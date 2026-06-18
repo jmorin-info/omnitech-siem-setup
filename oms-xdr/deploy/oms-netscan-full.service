@@ -1,0 +1,10 @@
+[Unit]
+Description=OMS-XDR - scan reseau complet (-p-)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/oms-xdr/oms-xdr.env
+WorkingDirectory=/opt/oms-xdr
+ExecStart=/opt/oms-xdr/.venv/bin/python -m oms_xdr.netscan --mode full --config /etc/oms-xdr/config.yaml

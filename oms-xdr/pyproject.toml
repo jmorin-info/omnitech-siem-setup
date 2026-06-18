@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oms-xdr"
+version = "1.0.0"
+description = "Surcouche XDR de corrélation/réponse au-dessus de Graylog — OMNITECH Security"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[project.scripts]
+oms-xdr = "oms_xdr.engine:main"
+oms-netscan = "oms_xdr.netscan:main"
+
+[tool.setuptools]
+packages = ["oms_xdr"]
+
+[tool.setuptools.package-data]
+oms_xdr = ["rules.yaml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

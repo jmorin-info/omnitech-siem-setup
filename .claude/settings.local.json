@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//etc/graylog/server/**)",
+      "Bash(mkdir -p /root/omnitech-siem-setup/archive /root/omnitech-siem-setup/lookups)",
+      "Bash(mv /root/omnitech-siem-setup/10.sh /root/omnitech-siem-setup/11.sh /root/omnitech-siem-setup/10-graylog-provision.sh /root/omnitech-siem-setup/archive/)"
+    ]
+  }
+}

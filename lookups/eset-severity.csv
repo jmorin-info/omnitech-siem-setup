@@ -1,0 +1,7 @@
+severity,score
+information,2
+notice,2
+warning,5
+error,7
+critical,9
+fatal,10

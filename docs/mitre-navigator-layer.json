@@ -1,0 +1,615 @@
+{
+  "name": "OMNITECH SIEM - Couverture detection",
+  "description": "Techniques couvertes par les detections OMNITECH (genere par 57-mitre-coverage.sh). Couleur = score de risque max.",
+  "domain": "enterprise-attack",
+  "versions": {
+    "attack": "14",
+    "navigator": "4.9.1",
+    "layer": "4.5"
+  },
+  "techniques": [
+    {
+      "techniqueID": "T1003.001",
+      "score": 10,
+      "enabled": true,
+      "comment": "LSASS Memory : lsass_access (score 10)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "lsass_access"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1003.006",
+      "score": 10,
+      "enabled": true,
+      "comment": "DCSync : dcsync (score 10)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "dcsync"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1558.003",
+      "score": 8,
+      "enabled": true,
+      "comment": "Kerberoasting : kerberoasting, kerberos_rc4 (score 8)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "kerberoasting, kerberos_rc4"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1055",
+      "score": 9,
+      "enabled": true,
+      "comment": "Process Injection : sysmon_injection (score 9)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "sysmon_injection"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1059.001",
+      "score": 5,
+      "enabled": true,
+      "comment": "PowerShell : powershell_suspect (score 5)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "powershell_suspect"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1071",
+      "score": 9,
+      "enabled": true,
+      "comment": "Application Layer Protocol : threat_intel, beaconing, c2_ioc (score 9)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "threat_intel, beaconing, c2_ioc"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1190",
+      "score": 7,
+      "enabled": true,
+      "comment": "Exploit Public-Facing Application : fortigate_utm, exposition_internet, waf_block (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "fortigate_utm, exposition_internet, waf_block"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1562.002",
+      "score": 9,
+      "enabled": true,
+      "comment": "Disable Windows Event Logging : winsec_critique (score 9)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "winsec_critique"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1485",
+      "score": 7,
+      "enabled": true,
+      "comment": "Data Destruction : vsphere_vm_destroy, file_delete_sensible (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "vsphere_vm_destroy, file_delete_sensible"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1059",
+      "score": 6,
+      "enabled": true,
+      "comment": "Command and Scripting Interpreter : vsphere_shell_ssh, eset_detection (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "vsphere_shell_ssh, eset_detection"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1110",
+      "score": 8,
+      "enabled": true,
+      "comment": "Brute Force : vsphere_auth_fail, vault_admin_abuse, m365_brute_externe, fmg_admin_login_fail (score 8)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "vsphere_auth_fail, vault_admin_abuse, m365_brute_externe, fmg_admin_login_fail"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1078",
+      "score": 10,
+      "enabled": true,
+      "comment": "Valid Accounts : m365_etranger, m365_risque, canary, impossible_travel, explicit_cred_use, vault_admin, fmg_admin_login (score 10)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "m365_etranger, m365_risque, canary, impossible_travel, explicit_cred_use, vault_admin, fmg_admin_login"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1114.003",
+      "score": 7,
+      "enabled": true,
+      "comment": "Email Forwarding Rule : m365_mail_forward, m365_fwd_existing (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "m365_mail_forward, m365_fwd_existing"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1567",
+      "score": 5,
+      "enabled": true,
+      "comment": "Exfiltration Over Web Service : m365_partage_externe (score 5)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "m365_partage_externe"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1098",
+      "score": 7,
+      "enabled": true,
+      "comment": "Account Manipulation : m365_role, local_admin_add (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "m365_role, local_admin_add"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1098.002",
+      "score": 6,
+      "enabled": true,
+      "comment": "Add Mailbox Delegate Permissions : m365_mailbox_deleg (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "m365_mailbox_deleg"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1021.002",
+      "score": 5,
+      "enabled": true,
+      "comment": "SMB Windows Admin Shares : admin_share (score 5)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "admin_share"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1490",
+      "score": 3,
+      "enabled": true,
+      "comment": "Inhibit System Recovery : veeam_job_echec (score 3)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "veeam_job_echec"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1204.002",
+      "score": 7,
+      "enabled": true,
+      "comment": "Malicious File : defender (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "defender"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1486",
+      "score": 10,
+      "enabled": true,
+      "comment": "Data Encrypted for Impact : ransomware_indicator (score 10)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "ransomware_indicator"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1048",
+      "score": 6,
+      "enabled": true,
+      "comment": "Exfiltration Over Alternative Protocol : volume_spike, data_exfil (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "volume_spike, data_exfil"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1562.001",
+      "score": 4,
+      "enabled": true,
+      "comment": "Disable or Modify Tools : volume_drop (score 4)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "volume_drop"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1071.004",
+      "score": 8,
+      "enabled": true,
+      "comment": "DNS : dns_tunneling, malware_domain (score 8)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "dns_tunneling, malware_domain"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1484.001",
+      "score": 7,
+      "enabled": true,
+      "comment": "Domain Policy Modification : gpo_modification (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "gpo_modification"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1558.004",
+      "score": 7,
+      "enabled": true,
+      "comment": "AS-REP Roasting : asrep_roasting (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "asrep_roasting"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1218",
+      "score": 6,
+      "enabled": true,
+      "comment": "System Binary Proxy Execution : lolbin_suspect (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "lolbin_suspect"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1547.001",
+      "score": 6,
+      "enabled": true,
+      "comment": "Registry Run Keys / Startup Folder : persistence_autorun (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "persistence_autorun"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1528",
+      "score": 7,
+      "enabled": true,
+      "comment": "Steal Application Access Token : m365_oauth_consent (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "m365_oauth_consent"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1046",
+      "score": 5,
+      "enabled": true,
+      "comment": "Network Service Discovery : network_scan (score 5)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "network_scan"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1036.005",
+      "score": 7,
+      "enabled": true,
+      "comment": "Masquerading: Match Legitimate Name or Location : masquerading (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "masquerading"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1552.006",
+      "score": 8,
+      "enabled": true,
+      "comment": "Unsecured Credentials: Group Policy Preferences : gpp_creds_access (score 8)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "gpp_creds_access"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1136.001",
+      "score": 6,
+      "enabled": true,
+      "comment": "Create Account: Local Account : local_account_create (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "local_account_create"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1078.004",
+      "score": 6,
+      "enabled": true,
+      "comment": "Valid Accounts: Cloud Accounts : new_country (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "new_country"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1649",
+      "score": 9,
+      "enabled": true,
+      "comment": "Steal or Forge Authentication Certificates : adcs_abuse (score 9)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "adcs_abuse"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1047",
+      "score": 8,
+      "enabled": true,
+      "comment": "Windows Management Instrumentation : wmi_lateral_exec (score 8)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "wmi_lateral_exec"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1556.005",
+      "score": 9,
+      "enabled": true,
+      "comment": "Modify Authentication Process : shadow_credentials (score 9)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "shadow_credentials"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1087.002",
+      "score": 6,
+      "enabled": true,
+      "comment": "Account Discovery: Domain Account : ldap_recon, ad_recon (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "ldap_recon, ad_recon"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1021",
+      "score": 7,
+      "enabled": true,
+      "comment": "Remote Services : lateral_movement (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "lateral_movement"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1555.005",
+      "score": 7,
+      "enabled": true,
+      "comment": "Password Managers : vault_auth_fail (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "vault_auth_fail"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1053.005",
+      "score": 6,
+      "enabled": true,
+      "comment": "Scheduled Task : scheduled_task (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "scheduled_task"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1543.003",
+      "score": 6,
+      "enabled": true,
+      "comment": "Windows Service : service_install (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "service_install"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1548.002",
+      "score": 8,
+      "enabled": true,
+      "comment": "Bypass User Account Control : uac_bypass (score 8)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "uac_bypass"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1018",
+      "score": 5,
+      "enabled": true,
+      "comment": "Remote System Discovery : remote_discovery (score 5)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "remote_discovery"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1489",
+      "score": 7,
+      "enabled": true,
+      "comment": "Service Stop : service_stop_securite (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "service_stop_securite"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1039",
+      "score": 6,
+      "enabled": true,
+      "comment": "Data from Network Shared Drive : file_sensitive_access (score 6)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "file_sensitive_access"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1565.001",
+      "score": 4,
+      "enabled": true,
+      "comment": "Stored Data Manipulation : fmg_config_change (score 4)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "fmg_config_change"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1505.003",
+      "score": 9,
+      "enabled": true,
+      "comment": "Web Shell : web_shell (score 9)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "web_shell"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1003.003",
+      "score": 10,
+      "enabled": true,
+      "comment": "NTDS : ntds_dump (score 10)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "ntds_dump"
+        }
+      ]
+    }
+  ],
+  "gradient": {
+    "colors": [
+      "#ffe8a1",
+      "#ff8c42",
+      "#c1121f"
+    ],
+    "minValue": 0,
+    "maxValue": 10
+  },
+  "legendItems": [
+    {
+      "label": "score 1-4 faible",
+      "color": "#ffe8a1"
+    },
+    {
+      "label": "score 5-7 eleve",
+      "color": "#ff8c42"
+    },
+    {
+      "label": "score 8-10 critique",
+      "color": "#c1121f"
+    }
+  ],
+  "showTacticRowBackground": true,
+  "tacticRowBackground": "#205081",
+  "sorting": 3,
+  "hideDisabled": false
+}

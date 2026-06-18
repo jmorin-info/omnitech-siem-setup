@@ -1,0 +1,98 @@
+# ==============================================================================
+# winlogbeat.yml - Configuration de reference OMNITECH (postes & serveurs)
+# A deployer via NinjaOne avec Winlogbeat OSS + Sysmon (cf. README §Clients).
+# Remplacer <CA_ROOT> par le chemin du certificat Root CA OMNITECH SECURITY
+# exporte en .pem (deja deploye dans le magasin Windows via AD CS, mais Beats
+# utilise son propre fichier CA).
+# ==============================================================================
+
+winlogbeat.event_logs:
+
+  # --- Securite : on ne prend que les EventID utiles a la detection ----------
+  - name: Security
+    # RANGES obligatoires (pas une longue liste) : l'API Windows Event Log limite
+    # le nombre d'expressions par requete ; au-dela -> "requete invalide" et le
+    # canal Security n'est plus lu du tout. Ces ranges couvrent les memes EventID.
+    #   1100-1104 logs effaces/arretes | 4624-4799 auth, comptes, Kerberos, DS
+    #   4868-4889 AD CS | 5136-5145 DS changes + partages | 6272-6274 NPS | 7045
+    event_id: 1100-1104, 4624-4799, 4868-4889, 5136-5145, 6272-6274, 7045
+    ignore_older: 72h
+
+  # --- Sysmon : tout (le filtrage se fait dans la config Sysmon elle-meme) ---
+  - name: Microsoft-Windows-Sysmon/Operational
+    ignore_older: 72h
+
+  # --- PowerShell : script blocks (4104) et execution (4103) -----------------
+  - name: Microsoft-Windows-PowerShell/Operational
+    event_id: 4104
+    ignore_older: 72h
+
+  # --- Defender : detections et changements d'etat ---------------------------
+  - name: Microsoft-Windows-Windows Defender/Operational
+    event_id: 1006, 1007, 1116, 1117, 1118, 1119, 5001, 5007, 5010, 5012
+    ignore_older: 72h
+
+  # --- System : services, crashs, arrets inattendus --------------------------
+  - name: System
+    event_id: 104, 1074, 6005, 6006, 6008, 7034, 7036, 7040, 7045
+    ignore_older: 72h
+
+  # --- RDP : sessions ouvertes/reconnectees (latéralisation) -----------------
+  - name: Microsoft-Windows-TerminalServices-LocalSessionManager/Operational
+    event_id: 21, 22, 24, 25
+    ignore_older: 72h
+
+  # --- NTLM : audit (n'emet que si la GPO d'audit NTLM est activee) ----------
+  - name: Microsoft-Windows-NTLM/Operational
+    event_id: 8001, 8002, 8003, 8004
+    ignore_older: 72h
+
+  # --- Certificats : journal dedie alimente par Get-OmniCertExpiry.ps1 -------
+  # (n'existe que sur les machines ou le script tourne : PKI + serveurs ; les
+  #  autres l'ignorent sans erreur. EventID 9001 = cert proche d'expiration)
+  - name: OMNI-Certificats
+    ignore_older: 72h
+
+  # --- Inventaire : logiciels + OS/correctifs (Get-OmniInventory.ps1) --------
+  # EventID 9101 = logiciel, 9102 = OS/correctifs. Parse par le pipeline
+  # (event_source=inventory) -> detection de vulnerabilites KEV + anciennete patch.
+  - name: OMNI-Inventaire
+    ignore_older: 26h
+
+  # --- DNS Server : requetes (alimente la detection C2/exfil/DGA omni-ndr-dns) -
+  # N'existe QUE sur les serveurs DNS (DC). Les autres machines l'ignorent sans
+  # erreur. Pre-requis sur le DC : canal active une fois via
+  #   wevtutil sl "Microsoft-Windows-DNSServer/Analytical" /e:true /rt:false /q:true
+  # Volume eleve -> reserve aux DC. EventID 256/257 = requete/reponse.
+  - name: Microsoft-Windows-DNSServer/Analytical
+    # canal "direct"/analytique -> lecteur experimental obligatoire (sinon 0 event)
+    api: wineventlog-experimental
+    ignore_older: 12h
+
+  # --- DNS Server : audit (changements de config DNS, faible volume, A.8.9) ----
+  - name: Microsoft-Windows-DNSServer/Audit
+    ignore_older: 72h
+
+# ------------------------------------------------------------------------------
+output.logstash:                       # l'input "Beats" de Graylog parle logstash
+  hosts: ["bx-it-graylog-vm.omnitech.security:5044"]
+  ssl.enabled: true
+  ssl.certificate_authorities: ["C:/Program Files/Winlogbeat/omnitech-rootca.pem"]
+  # Tant que le cert auto-signe temporaire est en place sur le SIEM, il faudra
+  # soit pousser CE cert comme CA, soit (mieux) signer au plus vite via la PKI.
+  bulk_max_size: 2048
+  compression_level: 3
+
+# Tags utiles au routage des streams cote Graylog
+processors:
+  - add_fields:
+      target: omnitech
+      fields:
+        site: "BX"          # adapter par site : BX / IVR / LAN
+        collecteur: "winlogbeat"
+
+logging.level: warning
+logging.to_files: true
+logging.files:
+  path: C:/ProgramData/winlogbeat/Logs
+  keepfiles: 3

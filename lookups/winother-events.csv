@@ -1,0 +1,30 @@
+channel_eid,action
+System:104,journal_systeme_efface
+System:1074,arret_redemarrage_demande
+System:6005,service_journal_demarre
+System:6006,arret_propre
+System:6008,arret_inattendu
+System:7034,service_crash
+System:7036,service_changement_etat
+System:7040,service_type_demarrage_modifie
+System:7045,service_installe
+Microsoft-Windows-PowerShell/Operational:4103,powershell_execution_module
+Microsoft-Windows-PowerShell/Operational:4104,powershell_scriptblock
+Microsoft-Windows-Windows Defender/Operational:1006,defender_detection_malware
+Microsoft-Windows-Windows Defender/Operational:1007,defender_action_effectuee
+Microsoft-Windows-Windows Defender/Operational:1116,defender_detection_malware
+Microsoft-Windows-Windows Defender/Operational:1117,defender_action_effectuee
+Microsoft-Windows-Windows Defender/Operational:1118,defender_action_echouee
+Microsoft-Windows-Windows Defender/Operational:1119,defender_action_echec_critique
+Microsoft-Windows-Windows Defender/Operational:5001,defender_protection_temps_reel_desactivee
+Microsoft-Windows-Windows Defender/Operational:5007,defender_configuration_modifiee
+Microsoft-Windows-Windows Defender/Operational:5010,defender_scan_desactive
+Microsoft-Windows-Windows Defender/Operational:5012,defender_scan_desactive
+Microsoft-Windows-TerminalServices-LocalSessionManager/Operational:21,rdp_session_ouverte
+Microsoft-Windows-TerminalServices-LocalSessionManager/Operational:22,rdp_shell_demarre
+Microsoft-Windows-TerminalServices-LocalSessionManager/Operational:24,rdp_session_deconnectee
+Microsoft-Windows-TerminalServices-LocalSessionManager/Operational:25,rdp_session_reconnectee
+Microsoft-Windows-NTLM/Operational:8001,ntlm_sortant_audit
+Microsoft-Windows-NTLM/Operational:8002,ntlm_entrant_audit
+Microsoft-Windows-NTLM/Operational:8003,ntlm_domaine_audit
+Microsoft-Windows-NTLM/Operational:8004,ntlm_authentification_auditee

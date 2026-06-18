@@ -1,0 +1,80 @@
+# =====================================================================
+#  OMS-XDR — Couche de corrélation/réponse au-dessus de Graylog
+#  OMNITECH Security — Site Oméga
+#  Aucun secret en clair ici : les credentials sont lus depuis
+#  les variables d'environnement (cf. /etc/oms-xdr/oms-xdr.env)
+# =====================================================================
+
+graylog:
+  url: "https://10.33.220.10"      # référence (instance SIEM) ; la LECTURE passe par OpenSearch
+  # Lecture via OpenSearch local (déploiement intégré sur la VM SIEM, comme omni-*)
+  opensearch: "http://127.0.0.1:9200"
+  index: "omni-*"
+  # Flux Graylog par source (récupérés via setup_graylog.sh -> renseigner les IDs)
+  streams:                       # IDs réels OMNITECH (récupérés le 18/06/2026)
+    fortigate: "6a2ab23665bc77613c83415d"   # OMNI - FortiGate
+    windows:   "6a2ab23565bc77613c834123"   # OMNI - Windows Security
+    sysmon:    "6a2ab23665bc77613c834135"   # OMNI - Sysmon
+    internal:  "6a2bd9ec65bc77613c898706"   # OMNI - Interne SIEM (réinjection)
+    netscan:   ""                            # input dédié oms-netscan (si scan actif activé)
+  # Réinjection des incidents : réutilise le bus GELF existant du SIEM (pas de 12222).
+  output_gelf:
+    host: "127.0.0.1"           # local sur la VM SIEM
+    port: 12201                 # input GELF HTTP existant (POST /gelf)
+    proto: "http"
+
+engine:
+  window_minutes: 15            # fenêtre glissante de corrélation
+  loop_seconds: 300             # cadence (si lancé en démon ; sinon via systemd timer)
+  dedup_minutes: 60             # ne pas re-notifier le même incident avant N minutes
+  state_dir: "/var/lib/oms-xdr"
+  min_severity_notify: "medium" # low|medium|high|critical
+
+netscan:
+  enabled: false                # DÉSACTIVÉ : décision OMNITECH = KEV + passif d'abord, scan actif différé
+  binary: "nmap"
+  # Périmètre AUTORISÉ uniquement — réseaux internes OMNITECH.
+  # À ajuster au plan d'adressage réel (sites Oméga / Ivry / Lançon).
+  targets:
+    - "10.33.50.0/24"           # serveurs (DC 10.33.50.250, Centreon 10.33.50.6)
+    - "10.33.80.0/24"           # VLAN 80 infra (EMS, FMG, FAZ)
+    - "10.33.120.0/24"          # GED / pollers
+    - "10.33.220.0/24"          # SIEM
+    - "10.13.10.0/24"           # postes TECH
+  exclude:
+    - "10.33.220.10"            # éviter d'auto-scanner le SIEM en continu
+  quick_ports: "top-1000"       # scan rapide horaire
+  full_scan_weekly: true        # -p- une fois/semaine (déclenché par timer dédié)
+  rate_pps: 500                 # plafonne le débit pour ne pas saturer
+  baseline_file: "/var/lib/oms-xdr/netscan_baseline.json"
+
+ollama:
+  enabled: true                 # narration analyste FR (LLM local sur la VM SIEM)
+  url: "http://127.0.0.1:11434" # Ollama local CPU-only — bind 127.0.0.1, pas d'exposition réseau
+  model: "qwen2.5:3b"           # 3B : bon FR, ~2 Go, ~10-15 tok/s sur 8 vCPU (chargé à la demande)
+                                # Alternative qualité+ : "mistral:7b" (plus lent ~5 tok/s, ~5 Go)
+  timeout: 120
+
+teams:
+  enabled: false                # webhook Power Automate (notification incident)
+  webhook_env: "OMS_TEAMS_WEBHOOK"
+
+response:
+  # SÉCURITÉ : par défaut tout est en mode "recommandation" (dry-run).
+  # Aucune action automatique sur l'infra tant que auto_* n'est pas activé.
+  dry_run: true
+  auto_block_fortigate: false
+  auto_disable_ad_account: false
+  auto_isolate_ninjaone: false
+  fortigate:
+    # Blocage DÉLÉGUÉ au feed omni-soar (sûr : aucun credential sur le pare-feu,
+    # public-only + whitelist + TTL + cap appliqués par omni-soar).
+    soar_url: "http://127.0.0.1:8088/block"
+    soar_hits: 10               # occurrences envoyées (>= SOAR_MIN_HITS de 00-vars.env, défaut 5)
+  ad:
+    dc: "10.33.50.250"          # BX-AD-01-IT-VM
+    netbios: "SECURITY"
+  ninjaone:
+    base_url_env: "OMS_NINJA_URL"
+    client_id_env: "OMS_NINJA_CLIENT_ID"
+    secret_env: "OMS_NINJA_SECRET"

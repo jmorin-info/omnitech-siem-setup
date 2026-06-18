@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OMNI SOC — Console</title>
+<link rel="icon" href="/m/icon-192.png">
+<script src="/soc/chart.min.js"></script>
+<style>
+  :root{
+    --bg:#06080f; --bg2:#0a0e1a; --card:#0d1424; --card2:#111a2e; --bd:#1a2540;
+    --fg:#e6edf6; --mut:#7c8aa6; --dim:#52607d;
+    --cy:#22d3ee; --cy2:#0ea5b7; --red:#fb3b53; --amb:#f5a623; --grn:#34d399; --vio:#a78bfa; --blu:#3b82f6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:
+      radial-gradient(900px 500px at 80% -10%, rgba(34,211,238,.10), transparent 60%),
+      radial-gradient(700px 500px at 0% 110%, rgba(167,139,250,.08), transparent 55%),
+      var(--bg);
+    color:var(--fg);font:14px/1.5 'Segoe UI',-apple-system,Roboto,sans-serif;overflow:hidden}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+    background-size:42px 42px;mask:radial-gradient(circle at 50% 30%,#000,transparent 90%)}
+  .mono{font-family:'SF Mono',ui-monospace,'Cascadia Code',Consolas,monospace}
+
+  /* LOGIN */
+  #login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  .lcard{width:340px;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--bd);
+    border-radius:16px;padding:30px 26px;box-shadow:0 0 60px rgba(34,211,238,.08)}
+  .lcard h1{font-size:20px;letter-spacing:.5px;text-align:center;margin-bottom:4px}
+  .lcard p{color:var(--mut);text-align:center;font-size:12px;margin-bottom:18px}
+  input{width:100%;background:#070b15;border:1px solid var(--bd);border-radius:9px;color:var(--fg);
+    padding:12px;font-size:14px;margin:6px 0;outline:none}
+  input:focus{border-color:var(--cy);box-shadow:0 0 0 3px rgba(34,211,238,.12)}
+  .btn{background:linear-gradient(90deg,var(--cy2),var(--cy));color:#04121a;border:0;border-radius:9px;
+    padding:12px;font-weight:700;width:100%;cursor:pointer;letter-spacing:.3px}
+  .err{color:var(--red);text-align:center;font-size:12px;min-height:16px;margin-top:8px}
+
+  /* SHELL */
+  #app{display:none;height:100vh;grid-template-columns:230px 1fr;grid-template-rows:60px 1fr}
+  aside{grid-row:1/3;background:linear-gradient(180deg,#0a1020,#070b14);border-right:1px solid var(--bd);
+    padding:18px 14px;display:flex;flex-direction:column;gap:4px}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 18px}
+  .brand .logo{width:34px;height:34px;border-radius:9px;background:radial-gradient(circle at 30% 30%,var(--cy),var(--blu));
+    display:grid;place-items:center;font-size:18px;box-shadow:0 0 20px rgba(34,211,238,.5)}
+  .brand b{font-size:15px;letter-spacing:1px}.brand span{color:var(--dim);font-size:10px;letter-spacing:2px;display:block}
+  nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;color:var(--mut);
+    text-decoration:none;font-weight:600;font-size:13px;cursor:pointer;transition:.15s}
+  nav a .ic{width:18px;text-align:center;opacity:.9}
+  nav a:hover{background:#101a30;color:var(--fg)}
+  nav a.on{background:linear-gradient(90deg,rgba(34,211,238,.16),transparent);color:#fff;
+    box-shadow:inset 2px 0 0 var(--cy)}
+  .side-foot{margin-top:auto;color:var(--dim);font-size:11px;padding:8px}
+
+  header{grid-column:2;display:flex;align-items:center;gap:16px;padding:0 24px;border-bottom:1px solid var(--bd);
+    background:rgba(8,11,20,.6);backdrop-filter:blur(10px)}
+  header h2{font-size:16px;font-weight:700;letter-spacing:.3px}
+  .spacer{flex:1}
+  .pill{display:flex;align-items:center;gap:7px;background:#0c1525;border:1px solid var(--bd);
+    border-radius:20px;padding:5px 12px;font-size:12px;color:var(--mut)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:pulse 2s infinite}
+  @keyframes pulse{50%{opacity:.45}}
+  .iconbtn{background:#0c1525;border:1px solid var(--bd);color:var(--mut);border-radius:9px;padding:7px 11px;cursor:pointer}
+  .iconbtn:hover{color:var(--fg);border-color:var(--cy)}
+
+  main{grid-column:2;overflow-y:auto;padding:22px 24px 40px}
+  .page{display:none;animation:fade .35s ease}.page.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}}
+
+  .grid{display:grid;gap:16px}
+  .kpis{grid-template-columns:repeat(4,1fr);margin-bottom:16px}
+  .kpi{background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--bd);border-radius:14px;
+    padding:16px 18px;position:relative;overflow:hidden}
+  .kpi::after{content:"";position:absolute;right:-20px;top:-20px;width:80px;height:80px;border-radius:50%;
+    background:var(--accent,var(--cy));opacity:.10;filter:blur(8px)}
+  .kpi .lab{color:var(--mut);font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .kpi .val{font-size:34px;font-weight:800;margin-top:6px;color:var(--accent,#fff);letter-spacing:-1px}
+  .kpi .sub{color:var(--dim);font-size:11px;margin-top:2px}
+  .kpi.red{--accent:var(--red)}.kpi.amb{--accent:var(--amb)}.kpi.cy{--accent:var(--cy)}.kpi.vio{--accent:var(--vio)}
+
+  .cols{grid-template-columns:1.6fr 1fr}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px 18px}
+  .card h3{font-size:13px;font-weight:700;color:var(--fg);margin-bottom:14px;display:flex;align-items:center;gap:8px;letter-spacing:.3px}
+  .card h3 .tag{margin-left:auto;color:var(--dim);font-size:11px;font-weight:600}
+  .chartbox{position:relative;height:240px}
+  .chartbox.sm{height:220px}
+
+  .feed{display:flex;flex-direction:column;gap:10px}
+  .inc{background:var(--card2);border:1px solid var(--bd);border-left:3px solid var(--sev,var(--mut));border-radius:10px;padding:12px 14px}
+  .inc .top{display:flex;align-items:center;gap:10px}
+  .inc .ttl{font-weight:700;font-size:13px}
+  .inc .ts{margin-left:auto;color:var(--dim);font-size:11px;white-space:nowrap}
+  .inc .meta{color:var(--cy);font-size:11px;margin-top:3px}
+  .inc .nar{color:var(--mut);font-size:12px;margin-top:6px}
+  .inc .rem{color:var(--grn);font-size:12px;margin-top:5px}
+  .sev-critical{--sev:var(--red)}.sev-high{--sev:var(--amb)}.sev-medium{--sev:var(--blu)}.sev-low{--sev:var(--dim)}
+  .chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;
+    background:rgba(251,59,83,.14);color:var(--red);border:1px solid rgba(251,59,83,.3)}
+  .chip.h{background:rgba(245,166,35,.14);color:var(--amb);border-color:rgba(245,166,35,.3)}
+  .chip.m{background:rgba(59,130,246,.14);color:var(--blu);border-color:rgba(59,130,246,.3)}
+  .empty{color:var(--dim);text-align:center;padding:30px}
+  ::-webkit-scrollbar{width:9px}::-webkit-scrollbar-thumb{background:#1b2540;border-radius:5px}
+  @media(max-width:820px){
+    #app{grid-template-columns:1fr;grid-template-rows:56px 1fr}
+    aside{display:none}header{grid-column:1}main{grid-column:1;padding:16px}
+    .cols{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}
+  }
+</style>
+</head>
+<body>
+<div id="login">
+  <form class="lcard" onsubmit="login(event)">
+    <h1>⬢ OMNI <span style="color:var(--cy)">SOC</span></h1>
+    <p>Centre des opérations de sécurité — accès RSSI (VPN)</p>
+    <input id="u" placeholder="Compte AD" autocomplete="username" autocapitalize="none">
+    <input id="p" type="password" placeholder="Mot de passe" autocomplete="current-password">
+    <button class="btn">Se connecter</button>
+    <div class="err" id="lerr"></div>
+  </form>
+</div>
+
+<div id="app">
+  <aside>
+    <div class="brand"><div class="logo">⬢</div><div><b>OMNI SOC</b><span>OMNITECH SECURITY</span></div></div>
+    <nav id="nav">
+      <a class="on" data-p="overview"><span class="ic">▦</span>Vue d'ensemble</a>
+      <a data-p="incidents"><span class="ic">◈</span>Incidents</a>
+      <a data-p="detections"><span class="ic">◎</span>Détections</a>
+      <a data-p="attack"><span class="ic">⊞</span>ATT&CK</a>
+    </nav>
+    <div class="side-foot">v1 · données temps réel<br>OpenSearch + oms-xdr</div>
+  </aside>
+
+  <header>
+    <h2 id="ptitle">Vue d'ensemble</h2>
+    <span class="spacer"></span>
+    <span class="pill"><span class="dot"></span> Cluster opérationnel</span>
+    <span class="pill mono" id="clock">--:--:--</span>
+    <button class="iconbtn" onclick="loadAll()">⟳</button>
+    <button class="iconbtn" onclick="logout()">⎋</button>
+  </header>
+
+  <main>
+    <section class="page on" id="p-overview">
+      <div class="grid kpis" id="kpis"></div>
+      <div class="grid cols" style="margin-bottom:16px">
+        <div class="card"><h3>📈 Détections (24 h)<span class="tag">par heure</span></h3><div class="chartbox"><canvas id="cTs"></canvas></div></div>
+        <div class="card"><h3>🎯 Tactiques ATT&CK<span class="tag">7 j</span></h3><div class="chartbox"><canvas id="cTac"></canvas></div></div>
+      </div>
+      <div class="grid cols">
+        <div class="card"><h3>🔥 Top détections<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cDet"></canvas></div></div>
+        <div class="card"><h3>🛰️ Sources<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cSrc"></canvas></div></div>
+      </div>
+    </section>
+
+    <section class="page" id="p-incidents"><div class="card"><h3>◈ Incidents corrélés (oms-xdr)</h3><div class="feed" id="incFeed"></div></div></section>
+    <section class="page" id="p-detections"><div class="card"><h3>◎ Alertes récentes (24 h)</h3><div class="feed" id="alFeed"></div></div></section>
+    <section class="page" id="p-attack">
+      <div class="card"><h3>⊞ Répartition par tactique ATT&CK<span class="tag">événements 7 j</span></h3><div class="chartbox" style="height:300px"><canvas id="cAtk"></canvas></div></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const API="/m/api", $=s=>document.querySelector(s);
+const j=(u,o)=>fetch(API+u,{credentials:"same-origin",...o}).then(r=>{if(r.status===401)throw"auth";return r.json()});
+const esc=s=>(s==null?"":""+s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+const nice=s=>esc((s||"").toString().replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()));
+const ago=t=>{if(!t)return"";let d=(Date.now()-new Date((""+t).replace(" ","T").replace(/(Z|[+-]\d\d:?\d\d)?$/,"Z")).getTime())/1000;
+  return d<60?"à l'instant":d<3600?(d/60|0)+" min":d<86400?(d/3600|0)+" h":(d/86400|0)+" j"};
+const PAL=["#22d3ee","#a78bfa","#fb3b53","#f5a623","#34d399","#3b82f6","#e879f9","#2dd4bf"];
+
+// auth
+function login(e){e.preventDefault();
+  fetch(API+"/login",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({username:u.value,password:p.value})})
+   .then(r=>r.ok?start():$("#lerr").textContent="Identifiants invalides").catch(()=>$("#lerr").textContent="Erreur réseau");}
+function logout(){fetch(API+"/logout",{method:"POST",credentials:"same-origin"}).then(()=>location.reload());}
+function start(){$("#login").style.display="none";$("#app").style.display="grid";loadAll();
+  setInterval(()=>{if(!document.hidden)loadAll()},60000);}
+
+// nav
+const titles={overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK"};
+document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
+  document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
+  const pg=a.dataset.p; document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+pg));
+  $("#ptitle").textContent=titles[pg];});
+
+// charts
+if(window.Chart){Chart.defaults.color="#7c8aa6";Chart.defaults.font.family="Segoe UI";Chart.defaults.borderColor="rgba(255,255,255,.05)";}
+const charts={};
+function mk(id,cfg){if(!window.Chart||!$("#"+id))return;if(charts[id])charts[id].destroy();charts[id]=new Chart($("#"+id),cfg);}
+const noLeg={plugins:{legend:{display:false}}};
+
+async function loadAll(){
+  try{
+    const [k,ts,tac,det,src,inc,al]=await Promise.all([
+      j("/kpis"),j("/timeseries"),j("/by-tactic"),j("/top-detections"),j("/top-sources"),j("/incidents"),j("/alerts")]);
+    renderKpis(k.kpis); renderTs(ts.series); renderTac(tac.data); renderDet(det.data);
+    renderSrc(src.data); renderAtk(tac.data); renderInc(inc.incidents); renderAlerts(al.alerts);
+  }catch(e){if(e==="auth")location.reload();}
+}
+function renderKpis(k){k=k||{};
+  $("#kpis").innerHTML=[
+    ["red","⚠","Incidents critiques (7 j)",k.incidents_critiques_7j,"corrélés oms-xdr"],
+    ["amb","◎","Hôtes à risque (UEBA)",k.hotes_risque_ueba,"score ≥ 80"],
+    ["cy","📡","Détections (24 h)",k.alertes_24h,"volume tagué"],
+    ["vio","🛡","CVE KEV exposées",k.kev_exposees,"catalogue CISA"]
+  ].map(([c,i,l,v,s])=>`<div class="kpi ${c}"><div class="lab">${i} ${l}</div>
+    <div class="val mono">${(v??0).toLocaleString("fr")}</div><div class="sub">${s}</div></div>`).join("");
+}
+function renderTs(s){s=s||[];const lab=s.map(x=>new Date(x.t).getHours()+"h"),d=s.map(x=>x.n);
+  mk("cTs",{type:"line",data:{labels:lab,datasets:[{data:d,borderColor:"#22d3ee",borderWidth:2,
+    fill:true,tension:.35,pointRadius:0,backgroundColor:c=>{const g=c.chart.ctx.createLinearGradient(0,0,0,240);
+      g.addColorStop(0,"rgba(34,211,238,.35)");g.addColorStop(1,"rgba(34,211,238,0)");return g;}}]},
+    options:{...noLeg,maintainAspectRatio:false,scales:{x:{grid:{display:false}},y:{beginAtZero:true}}}});
+}
+function donut(id,data){const d=data||[];mk(id,{type:"doughnut",
+  data:{labels:d.map(x=>nice(x.k)),datasets:[{data:d.map(x=>x.n),backgroundColor:PAL,borderColor:"#0d1424",borderWidth:2}]},
+  options:{maintainAspectRatio:false,cutout:"62%",plugins:{legend:{position:"right",labels:{boxWidth:10,font:{size:11}}}}}});}
+function renderTac(d){donut("cTac",d);}
+function renderSrc(d){donut("cSrc",d);}
+function renderDet(d){d=d||[];mk("cDet",{type:"bar",
+  data:{labels:d.map(x=>nice(x.k)),datasets:[{data:d.map(x=>x.n),backgroundColor:"#a78bfa",borderRadius:5}]},
+  options:{...noLeg,indexAxis:"y",maintainAspectRatio:false,scales:{x:{beginAtZero:true},y:{grid:{display:false}}}}});}
+function renderAtk(d){d=d||[];mk("cAtk",{type:"bar",
+  data:{labels:d.map(x=>esc(x.k)),datasets:[{data:d.map(x=>x.n),backgroundColor:PAL,borderRadius:6}]},
+  options:{...noLeg,maintainAspectRatio:false,scales:{x:{grid:{display:false}},y:{beginAtZero:true}}}});}
+function sevClass(s){s=(s||"").toLowerCase();return s.includes("crit")?"critical":s.includes("high")||s.includes("elev")?"high":s.includes("med")||s.includes("moy")?"medium":"low";}
+function renderInc(list){list=list||[];$("#incFeed").innerHTML=list.length?list.map(i=>{const c=sevClass(i.severity);
+  return `<div class="inc sev-${c}"><div class="top"><span class="chip ${c=='high'?'h':c=='medium'?'m':''}">${esc((i.severity||'?').toUpperCase())}</span>
+    <span class="ttl">${esc(i.title)}</span><span class="ts">${ago(i.ts)}</span></div>
+    <div class="meta">${esc((i.entities||'').toString())} · ${esc((i.mitre||'').toString())}</div>
+    ${i.narrative?`<div class="nar">${esc(i.narrative)}</div>`:""}
+    ${i.remediation?`<div class="rem">➜ ${esc(i.remediation)}</div>`:""}</div>`;}).join(""):'<div class="empty">Aucun incident corrélé ✅</div>';}
+function renderAlerts(list){list=list||[];$("#alFeed").innerHTML=list.length?list.map(a=>{const c=a.priority==3?"critical":a.priority==2?"high":"medium";
+  return `<div class="inc sev-${c}"><div class="top"><span class="chip ${c=='high'?'h':c=='medium'?'m':''}">P${a.priority||'-'}</span>
+    <span class="ttl">${esc(a.title)}</span><span class="ts">${ago(a.ts)}</span></div>
+    ${a.entity?`<div class="meta">${esc(a.entity)}</div>`:""}</div>`;}).join(""):'<div class="empty">RAS</div>';}
+
+setInterval(()=>{$("#clock")&&($("#clock").textContent=new Date().toLocaleTimeString("fr"))},1000);
+j("/me").then(d=>{if(d.user)start();}).catch(()=>{});
+</script>
+</body>
+</html>

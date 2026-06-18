@@ -1,0 +1,10 @@
+[Unit]
+Description=OMS-XDR - scan rapide horaire
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Unit=oms-netscan-quick.service
+
+[Install]
+WantedBy=timers.target

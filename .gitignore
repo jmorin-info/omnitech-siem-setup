@@ -1,0 +1,42 @@
+# =============================================================================
+# Configs locales outils (editeurs, CLI)
+# SECRETS — NE JAMAIS VERSIONNER (valeurs réelles restent uniquement sur la VM)
+# =============================================================================
+00-vars.env
+00-vars.autodetect.env
+SECRETS.md
+.graylog_password_secret
+*.cred
+*.key
+*.pem
+*.pfx
+*.p12
+*.jks
+*_secret*
+*password*
+
+# Modèles versionnés (autorisés explicitement)
+!00-vars.env.example
+!SECRETS.example.md
+
+# =============================================================================
+# Artefacts / sauvegardes / temporaires
+# =============================================================================
+*.bak
+*.tmp
+*.log
+*.out
+*.swp
+/var/backups/
+__pycache__/
+*.pyc
+
+
+# oms-xdr (sous-projet Python)
+oms-xdr/.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# PWA mobile (venv)
+mobile/.venv/

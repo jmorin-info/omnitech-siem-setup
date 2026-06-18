@@ -1,0 +1,10 @@
+[Unit]
+Description=OMS-XDR - scan reseau rapide (top-1000)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/oms-xdr/oms-xdr.env
+WorkingDirectory=/opt/oms-xdr
+ExecStart=/opt/oms-xdr/.venv/bin/python -m oms_xdr.netscan --mode quick --config /etc/oms-xdr/config.yaml

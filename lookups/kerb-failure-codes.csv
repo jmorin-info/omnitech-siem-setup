@@ -1,0 +1,16 @@
+code,reason
+0x1,entree_client_expiree
+0x2,entree_serveur_expiree
+0x6,client_inconnu_dans_kdc
+0x7,serveur_inconnu_dans_kdc
+0x9,cle_client_reinitialisee
+0xc,politique_kdc_refus
+0xe,type_chiffrement_non_supporte
+0x12,compte_desactive_verrouille_revoque
+0x17,mot_de_passe_expire
+0x18,preauth_invalide_mdp_errone
+0x19,preauth_supplementaire_requise
+0x1b,nom_principal_serveur_inconnu
+0x1d,service_indisponible
+0x20,ticket_expire
+0x25,desynchronisation_horloge_importante

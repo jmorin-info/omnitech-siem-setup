@@ -1,0 +1,10 @@
+[Unit]
+Description=OMS-XDR - scan complet hebdomadaire (dimanche 03:00)
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+Persistent=true
+Unit=oms-netscan-full.service
+
+[Install]
+WantedBy=timers.target

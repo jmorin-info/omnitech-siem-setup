@@ -1,0 +1,10 @@
+logon_type,label
+2,interactif_console
+3,reseau
+4,batch
+5,service
+7,deverrouillage
+8,reseau_mdp_clair
+9,nouvelles_credentials_runas
+10,rdp_interactif_distant
+11,interactif_cache_hors_ligne

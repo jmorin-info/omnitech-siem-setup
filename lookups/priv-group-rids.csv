@@ -1,0 +1,15 @@
+rid,group_label
+512,Domain Admins
+516,Domain Controllers
+518,Schema Admins
+519,Enterprise Admins
+520,Group Policy Creator Owners
+525,Protected Users
+526,Key Admins
+527,Enterprise Key Admins
+544,Administrators (builtin)
+548,Account Operators
+549,Server Operators
+550,Print Operators
+551,Backup Operators
+552,Replicator

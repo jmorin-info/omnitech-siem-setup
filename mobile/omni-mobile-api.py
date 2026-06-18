@@ -1,0 +1,316 @@
+#!/usr/bin/env python3
+"""omni-mobile-api - Backend de la PWA mobile SIEM OMNITECH.
+
+Sert l'API mobile (lecture alertes/incidents/KPI + abonnement web-push) consommée
+par la PWA (servie par nginx sous /m/). Conçu pour un accès VPN-only.
+
+- Auth : déléguée à Graylog (POST /api/system/sessions, backend AD/LDAPS déjà en
+  place) -> cookie de session signé HMAC. Aucun code LDAP ici.
+- Lecture : OpenSearch local (127.0.0.1:9200), comme les services omni-*.
+- Push : web-push VAPID (pywebpush, venv). Déclenché par un webhook Graylog
+  (notification HTTP sur les alertes critiques) -> POST /m/api/push (secret local).
+
+Stdlib + pywebpush. Écoute 127.0.0.1:8090 (derrière nginx). Installé par 65-mobile-pwa.sh.
+"""
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import json
+import os
+import ssl
+import time
+import urllib.request
+import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie
+
+CONF = {}
+for path in ("/etc/default/omni-mobile",):
+    try:
+        with open(path) as fh:
+            for line in fh:
+                if "=" in line and not line.lstrip().startswith("#"):
+                    k, v = line.strip().split("=", 1)
+                    CONF[k] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+
+LISTEN = ("127.0.0.1", int(CONF.get("MOBILE_PORT", "8090")))
+OS_URL = CONF.get("OPENSEARCH", "http://127.0.0.1:9200")
+GL_URL = CONF.get("GRAYLOG_API", "https://bx-it-graylog-vm.omnitech.security:9000/api")
+GL_CACERT = CONF.get("GRAYLOG_CACERT", "/etc/graylog/certs/omnitech-rootca.crt")
+SECRET = CONF.get("MOBILE_SECRET", "change-me").encode()
+PUSH_SECRET = CONF.get("MOBILE_PUSH_SECRET", "change-me-push")
+SESSION_TTL = int(CONF.get("MOBILE_SESSION_TTL", "43200"))  # 12 h
+SUBS_FILE = CONF.get("MOBILE_SUBS_FILE", "/var/lib/omni-mobile/subscriptions.json")
+VAPID_PUB = CONF.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIV_FILE = CONF.get("VAPID_PRIVATE_FILE", "/etc/omni-mobile/vapid_private.pem")
+VAPID_SUBJECT = CONF.get("VAPID_SUBJECT", "mailto:informatique@omnitech-security.fr")
+INTERNAL = ["omni-winsec", "omni-sysmon", "omni-winother", "omni-fortigate",
+            "omni-m365", "omni-vsphere", "omni-fortimanager"]
+
+_ssl_ctx = ssl.create_default_context(cafile=GL_CACERT) if os.path.exists(GL_CACERT) else ssl._create_unverified_context()
+
+
+# --------------------------------------------------------------------------- util
+def os_search(index: str, body: dict) -> dict:
+    req = urllib.request.Request(f"{OS_URL}/{index}/_search",
+                                 data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    try:
+        return json.load(urllib.request.urlopen(req, timeout=30))
+    except urllib.error.URLError:
+        return {}
+
+
+def sign_session(user: str) -> str:
+    exp = int(time.time()) + SESSION_TTL
+    payload = f"{user}|{exp}"
+    sig = hmac.new(SECRET, payload.encode(), hashlib.sha256).hexdigest()
+    return base64.urlsafe_b64encode(f"{payload}|{sig}".encode()).decode()
+
+
+def verify_session(tok: str) -> str | None:
+    try:
+        raw = base64.urlsafe_b64decode(tok.encode()).decode()
+        user, exp, sig = raw.rsplit("|", 2)
+        good = hmac.new(SECRET, f"{user}|{exp}".encode(), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(sig, good) and int(exp) > time.time():
+            return user
+    except Exception:
+        pass
+    return None
+
+
+def graylog_login(user: str, pwd: str) -> bool:
+    """Valide les identifiants via la session Graylog (backend AD/LDAPS)."""
+    body = json.dumps({"username": user, "password": pwd, "host": ""}).encode()
+    req = urllib.request.Request(f"{GL_URL}/system/sessions", data=body,
+                                 headers={"Content-Type": "application/json",
+                                          "X-Requested-By": "omni-mobile",
+                                          "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15, context=_ssl_ctx) as r:
+            return r.status in (200, 201)
+    except urllib.error.HTTPError:
+        return False
+    except urllib.error.URLError:
+        return False
+
+
+def load_subs() -> list:
+    try:
+        with open(SUBS_FILE) as fh:
+            return json.load(fh)
+    except Exception:
+        return []
+
+
+def save_subs(subs: list) -> None:
+    os.makedirs(os.path.dirname(SUBS_FILE), exist_ok=True)
+    tmp = SUBS_FILE + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(subs, fh)
+    os.replace(tmp, SUBS_FILE)
+
+
+# ----------------------------------------------------------------------- requêtes
+def get_alerts(limit: int = 50) -> list:
+    res = os_search("gl-events*", {
+        "size": limit, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"range": {"timestamp": {"gte": "now-24h"}}},
+        "_source": ["timestamp", "event_definition_title", "message", "priority",
+                    "key", "fields", "alert"],
+    })
+    out = []
+    for h in res.get("hits", {}).get("hits", []):
+        s = h.get("_source", {})
+        out.append({
+            "ts": s.get("timestamp"),
+            "title": s.get("event_definition_title") or s.get("message"),
+            "priority": s.get("priority"),
+            "entity": s.get("key") or "",
+        })
+    return out
+
+
+def get_incidents(limit: int = 30) -> list:
+    res = os_search("omni-*", {
+        "size": limit, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {"must": [{"term": {"event_source": "xdr_incident"}}],
+                           "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}},
+        "_source": ["timestamp", "short_message", "full_message", "severity",
+                    "rule_id", "entities", "mitre", "remediation"],
+    })
+    out = []
+    for h in res.get("hits", {}).get("hits", []):
+        s = h.get("_source", {})
+        out.append({
+            "ts": s.get("timestamp"),
+            "title": s.get("short_message"),
+            "severity": s.get("severity"),
+            "rule": s.get("rule_id"),
+            "entities": s.get("entities"),
+            "mitre": s.get("mitre"),
+            "narrative": s.get("full_message"),
+            "remediation": s.get("remediation"),
+        })
+    return out
+
+
+def _count(query: dict) -> int:
+    body = {"size": 0, "track_total_hits": True, "query": query}
+    res = os_search("omni-*", body)
+    return res.get("hits", {}).get("total", {}).get("value", 0)
+
+
+def get_kpis() -> dict:
+    last24 = {"range": {"timestamp": {"gte": "now-24h"}}}
+    return {
+        "alertes_24h": _count({"bool": {"must": [{"exists": {"field": "alert_tag"}}], "filter": [last24]}}),
+        "incidents_critiques_7j": _count({"bool": {"must": [
+            {"term": {"event_source": "xdr_incident"}}, {"term": {"severity": "critical"}}],
+            "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}}),
+        "hotes_risque_ueba": _count({"bool": {"must": [{"term": {"event_source": "ueba_score"}},
+            {"range": {"ueba_score": {"gte": 80}}}], "filter": [last24]}}),
+        "kev_exposees": _count({"bool": {"must": [{"term": {"alert_tag": "vuln_kev"}}], "filter": [last24]}}),
+    }
+
+
+def get_timeseries():
+    res = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}],
+                           "filter": [{"range": {"timestamp": {"gte": "now-24h"}}}]}},
+        "aggs": {"h": {"date_histogram": {"field": "timestamp", "fixed_interval": "1h"}}}})
+    return [{"t": b.get("key_as_string"), "n": b.get("doc_count")}
+            for b in res.get("aggregations", {}).get("h", {}).get("buckets", [])]
+
+
+def get_terms(field, gte="now-7d", size=8):
+    res = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}],
+                           "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
+        "aggs": {"t": {"terms": {"field": field, "size": size}}}})
+    return [{"k": b.get("key"), "n": b.get("doc_count")}
+            for b in res.get("aggregations", {}).get("t", {}).get("buckets", [])]
+
+
+# ------------------------------------------------------------------------- handler
+class H(BaseHTTPRequestHandler):
+    def log_message(self, *a):  # silencieux
+        pass
+
+    def _json(self, obj, code=200, cookie=None):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _user(self):
+        c = SimpleCookie(self.headers.get("Cookie", ""))
+        tok = c["oms_session"].value if "oms_session" in c else ""
+        return verify_session(tok)
+
+    def _body(self):
+        n = int(self.headers.get("Content-Length", 0) or 0)
+        try:
+            return json.loads(self.rfile.read(n) or b"{}")
+        except Exception:
+            return {}
+
+    def do_GET(self):
+        p = self.path.split("?")[0]
+        if p == "/m/api/vapid":
+            return self._json({"publicKey": VAPID_PUB})
+        if p == "/m/api/me":
+            u = self._user()
+            return self._json({"user": u} if u else {"user": None}, 200 if u else 401)
+        if not self._user():
+            return self._json({"error": "auth"}, 401)
+        if p == "/m/api/alerts":
+            return self._json({"alerts": get_alerts()})
+        if p == "/m/api/incidents":
+            return self._json({"incidents": get_incidents()})
+        if p == "/m/api/kpis":
+            return self._json({"kpis": get_kpis()})
+        if p == "/m/api/timeseries":
+            return self._json({"series": get_timeseries()})
+        if p == "/m/api/by-tactic":
+            return self._json({"data": get_terms("mitre_tactic")})
+        if p == "/m/api/top-detections":
+            return self._json({"data": get_terms("alert_tag")})
+        if p == "/m/api/top-sources":
+            return self._json({"data": get_terms("event_source")})
+        self._json({"error": "not found"}, 404)
+
+    def do_POST(self):
+        p = self.path.split("?")[0]
+        b = self._body()
+        if p == "/m/api/login":
+            if graylog_login(str(b.get("username", "")), str(b.get("password", ""))):
+                tok = sign_session(str(b.get("username")))
+                ck = f"oms_session={tok}; Path=/m; HttpOnly; Secure; SameSite=Strict; Max-Age={SESSION_TTL}"
+                return self._json({"ok": True, "user": b.get("username")}, cookie=ck)
+            return self._json({"ok": False}, 401)
+        if p == "/m/api/logout":
+            return self._json({"ok": True}, cookie="oms_session=; Path=/m; Max-Age=0")
+        if p == "/m/api/subscribe":
+            if not self._user():
+                return self._json({"error": "auth"}, 401)
+            sub = b.get("subscription")
+            if sub and sub.get("endpoint"):
+                subs = [s for s in load_subs() if s.get("endpoint") != sub["endpoint"]]
+                subs.append(sub)
+                save_subs(subs)
+                return self._json({"ok": True})
+            return self._json({"ok": False}, 400)
+        if p == "/m/api/push":
+            # webhook Graylog (localhost) : secret partagé (query ?secret=, body ou header)
+            import urllib.parse as _up
+            qsec = _up.parse_qs(self.path.split("?", 1)[1]).get("secret", [""])[0] if "?" in self.path else ""
+            if PUSH_SECRET not in (qsec, b.get("secret"), self.headers.get("X-Push-Secret")):
+                return self._json({"error": "forbidden"}, 403)
+            # accepte un payload {title,body} OU le format de notification Graylog
+            title = b.get("title") or b.get("event_definition_title") or "Alerte SIEM critique"
+            ev = b.get("event") or {}
+            body = b.get("body") or ev.get("message") or ev.get("key") or "Ouvrir l'app pour le détail"
+            sent = push_all(str(title)[:90], str(body)[:140])
+            return self._json({"sent": sent})
+        self._json({"error": "not found"}, 404)
+
+
+def push_all(title: str, body: str) -> int:
+    """Envoie un web-push minimal à tous les abonnés (payload non sensible)."""
+    try:
+        from pywebpush import webpush, WebPushException  # type: ignore
+    except ImportError:
+        return -1
+    if not os.path.exists(VAPID_PRIV_FILE):
+        return -1
+    priv = open(VAPID_PRIV_FILE).read()
+    payload = json.dumps({"title": title, "body": body})[:300]
+    subs = load_subs()
+    ok, dead = 0, []
+    for s in subs:
+        try:
+            webpush(subscription_info=s, data=payload, vapid_private_key=priv,
+                    vapid_claims={"sub": VAPID_SUBJECT}, timeout=10)
+            ok += 1
+        except WebPushException as e:
+            if getattr(e, "response", None) is not None and e.response.status_code in (404, 410):
+                dead.append(s.get("endpoint"))
+        except Exception:
+            pass
+    if dead:
+        save_subs([s for s in subs if s.get("endpoint") not in dead])
+    return ok
+
+
+if __name__ == "__main__":
+    ThreadingHTTPServer(LISTEN, H).serve_forever()

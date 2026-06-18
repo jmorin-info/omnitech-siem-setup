@@ -1,0 +1,71 @@
+alert_tag,technique,technique_name,tactic,severity,score
+lsass_access,T1003.001,LSASS Memory,Credential Access,critique,10
+dcsync,T1003.006,DCSync,Credential Access,critique,10
+kerberoasting,T1558.003,Kerberoasting,Credential Access,eleve,8
+sysmon_injection,T1055,Process Injection,Defense Evasion,critique,9
+powershell_suspect,T1059.001,PowerShell,Execution,moyen,5
+threat_intel,T1071,Application Layer Protocol,Command and Control,eleve,7
+fortigate_utm,T1190,Exploit Public-Facing Application,Initial Access,eleve,6
+winsec_critique,T1562.002,Disable Windows Event Logging,Defense Evasion,critique,9
+vsphere_vm_destroy,T1485,Data Destruction,Impact,eleve,7
+vsphere_shell_ssh,T1059,Command and Scripting Interpreter,Execution,eleve,6
+vsphere_auth_fail,T1110,Brute Force,Credential Access,moyen,4
+m365_etranger,T1078,Valid Accounts,Initial Access,moyen,4
+m365_risque,T1078,Valid Accounts,Initial Access,eleve,6
+m365_mail_forward,T1114.003,Email Forwarding Rule,Collection,eleve,7
+m365_partage_externe,T1567,Exfiltration Over Web Service,Exfiltration,moyen,5
+m365_role,T1098,Account Manipulation,Persistence,eleve,7
+m365_mailbox_deleg,T1098.002,Add Mailbox Delegate Permissions,Persistence,eleve,6
+admin_share,T1021.002,SMB Windows Admin Shares,Lateral Movement,moyen,5
+canary,T1078,Valid Accounts decoy,Credential Access,critique,10
+veeam_job_echec,T1490,Inhibit System Recovery,Impact,moyen,3
+defender,T1204.002,Malicious File,Execution,eleve,7
+ransomware_indicator,T1486,Data Encrypted for Impact,Impact,critique,10
+impossible_travel,T1078,Valid Accounts,Initial Access,critique,9
+beaconing,T1071,Application Layer Protocol,Command and Control,eleve,7
+volume_spike,T1048,Exfiltration Over Alternative Protocol,Exfiltration,moyen,4
+volume_drop,T1562.001,Disable or Modify Tools,Defense Evasion,moyen,4
+dns_tunneling,T1071.004,DNS,Command and Control,eleve,8
+gpo_modification,T1484.001,Domain Policy Modification,Defense Evasion,eleve,7
+asrep_roasting,T1558.004,AS-REP Roasting,Credential Access,eleve,7
+lolbin_suspect,T1218,System Binary Proxy Execution,Defense Evasion,eleve,6
+persistence_autorun,T1547.001,Registry Run Keys / Startup Folder,Persistence,eleve,6
+m365_oauth_consent,T1528,Steal Application Access Token,Credential Access,eleve,7
+network_scan,T1046,Network Service Discovery,Discovery,eleve,5
+masquerading,T1036.005,Masquerading: Match Legitimate Name or Location,Defense Evasion,eleve,7
+explicit_cred_use,T1078,Valid Accounts,Defense Evasion,moyen,5
+exposition_internet,T1190,Exploit Public-Facing Application,Initial Access,eleve,7
+data_exfil,T1048,Exfiltration Over Alternative Protocol,Exfiltration,eleve,6
+gpp_creds_access,T1552.006,Unsecured Credentials: Group Policy Preferences,Credential Access,eleve,8
+kerberos_rc4,T1558.003,Kerberoasting,Credential Access,eleve,7
+local_admin_add,T1098,Account Manipulation,Persistence,eleve,7
+local_account_create,T1136.001,Create Account: Local Account,Persistence,eleve,6
+new_country,T1078.004,Valid Accounts: Cloud Accounts,Initial Access,eleve,6
+adcs_abuse,T1649,Steal or Forge Authentication Certificates,Credential Access,critique,9
+wmi_lateral_exec,T1047,Windows Management Instrumentation,Lateral Movement,eleve,8
+shadow_credentials,T1556.005,Modify Authentication Process,Credential Access,critique,9
+ldap_recon,T1087.002,Account Discovery: Domain Account,Discovery,moyen,4
+lateral_movement,T1021,Remote Services,Lateral Movement,eleve,7
+eset_detection,T1059,Command and Scripting Interpreter,Execution,eleve,6
+waf_block,T1190,Exploit Public-Facing Application,Initial Access,eleve,6
+vault_auth_fail,T1555.005,Password Managers,Credential Access,eleve,7
+vault_admin,T1078,Valid Accounts,Defense Evasion,eleve,6
+vault_admin_abuse,T1110,Brute Force,Credential Access,critique,8
+scheduled_task,T1053.005,Scheduled Task,Privilege Escalation,eleve,6
+service_install,T1543.003,Windows Service,Privilege Escalation,eleve,6
+uac_bypass,T1548.002,Bypass User Account Control,Privilege Escalation,critique,8
+m365_brute_externe,T1110,Brute Force,Credential Access,eleve,6
+remote_discovery,T1018,Remote System Discovery,Discovery,moyen,5
+service_stop_securite,T1489,Service Stop,Impact,eleve,7
+file_sensitive_access,T1039,Data from Network Shared Drive,Collection,eleve,6
+file_delete_sensible,T1485,Data Destruction,Impact,eleve,7
+fmg_admin_login_fail,T1110,Brute Force,Credential Access,eleve,6
+fmg_config_change,T1565.001,Stored Data Manipulation,Impact,moyen,4
+fmg_admin_login,T1078,Valid Accounts,Defense Evasion,faible,2
+m365_fwd_existing,T1114.003,Email Forwarding Rule,Collection,eleve,7
+c2_ioc,T1071,Application Layer Protocol,Command and Control,critique,9
+malware_domain,T1071.004,DNS,Command and Control,eleve,8
+ad_recon,T1087.002,Account Discovery: Domain Account,Discovery,eleve,6
+web_shell,T1505.003,Web Shell,Persistence,critique,9
+ntds_dump,T1003.003,NTDS,Credential Access,critique,10
+github_leak,T1552.001,Credentials In Files,Credential Access,eleve,7

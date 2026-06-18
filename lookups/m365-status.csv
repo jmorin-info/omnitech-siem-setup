@@ -1,0 +1,34 @@
+status_code,label
+0,Succes
+50053,Compte verrouille (trop d'echecs)
+50126,Identifiants invalides
+50125,Reinitialisation/changement de mot de passe requis
+50055,Mot de passe expire
+50057,Compte desactive
+50058,Session expiree (auth silencieuse impossible)
+50059,Aucune information de tenant (utilisateur inconnu)
+50034,Compte introuvable dans le tenant
+50076,MFA requise (Conditional Access)
+50074,MFA requise (preuve forte exigee)
+50079,Enrolement MFA requis
+50072,Inscription MFA utilisateur requise
+53003,Bloque par Conditional Access
+53004,MFA a configurer (Conditional Access)
+53000,Appareil non conforme (Conditional Access)
+53001,Appareil non enregistre/joint (Conditional Access)
+53011,Acces bloque par evaluation de risque continue
+50140,Interruption 'Rester connecte' (KMSI)
+50158,Authentification externe/contexte requis
+50097,Authentification de l'appareil requise
+50105,Utilisateur non assigne a l'application
+65001,Consentement applicatif requis
+65004,Consentement utilisateur refuse
+70044,Session expiree ou revoquee
+50173,Jeton frais requis (mot de passe change)
+50177,Jeton d'app externe requis
+50133,Session invalide (mot de passe expire/recent)
+50014,Limite invite atteinte (redemption en attente)
+500142,Redemption invitee en cours
+90094,Consentement administrateur requis
+81010,SSO transparent : echec de validation du ticket Kerberos
+81012,SSO transparent : utilisateur connecte different

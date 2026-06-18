@@ -1,0 +1,258 @@
+# =====================================================================
+#  OMS-XDR — Base de règles pilotée par données  (INTÉGRÉE au SIEM OMNITECH)
+#  signals  : requêtes atomiques exécutées contre Graylog
+#  rules    : corrélation multi-signaux par entité + mapping MITRE ATT&CK
+#
+#  INTÉGRATION (18/06/2026) : les signaux consomment les DÉTECTIONS EXISTANTES
+#  (champ `alert_tag` + schéma normalisé `event_id`/`src_ip`/`user`/`host`/
+#  `event_action`) plutôt que de re-détecter sur des champs bruts. oms-xdr est
+#  ainsi la couche CORRÉLATION + LLM + RÉPONSE au-dessus du moteur de détection
+#  mûr d'OMNITECH, sans doublon.  Clés de stream -> IDs réels dans config.yaml.
+#  NB: valider les noms de champs FortiGate (subtype/status) au 1er run --once.
+# =====================================================================
+
+# ---- SIGNAUX -------------------------------------------------------
+# type: count_by  -> agrège par entity_field et déclenche si count >= threshold
+# type: presence  -> déclenche si >=1 message (l'alert_tag a déjà appliqué le seuil de détection)
+signals:
+
+  S_PORTSCAN_FW:
+    description: "Scan réseau détecté (FortiGate IPS / détection interne T1046)"
+    stream: fortigate
+    query: 'alert_tag:network_scan'
+    type: presence
+    entity_field: src_ip
+
+  S_PORTSCAN_NET:
+    description: "Delta de ports ouverts détecté par oms-netscan"
+    stream: netscan
+    query: 'oms_event:"new_open_port"'
+    type: presence
+    entity_field: target_host
+
+  S_BRUTEFORCE_WIN:
+    description: "Échecs d'authentification Windows répétés (4625, hors compte de service)"
+    stream: windows
+    query: 'event_id:4625 AND logon_fail:1 AND NOT account_class:machine AND NOT account_class:service'
+    type: count_by
+    entity_field: user
+    threshold: 10
+
+  S_BRUTEFORCE_VPN:
+    description: "Échecs d'authentification VPN/SSL-VPN FortiGate"
+    stream: fortigate
+    query: 'subtype:"vpn" AND action:"ssl-login-fail"'
+    type: count_by
+    entity_field: src_ip
+    threshold: 8
+
+  S_LOGON_SUCCESS:
+    description: "Connexion réussie (4624) — corrélée à un brute force"
+    stream: windows
+    query: 'event_id:4624 AND NOT account_class:machine AND NOT account_class:service'
+    type: presence
+    entity_field: user
+
+  S_NEW_ADMIN:
+    description: "Ajout à un groupe privilégié (détection local_admin_add / 4728-4732-4756)"
+    stream: windows
+    query: 'alert_tag:local_admin_add OR event_id:(4728 OR 4732 OR 4756)'
+    type: presence
+    entity_field: user
+
+  S_USER_CREATED:
+    description: "Création de compte (détection local_account_create / 4720)"
+    stream: windows
+    query: 'alert_tag:local_account_create OR event_id:4720'
+    type: presence
+    entity_field: user
+
+  S_KERBEROAST:
+    description: "Kerberoasting (détection existante alert_tag:kerberoasting)"
+    stream: windows
+    query: 'alert_tag:kerberoasting OR alert_tag:kerberos_rc4'
+    type: presence
+    entity_field: user
+
+  S_DCSYNC:
+    description: "DCSync (détection existante alert_tag:dcsync)"
+    stream: windows
+    query: 'alert_tag:dcsync'
+    type: presence
+    entity_field: user
+
+  S_PSSCRIPTBLOCK:
+    description: "PowerShell offensif (détection existante alert_tag:powershell_suspect)"
+    stream: windows
+    query: 'alert_tag:powershell_suspect'
+    type: presence
+    entity_field: host
+
+  S_OUTBOUND_DENY_SPIKE:
+    description: "Pic de flux sortants bloqués / exfiltration (C2 potentiel)"
+    stream: fortigate
+    query: 'action:"deny" AND (alert_tag:data_exfil OR net_direction:"sortant")'
+    type: count_by
+    entity_field: src_ip
+    threshold: 50
+
+  # --- Signaux consommant des détections critiques existantes (stream vide = tous) ---
+  S_LSASS:
+    description: "Accès mémoire LSASS (vol d'identifiants — détection existante)"
+    stream: ""
+    query: 'alert_tag:lsass_access'
+    type: presence
+    entity_field: host
+
+  S_RANSOMWARE:
+    description: "Indicateur rançongiciel (effacement clichés/sauvegardes)"
+    stream: ""
+    query: 'alert_tag:ransomware_indicator'
+    type: presence
+    entity_field: host
+
+  S_AUDIT_TAMPER:
+    description: "Sabotage de la journalisation / audit Windows"
+    stream: ""
+    query: 'alert_tag:winsec_critique'
+    type: presence
+    entity_field: host
+
+  S_DEFENSE_OFF:
+    description: "Neutralisation des défenses (Defender / arrêt service sécurité)"
+    stream: ""
+    query: 'alert_tag:defender OR alert_tag:service_stop_securite'
+    type: presence
+    entity_field: host
+
+  S_ADCS_ABUSE:
+    description: "Abus AD CS / certificats (ESC1-ESC8)"
+    stream: ""
+    query: 'alert_tag:adcs_abuse'
+    type: presence
+    entity_field: user
+
+  S_SHADOW_CREDS:
+    description: "Shadow Credentials (msDS-KeyCredentialLink)"
+    stream: ""
+    query: 'alert_tag:shadow_credentials'
+    type: presence
+    entity_field: user
+
+  S_LATERAL:
+    description: "Mouvement latéral (compte -> N hôtes / WMI)"
+    stream: ""
+    query: 'alert_tag:lateral_movement OR alert_tag:wmi_lateral_exec'
+    type: presence
+    entity_field: user
+
+  S_EXPOSITION:
+    description: "Service interne exposé sur Internet"
+    stream: fortigate
+    query: 'alert_tag:exposition_internet'
+    type: presence
+    entity_field: dest_ip
+
+# ---- RÈGLES DE CORRÉLATION ----------------------------------------
+# require_all : tous les signaux présents pour la MÊME entité dans la fenêtre
+# any_of      : au moins un des signaux listés
+# join_entity : true => corrélation par entité commune ; false => corrélation globale
+rules:
+
+  CR_RECON_TO_ACCESS:
+    title: "Reconnaissance suivie d'attaque par force brute"
+    severity: high
+    join_entity: true
+    require_all: [S_BRUTEFORCE_VPN]
+    any_of: [S_PORTSCAN_FW, S_PORTSCAN_NET]
+    mitre: ["T1046", "T1110"]
+    tactic: ["Reconnaissance", "Credential Access"]
+
+  CR_CRED_ABUSE:
+    title: "Force brute aboutie + connexion réussie (compromission probable)"
+    severity: high
+    join_entity: true
+    require_all: [S_BRUTEFORCE_WIN, S_LOGON_SUCCESS]
+    mitre: ["T1110", "T1078"]
+    tactic: ["Credential Access", "Defense Evasion"]
+
+  CR_PRIV_ESCALATION:
+    title: "Création de compte / élévation de privilèges hors changement validé"
+    severity: high
+    join_entity: false
+    any_of: [S_NEW_ADMIN, S_USER_CREATED]
+    mitre: ["T1136", "T1098", "T1078.002"]
+    tactic: ["Persistence", "Privilege Escalation"]
+
+  CR_AD_CREDENTIAL_THEFT:
+    title: "Vol d'identifiants Active Directory (Kerberoasting / DCSync)"
+    severity: critical
+    join_entity: false
+    any_of: [S_KERBEROAST, S_DCSYNC]
+    mitre: ["T1558.003", "T1003.006"]
+    tactic: ["Credential Access"]
+
+  CR_EXECUTION_C2:
+    title: "Exécution PowerShell offensive + flux sortants suspects (C2)"
+    severity: critical
+    join_entity: false
+    require_all: [S_PSSCRIPTBLOCK]
+    any_of: [S_OUTBOUND_DENY_SPIKE]
+    mitre: ["T1059.001", "T1071"]
+    tactic: ["Execution", "Command and Control"]
+
+  CR_LATERAL_FROM_SCAN:
+    title: "Scan interne depuis un hôte du parc (mouvement latéral)"
+    severity: medium
+    join_entity: true
+    require_all: [S_PORTSCAN_NET]
+    mitre: ["T1046", "T1021"]
+    tactic: ["Discovery", "Lateral Movement"]
+
+  CR_LSASS_THEFT:
+    title: "Vol d'identifiants en mémoire (accès LSASS)"
+    severity: critical
+    join_entity: false
+    any_of: [S_LSASS]
+    mitre: ["T1003.001"]
+    tactic: ["Credential Access"]
+
+  CR_RANSOMWARE:
+    title: "Indicateur de rançongiciel (destruction de sauvegardes / clichés)"
+    severity: critical
+    join_entity: false
+    any_of: [S_RANSOMWARE]
+    mitre: ["T1486", "T1490"]
+    tactic: ["Impact"]
+
+  CR_AD_CERT_PERSIST:
+    title: "Persistance AD par certificat / shadow credentials (ESC, KeyCredentialLink)"
+    severity: critical
+    join_entity: false
+    any_of: [S_ADCS_ABUSE, S_SHADOW_CREDS]
+    mitre: ["T1649", "T1556.005"]
+    tactic: ["Credential Access", "Persistence"]
+
+  CR_DEFENSE_NEUTRALIZED:
+    title: "Neutralisation des défenses (audit / Defender / service de sécurité)"
+    severity: high
+    join_entity: false
+    any_of: [S_AUDIT_TAMPER, S_DEFENSE_OFF]
+    mitre: ["T1562.001", "T1562.002"]
+    tactic: ["Defense Evasion"]
+
+  CR_LATERAL_MOVEMENT:
+    title: "Mouvement latéral confirmé (compte sur plusieurs hôtes / WMI)"
+    severity: high
+    join_entity: false
+    any_of: [S_LATERAL]
+    mitre: ["T1021", "T1047"]
+    tactic: ["Lateral Movement"]
+
+  CR_EXPOSED_SERVICE:
+    title: "Service interne exposé sur Internet"
+    severity: medium
+    join_entity: false
+    any_of: [S_EXPOSITION]
+    mitre: ["T1190"]
+    tactic: ["Initial Access"]
