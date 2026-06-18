@@ -197,6 +197,36 @@ def get_terms(field, gte="now-7d", size=8):
             for b in res.get("aggregations", {}).get("t", {}).get("buckets", [])]
 
 
+def get_attack_matrix():
+    rows = []
+    try:
+        import csv as _csv
+        with open("/root/omnitech-siem-setup/lookups/mitre-attack.csv") as f:
+            rd = _csv.reader(f); next(rd, None)
+            for r in rd:
+                if len(r) >= 4 and r[1].startswith("T"):
+                    rows.append((r[1], r[2], r[3], r[4] if len(r) > 4 else ""))
+    except Exception:
+        pass
+    res = os_search("omni-*", {"size": 0, "query": {"range": {"timestamp": {"gte": "now-7d"}}},
+        "aggs": {"t": {"terms": {"field": "mitre_technique", "size": 300}}}})
+    counts = {b.get("key"): b.get("doc_count") for b in res.get("aggregations", {}).get("t", {}).get("buckets", [])}
+    tac = {}
+    for tech, name, tactic, sev in rows:
+        tac.setdefault(tactic, {}).setdefault(tech, {"id": tech, "name": name, "count": counts.get(tech, 0), "sev": sev})
+    ORDER = ["Reconnaissance", "Resource Development", "Initial Access", "Execution", "Persistence",
+             "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery",
+             "Lateral Movement", "Collection", "Command and Control", "Exfiltration", "Impact"]
+    out = []
+    for t in ORDER:
+        if t in tac:
+            out.append({"tactic": t, "techniques": sorted(tac[t].values(), key=lambda x: -x["count"])})
+    for t, v in tac.items():
+        if t not in ORDER:
+            out.append({"tactic": t, "techniques": list(v.values())})
+    return out
+
+
 # ------------------------------------------------------------------------- handler
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silencieux
@@ -247,6 +277,8 @@ class H(BaseHTTPRequestHandler):
             return self._json({"data": get_terms("alert_tag")})
         if p == "/m/api/top-sources":
             return self._json({"data": get_terms("event_source")})
+        if p == "/m/api/attack-matrix":
+            return self._json({"matrix": get_attack_matrix()})
         self._json({"error": "not found"}, 404)
 
     def do_POST(self):
