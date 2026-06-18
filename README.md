@@ -34,14 +34,15 @@ Everything is code. Every script is **idempotent** (safe to re‑run) and stops 
 
 | Capability | What it does |
 |---|---|
-| **Detection engineering** | 74 pipeline rules across 6 streams → tagged events (`alert_tag`) + 59 alert definitions (mail + Teams) |
-| **MITRE ATT&CK mapping** | 60 `alert_tag` → 54 techniques / 14 tactics, risk score 0–10, ATT&CK Navigator layer |
+| **Detection engineering** | 100+ pipeline rules across 7 streams (AD/Sysmon, FortiGate, FortiManager, M365, vSphere, …) → tagged events (`alert_tag`) + 100+ alert definitions (mail + Teams), tumbling windows |
+| **MITRE ATT&CK** | 69 `alert_tag` → 48 techniques / 12 tactics, risk score 0–10, ATT&CK Navigator layer + interactive coverage matrix |
+| **XDR correlation & local LLM** | `oms-xdr`: cross‑source kill‑chain correlation, incident scoring, local LLM triage/narration (Ollama, CPU), dry‑run response (double‑lock) |
+| **SOC console & mobile app** | “OMNI SOC” web console (VPN‑only): interactive ATT&CK matrix, attack graph, Entity‑360, real‑time SSE feed, command palette (⌘K), case‑management (status/assignee/notes). Installable mobile **PWA** with web‑push |
 | **Self‑explaining alerts** | Each detection carries `alert_explain` + `alert_remediation` (“what happened / what to do”), plus decoded failure cause, EventID, ATT&CK and risk in every notification |
 | **UEBA / NDR** | Volume Z‑score, impossible‑travel (Haversine), C2 beaconing (interval CV), DNS‑tunnelling (entropy), internal scan, entity risk scoring 0–100 |
-| **Incident correlation** | Per‑entity kill‑chain reconstruction over 24 h, scored 0–100 (`omni-incident-correlate`) |
-| **SOAR (light)** | Threat‑feed auto‑block of attacker IPs on FortiGate — no credentials on the firewall, TTL, whitelist, rate cap, full GELF audit trail |
-| **Exposure & vulnerabilities** | Passive exposure mapping + CISA KEV / patch‑age correlation from the Windows inventory |
-| **Compliance & integrity** | Tiered retention, tamper‑evident HMAC chain (`omni-integrity`), automated weekly/monthly reports, full ISO 27001 documentation set |
+| **Threat intel & leaks** | abuse.ch (Feodo C2 / URLhaus domains), CISA KEV + patch‑age; leak & dark‑web monitoring: RansomLook (ransomware extortion sites), HIBP, Dehashed, GitHub |
+| **SOAR & response** | Threat‑feed auto‑block of attacker IPs on FortiGate (no creds, TTL, whitelist, audit); AD account disable via LDAPS (dry‑run + denylist + audit + human‑in‑the‑loop) |
+| **Compliance & integrity** | Tiered retention, tamper‑evident HMAC chain (`omni-integrity`), continual‑improvement register (clause 10) + dated audit‑evidence generator, full ISO 27001:2022 mapping |
 
 ### Architecture
 
@@ -120,7 +121,7 @@ Debian 13 · Graylog 7.1 · OpenSearch 2.19.x (3.x breaks Graylog) · MongoDB 8.
 
 ### Status & roadmap
 
-**Production.** Roadmap (see `docs/REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md`): local LLM triage (advisory) → response actuators (ESET isolate / AD disable, generalising SOAR) → optional cloud-LLM layer with deterministic tokenisation + Presidio backstop. Co‑managed MDR scoping in `docs/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md`.
+**Production.** **Delivered:** XDR correlation + local LLM triage (`oms-xdr` + Ollama), SOC web console + mobile PWA, threat‑intel (abuse.ch IOC) + leak/dark‑web monitoring, ATT&CK coverage matrix, AD account‑disable actuator (dry‑run), ISO clause‑10 register + dated audit‑evidence generator. **Next:** ESET endpoint isolation + arming the AD response (pending API access / AD delegation), optional cloud‑LLM advisory layer with deterministic tokenisation + Presidio backstop. Co‑managed MDR scoping in `docs/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md`.
 
 ---
 
@@ -136,14 +137,15 @@ Tout est code. Chaque script est **idempotent** (rejouable sans danger) et s'arr
 
 | Capacité | Rôle |
 |---|---|
-| **Detection engineering** | 74 règles pipeline sur 6 streams → événements tagués (`alert_tag`) + 59 définitions d'alerte (mail + Teams) |
-| **Mapping MITRE ATT&CK** | 60 `alert_tag` → 54 techniques / 14 tactiques, score de risque 0–10, couche ATT&CK Navigator |
+| **Detection engineering** | 100+ règles pipeline sur 7 streams (AD/Sysmon, FortiGate, FortiManager, M365, vSphere, …) → événements tagués (`alert_tag`) + 100+ définitions d'alerte (mail + Teams), fenêtres tumbling |
+| **Mapping MITRE ATT&CK** | 69 `alert_tag` → 48 techniques / 12 tactiques, score de risque 0–10, couche ATT&CK Navigator + matrice de couverture interactive |
+| **Corrélation XDR & LLM local** | `oms-xdr` : corrélation kill‑chain multi‑sources, scoring d'incident, triage/narration par LLM local (Ollama, CPU), réponse en dry‑run (double verrou) |
+| **Console SOC & app mobile** | Console web « OMNI SOC » (VPN‑only) : matrice ATT&CK interactive, graphe d'attaque, Entité‑360, flux temps réel (SSE), command palette (⌘K), case‑management (statut/assignation/notes). **PWA** mobile installable avec web‑push |
 | **Alertes auto‑explicatives** | Chaque détection porte `alert_explain` + `alert_remediation` (« ce qui s'est passé / que faire »), plus la cause décodée de l'échec, l'EventID, ATT&CK et le risque dans chaque notification |
 | **UEBA / NDR** | Z‑score de volume, voyage impossible (Haversine), beaconing C2 (CV des intervalles), tunnel DNS (entropie), scan interne, score de risque d'entité 0–100 |
-| **Corrélation d'incidents** | Reconstruction de kill‑chain par entité sur 24 h, score 0–100 (`omni-incident-correlate`) |
-| **SOAR (léger)** | Blocage automatique des IP attaquantes sur FortiGate via threat‑feed — aucun identifiant sur le pare‑feu, TTL, liste blanche, plafond, piste d'audit GELF complète |
-| **Exposition & vulnérabilités** | Cartographie passive d'exposition + corrélation CISA KEV / ancienneté de patch depuis l'inventaire Windows |
-| **Conformité & intégrité** | Rétention par paliers, chaîne d'intégrité HMAC anti‑altération (`omni-integrity`), rapports hebdo/mensuels automatiques, dossier ISO 27001 complet |
+| **Threat intel & fuites** | abuse.ch (C2 Feodo / domaines URLhaus), CISA KEV + ancienneté de patch ; surveillance fuites & dark web : RansomLook (sites d'extorsion ransomware), HIBP, Dehashed, GitHub |
+| **SOAR & réponse** | Blocage auto des IP attaquantes sur FortiGate via threat‑feed (sans identifiant, TTL, liste blanche, audit) ; désactivation de compte AD via LDAPS (dry‑run + denylist + audit + human‑in‑the‑loop) |
+| **Conformité & intégrité** | Rétention par paliers, chaîne d'intégrité HMAC anti‑altération (`omni-integrity`), registre d'amélioration continue (clause 10) + générateur de preuves daté, mapping ISO 27001:2022 complet |
 
 ### Architecture
 
@@ -222,7 +224,7 @@ Debian 13 · Graylog 7.1 · OpenSearch 2.19.x (la 3.x casse Graylog) · MongoDB 
 
 ### État & feuille de route
 
-**Production.** Feuille de route (cf. `docs/REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md`) : triage LLM local (conseil) → actionneurs de réponse (isolation ESET / désactivation AD, généralisation du SOAR) → couche LLM cloud optionnelle avec tokenisation déterministe + filet Presidio. Chiffrage du MDR co‑managé dans `docs/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md`.
+**Production.** **Livré :** corrélation XDR + triage LLM local (`oms-xdr` + Ollama), console web SOC + PWA mobile, threat‑intel (IOC abuse.ch) + surveillance fuites/dark web, matrice de couverture ATT&CK, actionneur de désactivation de compte AD (dry‑run), registre clause 10 + générateur de preuves d'audit daté. **À venir :** isolation d'endpoint ESET + armement de la réponse AD (en attente des accès API / délégation AD), couche LLM cloud optionnelle (conseil) avec tokenisation déterministe + filet Presidio. Chiffrage du MDR co‑managé dans `docs/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md`.
 
 ---
 
