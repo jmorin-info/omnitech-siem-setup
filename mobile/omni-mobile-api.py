@@ -411,6 +411,31 @@ def get_leaks():
     return {"items": items, "sources": counts}
 
 
+# --- anti brute-force login (par IP, en memoire) ---
+LOGIN_FAILS = {}
+LOGIN_MAX = int(CONF.get("MOBILE_LOGIN_MAX", "5"))
+LOGIN_WINDOW = int(CONF.get("MOBILE_LOGIN_WINDOW", "900"))  # 15 min
+
+
+def login_locked(ip):
+    rec = LOGIN_FAILS.get(ip)
+    if not rec:
+        return False
+    if time.time() - rec[1] > LOGIN_WINDOW:
+        LOGIN_FAILS.pop(ip, None)
+        return False
+    return rec[0] >= LOGIN_MAX
+
+
+def login_fail(ip):
+    now = time.time()
+    rec = LOGIN_FAILS.get(ip)
+    if not rec or now - rec[1] > LOGIN_WINDOW:
+        LOGIN_FAILS[ip] = [1, now]
+    else:
+        rec[0] += 1
+
+
 # ------------------------------------------------------------------------- handler
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silencieux
@@ -518,10 +543,15 @@ class H(BaseHTTPRequestHandler):
         p = self.path.split("?")[0]
         b = self._body()
         if p == "/m/api/login":
+            ip = self.headers.get("X-Real-IP") or self.client_address[0]
+            if login_locked(ip):
+                return self._json({"ok": False, "error": "rate_limited"}, 429)
             if graylog_login(str(b.get("username", "")), str(b.get("password", ""))):
+                LOGIN_FAILS.pop(ip, None)
                 tok = sign_session(str(b.get("username")))
                 ck = f"oms_session={tok}; Path=/m; HttpOnly; Secure; SameSite=Strict; Max-Age={SESSION_TTL}"
                 return self._json({"ok": True, "user": b.get("username")}, cookie=ck)
+            login_fail(ip)
             return self._json({"ok": False}, 401)
         if p == "/m/api/logout":
             return self._json({"ok": True}, cookie="oms_session=; Path=/m; Max-Age=0")
