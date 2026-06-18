@@ -159,6 +159,9 @@
   .emc textarea{width:100%;background:#070b15;border:1px solid var(--bd);border-radius:8px;color:var(--fg);padding:10px;font-size:13px;margin:6px 0;resize:vertical}
   .blk.rem .lbl{color:var(--grn)}
   .lsrc{margin-bottom:14px;display:flex;flex-wrap:wrap;gap:4px}
+  .dfilter{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .dfilter select{background:#0c1525;border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:8px 11px;font-size:13px}
+  .dfilter select:focus{border-color:var(--cy);outline:none}
   .report{background:#fff;color:#111827;border-radius:10px;padding:32px;max-width:920px}
   .report h1{font-size:20px;color:#0b1322;margin:0}.report h2{font-size:14px;margin:20px 0 8px;color:#0b1322;border-bottom:1px solid #e2e8f0;padding-bottom:5px}
   .report .muted{color:#64748b}
@@ -233,7 +236,14 @@
     </section>
 
     <section class="page" id="p-incidents"><div class="card"><h3>◈ Incidents corrélés (oms-xdr)</h3><div class="feed" id="incFeed"></div></div></section>
-    <section class="page" id="p-detections"><div class="card"><h3>◎ Alertes récentes (24 h)</h3><div class="feed" id="alFeed"></div></div></section>
+    <section class="page" id="p-detections"><div class="card"><h3>◎ Détections (24 h)
+        <span class="tag" id="detCount"></span></h3>
+      <div class="dfilter">
+        <select id="fTactic" onchange="onFilter()"><option value="">Toutes tactiques</option></select>
+        <select id="fSource" onchange="onFilter()"><option value="">Toutes sources</option></select>
+        <button class="stb" onclick="clearFilter()">Réinitialiser</button>
+      </div>
+      <div class="feed" id="detFeed"></div></div></section>
     <section class="page" id="p-attack">
       <div class="card"><h3>⊞ Matrice MITRE ATT&CK<span class="tag">couverture × activité (7 j)</span></h3>
         <div class="matrix" id="atkMatrix"></div></div>
@@ -296,10 +306,10 @@ const noLeg={plugins:{legend:{display:false}}};
 
 async function loadAll(){
   try{
-    const [k,ts,tac,det,src,inc,al,mtx]=await Promise.all([
-      j("/kpis"),j("/timeseries"),j("/by-tactic"),j("/top-detections"),j("/top-sources"),j("/cases"),j("/alerts"),j("/attack-matrix")]);
+    const [k,ts,tac,det,src,inc,mtx]=await Promise.all([
+      j("/kpis"),j("/timeseries"),j("/by-tactic"),j("/top-detections"),j("/top-sources"),j("/cases"),j("/attack-matrix")]);
     renderKpis(k.kpis); renderTs(ts.series); renderTac(tac.data); renderDet(det.data);
-    renderSrc(src.data); renderMatrix(mtx.matrix); renderCases(inc.cases); renderAlerts(al.alerts);
+    renderSrc(src.data); renderMatrix(mtx.matrix); renderCases(inc.cases); loadDetections();
     j("/graph").then(g=>renderGraph(g)).catch(()=>{});
     j("/leaks").then(l=>renderLeaks(l)).catch(()=>{});
     j("/health").then(h=>renderHealth(h)).catch(()=>{});
@@ -413,6 +423,21 @@ function renderHealth(d){d=d||{};
     <span class="ttl">${esc(x.k)}</span>
     <span class="mono" style="color:var(--cy);margin-left:auto">${(x.n||0).toLocaleString("fr")}</span>
     <span class="ts">${ago(x.last)}</span></div></div>`).join("")||'<div class="empty">—</div>';}
+let DETI=[],detF={tactic:"",source:""};
+function onFilter(){detF.tactic=$("#fTactic").value;detF.source=$("#fSource").value;loadDetections();}
+function clearFilter(){detF={tactic:"",source:""};if($("#fTactic"))$("#fTactic").value="";if($("#fSource"))$("#fSource").value="";loadDetections();}
+function loadDetections(){j("/detections?tactic="+encodeURIComponent(detF.tactic)+"&source="+encodeURIComponent(detF.source)).then(d=>renderDetections(d)).catch(()=>{});}
+function renderDetections(d){d=d||{};DETI=d.items||[];
+  const ft=$("#fTactic");if(ft&&ft.options.length<=1)(d.tactics||[]).forEach(t=>ft.add(new Option(t,t)));
+  const fs=$("#fSource");if(fs&&fs.options.length<=1)(d.sources||[]).forEach(s=>fs.add(new Option(s,s)));
+  if($("#detCount"))$("#detCount").textContent=DETI.length+" détection(s)";
+  $("#detFeed").innerHTML=DETI.length?DETI.map((x,i)=>{const c=x.priority==3?"critical":x.priority==2?"high":"medium";
+    const who=((x.entity||"")+"").split("\\").pop();
+    return `<div class="inc sev-${c}" onclick="openDet(${i})"><div class="top">
+      <span class="chip ${chipCls(c)}">${esc((x.source||"").toUpperCase())}</span>
+      <span class="ttl">${nice(x.tag)}</span><span class="ts">${ago(x.ts)}</span></div>
+      <div class="meta">${esc(x.tech||"")}${x.tactic?" · "+esc(x.tactic):""}${who?" · 👤 "+esc(who):""}</div></div>`;}).join(""):'<div class="empty">Aucune détection pour ce filtre</div>';}
+function openDet(i){const x=DETI[i];if(!x||!x.entity)return;openEntity(x.entity,((x.entity||"")+"").split("\\").pop());}
 function renderLeaks(d){d=d||{};
   $("#leakSrc").innerHTML=(d.sources||[]).map(s=>`<span class="pchip">${esc((s.k||'?').toUpperCase())} · ${s.n}</span>`).join(" ")||'<span class="muted">Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)</span>';
   const items=d.items||[];

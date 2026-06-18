@@ -337,6 +337,33 @@ def get_entity(name):
             "events": ev}
 
 
+def get_detections(tactic="", source="", tag=""):
+    must = [{"exists": {"field": "alert_tag"}}]
+    if tactic:
+        must.append({"term": {"mitre_tactic": tactic}})
+    if source:
+        must.append({"term": {"event_source": source}})
+    if tag:
+        must.append({"term": {"alert_tag": tag}})
+    res = os_search("omni-*", {"size": 60, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {"must": must, "filter": [{"range": {"timestamp": {"gte": "now-24h"}}}]}},
+        "_source": ["timestamp", "alert_tag", "mitre_technique", "mitre_tactic", "event_source",
+                    "user", "key", "short_message", "message", "priority"],
+        "aggs": {"tac": {"terms": {"field": "mitre_tactic", "size": 14}},
+                 "src": {"terms": {"field": "event_source", "size": 15}}}})
+    items = []
+    for h in res.get("hits", {}).get("hits", []):
+        s = h.get("_source", {})
+        items.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
+                      "tactic": s.get("mitre_tactic"), "source": s.get("event_source"),
+                      "entity": s.get("user") or s.get("key"), "priority": s.get("priority"),
+                      "msg": s.get("short_message") or s.get("message")})
+    ag = res.get("aggregations", {})
+    return {"items": items,
+            "tactics": [b["key"] for b in ag.get("tac", {}).get("buckets", [])],
+            "sources": [b["key"] for b in ag.get("src", {}).get("buckets", [])]}
+
+
 def get_report():
     cov = get_attack_matrix()
     src = get_health()
@@ -444,6 +471,10 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_health())
         if p == "/m/api/report":
             return self._json(get_report())
+        if p == "/m/api/detections":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return self._json(get_detections(qs.get("tactic", [""])[0], qs.get("source", [""])[0], qs.get("tag", [""])[0]))
         if p == "/m/api/graph":
             return self._json(get_graph())
         if p == "/m/api/entity":
