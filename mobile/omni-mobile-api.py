@@ -343,7 +343,38 @@ class H(BaseHTTPRequestHandler):
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             return self._json(get_entity(qs.get("u", [""])[0]))
+        if p == "/m/api/stream":
+            return self._sse()
         self._json({"error": "not found"}, 404)
+
+    def _sse(self):
+        import time as _t
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        last = None
+        try:
+            while True:
+                rng = {"gt": last} if last else {"gte": "now-2m"}
+                res = os_search("omni-*", {"size": 20, "sort": [{"timestamp": {"order": "desc"}}],
+                    "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}],
+                                       "filter": [{"range": {"timestamp": rng}}]}},
+                    "_source": ["timestamp", "alert_tag", "mitre_technique", "user", "short_message",
+                                "message", "priority", "key"]})
+                for h in reversed(res.get("hits", {}).get("hits", [])):
+                    s = h.get("_source", {}); ts = s.get("timestamp")
+                    if ts:
+                        last = ts
+                    ev = {"ts": ts, "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
+                          "user": s.get("user"), "entity": s.get("key"), "priority": s.get("priority"),
+                          "msg": s.get("short_message") or s.get("message")}
+                    self.wfile.write(("data: " + json.dumps(ev) + "\n\n").encode()); self.wfile.flush()
+                self.wfile.write(b": hb\n\n"); self.wfile.flush()
+                _t.sleep(4)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
 
     def do_POST(self):
         p = self.path.split("?")[0]
