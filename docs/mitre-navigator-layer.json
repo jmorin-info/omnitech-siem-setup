@@ -583,6 +583,42 @@
           "value": "ntds_dump"
         }
       ]
+    },
+    {
+      "techniqueID": "T1552.001",
+      "score": 7,
+      "enabled": true,
+      "comment": "Credentials In Files : github_leak (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "github_leak"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1657",
+      "score": 10,
+      "enabled": true,
+      "comment": "Financial Theft : ransomware_mention (score 10)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "ransomware_mention"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1589.001",
+      "score": 7,
+      "enabled": true,
+      "comment": "Gather Victim Identity: Credentials : credential_leak (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "credential_leak"
+        }
+      ]
     }
   ],
   "gradient": {

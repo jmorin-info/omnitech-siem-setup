@@ -188,6 +188,7 @@
       <a data-p="attack"><span class="ic">⊞</span>ATT&CK</a>
       <a data-p="graph"><span class="ic">🕸</span>Graphe d'attaque</a>
       <a data-p="leaks"><span class="ic">🔓</span>Fuites & Dark Web</a>
+      <a data-p="health"><span class="ic">💓</span>Santé & Collecte</a>
     </nav>
     <div class="side-foot">v1 · données temps réel<br>OpenSearch + oms-xdr</div>
   </aside>
@@ -231,6 +232,10 @@
       <div class="card"><h3>🔓 Fuites & Dark Web<span class="tag">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
         <div class="lsrc" id="leakSrc"></div><div class="feed" id="leakFeed"></div></div>
     </section>
+    <section class="page" id="p-health">
+      <div class="grid kpis" id="hkpis"></div>
+      <div class="card" style="margin-top:16px"><h3>🛰️ Sources de collecte (24 h)<span class="tag">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
+    </section>
   </main>
   <div id="emodal"><div class="scrim2" onclick="closeEnt()"></div><div class="emc" id="emc"></div></div>
   <div id="pal"><div class="scrim2" onclick="closePal()"></div><div class="palbox"><input id="palIn" placeholder="Rechercher / naviguer…  (pages, entités)" oninput="renderPal(this.value)"><div id="palList"></div></div></div>
@@ -256,7 +261,7 @@ function start(){$("#login").style.display="none";$("#app").style.display="grid"
   setInterval(()=>{if(!document.hidden)loadAll()},60000);}
 
 // nav
-const titles={overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web"};
+const titles={overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte"};
 document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
   const pg=a.dataset.p; document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+pg));
@@ -277,6 +282,7 @@ async function loadAll(){
     renderSrc(src.data); renderMatrix(mtx.matrix); renderCases(inc.cases); renderAlerts(al.alerts);
     j("/graph").then(g=>renderGraph(g)).catch(()=>{});
     j("/leaks").then(l=>renderLeaks(l)).catch(()=>{});
+    j("/health").then(h=>renderHealth(h)).catch(()=>{});
   }catch(e){if(e==="auth")location.reload();}
 }
 function renderKpis(k){k=k||{};
@@ -359,6 +365,17 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){closePal();closeEnt();}
   if(e.key==="Enter"&&$("#pal").classList.contains("on")){const f=$("#palList .pi");if(f)f.click();}});
 function layoutGraph(){if(cy){cy.resize();cy.layout(GCFG).run();cy.fit(undefined,30);}}
+function renderHealth(d){d=d||{};
+  $("#hkpis").innerHTML=[
+    ["cy","Cluster",esc(d.cluster||'?'),"OpenSearch"],
+    ["cy","Événements (24 h)",(d.events_24h||0).toLocaleString("fr"),"toutes sources"],
+    ["vio","Sources actives",(d.sources||[]).length,"sur 24 h"],
+    ["amb","Shards actifs",(d.shards!=null?d.shards:'?'),((d.nodes!=null?d.nodes:'?'))+" nœud(s)"]
+  ].map(([c,l,v,s])=>`<div class="kpi ${c}"><div class="lab">${l}</div><div class="val mono">${v}</div><div class="sub">${s}</div></div>`).join("");
+  $("#hsrc").innerHTML=(d.sources||[]).map(x=>`<div class="inc"><div class="top">
+    <span class="ttl">${esc(x.k)}</span>
+    <span class="mono" style="color:var(--cy);margin-left:auto">${(x.n||0).toLocaleString("fr")}</span>
+    <span class="ts">${ago(x.last)}</span></div></div>`).join("")||'<div class="empty">—</div>';}
 function renderLeaks(d){d=d||{};
   $("#leakSrc").innerHTML=(d.sources||[]).map(s=>`<span class="pchip">${esc((s.k||'?').toUpperCase())} · ${s.n}</span>`).join(" ")||'<span class="muted">Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)</span>';
   const items=d.items||[];

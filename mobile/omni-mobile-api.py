@@ -337,6 +337,24 @@ def get_entity(name):
             "events": ev}
 
 
+def get_health():
+    ch = {}
+    try:
+        ch = json.load(urllib.request.urlopen(OS_URL + "/_cluster/health", timeout=10))
+    except Exception:
+        ch = {}
+    res = os_search("omni-*", {"size": 0, "query": {"range": {"timestamp": {"gte": "now-24h"}}},
+        "aggs": {"src": {"terms": {"field": "event_source", "size": 30},
+                         "aggs": {"last": {"max": {"field": "timestamp"}}}},
+                 "tot": {"value_count": {"field": "event_source"}}}})
+    ag = res.get("aggregations", {})
+    sources = [{"k": b["key"], "n": b["doc_count"], "last": (b.get("last", {}) or {}).get("value_as_string")}
+               for b in ag.get("src", {}).get("buckets", [])]
+    return {"cluster": ch.get("status", "?"), "nodes": ch.get("number_of_nodes"),
+            "shards": ch.get("active_shards"), "events_24h": ag.get("tot", {}).get("value", 0),
+            "sources": sources}
+
+
 def get_leaks():
     res = os_search("omni-*", {"size": 40, "sort": [{"timestamp": {"order": "desc"}}],
         "query": {"bool": {"must": [{"term": {"event_source": "leak_intel"}}],
@@ -411,6 +429,8 @@ class H(BaseHTTPRequestHandler):
             return self._json({"matrix": get_attack_matrix()})
         if p == "/m/api/leaks":
             return self._json(get_leaks())
+        if p == "/m/api/health":
+            return self._json(get_health())
         if p == "/m/api/graph":
             return self._json(get_graph())
         if p == "/m/api/entity":
