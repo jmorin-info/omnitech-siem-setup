@@ -175,6 +175,22 @@
   .pdesc b{color:var(--fg);font-weight:600}
   .mlegend{display:flex;gap:16px;align-items:center;font-size:11px;color:var(--mut);margin-top:14px;flex-wrap:wrap}
   .mlegend i{width:13px;height:13px;border-radius:3px;display:inline-block;vertical-align:middle;margin-right:5px;border:1px solid var(--bd)}
+  /* --- niveau de menace + touche cyber --- */
+  .threat{display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid var(--bd);border-radius:14px;padding:16px 24px;margin-bottom:20px;position:relative;overflow:hidden;background:linear-gradient(90deg,var(--tg,rgba(52,211,153,.08)),transparent 72%)}
+  .threat.red{--tg:rgba(251,59,83,.14);border-color:#fb3b5366;box-shadow:0 0 34px rgba(251,59,83,.16)}
+  .threat.amb{--tg:rgba(245,166,35,.13);border-color:#f5a62355;box-shadow:0 0 30px rgba(245,166,35,.12)}
+  .threat.blu{--tg:rgba(59,130,246,.13);border-color:#3b82f655}
+  .threat.grn{--tg:rgba(52,211,153,.1);border-color:#34d39955}
+  .tinner{display:flex;align-items:center;gap:16px}
+  .tdot{width:15px;height:15px;border-radius:50%;background:var(--tc,var(--grn));box-shadow:0 0 16px var(--tc,var(--grn));animation:pulse 1.6s infinite}
+  .threat.red .tdot{--tc:var(--red)}.threat.amb .tdot{--tc:var(--amb)}.threat.blu .tdot{--tc:var(--blu)}.threat.grn .tdot{--tc:var(--grn)}
+  .tlvl{font-size:23px;font-weight:800;letter-spacing:1.5px}
+  .threat.red .tlvl{color:var(--red)}.threat.amb .tlvl{color:var(--amb)}.threat.blu .tlvl{color:var(--blu)}.threat.grn .tlvl{color:var(--grn)}
+  .tsub{font-size:12px;color:var(--mut);margin-top:2px}
+  .tstats{display:flex;gap:24px}.tstats>div{text-align:center}.tstats b{font-size:21px;display:block;color:var(--fg)}.tstats span{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+  .brand .logo,.appbar .mark{animation:glow 3.5s ease-in-out infinite}
+  @keyframes glow{50%{box-shadow:0 0 28px rgba(34,211,238,.7)}}
+  aside::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(34,211,238,.02) 3px,rgba(34,211,238,.02) 4px)}
   .report{background:#fff;color:#111827;border-radius:10px;padding:32px;max-width:920px}
   .report h1{font-size:20px;color:#0b1322;margin:0}.report h2{font-size:14px;margin:20px 0 8px;color:#0b1322;border-bottom:1px solid #e2e8f0;padding-bottom:5px}
   .report .muted{color:#64748b}
@@ -237,6 +253,10 @@
   <main>
     <div id="pdesc" class="pdesc"></div>
     <section class="page on" id="p-overview">
+      <div class="threat grn" id="threat">
+        <div class="tinner"><span class="tdot"></span><div><div class="tlvl" id="tlabel">ANALYSE…</div><div class="tsub" id="tsub">Niveau de menace</div></div></div>
+        <div class="tstats" id="tstats"></div>
+      </div>
       <div class="grid kpis" id="kpis"></div>
       <div class="grid cols" style="margin-bottom:16px">
         <div class="card"><h3>📈 Détections (24 h)<span class="tag">par heure</span></h3><div class="chartbox"><canvas id="cTs"></canvas></div></div>
@@ -246,7 +266,10 @@
         <div class="card"><h3>🔥 Top détections<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cDet"></canvas></div></div>
         <div class="card"><h3>🛰️ Sources<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cSrc"></canvas></div></div>
       </div>
-      <div class="card" style="margin-top:16px"><h3><span class="livedot"></span> Flux temps réel<span class="tag" id="liveCount">live</span></h3><div class="live" id="liveFeed"><div class="muted">En attente d'événements…</div></div></div>
+      <div class="grid cols" style="margin-top:18px">
+        <div class="card"><h3>⚠️ Top entités à risque<span class="tag">7 j · cliquer pour la fiche</span></h3><div class="feed" id="topEnt"></div></div>
+        <div class="card"><h3><span class="livedot"></span> Flux temps réel<span class="tag" id="liveCount">live</span></h3><div class="live" id="liveFeed"><div class="muted">En attente d'événements…</div></div></div>
+      </div>
     </section>
 
     <section class="page" id="p-incidents"><div class="card"><h3>◈ Incidents corrélés (oms-xdr)</h3><div class="feed" id="incFeed"></div></div></section>
@@ -339,14 +362,26 @@ async function loadAll(){
     j("/graph").then(g=>renderGraph(g)).catch(()=>{});
     j("/leaks").then(l=>renderLeaks(l)).catch(()=>{});
     j("/health").then(h=>renderHealth(h)).catch(()=>{});
+    j("/risk").then(r=>renderRisk(r)).catch(()=>{});
     j("/report").then(r=>renderReport(r)).catch(()=>{});
   }catch(e){if(e==="auth")location.reload();}
 }
+let TOPE=[];
+function renderRisk(d){d=d||{};
+  const M={CRITIQUE:["red","Compromission probable — action immédiate"],ELEVE:["amb","Activité critique en cours"],SURVEILLE:["blu","Signaux à surveiller"],NOMINAL:["grn","Aucune menace active"]};
+  const m=M[d.threat_level]||M.NOMINAL;const t=$("#threat");
+  if(t){t.className="threat "+m[0];$("#tlabel").textContent=d.threat_level||"NOMINAL";$("#tsub").textContent="Niveau de menace · "+m[1];
+    $("#tstats").innerHTML=`<div><b>${d.critical_incidents||0}</b><span>incidents critiques</span></div><div><b>${d.ueba||0}</b><span>hôtes à risque</span></div><div><b>${d.kev||0}</b><span>CVE KEV</span></div>`;}
+  TOPE=d.top_entities||[];
+  $("#topEnt").innerHTML=TOPE.length?TOPE.map((e,i)=>{const who=((e.k||"")+"").split("\\").pop();
+    return `<div class="inc" onclick="openTopE(${i})"><div class="top"><span class="ttl">👤 ${esc(who)}</span>
+      <span class="mono" style="color:var(--amb);margin-left:auto">${(e.n||0).toLocaleString("fr")}</span><span class="ts">${e.tech||0} tech.</span></div></div>`;}).join(""):'<div class="empty">—</div>';}
+function openTopE(i){const e=TOPE[i];if(e&&e.k)openEntity(e.k,((e.k||"")+"").split("\\").pop());}
 function renderKpis(k){k=k||{};
   $("#kpis").innerHTML=[
     ["red","⚠","Incidents critiques (7 j)",k.incidents_critiques_7j,"corrélés oms-xdr","incidents"],
     ["amb","◎","Hôtes à risque (UEBA)",k.hotes_risque_ueba,"score ≥ 80","graph"],
-    ["cy","📡","Détections (24 h)",k.alertes_24h,"volume tagué","detections"],
+    ["cy","📡","Événements détectés (24 h)",k.alertes_24h,"détections taguées","detections"],
     ["vio","🛡","CVE KEV exposées",k.kev_exposees,"catalogue CISA","detections"]
   ].map(([c,i,l,v,s,p])=>`<div class="kpi ${c}" style="cursor:pointer" onclick="goNav('${p}')"><div class="lab">${i} ${l}</div>
     <div class="val mono">${(v??0).toLocaleString("fr")}</div><div class="sub">${s}</div></div>`).join("");

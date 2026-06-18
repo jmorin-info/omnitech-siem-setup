@@ -375,6 +375,29 @@ def get_report():
             "events_24h": src.get("events_24h")}
 
 
+def get_risk():
+    k = get_kpis()
+    res = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}, {"exists": {"field": "user"}}],
+                           "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}},
+        "aggs": {"u": {"terms": {"field": "user", "size": 8},
+                       "aggs": {"t": {"cardinality": {"field": "mitre_technique"}}}}}})
+    ents = [{"k": b["key"], "n": b["doc_count"], "tech": (b.get("t", {}) or {}).get("value", 0)}
+            for b in res.get("aggregations", {}).get("u", {}).get("buckets", [])]
+    crit = k.get("incidents_critiques_7j", 0)
+    ueba = k.get("hotes_risque_ueba", 0)
+    kev = k.get("kev_exposees", 0)
+    if crit >= 3:
+        lvl = "CRITIQUE"
+    elif crit >= 1:
+        lvl = "ELEVE"
+    elif ueba > 0 or kev > 0:
+        lvl = "SURVEILLE"
+    else:
+        lvl = "NOMINAL"
+    return {"threat_level": lvl, "critical_incidents": crit, "ueba": ueba, "kev": kev, "top_entities": ents}
+
+
 def get_health():
     ch = {}
     try:
@@ -494,6 +517,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_leaks())
         if p == "/m/api/health":
             return self._json(get_health())
+        if p == "/m/api/risk":
+            return self._json(get_risk())
         if p == "/m/api/report":
             return self._json(get_report())
         if p == "/m/api/detections":
