@@ -337,7 +337,7 @@ def get_entity(name):
             "events": ev}
 
 
-def get_detections(tactic="", source="", tag=""):
+def get_detections(tactic="", source="", tag="", technique=""):
     must = [{"exists": {"field": "alert_tag"}}]
     if tactic:
         must.append({"term": {"mitre_tactic": tactic}})
@@ -345,6 +345,8 @@ def get_detections(tactic="", source="", tag=""):
         must.append({"term": {"event_source": source}})
     if tag:
         must.append({"term": {"alert_tag": tag}})
+    if technique:
+        must.append({"term": {"mitre_technique": technique}})
     res = os_search("omni-*", {"size": 60, "sort": [{"timestamp": {"order": "desc"}}],
         "query": {"bool": {"must": must, "filter": [{"range": {"timestamp": {"gte": "now-24h"}}}]}},
         "_source": ["timestamp", "alert_tag", "mitre_technique", "mitre_tactic", "event_source",
@@ -373,6 +375,22 @@ def get_report():
             "incidents": get_incidents(12),
             "sources": src.get("sources", []), "cluster": src.get("cluster"),
             "events_24h": src.get("events_24h")}
+
+
+def get_geo_threats():
+    out = {"countries": []}
+    for field in ("src_ip_country_code", "srcip_country_code", "src_country"):
+        res = os_search("omni-fortigate*", {"size": 0,
+            "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}},
+            "aggs": {"c": {"terms": {"field": field, "size": 14}}}})
+        cc = [{"k": b["key"], "n": b["doc_count"]}
+              for b in res.get("aggregations", {}).get("c", {}).get("buckets", [])
+              if b.get("key") and b["key"] not in ("Reserved", "Private", "-", "")]
+        if cc:
+            out["countries"] = cc
+            out["field"] = field
+            break
+    return out
 
 
 def get_risk():
@@ -519,12 +537,14 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_health())
         if p == "/m/api/risk":
             return self._json(get_risk())
+        if p == "/m/api/geo":
+            return self._json(get_geo_threats())
         if p == "/m/api/report":
             return self._json(get_report())
         if p == "/m/api/detections":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
-            return self._json(get_detections(qs.get("tactic", [""])[0], qs.get("source", [""])[0], qs.get("tag", [""])[0]))
+            return self._json(get_detections(qs.get("tactic", [""])[0], qs.get("source", [""])[0], qs.get("tag", [""])[0], qs.get("technique", [""])[0]))
         if p == "/m/api/graph":
             return self._json(get_graph())
         if p == "/m/api/entity":
