@@ -262,13 +262,13 @@
     },
     {
       "techniqueID": "T1562.001",
-      "score": 4,
+      "score": 7,
       "enabled": true,
-      "comment": "Disable or Modify Tools : volume_drop (score 4)",
+      "comment": "Disable or Modify Tools : volume_drop, source_silent (score 7)",
       "metadata": [
         {
           "name": "detections",
-          "value": "volume_drop"
+          "value": "volume_drop, source_silent"
         }
       ]
     },
