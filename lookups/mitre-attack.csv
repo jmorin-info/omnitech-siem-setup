@@ -71,3 +71,4 @@ ntds_dump,T1003.003,NTDS,Credential Access,critique,10
 github_leak,T1552.001,Credentials In Files,Credential Access,eleve,7
 ransomware_mention,T1657,Financial Theft,Impact,critique,10
 credential_leak,T1589.001,Gather Victim Identity: Credentials,Reconnaissance,eleve,7
+source_silent,T1562.001,Impair Defenses: Disable or Modify Tools,Defense Evasion,eleve,7
