@@ -619,6 +619,30 @@
           "value": "credential_leak"
         }
       ]
+    },
+    {
+      "techniqueID": "T1003.002",
+      "score": 9,
+      "enabled": true,
+      "comment": "Security Account Manager : sam_hive_dump (score 9)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "sam_hive_dump"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1070.001",
+      "score": 8,
+      "enabled": true,
+      "comment": "Clear Windows Event Logs : log_cleared (score 8)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "log_cleared"
+        }
+      ]
     }
   ],
   "gradient": {
