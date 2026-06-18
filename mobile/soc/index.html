@@ -159,6 +159,20 @@
   .emc textarea{width:100%;background:#070b15;border:1px solid var(--bd);border-radius:8px;color:var(--fg);padding:10px;font-size:13px;margin:6px 0;resize:vertical}
   .blk.rem .lbl{color:var(--grn)}
   .lsrc{margin-bottom:14px;display:flex;flex-wrap:wrap;gap:4px}
+  .report{background:#fff;color:#111827;border-radius:10px;padding:32px;max-width:920px}
+  .report h1{font-size:20px;color:#0b1322;margin:0}.report h2{font-size:14px;margin:20px 0 8px;color:#0b1322;border-bottom:1px solid #e2e8f0;padding-bottom:5px}
+  .report .muted{color:#64748b}
+  .rhead{display:flex;align-items:center;border-bottom:2px solid #0e7490;padding-bottom:12px}
+  .rlogo{margin-left:auto;font-size:34px;color:#0e7490}
+  .rkpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
+  .rkpi>div{border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}
+  .rkpi b{font-size:24px;display:block;color:#0e7490}.rkpi span{font-size:11px;color:#475569}
+  .report table{width:100%;border-collapse:collapse;font-size:12px}
+  .report th,.report td{text-align:left;padding:5px 8px;border-bottom:1px solid #eef2f7}
+  .report th{color:#475569;font-weight:600}.report .num{text-align:right}
+  @media print{aside,header,nav,#emodal,#pal{display:none!important}
+    #app{display:block!important}main{padding:0!important}.page:not(#p-report){display:none!important}
+    #p-report .iconbtn,#p-report .sec{display:none!important}body::before{display:none}.report{box-shadow:none;max-width:none;padding:0}}
   @media(max-width:820px){
     #app{grid-template-columns:1fr;grid-template-rows:56px 1fr}
     aside{display:none}header{grid-column:1}main{grid-column:1;padding:16px}
@@ -189,6 +203,7 @@
       <a data-p="graph"><span class="ic">🕸</span>Graphe d'attaque</a>
       <a data-p="leaks"><span class="ic">🔓</span>Fuites & Dark Web</a>
       <a data-p="health"><span class="ic">💓</span>Santé & Collecte</a>
+      <a data-p="report"><span class="ic">📄</span>Rapport</a>
     </nav>
     <div class="side-foot">v1 · données temps réel<br>OpenSearch + oms-xdr</div>
   </aside>
@@ -236,6 +251,11 @@
       <div class="grid kpis" id="hkpis"></div>
       <div class="card" style="margin-top:16px"><h3>🛰️ Sources de collecte (24 h)<span class="tag">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
     </section>
+    <section class="page" id="p-report">
+      <div style="display:flex;align-items:center;margin-bottom:14px"><h3 class="sec" style="margin:0">Rapport de posture</h3>
+        <button class="iconbtn" style="margin-left:auto" onclick="window.print()">🖨️ Imprimer / PDF</button></div>
+      <div id="reportBody" class="report"></div>
+    </section>
   </main>
   <div id="emodal"><div class="scrim2" onclick="closeEnt()"></div><div class="emc" id="emc"></div></div>
   <div id="pal"><div class="scrim2" onclick="closePal()"></div><div class="palbox"><input id="palIn" placeholder="Rechercher / naviguer…  (pages, entités)" oninput="renderPal(this.value)"><div id="palList"></div></div></div>
@@ -261,7 +281,7 @@ function start(){$("#login").style.display="none";$("#app").style.display="grid"
   setInterval(()=>{if(!document.hidden)loadAll()},60000);}
 
 // nav
-const titles={overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte"};
+const titles={overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport"};
 document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
   const pg=a.dataset.p; document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+pg));
@@ -283,6 +303,7 @@ async function loadAll(){
     j("/graph").then(g=>renderGraph(g)).catch(()=>{});
     j("/leaks").then(l=>renderLeaks(l)).catch(()=>{});
     j("/health").then(h=>renderHealth(h)).catch(()=>{});
+    j("/report").then(r=>renderReport(r)).catch(()=>{});
   }catch(e){if(e==="auth")location.reload();}
 }
 function renderKpis(k){k=k||{};
@@ -365,6 +386,22 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){closePal();closeEnt();}
   if(e.key==="Enter"&&$("#pal").classList.contains("on")){const f=$("#palList .pi");if(f)f.click();}});
 function layoutGraph(){if(cy){cy.resize();cy.layout(GCFG).run();cy.fit(undefined,30);}}
+function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocaleString("fr");
+  const top=(d.top_detections||[]).map(t=>`<tr><td>${nice(t.k)}</td><td class="num">${(t.n||0).toLocaleString("fr")}</td></tr>`).join("");
+  const inc=(d.incidents||[]).map(i=>`<tr><td>${esc((i.severity||'?').toUpperCase())}</td><td>${esc(i.title)}</td><td>${esc((i.entities||'').toString())}</td><td>${esc((i.mitre||'').toString())}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">Aucun incident corrélé</td></tr>';
+  const src=(d.sources||[]).slice(0,12).map(s=>`<tr><td>${esc(s.k)}</td><td class="num">${(s.n||0).toLocaleString("fr")}</td></tr>`).join("");
+  const cov=d.coverage||{};
+  $("#reportBody").innerHTML=`
+   <div class="rhead"><div><h1>OMNITECH SECURITY — Rapport de posture SOC</h1><div class="muted">Généré le ${dt} · plateforme SIEM/XDR (Graylog + oms-xdr)</div></div><div class="rlogo">⬢</div></div>
+   <div class="rkpi"><div><b>${k.incidents_critiques_7j??0}</b><span>Incidents critiques (7 j)</span></div>
+     <div><b>${(k.alertes_24h??0).toLocaleString("fr")}</b><span>Détections (24 h)</span></div>
+     <div><b>${cov.techniques??'?'}</b><span>Techniques ATT&CK</span></div>
+     <div><b>${(d.events_24h??0).toLocaleString("fr")}</b><span>Événements (24 h)</span></div></div>
+   <h2>Couverture MITRE ATT&CK</h2><p>${cov.techniques??'?'} techniques sur ${cov.tactics??'?'} tactiques couvertes. État du cluster de collecte : <b>${esc(d.cluster||'?')}</b>.</p>
+   <h2>Top détections (7 jours)</h2><table><thead><tr><th>Détection</th><th class="num">Volume</th></tr></thead><tbody>${top}</tbody></table>
+   <h2>Incidents corrélés récents</h2><table><thead><tr><th>Sévérité</th><th>Titre</th><th>Entité</th><th>ATT&CK</th></tr></thead><tbody>${inc}</tbody></table>
+   <h2>Sources de collecte (24 h)</h2><table><thead><tr><th>Source</th><th class="num">Volume</th></tr></thead><tbody>${src}</tbody></table>
+   <div class="muted" style="margin-top:20px">Document généré automatiquement — démarche d'amélioration continue (ISO/IEC 27001:2022, clause 10). Preuve datée et reproductible.</div>`;}
 function renderHealth(d){d=d||{};
   $("#hkpis").innerHTML=[
     ["cy","Cluster",esc(d.cluster||'?'),"OpenSearch"],

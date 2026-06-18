@@ -337,6 +337,17 @@ def get_entity(name):
             "events": ev}
 
 
+def get_report():
+    cov = get_attack_matrix()
+    src = get_health()
+    return {"kpis": get_kpis(),
+            "coverage": {"techniques": sum(len(c["techniques"]) for c in cov), "tactics": len(cov)},
+            "top_detections": get_terms("alert_tag", "now-7d", 10),
+            "incidents": get_incidents(12),
+            "sources": src.get("sources", []), "cluster": src.get("cluster"),
+            "events_24h": src.get("events_24h")}
+
+
 def get_health():
     ch = {}
     try:
@@ -431,6 +442,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_leaks())
         if p == "/m/api/health":
             return self._json(get_health())
+        if p == "/m/api/report":
+            return self._json(get_report())
         if p == "/m/api/graph":
             return self._json(get_graph())
         if p == "/m/api/entity":
