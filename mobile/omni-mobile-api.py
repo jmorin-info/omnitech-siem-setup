@@ -227,25 +227,62 @@ def get_attack_matrix():
     return out
 
 
+def _tech_tactic_map():
+    m = {}
+    try:
+        import csv as _csv
+        with open("/root/omnitech-siem-setup/lookups/mitre-attack.csv") as f:
+            rd = _csv.reader(f); next(rd, None)
+            for r in rd:
+                if len(r) >= 4 and r[1].startswith("T"):
+                    m[r[1]] = r[3]
+    except Exception:
+        pass
+    return m
+
+
 def get_graph():
+    tt = _tech_tactic_map()
     res = os_search("omni-*", {"size": 0,
         "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}, {"exists": {"field": "mitre_technique"}},
                                     {"exists": {"field": "user"}}],
                            "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}},
-        "aggs": {"e": {"terms": {"field": "user", "size": 12},
-                       "aggs": {"t": {"terms": {"field": "mitre_technique", "size": 6}}}}}})
+        "aggs": {"e": {"terms": {"field": "user", "size": 15},
+                       "aggs": {"t": {"terms": {"field": "mitre_technique", "size": 8}}}}}})
     nodes, edges, seen = [], [], set()
-    def add(nid, label, typ, w):
-        if nid not in seen:
-            seen.add(nid); nodes.append({"id": nid, "label": label, "type": typ, "weight": w})
+    def add(n):
+        if n["id"] not in seen:
+            seen.add(n["id"]); nodes.append(n)
     for eb in res.get("aggregations", {}).get("e", {}).get("buckets", []):
         ent = eb.get("key"); eid = "u:" + ent
-        add(eid, ent.split("\\")[-1], "entity", eb.get("doc_count", 0))
+        add({"id": eid, "label": ent.split("\\")[-1], "full": ent, "type": "entity", "weight": eb.get("doc_count", 0)})
         for tb in eb.get("t", {}).get("buckets", []):
             tech = tb.get("key"); tid = "t:" + tech
-            add(tid, tech, "technique", 0)
+            add({"id": tid, "label": tech, "type": "technique", "tactic": tt.get(tech, "?"), "weight": 0})
             edges.append({"source": eid, "target": tid, "weight": tb.get("doc_count", 0)})
     return {"nodes": nodes, "edges": edges}
+
+
+def get_entity(name):
+    if not name:
+        return {"name": "", "total": 0, "techniques": [], "tactics": [], "events": []}
+    q = {"bool": {"must": [{"term": {"user": name}}, {"exists": {"field": "alert_tag"}}],
+                  "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}}
+    res = os_search("omni-*", {"size": 20, "sort": [{"timestamp": {"order": "desc"}}], "query": q,
+        "_source": ["timestamp", "alert_tag", "mitre_technique", "short_message", "message"],
+        "aggs": {"tech": {"terms": {"field": "mitre_technique", "size": 8}},
+                 "tac": {"terms": {"field": "mitre_tactic", "size": 8}},
+                 "tot": {"value_count": {"field": "alert_tag"}}}})
+    ag = res.get("aggregations", {})
+    ev = []
+    for h in res.get("hits", {}).get("hits", []):
+        s = h.get("_source", {})
+        ev.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
+                   "msg": s.get("short_message") or s.get("message")})
+    return {"name": name, "total": ag.get("tot", {}).get("value", 0),
+            "techniques": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tech", {}).get("buckets", [])],
+            "tactics": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tac", {}).get("buckets", [])],
+            "events": ev}
 
 
 # ------------------------------------------------------------------------- handler
@@ -302,6 +339,10 @@ class H(BaseHTTPRequestHandler):
             return self._json({"matrix": get_attack_matrix()})
         if p == "/m/api/graph":
             return self._json(get_graph())
+        if p == "/m/api/entity":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return self._json(get_entity(qs.get("u", [""])[0]))
         self._json({"error": "not found"}, 404)
 
     def do_POST(self):
