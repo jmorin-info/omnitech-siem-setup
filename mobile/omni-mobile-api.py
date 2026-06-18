@@ -148,6 +148,7 @@ def get_incidents(limit: int = 30) -> list:
     for h in res.get("hits", {}).get("hits", []):
         s = h.get("_source", {})
         out.append({
+            "id": h.get("_id"),
             "ts": s.get("timestamp"),
             "title": s.get("short_message"),
             "severity": s.get("severity"),
@@ -263,6 +264,57 @@ def get_graph():
     return {"nodes": nodes, "edges": edges}
 
 
+CASES_FILE = CONF.get("MOBILE_CASES_FILE", "/var/lib/omni-mobile/cases.json")
+
+
+def load_cases():
+    try:
+        with open(CASES_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_cases(c):
+    os.makedirs(os.path.dirname(CASES_FILE), exist_ok=True)
+    tmp = CASES_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(c, f)
+    os.replace(tmp, CASES_FILE)
+
+
+def get_cases():
+    incs = get_incidents(50)
+    st = load_cases()
+    for i in incs:
+        c = st.get(i.get("id") or "", {})
+        i["status"] = c.get("status", "new")
+        i["assignee"] = c.get("assignee", "")
+        i["notes"] = c.get("notes", [])
+    return incs
+
+
+def update_case(b, who):
+    cid = b.get("id")
+    if not cid:
+        return {"ok": False}
+    import datetime as _dt
+    st = load_cases()
+    c = st.setdefault(cid, {"status": "new", "assignee": "", "notes": []})
+    act = b.get("action"); val = b.get("value", "")
+    if act == "status":
+        c["status"] = val if val in ("new", "in_progress", "closed") else "new"
+    elif act == "assign":
+        c["assignee"] = str(val)[:120]
+    elif act == "note":
+        txt = str(val).strip()
+        if txt:
+            c.setdefault("notes", []).append(
+                {"by": who or "?", "ts": _dt.datetime.now().isoformat(timespec="seconds"), "text": txt[:1000]})
+    save_cases(st)
+    return {"ok": True, "case": c}
+
+
 def get_entity(name):
     if not name:
         return {"name": "", "total": 0, "techniques": [], "tactics": [], "events": []}
@@ -325,6 +377,8 @@ class H(BaseHTTPRequestHandler):
             return self._json({"alerts": get_alerts()})
         if p == "/m/api/incidents":
             return self._json({"incidents": get_incidents()})
+        if p == "/m/api/cases":
+            return self._json({"cases": get_cases()})
         if p == "/m/api/kpis":
             return self._json({"kpis": get_kpis()})
         if p == "/m/api/timeseries":
@@ -387,6 +441,10 @@ class H(BaseHTTPRequestHandler):
             return self._json({"ok": False}, 401)
         if p == "/m/api/logout":
             return self._json({"ok": True}, cookie="oms_session=; Path=/m; Max-Age=0")
+        if p == "/m/api/case":
+            if not self._user():
+                return self._json({"error": "auth"}, 401)
+            return self._json(update_case(b, self._user()))
         if p == "/m/api/subscribe":
             if not self._user():
                 return self._json({"error": "auth"}, 401)
