@@ -227,6 +227,27 @@ def get_attack_matrix():
     return out
 
 
+def get_graph():
+    res = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}, {"exists": {"field": "mitre_technique"}},
+                                    {"exists": {"field": "user"}}],
+                           "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}},
+        "aggs": {"e": {"terms": {"field": "user", "size": 12},
+                       "aggs": {"t": {"terms": {"field": "mitre_technique", "size": 6}}}}}})
+    nodes, edges, seen = [], [], set()
+    def add(nid, label, typ, w):
+        if nid not in seen:
+            seen.add(nid); nodes.append({"id": nid, "label": label, "type": typ, "weight": w})
+    for eb in res.get("aggregations", {}).get("e", {}).get("buckets", []):
+        ent = eb.get("key"); eid = "u:" + ent
+        add(eid, ent.split("\\")[-1], "entity", eb.get("doc_count", 0))
+        for tb in eb.get("t", {}).get("buckets", []):
+            tech = tb.get("key"); tid = "t:" + tech
+            add(tid, tech, "technique", 0)
+            edges.append({"source": eid, "target": tid, "weight": tb.get("doc_count", 0)})
+    return {"nodes": nodes, "edges": edges}
+
+
 # ------------------------------------------------------------------------- handler
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silencieux
@@ -279,6 +300,8 @@ class H(BaseHTTPRequestHandler):
             return self._json({"data": get_terms("event_source")})
         if p == "/m/api/attack-matrix":
             return self._json({"matrix": get_attack_matrix()})
+        if p == "/m/api/graph":
+            return self._json(get_graph())
         self._json({"error": "not found"}, 404)
 
     def do_POST(self):
