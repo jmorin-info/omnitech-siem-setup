@@ -337,6 +337,24 @@ def get_entity(name):
             "events": ev}
 
 
+def get_leaks():
+    res = os_search("omni-*", {"size": 40, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {"must": [{"term": {"event_source": "leak_intel"}}],
+                           "filter": [{"range": {"timestamp": {"gte": "now-30d"}}}]}},
+        "_source": ["timestamp", "leak_source", "alert_tag", "leak_victim", "leak_account",
+                    "leak_breaches", "leak_repo", "leak_url", "short_message"],
+        "aggs": {"src": {"terms": {"field": "leak_source", "size": 10}}}})
+    items = []
+    for h in res.get("hits", {}).get("hits", []):
+        s = h.get("_source", {})
+        items.append({"ts": s.get("timestamp"), "source": s.get("leak_source"), "tag": s.get("alert_tag"),
+                      "label": s.get("leak_victim") or s.get("leak_account") or s.get("leak_repo") or "—",
+                      "msg": s.get("short_message"), "url": s.get("leak_url"),
+                      "breaches": s.get("leak_breaches")})
+    counts = [{"k": b["key"], "n": b["doc_count"]} for b in res.get("aggregations", {}).get("src", {}).get("buckets", [])]
+    return {"items": items, "sources": counts}
+
+
 # ------------------------------------------------------------------------- handler
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silencieux
@@ -391,6 +409,8 @@ class H(BaseHTTPRequestHandler):
             return self._json({"data": get_terms("event_source")})
         if p == "/m/api/attack-matrix":
             return self._json({"matrix": get_attack_matrix()})
+        if p == "/m/api/leaks":
+            return self._json(get_leaks())
         if p == "/m/api/graph":
             return self._json(get_graph())
         if p == "/m/api/entity":

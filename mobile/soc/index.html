@@ -158,6 +158,7 @@
   .emc input{width:auto;display:inline-block;margin-right:6px}
   .emc textarea{width:100%;background:#070b15;border:1px solid var(--bd);border-radius:8px;color:var(--fg);padding:10px;font-size:13px;margin:6px 0;resize:vertical}
   .blk.rem .lbl{color:var(--grn)}
+  .lsrc{margin-bottom:14px;display:flex;flex-wrap:wrap;gap:4px}
   @media(max-width:820px){
     #app{grid-template-columns:1fr;grid-template-rows:56px 1fr}
     aside{display:none}header{grid-column:1}main{grid-column:1;padding:16px}
@@ -186,6 +187,7 @@
       <a data-p="detections"><span class="ic">◎</span>Détections</a>
       <a data-p="attack"><span class="ic">⊞</span>ATT&CK</a>
       <a data-p="graph"><span class="ic">🕸</span>Graphe d'attaque</a>
+      <a data-p="leaks"><span class="ic">🔓</span>Fuites & Dark Web</a>
     </nav>
     <div class="side-foot">v1 · données temps réel<br>OpenSearch + oms-xdr</div>
   </aside>
@@ -225,6 +227,10 @@
         <div id="cy"></div>
         <div class="leg"><span class="d e"></span> Entité (utilisateur) &nbsp; <span class="d t"></span> Technique ATT&CK &nbsp; <span class="muted">— épaisseur = volume</span></div></div>
     </section>
+    <section class="page" id="p-leaks">
+      <div class="card"><h3>🔓 Fuites & Dark Web<span class="tag">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
+        <div class="lsrc" id="leakSrc"></div><div class="feed" id="leakFeed"></div></div>
+    </section>
   </main>
   <div id="emodal"><div class="scrim2" onclick="closeEnt()"></div><div class="emc" id="emc"></div></div>
   <div id="pal"><div class="scrim2" onclick="closePal()"></div><div class="palbox"><input id="palIn" placeholder="Rechercher / naviguer…  (pages, entités)" oninput="renderPal(this.value)"><div id="palList"></div></div></div>
@@ -250,7 +256,7 @@ function start(){$("#login").style.display="none";$("#app").style.display="grid"
   setInterval(()=>{if(!document.hidden)loadAll()},60000);}
 
 // nav
-const titles={overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque"};
+const titles={overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web"};
 document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
   const pg=a.dataset.p; document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+pg));
@@ -270,6 +276,7 @@ async function loadAll(){
     renderKpis(k.kpis); renderTs(ts.series); renderTac(tac.data); renderDet(det.data);
     renderSrc(src.data); renderMatrix(mtx.matrix); renderCases(inc.cases); renderAlerts(al.alerts);
     j("/graph").then(g=>renderGraph(g)).catch(()=>{});
+    j("/leaks").then(l=>renderLeaks(l)).catch(()=>{});
   }catch(e){if(e==="auth")location.reload();}
 }
 function renderKpis(k){k=k||{};
@@ -352,6 +359,14 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){closePal();closeEnt();}
   if(e.key==="Enter"&&$("#pal").classList.contains("on")){const f=$("#palList .pi");if(f)f.click();}});
 function layoutGraph(){if(cy){cy.resize();cy.layout(GCFG).run();cy.fit(undefined,30);}}
+function renderLeaks(d){d=d||{};
+  $("#leakSrc").innerHTML=(d.sources||[]).map(s=>`<span class="pchip">${esc((s.k||'?').toUpperCase())} · ${s.n}</span>`).join(" ")||'<span class="muted">Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)</span>';
+  const items=d.items||[];
+  $("#leakFeed").innerHTML=items.length?items.map(x=>{const crit=x.tag==="ransomware_mention";
+    return `<div class="inc sev-${crit?'critical':'high'}"><div class="top">
+      <span class="chip ${crit?'':'h'}">${esc((x.source||'').toUpperCase())}</span>
+      <span class="ttl">${esc(x.label)}</span><span class="ts">${ago(x.ts)}</span></div>
+      <div class="meta">${esc(x.msg||'')}${x.breaches?' · '+esc(x.breaches):''}</div></div>`;}).join(""):'<div class="empty">Aucune fuite détectée ✅</div>';}
 function heat(n){return n===0?"h0":n<10?"h1":n<100?"h2":n<1000?"h3":"h4";}
 function renderMatrix(m){m=m||[];$("#atkMatrix").innerHTML=m.map(col=>`<div class="mcol">
   <div class="mhead">${esc(col.tactic)}<span>${col.techniques.length} tech.</span></div>
