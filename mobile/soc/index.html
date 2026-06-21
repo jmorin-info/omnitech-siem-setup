@@ -208,6 +208,74 @@
   .report table{width:100%;border-collapse:collapse;font-size:12px}
   .report th,.report td{text-align:left;padding:5px 8px;border-bottom:1px solid #eef2f7}
   .report th{color:#475569;font-weight:600}.report .num{text-align:right}
+
+  /* ============== POLISH PREMIUM · CYBER « RTX » ============== */
+  :root{--ring:rgba(34,211,238,.5)}
+  body{background:
+      radial-gradient(1150px 620px at 82% -12%, rgba(34,211,238,.13), transparent 60%),
+      radial-gradient(820px 560px at -6% 112%, rgba(167,139,250,.11), transparent 55%),
+      radial-gradient(700px 700px at 50% 46%, rgba(59,130,246,.05), transparent 72%),
+      var(--bg)}
+  /* Cartes & KPI : verre dépoli, profondeur, liseré supérieur lumineux, hover */
+  .card,.kpi{position:relative;background:linear-gradient(168deg,rgba(20,30,52,.74),rgba(11,17,32,.74));
+    backdrop-filter:blur(13px) saturate(1.15);-webkit-backdrop-filter:blur(13px) saturate(1.15);
+    border:1px solid rgba(120,150,210,.14);
+    box-shadow:0 12px 30px -14px rgba(0,0,0,.72), inset 0 1px 0 rgba(255,255,255,.05);
+    transition:transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s, border-color .22s}
+  .card::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;border-radius:14px 14px 0 0;
+    background:linear-gradient(90deg,transparent,rgba(34,211,238,.55),transparent);opacity:.7}
+  .card:hover{transform:translateY(-3px);border-color:rgba(34,211,238,.26);
+    box-shadow:0 20px 44px -16px rgba(0,0,0,.82), 0 0 0 1px rgba(34,211,238,.06), inset 0 1px 0 rgba(255,255,255,.06)}
+  .kpi:hover{transform:translateY(-3px);border-color:rgba(34,211,238,.22)}
+  .kpi::after{opacity:.20;filter:blur(11px);width:104px;height:104px}
+  /* Teinte d'accent par KPI (plus de présence) */
+  .kpi.red{background:linear-gradient(158deg,rgba(251,59,83,.12),rgba(11,17,32,.76))}
+  .kpi.amb{background:linear-gradient(158deg,rgba(245,166,35,.10),rgba(11,17,32,.76))}
+  .kpi.cy{background:linear-gradient(158deg,rgba(34,211,238,.10),rgba(11,17,32,.76))}
+  .kpi.vio{background:linear-gradient(158deg,rgba(167,139,250,.11),rgba(11,17,32,.76))}
+  .kpi.red:hover{border-color:rgba(251,59,83,.4);box-shadow:0 20px 44px -16px rgba(0,0,0,.82),0 0 26px -8px rgba(251,59,83,.4)}
+  .kpi.amb:hover{border-color:rgba(245,166,35,.38)}
+  .kpi.vio:hover{border-color:rgba(167,139,250,.4)}
+  /* Valeur KPI en dégradé métallique + halo selon l'accent */
+  .kpi .val{background:linear-gradient(180deg,#ffffff,#c2cfe2);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 1px 10px rgba(34,211,238,.10))}
+  .kpi.red .val{background:linear-gradient(180deg,#ff97a4,var(--red));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .kpi.amb .val{background:linear-gradient(180deg,#ffd592,var(--amb));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .kpi.cy  .val{background:linear-gradient(180deg,#9bf1fb,var(--cy));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .kpi.vio .val{background:linear-gradient(180deg,#d0c0ff,var(--vio));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  /* Titres de carte : pastille d'accent lumineuse */
+  .card h3{position:relative;padding-left:13px}
+  .card h3::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);width:4px;height:13px;border-radius:3px;
+    background:linear-gradient(180deg,var(--cy),var(--blu));box-shadow:0 0 9px rgba(34,211,238,.7)}
+  /* Sidebar : navigation plus vivante */
+  nav a{transition:.2s cubic-bezier(.2,.8,.2,1)}
+  nav a:hover{transform:translateX(3px);background:linear-gradient(90deg,rgba(34,211,238,.10),transparent)}
+  nav a.on{box-shadow:inset 3px 0 0 var(--cy), 0 0 22px -6px rgba(34,211,238,.55)}
+  nav a.on .ic{filter:drop-shadow(0 0 6px rgba(34,211,238,.85))}
+  .brand .logo{box-shadow:0 0 28px rgba(34,211,238,.6), inset 0 0 12px rgba(255,255,255,.22)}
+  /* Header : verre + ligne lumineuse */
+  header{background:linear-gradient(180deg,rgba(10,14,24,.8),rgba(8,11,20,.5));border-bottom-color:rgba(120,150,210,.14);box-shadow:0 1px 0 rgba(34,211,238,.07)}
+  .pill,.iconbtn{background:linear-gradient(180deg,rgba(14,22,38,.82),rgba(10,16,28,.82));backdrop-filter:blur(8px)}
+  .iconbtn{transition:.18s}.iconbtn:hover{box-shadow:0 0 0 3px rgba(34,211,238,.1)}
+  /* Lignes (incidents/détections/cas) : hover lift + glow du liseré de sévérité */
+  .inc{transition:transform .18s, box-shadow .18s, border-color .18s}
+  .inc:hover{transform:translateX(2px);border-color:rgba(120,150,210,.26);
+    box-shadow:-7px 0 20px -11px var(--sev,var(--cy)), 0 8px 22px -16px rgba(0,0,0,.85)}
+  .chip{box-shadow:inset 0 0 12px rgba(255,255,255,.05)}
+  .btn{box-shadow:0 8px 24px -8px rgba(34,211,238,.5), inset 0 1px 0 rgba(255,255,255,.4)}
+  .btn:hover{filter:brightness(1.06)}
+  /* Matrice ATT&CK : relief au survol, cellules chaudes plus lumineuses */
+  .mcell{transition:transform .15s, box-shadow .15s}
+  .mcell:hover{transform:translateY(-2px);border-color:var(--cy)}
+  .mcell.h4{box-shadow:0 0 18px rgba(251,59,83,.42)}
+  /* Drawer entité + threat banner : profondeur */
+  .emc{box-shadow:-30px 0 80px rgba(0,0,0,.6)}
+  .threat{backdrop-filter:blur(10px)}
+  /* Scrollbar cyber */
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#243a64,#15233c);border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#2d4a7e,#1c2e4e);background-clip:padding-box}
+
   @media print{aside,header,nav,#emodal,#pal{display:none!important}
     #app{display:block!important}main{padding:0!important}.page:not(#p-report){display:none!important}
     #p-report .iconbtn,#p-report .sec{display:none!important}body::before{display:none}.report{box-shadow:none;max-width:none;padding:0}}
