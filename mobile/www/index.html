@@ -116,6 +116,24 @@
   .raw{background:#070b15;border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:11px;
     color:var(--mut);white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto}
   ::-webkit-scrollbar{width:0}
+  /* onglet Menace */
+  .thban{display:flex;flex-direction:column;gap:12px;margin-bottom:4px}
+  .thlvl{display:flex;align-items:center;gap:12px;background:linear-gradient(155deg,var(--card2),var(--card));
+    border:1px solid var(--bd);border-left:4px solid var(--sev,var(--dim));border-radius:14px;padding:16px 16px}
+  .thlvl .thl{color:var(--mut);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .thlvl .thv{margin-left:auto;font-size:14px;padding:5px 12px}
+  .thgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .thm{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:11px 8px;text-align:center}
+  .thm .tmv{font-size:24px;font-weight:800;letter-spacing:-1px;line-height:1}
+  .thm .tml{color:var(--dim);font-size:9.5px;margin-top:5px;line-height:1.2}
+  .risk{display:flex;flex-direction:column;gap:9px}
+  .rrow{background:var(--card2);border:1px solid var(--bd);border-radius:11px;padding:11px 13px}
+  .rrow .rtop{display:flex;align-items:center;gap:8px}
+  .rrow .rent{font-weight:700;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rrow .rsc{font-size:17px;font-weight:800;letter-spacing:-.5px}
+  .rrow .rsub{color:var(--mut);font-size:11px;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gz{display:block;height:6px;border-radius:4px;background:rgba(255,255,255,.06);margin-top:9px;overflow:hidden}
+  .gz .gzf{display:block;height:100%;border-radius:4px;transition:width .4s ease}
 </style>
 </head>
 <body>
@@ -150,12 +168,19 @@
     </section>
     <section class="page" id="p-alerts"><h3 class="sec">Alertes récentes (24 h)</h3><div class="feed" id="alFeed"></div></section>
     <section class="page" id="p-inc"><h3 class="sec">Incidents corrélés</h3><div class="feed" id="incFeed"></div></section>
+    <section class="page" id="p-threat">
+      <div class="thban" id="thBanner"></div>
+      <h3 class="sec">Anomalies ML (3 h)</h3><div class="risk" id="mlList"></div>
+      <h3 class="sec">Risque UEBA (24 h)</h3><div class="risk" id="uebaList"></div>
+      <h3 class="sec">Top détections (24 h)</h3><div class="feed" id="detMini"></div>
+    </section>
   </main>
 
   <nav id="nav">
     <a class="on" data-p="home"><span class="ic">▦</span>Synthèse</a>
     <a data-p="alerts"><span class="ic">🚨</span>Alertes</a>
     <a data-p="inc"><span class="ic">◈</span>Incidents</a>
+    <a data-p="threat"><span class="ic">☢</span>Menace</a>
   </nav>
 </div>
 
@@ -194,6 +219,7 @@ async function loadAll(){
     DATA.alerts=al.alerts||[];DATA.incidents=inc.incidents||[];
     renderKpis(k.kpis||{});renderTs(ts.series||[]);renderTac(tac.data||[]);
     renderFeed("alFeed",DATA.alerts,"alert");renderFeed("incFeed",DATA.incidents,"inc");
+    loadThreat();
   }catch(e){if(e==="auth")location.reload();}
 }
 function renderKpis(k){$("#kpis").innerHTML=[
@@ -247,6 +273,63 @@ async function enablePush(){try{
   await fetch(API+"/subscribe",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription:sub})});
   $("#pushb").classList.add("act");
 }catch(e){console.log(e);}}
+
+// ===== onglet "Menace" (parité console : niveau menace + ML/UEBA + détections sévérité) =====
+let DETM=[];
+function gaugeColor(v){v=+v||0;return v>=80?"var(--red)":v>=60?"var(--amb)":v>=40?"var(--cy)":"var(--dim)";}
+function gaugeBar(v,max){v=+v||0;max=max||100;const pc=Math.max(4,Math.min(100,Math.round(v*100/max)));
+  return '<span class="gz"><span class="gzf" style="width:'+pc+'%;background:'+gaugeColor(v)+'"></span></span>';}
+function threatCls(l){l=(l||"").toUpperCase();return l.indexOf("CRIT")>=0?"critical":l.indexOf("ELEV")>=0?"high":l.indexOf("SURV")>=0?"medium":"low";}
+function renderThreat(r){r=r||{};
+  const c=threatCls(r.threat_level),lab=esc(r.threat_level||"NOMINAL");
+  const box=$("#thBanner");
+  if(box)box.innerHTML='<div class="thlvl sev-'+c+'"><div class="thl">Niveau de menace</div>'
+    +'<div class="thv chip '+chipCls(c)+'">'+lab+'</div></div>'
+    +'<div class="thgrid">'
+    +'<div class="thm"><div class="tmv mono" style="color:var(--red)">'+((r.critical_incidents||0).toLocaleString("fr"))+'</div><div class="tml">Incidents critiques · 7 j</div></div>'
+    +'<div class="thm"><div class="tmv mono" style="color:var(--amb)">'+((r.ueba||0).toLocaleString("fr"))+'</div><div class="tml">Hôtes à risque · UEBA</div></div>'
+    +'<div class="thm"><div class="tmv mono" style="color:var(--vio)">'+((r.kev||0).toLocaleString("fr"))+'</div><div class="tml">CVE KEV exposées</div></div>'
+    +'</div>';
+  renderRiskList("mlList",r.ml_top||[],"ml");
+  renderRiskList("uebaList",r.ueba_top||[],"ueba");
+}
+function renderRiskList(id,list,kind){const el=$("#"+id);if(!el)return;
+  if(!list.length){el.innerHTML='<div class="empty">Aucune anomalie ✅</div>';return;}
+  el.innerHTML=list.map(x=>{const sc=+x.score||0;
+    const sub=kind==="ml"?(x.reason||x.type||""):(x.factor||"");
+    return '<div class="rrow"><div class="rtop"><span class="rent">'+esc((x.entity||"—").split("\\").pop())
+      +'</span><span class="rsc mono" style="color:'+gaugeColor(sc)+'">'+sc+'</span></div>'
+      +gaugeBar(sc,100)
+      +(sub?'<div class="rsub">'+esc(sub)+'</div>':'')+'</div>';}).join("");}
+function renderDetMini(items){const el=$("#detMini");if(!el)return;
+  DETM=items||[];
+  if(!DETM.length){el.innerHTML='<div class="empty">Aucune détection (24 h) ✅</div>';return;}
+  el.innerHTML=DETM.slice(0,12).map((x,i)=>{
+    const c=x.sev?sevClass(x.sev):(x.priority==3?"critical":x.priority==2?"high":"medium");
+    const badge=x.sev?esc((x.sev||"").toUpperCase()):"P"+(x.priority||"-");
+    const ttl=esc(x.tag?nice(x.tag):(x.msg||"Détection"));
+    const meta=[x.entity,x.tactic?nice(x.tactic):"",x.source].filter(Boolean).map(esc).join(" · ");
+    return '<div class="item sev-'+c+'" onclick="openDetSheet('+i+')"><div class="top">'
+      +'<span class="chip '+chipCls(c)+'">'+badge+'</span>'
+      +'<span class="ttl">'+ttl+'</span><span class="ts">'+ago(x.ts)+'</span></div>'
+      +(meta?'<div class="meta">'+meta+'</div>':'')+'</div>';}).join("");}
+function openDetSheet(i){const x=DETM[i];if(!x)return;
+  const c=x.sev?sevClass(x.sev):(x.priority==3?"critical":x.priority==2?"high":"medium");
+  const badge=x.sev?esc((x.sev||"").toUpperCase()):"Priorité "+(x.priority||"-");
+  let h='<div class="grip"></div><h2>'+esc(x.tag?nice(x.tag):"Détection")+'</h2>'
+    +'<div style="margin-bottom:8px"><span class="chip '+chipCls(c)+'">'+badge+'</span>'
+    +(x.score!=null?'<span class="chip l" style="margin-left:6px">score '+esc(""+x.score)+'</span>':'')
+    +'<span class="ts" style="color:var(--dim);font-size:12px;margin-left:8px">'+ago(x.ts)+'</span></div>';
+  if(x.entity)h+=kv("Entité",x.entity);
+  if(x.tactic)h+=kv("Tactique",nice(x.tactic));
+  if(x.tech)h+=kv("Technique",x.tech);
+  if(x.source)h+=kv("Source",x.source);
+  if(x.msg)h+=blk("Message",esc(x.msg));
+  $("#sheetc").innerHTML=h;$("#sheet").classList.add("on");}
+async function loadThreat(){try{
+  const [r,det]=await Promise.all([j("/risk"),j("/detections")]);
+  renderThreat(r||{});renderDetMini((det&&det.items)||[]);
+}catch(e){if(e==="auth")location.reload();}}
 
 if("serviceWorker"in navigator)navigator.serviceWorker.register("/m/sw.js");
 j("/me").then(d=>{if(d.user)start();}).catch(()=>{});

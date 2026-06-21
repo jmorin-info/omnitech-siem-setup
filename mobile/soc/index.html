@@ -287,6 +287,43 @@
   .kpitrend{display:inline-block;margin-left:8px;font-size:11px;font-weight:700;vertical-align:middle;padding:1px 6px;border-radius:999px;line-height:1.5;letter-spacing:.2px}
   .kt-bad{color:#fca5a5;background:rgba(239,68,68,.14)}
   .kt-good{color:#86efac;background:rgba(34,197,94,.14)}
+  /* === Toasts === */
+  #toasts{position:fixed;right:18px;bottom:18px;z-index:9999;display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:none;max-width:380px}
+  .toast{pointer-events:auto;position:relative;display:flex;gap:11px;align-items:flex-start;width:340px;max-width:88vw;padding:13px 14px 14px;border-radius:13px;overflow:hidden;color:var(--fg);border:1px solid var(--bd);border-left:3px solid var(--ac,var(--cy));background:linear-gradient(180deg,rgba(17,26,46,.92),rgba(13,20,36,.92));backdrop-filter:blur(14px) saturate(1.15);-webkit-backdrop-filter:blur(14px) saturate(1.15);box-shadow:0 14px 40px -14px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.02) inset,-8px 0 26px -20px var(--ac,var(--cy));animation:toastIn .28s cubic-bezier(.21,1.02,.55,1)}
+  .toast.out{animation:toastOut .26s ease forwards}
+  @keyframes toastIn{from{opacity:0;transform:translateX(26px) scale(.97)}to{opacity:1;transform:none}}
+  @keyframes toastOut{to{opacity:0;transform:translateX(26px) scale(.97)}}
+  .toast .ti{flex:0 0 auto;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-top:1px;color:var(--ac,var(--cy));background:rgba(34,211,238,.16);box-shadow:0 0 14px -2px var(--ac,var(--cy))}
+  .toast.t-grn .ti{background:rgba(52,211,153,.16)}.toast.t-amb .ti{background:rgba(245,166,35,.16)}.toast.t-red .ti{background:rgba(251,59,83,.16)}
+  .toast .tb{flex:1 1 auto;min-width:0}
+  .toast .tt{font-size:12px;font-weight:700;letter-spacing:.2px;color:var(--ac,var(--cy));margin-bottom:2px}
+  .toast .tm{font-size:12.5px;line-height:1.42;color:var(--fg);word-wrap:break-word;overflow-wrap:anywhere}
+  .toast .tx{flex:0 0 auto;background:none;border:0;color:var(--dim);font-size:17px;line-height:1;cursor:pointer;padding:0 2px;margin:-2px -2px 0 2px}
+  .toast .tx:hover{color:var(--fg)}
+  .toast .tp{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(255,255,255,.06)}
+  .toast .tp i{display:block;height:100%;width:100%;transform-origin:left;background:linear-gradient(90deg,var(--ac,var(--cy)),transparent);animation:toastBar linear forwards}
+  @keyframes toastBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+  .toast.t-grn{--ac:var(--grn)}.toast.t-cy{--ac:var(--cy)}.toast.t-amb{--ac:var(--amb)}.toast.t-red{--ac:var(--red)}
+  @media(max-width:820px){#toasts{right:10px;left:10px;bottom:10px;align-items:stretch;max-width:none}.toast{width:auto}}
+  @media print{#toasts{display:none!important}}
+  /* === Polish chargement / header === */
+  .pill.upd{gap:6px}.pill.upd .updtxt{font-variant-numeric:tabular-nums;letter-spacing:.2px}
+  .cadsel{background:#0c1525;border:1px solid var(--bd);color:var(--mut);border-radius:9px;padding:6px 9px;font-size:12px;font-family:inherit;cursor:pointer;outline:none}
+  .cadsel:hover{color:var(--fg);border-color:var(--cy)}.cadsel option{background:#0c1525;color:var(--fg)}
+  .iconbtn.spin{color:var(--cy);border-color:var(--cy);pointer-events:none;display:inline-block;animation:spin360 .8s linear infinite}
+  @keyframes spin360{to{transform:rotate(360deg)}}
+  @keyframes shimmer{100%{background-position:-180% 0}}
+  body.firstload .feed:empty,body.firstload #kpis:empty{position:relative;min-height:120px}
+  body.firstload .feed:empty::after{content:"";position:absolute;left:14px;right:14px;top:0;height:202px;pointer-events:none;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%);background-size:220% 100%;background-position:120% 0;animation:shimmer 1.25s ease-in-out infinite;border-radius:10px}
+  body.firstload #kpis:empty::before{content:"";display:block;height:96px;border-radius:14px;background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--bd)}
+  body.firstload #kpis:empty::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:14px;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.06) 50%,transparent 70%);background-size:220% 100%;background-position:120% 0;animation:shimmer 1.25s ease-in-out infinite}
+  @keyframes revealIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  body.firstload #kpis>*,body.firstload .feed>*{animation:revealIn .32s ease both}
+  /* === Accessibilité : focus clavier visible === */
+  a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible,[role="button"]:focus-visible{outline:2px solid var(--cy);outline-offset:2px;border-radius:9px;box-shadow:0 0 0 4px rgba(34,211,238,.22)}
+  nav a:focus-visible{outline-offset:-2px;box-shadow:0 0 0 3px rgba(34,211,238,.25),inset 2px 0 0 var(--cy)}
+  .emc:focus-visible,.palbox:focus-visible{outline:none;box-shadow:none}
+  a:focus:not(:focus-visible),button:focus:not(:focus-visible),[tabindex]:focus:not(:focus-visible),[role="button"]:focus:not(:focus-visible){outline:none}
 
   @media print{aside,header,nav,#emodal,#pal{display:none!important}
     #app{display:block!important}main{padding:0!important}.page:not(#p-report){display:none!important}
@@ -331,8 +368,14 @@
     <span class="spacer"></span>
     <span class="pill"><span class="dot"></span> Cluster opérationnel</span>
     <span class="pill mono" id="clock">--:--:--</span>
-    <button class="iconbtn" onclick="openPal()" title="Recherche (Ctrl/Cmd+K)">⌘K</button>
-    <button class="iconbtn" onclick="loadAll()">⟳</button>
+    <span class="pill upd" id="updPill" title="Fraîcheur des données"><span class="updtxt">Mis à jour…</span></span>
+    <select class="cadsel" id="cadSel" title="Cadence du rafraîchissement automatique" onchange="setCadence(this.value)" aria-label="Cadence de rafraîchissement">
+      <option value="30000">Auto · 30 s</option>
+      <option value="60000">Auto · 60 s</option>
+      <option value="0">⏸ En pause</option>
+    </select>
+    <button class="iconbtn" onclick="openPal()" title="Recherche (Ctrl/Cmd+K)" aria-label="Recherche et navigation (Ctrl ou Cmd + K)">⌘K</button>
+    <button class="iconbtn" id="refBtn" onclick="refreshNow()" title="Rafraîchir maintenant" aria-busy="false" aria-label="Rafraîchir les données">⟳</button>
     <button class="iconbtn" onclick="logout()">⎋</button>
   </header>
 
@@ -435,8 +478,8 @@ function login(e){e.preventDefault();
     body:JSON.stringify({username:u.value,password:p.value})})
    .then(r=>r.ok?start():$("#lerr").textContent="Identifiants invalides").catch(()=>$("#lerr").textContent="Erreur réseau");}
 function logout(){fetch(API+"/logout",{method:"POST",credentials:"same-origin"}).then(()=>location.reload());}
-function start(){$("#login").style.display="none";$("#app").style.display="grid";setDesc("overview");loadAll();startLive();
-  setInterval(()=>{if(!document.hidden)loadAll()},60000);}
+function start(){$("#login").style.display="none";$("#app").style.display="grid";setDesc("overview");
+  document.body.classList.add("firstload");loadAll();startLive();startRefresh();}
 
 // nav
 const titles={overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport"};
@@ -465,6 +508,7 @@ function mk(id,cfg){if(!window.Chart||!$("#"+id))return;if(charts[id])charts[id]
 const noLeg={plugins:{legend:{display:false}}};
 
 async function loadAll(){
+  RELOADING=true;setSpin(true);tickUpd();
   try{
     const [k,ts,tac,det,src,inc,mtx]=await Promise.all([
       j("/kpis"),j("/timeseries"),j("/by-tactic"),j("/top-detections"),j("/top-sources"),j("/cases"),j("/attack-matrix")]);
@@ -477,7 +521,8 @@ async function loadAll(){
     j("/geo").then(g=>renderGeo(g)).catch(()=>{});
     // /graph et /report : charges a l'ouverture de leur onglet (cf. routeur #nav) -
     // evite de relancer le graphe lourd + la matrice 300-termes toutes les 60 s.
-  }catch(e){if(e==="auth")location.reload();}
+  }catch(e){if(e==="auth"){toastWarn("Session expirée — reconnexion à la console SOC…",{title:"Session",sticky:true});setTimeout(()=>location.reload(),1200);}else{toastNet();}}
+  finally{RELOADING=false;setSpin(false);document.body.classList.remove("firstload");markUpdated();}
 }
 let TOPE=[];
 function renderRisk(d){d=d||{};
@@ -600,6 +645,57 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){closePal();closeEnt();}
   if(e.key==="Enter"&&$("#pal").classList.contains("on")){const f=$("#palList .pi");if(f)f.click();}});
 function layoutGraph(){if(cy){cy.resize();cy.layout(GCFG).run();cy.fit(undefined,30);}}
+// === Feedback non bloquant — toasts (verre + accent) =======================
+var TOAST_META={
+  ok:  {ic:"✓", ac:"grn", title:"Succès"},
+  info:{ic:"◈", ac:"cy",  title:"Information"},
+  warn:{ic:"▲", ac:"amb", title:"Attention"},
+  err: {ic:"✕", ac:"red", title:"Erreur"}
+};
+function toastHost(){
+  var h=document.getElementById("toasts");
+  if(!h){h=document.createElement("div");h.id="toasts";h.setAttribute("aria-live","polite");document.body.appendChild(h);}
+  return h;
+}
+function toastClose(el){
+  if(!el||el.dataset.closing)return;
+  el.dataset.closing="1";
+  el.classList.add("out");
+  setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el);},260);
+}
+function toast(msg,type,opts){
+  opts=opts||{};
+  var m=TOAST_META[type]||TOAST_META.info;
+  var host=toastHost();
+  while(host.children.length>=5)toastClose(host.firstChild);
+  var ttl=opts.sticky?0:(opts.ttl||4200);
+  var el=document.createElement("div");
+  el.className="toast t-"+m.ac;
+  el.innerHTML='<div class="ti">'+m.ic+'</div>'
+    +'<div class="tb"><div class="tt">'+esc(opts.title||m.title)+'</div>'
+    +'<div class="tm">'+esc(msg||"")+'</div></div>'
+    +'<button class="tx" aria-label="Fermer">×</button>'
+    +(ttl?'<div class="tp"><i style="animation-duration:'+ttl+'ms"></i></div>':'');
+  el.querySelector(".tx").onclick=function(){toastClose(el);};
+  host.appendChild(el);
+  if(ttl){
+    var timer=setTimeout(function(){toastClose(el);},ttl);
+    el.onmouseenter=function(){clearTimeout(timer);var bar=el.querySelector(".tp i");if(bar)bar.style.animationPlayState="paused";};
+    el.onmouseleave=function(){var bar=el.querySelector(".tp i");if(bar)bar.style.animationPlayState="running";timer=setTimeout(function(){toastClose(el);},1400);};
+  }
+  return el;
+}
+function toastOk(m,o){return toast(m,"ok",o);}
+function toastInfo(m,o){return toast(m,"info",o);}
+function toastWarn(m,o){return toast(m,"warn",o);}
+function toastErr(m,o){return toast(m,"err",o);}
+var _netToastAt=0;
+function toastNet(msg){
+  var now=Date.now();
+  if(now-_netToastAt<4000)return;
+  _netToastAt=now;
+  toastErr(msg||"Connexion au SIEM interrompue — nouvelle tentative automatique.",{title:"Réseau"});
+}
 var KTREND={};
 function renderKpiTrend(t){KTREND=t||{};
   var keys=["incidents_critiques_7j","hotes_risque_ueba","alertes_24h","kev_exposees"];
@@ -690,6 +786,48 @@ function entScoreBanner(d){
   }
   return cards?'<div class="escRow">'+cards+'</div>':'';
 }
+/* ===== Polish chargement / rafraichissement (additif) ===== */
+var UPD_AT=0, UPD_T=null, REFRESH_T=null, RELOADING=false;
+function fmtAgoShort(ms){
+  if(!ms)return "jamais";
+  var s=Math.max(0,Math.floor((Date.now()-ms)/1000));
+  if(s<60)return "il y a "+s+" s";
+  if(s<3600)return "il y a "+Math.floor(s/60)+" min";
+  return "il y a "+Math.floor(s/3600)+" h";
+}
+function markUpdated(){UPD_AT=Date.now();tickUpd();}
+function tickUpd(){
+  var el=$("#updPill");if(!el)return;
+  var lbl=el.querySelector(".updtxt");if(!lbl)return;
+  if(RELOADING){lbl.textContent="actualisation…";return;}
+  lbl.textContent="Mis à jour "+fmtAgoShort(UPD_AT);
+}
+function setSpin(on){
+  var b=$("#refBtn");if(!b)return;
+  if(on)b.classList.add("spin");else b.classList.remove("spin");
+  b.setAttribute("aria-busy",on?"true":"false");
+}
+function refreshNow(){if(RELOADING)return;loadAll();}
+function getCadence(){
+  var v=null;try{v=localStorage.getItem("soc.cadence");}catch(_){v=null;}
+  if(v!=="30000"&&v!=="60000"&&v!=="0")v="60000";
+  return v;
+}
+function applyCadence(){
+  if(REFRESH_T){clearInterval(REFRESH_T);REFRESH_T=null;}
+  var v=getCadence();
+  var sel=$("#cadSel");if(sel)sel.value=v;
+  if(v==="0")return;
+  REFRESH_T=setInterval(function(){if(!document.hidden&&!RELOADING)loadAll();},parseInt(v,10));
+}
+function setCadence(v){
+  try{localStorage.setItem("soc.cadence",v);}catch(_){}
+  applyCadence();
+}
+function startRefresh(){
+  if(!UPD_T){UPD_T=setInterval(tickUpd,1000);}
+  applyCadence();
+}
 function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocaleString("fr");
   const top=(d.top_detections||[]).map(t=>`<tr><td>${nice(t.k)}</td><td class="num">${(t.n||0).toLocaleString("fr")}</td></tr>`).join("");
   const inc=(d.incidents||[]).map(i=>`<tr><td>${esc((i.severity||'?').toUpperCase())}</td><td>${esc(i.title)}</td><td>${esc((i.entities||'').toString())}</td><td>${esc((i.mitre||'').toString())}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">Aucun incident corrélé</td></tr>';
@@ -749,9 +887,10 @@ function renderDetRows(){
       <span class="ttl">${nice(x.tag)}</span>${x.score?`<span class="mono" style="color:var(--${c=='critical'?'red':c=='high'?'amb':'cy'});margin-left:auto;font-weight:700">${x.score}</span>`:""}<span class="ts">${ago(x.ts)}</span></div>
       <div class="meta">${esc(x.tech||"")}${x.tactic?" · "+esc(x.tactic):""}${who?" · 👤 "+esc(who):""}</div></div>`;}).join(""):'<div class="empty">Aucune détection</div>';}
 function applyDetSearch(){detQ=(($("#detSearch")||{}).value||"").toLowerCase().trim();renderDetRows();}
-function exportDetections(){const rows=DETV.length?DETV:DETI;if(!rows.length)return;const cols=["ts","sev","score","tag","tech","tactic","source","entity","msg"];
+function exportDetections(){const rows=DETV.length?DETV:DETI;if(!rows.length){toastInfo("Aucune détection à exporter pour ce filtre.");return;}const cols=["ts","sev","score","tag","tech","tactic","source","entity","msg"];
   const csv=[cols.join(",")].concat(rows.map(r=>cols.map(k=>'"'+((r[k]==null?"":r[k])+"").replace(/"/g,'""')+'"').join(","))).join("\n");
-  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));a.download="detections_omni_soc.csv";a.click();}
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));a.download="detections_omni_soc.csv";a.click();
+  toastOk("Export CSV généré — "+rows.length.toLocaleString("fr")+" détection"+(rows.length>1?"s":"")+".",{title:"Export"});}
 function openDet(i){const x=DETV[i];if(!x||!x.entity)return;openEntity(x.entity,((x.entity||"")+"").split("\\").pop());}
 var LEAK_CATS=[
   {id:"extortion",ic:"🏴‍☠️",lab:"Extorsion ransomware",sub:"sites de fuite (RansomLook)",kpi:"red",sev:"critical",vc:"red"},
@@ -840,8 +979,13 @@ function openCase(i){const x=CASES[i];if(!x)return;
       <button class="stb" onclick="caseAct('${x.id}','note',document.getElementById('caseNote').value)">Ajouter la note</button></div>`;
   $("#emodal").classList.add("on");}
 function caseAct(id,action,value){
+  var CASE_MSG={status:"Statut du cas mis à jour.",disposition:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",assign:"Cas assigné.",note:"Note d'investigation ajoutée."};
   fetch(API+"/case",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({id:id,action:action,value:value})}).then(r=>r.json()).then(()=>{closeEnt();loadAll();}).catch(()=>{});}
+    body:JSON.stringify({id:id,action:action,value:value})})
+   .then(r=>{if(r.status===401)throw"auth";if(!r.ok)throw"http";return r.json();})
+   .then(()=>{toastOk(CASE_MSG[action]||"Cas mis à jour.");closeEnt();loadAll();})
+   .catch(e=>{if(e==="auth"){toastWarn("Session expirée — reconnexion…",{title:"Session"});setTimeout(()=>location.reload(),1100);}
+     else toastErr("Échec de la mise à jour du cas. Réessayez.");});}
 function renderAlerts(list){list=list||[];$("#alFeed").innerHTML=list.length?list.map(a=>{const c=a.priority==3?"critical":a.priority==2?"high":"medium";
   return `<div class="inc sev-${c}"><div class="top"><span class="chip ${c=='high'?'h':c=='medium'?'m':''}">P${a.priority||'-'}</span>
     <span class="ttl">${esc(a.title)}</span><span class="ts">${ago(a.ts)}</span></div>
@@ -849,6 +993,168 @@ function renderAlerts(list){list=list||[];$("#alFeed").innerHTML=list.length?lis
 
 setInterval(()=>{$("#clock")&&($("#clock").textContent=new Date().toLocaleTimeString("fr"))},1000);
 j("/me").then(d=>{if(d.user)start();}).catch(()=>{});
+/* ===================== ACCESSIBILITE & CLAVIER (P3) ===================== */
+(function(){
+  var A11Y_SEL = ".kpi,.inc,.mcell,.pi,.entMore,.georow";
+  function a11yFocusables(root){
+    if(!root) return [];
+    var nodes = root.querySelectorAll('a[href],a[data-p],button,input,select,textarea,[tabindex],[role="button"],[onclick]');
+    var out = [];
+    for(var i=0;i<nodes.length;i++){
+      var el = nodes[i];
+      if(el.disabled) continue;
+      if(el.getAttribute("tabindex")==="-1") continue;
+      if(el.offsetParent===null && el.tagName!=="INPUT") continue;
+      out.push(el);
+    }
+    return out;
+  }
+  function a11yMakeButton(el){
+    if(!el || el.dataset.a11y) return;
+    var tag = el.tagName;
+    if(tag==="A"||tag==="BUTTON"||tag==="INPUT"||tag==="SELECT"||tag==="TEXTAREA"){
+      el.dataset.a11y = "1";
+      if(tag==="A" && !el.getAttribute("href") && !el.hasAttribute("role")) el.setAttribute("role","button");
+      if((tag==="A") && !el.hasAttribute("tabindex")) el.setAttribute("tabindex","0");
+      return;
+    }
+    el.dataset.a11y = "1";
+    if(!el.hasAttribute("role")) el.setAttribute("role","button");
+    if(!el.hasAttribute("tabindex")) el.setAttribute("tabindex","0");
+  }
+  function a11yScan(root){
+    if(!root) return;
+    var list = root.querySelectorAll(A11Y_SEL);
+    for(var i=0;i<list.length;i++) a11yMakeButton(list[i]);
+    var withClick = root.querySelectorAll("[onclick]");
+    for(var k=0;k<withClick.length;k++){ if(!withClick[k].dataset.a11y) a11yMakeButton(withClick[k]); }
+  }
+  function a11yInitStatic(){
+    var logo = document.querySelector(".brand .logo");
+    if(logo){ logo.setAttribute("role","img"); logo.setAttribute("aria-label","Logo OMNI SOC"); }
+    var nav = document.getElementById("nav");
+    if(nav){
+      nav.setAttribute("role","navigation"); nav.setAttribute("aria-label","Navigation principale");
+      var as = nav.querySelectorAll("a[data-p]");
+      for(var n=0;n<as.length;n++){
+        var a = as[n];
+        if(!a.hasAttribute("tabindex")) a.setAttribute("tabindex","0");
+        if(!a.hasAttribute("role")) a.setAttribute("role","button");
+        a.setAttribute("aria-current", a.classList.contains("on") ? "page" : "false");
+      }
+    }
+    var em = document.getElementById("emodal");
+    if(em){ em.setAttribute("role","dialog"); em.setAttribute("aria-modal","true"); em.setAttribute("aria-label","Fiche detaillee"); if(!em.classList.contains("on")) em.setAttribute("aria-hidden","true"); }
+    var pal = document.getElementById("pal");
+    if(pal){ pal.setAttribute("role","dialog"); pal.setAttribute("aria-modal","true"); pal.setAttribute("aria-label","Recherche et navigation"); if(!pal.classList.contains("on")) pal.setAttribute("aria-hidden","true"); }
+    var pin = document.getElementById("palIn");
+    if(pin){ pin.setAttribute("role","combobox"); pin.setAttribute("aria-expanded","true"); pin.setAttribute("aria-autocomplete","list"); pin.setAttribute("aria-label","Rechercher une page ou une entite"); }
+    var main = document.querySelector("main");
+    if(main) a11yScan(main);
+  }
+  function a11yIsActivable(el){
+    if(!el) return false;
+    if(el.getAttribute("role")==="button") return true;
+    if(el.hasAttribute("data-p")) return true;
+    if(el.hasAttribute("onclick")) return true;
+    return false;
+  }
+  document.addEventListener("keydown", function(e){
+    if(e.key!=="Enter" && e.key!==" " && e.key!=="Spacebar") return;
+    var t = e.target;
+    var tn = t && t.tagName;
+    if(tn==="INPUT"||tn==="TEXTAREA"||tn==="SELECT"||(t&&t.isContentEditable)) return;
+    var el = t, hops=0;
+    while(el && el!==document.body && hops<4){ if(a11yIsActivable(el)) break; el = el.parentElement; hops++; }
+    if(!el || !a11yIsActivable(el)) return;
+    e.preventDefault();
+    el.click();
+  }, true);
+  function a11ySyncNav(){
+    var nav = document.getElementById("nav"); if(!nav) return;
+    var as = nav.querySelectorAll("a[data-p]");
+    for(var i=0;i<as.length;i++) as[i].setAttribute("aria-current", as[i].classList.contains("on")?"page":"false");
+  }
+  document.addEventListener("click", function(e){
+    var a = e.target && e.target.closest ? e.target.closest("#nav a[data-p]") : null;
+    if(a) setTimeout(a11ySyncNav, 0);
+  }, true);
+  var A11Y_OPENER = null;
+  function a11yTopModal(){
+    var pal = document.getElementById("pal"); var em  = document.getElementById("emodal");
+    if(pal && pal.classList.contains("on")) return pal;
+    if(em && em.classList.contains("on")) return em;
+    return null;
+  }
+  function a11yOnModalOpen(modal){
+    var act = document.activeElement;
+    if(!A11Y_OPENER && act && !modal.contains(act)) A11Y_OPENER = act;
+    modal.setAttribute("aria-hidden","false");
+    setTimeout(function(){
+      if(!modal.classList.contains("on")) return;
+      var pin = modal.querySelector("#palIn");
+      if(pin){ try{ pin.focus(); }catch(_){ } return; }
+      if(modal.contains(document.activeElement) && document.activeElement!==document.body) return;
+      var f = a11yFocusables(modal.querySelector(".emc,.palbox")||modal);
+      var card = modal.querySelector(".emc,.palbox");
+      if(f.length){ try{ f[0].focus(); }catch(_){ } }
+      else if(card){ card.setAttribute("tabindex","-1"); try{ card.focus(); }catch(_){ } }
+    }, 40);
+  }
+  function a11yOnModalClose(modal){
+    modal.setAttribute("aria-hidden","true");
+    if(!a11yTopModal() && A11Y_OPENER){
+      var o = A11Y_OPENER; A11Y_OPENER = null;
+      setTimeout(function(){ try{ if(o && o.focus) o.focus(); }catch(_){ } }, 0);
+    }
+  }
+  function a11yWatchModal(id){
+    var m = document.getElementById(id); if(!m) return;
+    var was = m.classList.contains("on");
+    new MutationObserver(function(){
+      var now = m.classList.contains("on");
+      if(now===was) return;
+      was = now;
+      if(now) a11yOnModalOpen(m); else a11yOnModalClose(m);
+    }).observe(m, {attributes:true, attributeFilter:["class"]});
+  }
+  document.addEventListener("keydown", function(e){
+    if(e.key!=="Tab") return;
+    var modal = a11yTopModal(); if(!modal) return;
+    var scope = modal.querySelector(".emc,.palbox") || modal;
+    var f = a11yFocusables(scope);
+    if(!f.length){ e.preventDefault(); return; }
+    var first = f[0], last = f[f.length-1], act = document.activeElement;
+    if(!modal.contains(act)){ e.preventDefault(); try{ first.focus(); }catch(_){ } return; }
+    if(e.shiftKey && act===first){ e.preventDefault(); try{ last.focus(); }catch(_){ } }
+    else if(!e.shiftKey && act===last){ e.preventDefault(); try{ first.focus(); }catch(_){ } }
+  }, true);
+  function a11yBoot(){
+    a11yInitStatic();
+    a11yWatchModal("emodal"); a11yWatchModal("pal");
+    var main = document.querySelector("main");
+    if(main){
+      new MutationObserver(function(muts){
+        for(var i=0;i<muts.length;i++){
+          var added = muts[i].addedNodes;
+          for(var k=0;k<added.length;k++){
+            var node = added[k];
+            if(node.nodeType!==1) continue;
+            if(node.matches && node.matches(A11Y_SEL+",[onclick]")) a11yMakeButton(node);
+            a11yScan(node);
+          }
+        }
+      }).observe(main, {childList:true, subtree:true});
+      a11yScan(main);
+    }
+    var emc = document.getElementById("emc");
+    if(emc) new MutationObserver(function(){ a11yScan(emc); }).observe(emc,{childList:true,subtree:true});
+    var pl = document.getElementById("palList");
+    if(pl) new MutationObserver(function(){ a11yScan(pl); }).observe(pl,{childList:true,subtree:true});
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", a11yBoot);
+  else a11yBoot();
+})();
 </script>
 </body>
 </html>
