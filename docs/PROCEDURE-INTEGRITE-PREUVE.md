@@ -9,7 +9,7 @@ Graylog OSS n'a pas d'archivage natif (Enterprise) et un administrateur peut sup
 
 ### 1. Registre d'intégrité haché-en-chaîne + signé (`60-integrity.sh` → `/usr/local/sbin/omni-integrity`)
 - **Quotidien (03:30)** : un *maillon* capture l'état du corpus (par index : `docs`, `bytes`, `uuid` ; totaux). Chaque maillon inclut le **hash SHA-256 du maillon précédent** (chaînage) et est **signé HMAC-SHA256** avec une clé root-only (`/etc/graylog/omni-integrity.key`, chmod 600).
-- **Hors-SIEM** : le registre `/var/lib/omni-integrity/chain.jsonl` est copié à chaque exécution vers `//10.33.50.5/Public/SIEM/integrity/` → un insider du SIEM **ne peut pas réécrire l'historique** (la copie hors-bande + la signature le trahiraient).
+- **Hors-SIEM** : le registre `/var/lib/omni-integrity/chain.jsonl` est copié à chaque exécution vers `//10.33.50.5/Public/SIEM/integrity/` → un insider qui efface/altère **de façon opportuniste** est **trahi** par la divergence avec la copie hors-bande. *(Voir « Limites » pour le cas du root déterminé qui re-signe la chaîne — le dispositif ne couvre pas ce modèle.)*
 - **Attestation** : chaque exécution émet un événement `event_source:siem_integrity` dans le SIEM lui-même (le SIEM atteste de son propre état).
 - **Vérification à tout moment** : `omni-integrity --verify` → recalcule tous les hash, vérifie la signature HMAC et le chaînage. *Toute* altération (suppression masquée, édition) **casse la chaîne** (testé : falsifier une valeur ⇒ « CHAINE COMPROMISE »).
 
@@ -31,7 +31,8 @@ Pour produire des logs à valeur probante (incident, réquisition) :
 5. Conserver l'ensemble (export + hash + attestation) sur support maîtrisé ; journaliser la remise (qui/quand/à qui).
 
 ## Limites & évolution
-- Le registre prouve l'inaltérabilité de l'**état** du corpus (suppression/altération **détectable**), pas une immutabilité du **contenu** au niveau bit. Pour aller plus loin : expédier les logs vers un stockage **WORM / S3 Object Lock** (immuable côté stockage) — chantier infra à part.
+- **Modèle de menace — limite assumée (clé co-localisée).** La clé HMAC (`/etc/graylog/omni-integrity.key`) est sur la **même VM**, lisible par `root`. Un administrateur SIEM **déterminé et malveillant** peut donc altérer les index, **recalculer et re-signer** toute la chaîne `chain.jsonl` (et écraser la copie SMB s'il monte le partage avec le même compte) : `--verify` repasserait au **vert**. La copie hors-bande protège contre l'**effacement opportuniste**, **pas** contre un root qui re-signe. *À ne pas survendre à l'auditeur.* **Pour couvrir ce modèle** : externaliser la racine de confiance — envoi quotidien du **dernier hash horodaté** vers un destinataire **hors du contrôle du root SIEM** (mail/Teams, déjà disponibles) et/ou signature par une clé détenue **hors-bande** (HSM, coffre).
+- Le registre prouve l'inaltérabilité de l'**état** du corpus (suppression/altération **détectable** dans le modèle ci-dessus), pas une immutabilité du **contenu** au niveau bit. Pour aller plus loin : expédier les logs vers un stockage **WORM / S3 Object Lock** (immuable côté stockage) — chantier infra à part.
 - Entra ID **P1** actuel : passer en **P2** enrichit la détection cloud (niveaux de risque, riskyUsers) — cf. couverture M365.
 
 ## Contrôles périodiques (à inscrire au plan d'exploitation)
