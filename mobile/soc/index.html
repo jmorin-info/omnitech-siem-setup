@@ -379,7 +379,10 @@
     </section>
     <section class="page" id="p-health">
       <div class="grid kpis" id="hkpis"></div>
-      <div class="card" style="margin-top:16px"><h3>🛰️ Sources de collecte (24 h)<span class="tag">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
+      <div class="grid cols" style="margin-top:16px">
+        <div class="card"><h3>🛰️ Sources de collecte (24 h)<span class="tag">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
+        <div class="card"><h3>🌑 Hôtes silencieux (go‑dark)<span class="tag">muets &gt; 26 h · à vérifier</span></h3><div class="feed" id="hdark"></div></div>
+      </div>
     </section>
     <section class="page" id="p-report">
       <div style="display:flex;align-items:center;margin-bottom:14px"><h3 class="sec" style="margin:0">Rapport de posture</h3>
@@ -589,6 +592,8 @@ function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{};
     ...(rb.health_total!=null?[[(rb.health_fail>0?"red":"cy"),"Robots actifs",(rb.health_ok||0)+"/"+rb.health_total,(rb.health_fail||0)+" en panne · auto‑supervision"]]:[]),
     ...(sl.sla_coverage_pct!=null?[["cy","Couverture collecte",sl.sla_coverage_pct+"%",(sl.sla_go_dark||0)+" go‑dark / "+(sl.sla_expected||0)+" attendus"]]:[])
   ].map(([c,l,v,s])=>`<div class="kpi ${c}"><div class="lab">${l}</div><div class="val mono">${v}</div><div class="sub">${s}</div></div>`).join("");
+  const dk=d.dark_hosts||[];
+  if($("#hdark"))$("#hdark").innerHTML=dk.length?dk.map(x=>`<div class="inc sev-high"><div class="top"><span class="ttl">🖥️ ${esc(x.host)}</span><span class="mono" style="color:var(--amb);margin-left:auto;font-weight:700">${x.hours} h</span></div></div>`).join(""):'<div class="empty">Aucun hôte silencieux ✅</div>';
   $("#hsrc").innerHTML=(d.sources||[]).map(x=>`<div class="inc"><div class="top">
     <span class="ttl">${esc(x.k)}</span>
     <span class="mono" style="color:var(--cy);margin-left:auto">${(x.n||0).toLocaleString("fr")}</span>

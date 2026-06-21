@@ -574,9 +574,17 @@ def get_health():
                      ["health_ok", "health_fail", "health_total"])
     sla = _latest([{"term": {"event_source": "collecte_sla"}}, {"term": {"sla_type": "summary"}}],
                   ["sla_coverage_pct", "sla_active_24h", "sla_go_dark", "sla_expected"])
+    dres = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"filter": [{"term": {"alert_tag": "host_go_dark"}},
+                                      {"range": {"timestamp": {"gte": "now-26h"}}}]}},
+        "aggs": {"h": {"terms": {"field": "dark_host", "size": 40},
+                       "aggs": {"hrs": {"max": {"field": "hours_silent"}}}}}})
+    dark = [{"host": _rd(b["key"]), "hours": round((b.get("hrs", {}) or {}).get("value", 0) or 0, 1)}
+            for b in dres.get("aggregations", {}).get("h", {}).get("buckets", []) if b.get("key")]
+    dark.sort(key=lambda d: -d["hours"])
     return {"cluster": ch.get("status", "?"), "nodes": ch.get("number_of_nodes"),
             "shards": ch.get("active_shards"), "events_24h": ag.get("tot", {}).get("value", 0),
-            "sources": sources, "robots": robots, "sla": sla}
+            "sources": sources, "robots": robots, "sla": sla, "dark_hosts": dark}
 
 
 def get_leaks():
