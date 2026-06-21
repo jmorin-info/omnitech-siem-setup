@@ -22,6 +22,40 @@
 
 ---
 
+## Aperçu visuel · Visual tour
+
+> 🔒 Captures **anonymisées** — comptes / hôtes / IP / SID pseudonymisés de façon cohérente (mode `MOBILE_REDACT`). *Anonymised screenshots: accounts / hosts / IPs / SIDs are consistently pseudonymised.*
+
+### Console SOC « OMNI SOC » — *web console (VPN‑only)*
+
+<div align="center">
+
+[![Vue d'ensemble](docs/captures/01-vue-ensemble.jpg)](docs/captures/01-vue-ensemble.jpg)
+
+*Vue d'ensemble · niveau de menace, KPI, tactiques ATT&CK, **anomalies ML (oms‑ml)** & risque UEBA, flux temps réel, origines géographiques*
+
+</div>
+
+| | |
+|:---:|:---:|
+| [![Incidents](docs/captures/02-incidents.jpg)](docs/captures/02-incidents.jpg)<br>**Incidents** · cas corrélés (oms‑xdr), statut/assignation/notes | [![Détections](docs/captures/03-detections.jpg)](docs/captures/03-detections.jpg)<br>**Détections** · liste filtrable 24 h (tactique / source) |
+| [![Détections filtrées](docs/captures/11-detections-filtre.jpg)](docs/captures/11-detections-filtre.jpg)<br>**Détections filtrées** · drill par tactique | [![Entité‑360](docs/captures/09-entite-360.jpg)](docs/captures/09-entite-360.jpg)<br>**Entité‑360** · tactiques, techniques, événements récents |
+| [![Matrice ATT&CK](docs/captures/04-matrice-attack.jpg)](docs/captures/04-matrice-attack.jpg)<br>**Matrice MITRE ATT&CK** · couverture × activité (7 j) | [![Graphe](docs/captures/05-graphe.jpg)](docs/captures/05-graphe.jpg)<br>**Graphe d'attaque** · entités ↔ techniques |
+| [![Fuites](docs/captures/06-fuites.jpg)](docs/captures/06-fuites.jpg)<br>**Fuites & Dark Web** · RansomLook / HIBP / Dehashed / GitHub | [![Santé](docs/captures/07-sante.jpg)](docs/captures/07-sante.jpg)<br>**Santé & collecte** · cluster, fraîcheur par source |
+| [![Rapport](docs/captures/08-rapport.jpg)](docs/captures/08-rapport.jpg)<br>**Rapport** · synthèse exécutive imprimable (PDF) | [![Palette](docs/captures/10-palette.jpg)](docs/captures/10-palette.jpg)<br>**Palette de commandes** (⌘K) · navigation |
+
+### Graylog — *moteur SIEM sous‑jacent*
+
+| | |
+|:---:|:---:|
+| [![Direction](docs/captures/graylog-01-dashboard-direction.jpg)](docs/captures/graylog-01-dashboard-direction.jpg)<br>**Dashboard « OMNI - SOC » · Direction** · KPI exécutifs | [![ATT&CK](docs/captures/graylog-02-attack.jpg)](docs/captures/graylog-02-attack.jpg)<br>**Onglet ATT&CK** · couverture & techniques |
+| [![UEBA / NDR](docs/captures/graylog-03-ueba-ndr.jpg)](docs/captures/graylog-03-ueba-ndr.jpg)<br>**Onglet UEBA / NDR** · score comportemental, beaconing | [![OMS‑XDR](docs/captures/graylog-04-oms-xdr.jpg)](docs/captures/graylog-04-oms-xdr.jpg)<br>**Onglet OMS‑XDR** · incidents corrélés |
+| [![Identité AD](docs/captures/graylog-05-identite-ad.jpg)](docs/captures/graylog-05-identite-ad.jpg)<br>**Onglet Identité AD** · Kerberos, authentifications | [![Comptes à privilèges](docs/captures/graylog-06-comptes-privileges.jpg)](docs/captures/graylog-06-comptes-privileges.jpg)<br>**Onglet Comptes à privilèges** |
+| [![Sources](docs/captures/graylog-07-sources.jpg)](docs/captures/graylog-07-sources.jpg)<br>**Dashboard « Sources »** · télémétrie par source | [![Streams](docs/captures/graylog-08-streams.jpg)](docs/captures/graylog-08-streams.jpg)<br>**Streams** · routage (index sets dédiés) |
+| [![Alertes](docs/captures/graylog-09-alertes.jpg)](docs/captures/graylog-09-alertes.jpg)<br>**Alertes & événements** | |
+
+---
+
 ## English
 
 ### Overview
