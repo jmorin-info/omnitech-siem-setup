@@ -355,9 +355,12 @@
     <section class="page" id="p-detections"><div class="card"><h3>◎ Détections (24 h)
         <span class="tag" id="detCount"></span></h3>
       <div class="dfilter">
+        <input id="detSearch" oninput="applyDetSearch()" placeholder="🔎 Rechercher (tag, entité, technique, message…)" autocomplete="off"
+          style="background:#0c1525;border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:8px 12px;font-size:13px;flex:1;min-width:200px;margin:0">
         <select id="fTactic" onchange="onFilter()"><option value="">Toutes tactiques</option></select>
         <select id="fSource" onchange="onFilter()"><option value="">Toutes sources</option></select>
         <button class="stb" onclick="clearFilter()">Réinitialiser</button>
+        <button class="stb" onclick="exportDetections()" title="Exporter en CSV">⤓ CSV</button>
       </div>
       <div class="feed" id="detFeed"></div></div></section>
     <section class="page" id="p-attack">
@@ -582,22 +585,29 @@ function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{};
     <span class="ttl">${esc(x.k)}</span>
     <span class="mono" style="color:var(--cy);margin-left:auto">${(x.n||0).toLocaleString("fr")}</span>
     <span class="ts">${ago(x.last)}</span></div></div>`).join("")||'<div class="empty">—</div>';}
-let DETI=[],detF={tactic:"",source:"",technique:""};
+let DETI=[],DETV=[],detF={tactic:"",source:"",technique:""},detQ="";
 function onFilter(){detF.tactic=$("#fTactic").value;detF.source=$("#fSource").value;detF.technique="";loadDetections();}
-function clearFilter(){detF={tactic:"",source:"",technique:""};if($("#fTactic"))$("#fTactic").value="";if($("#fSource"))$("#fSource").value="";loadDetections();}
+function clearFilter(){detF={tactic:"",source:"",technique:""};detQ="";if($("#detSearch"))$("#detSearch").value="";if($("#fTactic"))$("#fTactic").value="";if($("#fSource"))$("#fSource").value="";loadDetections();}
 function openTech(id){detF={tactic:"",source:"",technique:id};if($("#fTactic"))$("#fTactic").value="";if($("#fSource"))$("#fSource").value="";goNav("detections");loadDetections();}
 function loadDetections(){j("/detections?tactic="+encodeURIComponent(detF.tactic)+"&source="+encodeURIComponent(detF.source)+"&technique="+encodeURIComponent(detF.technique||"")).then(d=>renderDetections(d)).catch(()=>{});}
 function renderDetections(d){d=d||{};DETI=d.items||[];
   const ft=$("#fTactic");if(ft&&ft.options.length<=1)(d.tactics||[]).forEach(t=>ft.add(new Option(t,t)));
   const fs=$("#fSource");if(fs&&fs.options.length<=1)(d.sources||[]).forEach(s=>fs.add(new Option(s,s)));
-  if($("#detCount"))$("#detCount").textContent=(detF.technique?"▸ "+detF.technique+" · ":"")+DETI.length+" détection(s)";
-  $("#detFeed").innerHTML=DETI.length?DETI.map((x,i)=>{const c=x.sev?sevClass(x.sev):(x.priority==3?"critical":x.priority==2?"high":"medium");
+  renderDetRows();}
+function renderDetRows(){
+  DETV=detQ?DETI.filter(x=>JSON.stringify([x.tag,x.entity,x.tech,x.tactic,x.source,x.msg]).toLowerCase().includes(detQ)):DETI.slice();
+  if($("#detCount"))$("#detCount").textContent=(detF.technique?"▸ "+detF.technique+" · ":"")+DETV.length+" détection(s)"+(detQ?' · « '+detQ+' »':'');
+  $("#detFeed").innerHTML=DETV.length?DETV.map((x,i)=>{const c=x.sev?sevClass(x.sev):(x.priority==3?"critical":x.priority==2?"high":"medium");
     const who=((x.entity||"")+"").split("\\").pop();
     return `<div class="inc sev-${c}" onclick="openDet(${i})"><div class="top">
       <span class="chip ${chipCls(c)}">${esc((x.source||"").toUpperCase())}</span>
       <span class="ttl">${nice(x.tag)}</span>${x.score?`<span class="mono" style="color:var(--${c=='critical'?'red':c=='high'?'amb':'cy'});margin-left:auto;font-weight:700">${x.score}</span>`:""}<span class="ts">${ago(x.ts)}</span></div>
-      <div class="meta">${esc(x.tech||"")}${x.tactic?" · "+esc(x.tactic):""}${who?" · 👤 "+esc(who):""}</div></div>`;}).join(""):'<div class="empty">Aucune détection pour ce filtre</div>';}
-function openDet(i){const x=DETI[i];if(!x||!x.entity)return;openEntity(x.entity,((x.entity||"")+"").split("\\").pop());}
+      <div class="meta">${esc(x.tech||"")}${x.tactic?" · "+esc(x.tactic):""}${who?" · 👤 "+esc(who):""}</div></div>`;}).join(""):'<div class="empty">Aucune détection</div>';}
+function applyDetSearch(){detQ=(($("#detSearch")||{}).value||"").toLowerCase().trim();renderDetRows();}
+function exportDetections(){const rows=DETV.length?DETV:DETI;if(!rows.length)return;const cols=["ts","sev","score","tag","tech","tactic","source","entity","msg"];
+  const csv=[cols.join(",")].concat(rows.map(r=>cols.map(k=>'"'+((r[k]==null?"":r[k])+"").replace(/"/g,'""')+'"').join(","))).join("\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));a.download="detections_omni_soc.csv";a.click();}
+function openDet(i){const x=DETV[i];if(!x||!x.entity)return;openEntity(x.entity,((x.entity||"")+"").split("\\").pop());}
 function renderLeaks(d){d=d||{};
   $("#leakSrc").innerHTML=(d.sources||[]).map(s=>`<span class="pchip">${esc((s.k||'?').toUpperCase())} · ${s.n}</span>`).join(" ")||'<span class="muted">Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)</span>';
   const items=d.items||[];
