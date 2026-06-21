@@ -356,7 +356,7 @@ def get_cases():
     for i in incs:
         c = st.get(i.get("id") or "", {})
         i["status"] = c.get("status", "new")
-        i["assignee"] = c.get("assignee", "")
+        i["assignée"] = c.get("assignée", "")
         i["notes"] = c.get("notes", [])
         i["disposition"] = c.get("disposition", "")
     return incs
@@ -370,13 +370,13 @@ def update_case(b, who):
     act = b.get("action"); val = b.get("value", "")
     with _CASES_LOCK:                       # verrou : cycle lecture-modif-ecriture atomique
         st = load_cases()
-        c = st.setdefault(cid, {"status": "new", "assignee": "", "notes": []})
+        c = st.setdefault(cid, {"status": "new", "assignée": "", "notes": []})
         if act == "status":
             c["status"] = val if val in ("new", "in_progress", "closed") else "new"
         elif act == "assign":
-            c["assignee"] = str(val)[:120]
+            c["assignée"] = str(val)[:120]
         elif act == "disposition":
-            # Qualification analyste -> label du modele ML de reduction de FP (oms-ml).
+            # Qualification analyste -> label du modèle ML de réduction de FP (oms-ml).
             if val in ("true_positive", "false_positive"):
                 c["disposition"] = val
                 c["disposition_by"] = who or "?"
@@ -542,7 +542,7 @@ def get_leaks_v2():
 
 
 def _trend(cur: int, prev: int) -> dict:
-    # delta en % vs fenetre precedente ; dir = sens (up/down/flat), bad = defavorable.
+    # delta en % vs fenetre précédente ; dir = sens (up/down/flat), bad = defavorable.
     if prev <= 0:
         pct = 100 if cur > 0 else 0
     else:
@@ -721,7 +721,7 @@ def get_leaks():
     return {"items": items, "sources": counts}
 
 
-# --- anti brute-force login (par IP, en memoire) ---
+# --- anti brute-force login (par IP, en mémoire) ---
 LOGIN_FAILS = {}
 LOGIN_MAX = int(CONF.get("MOBILE_LOGIN_MAX", "5"))
 LOGIN_WINDOW = int(CONF.get("MOBILE_LOGIN_WINDOW", "900"))  # 15 min
