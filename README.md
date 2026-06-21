@@ -52,7 +52,7 @@
 | [![UEBA / NDR](docs/captures/graylog-03-ueba-ndr.jpg)](docs/captures/graylog-03-ueba-ndr.jpg)<br>**Onglet UEBA / NDR** · score comportemental, beaconing | [![OMS‑XDR](docs/captures/graylog-04-oms-xdr.jpg)](docs/captures/graylog-04-oms-xdr.jpg)<br>**Onglet OMS‑XDR** · incidents corrélés |
 | [![Identité AD](docs/captures/graylog-05-identite-ad.jpg)](docs/captures/graylog-05-identite-ad.jpg)<br>**Onglet Identité AD** · Kerberos, authentifications | [![Comptes à privilèges](docs/captures/graylog-06-comptes-privileges.jpg)](docs/captures/graylog-06-comptes-privileges.jpg)<br>**Onglet Comptes à privilèges** |
 | [![Sources](docs/captures/graylog-07-sources.jpg)](docs/captures/graylog-07-sources.jpg)<br>**Dashboard « Sources »** · télémétrie par source | [![Streams](docs/captures/graylog-08-streams.jpg)](docs/captures/graylog-08-streams.jpg)<br>**Streams** · routage (index sets dédiés) |
-| [![Alertes](docs/captures/graylog-09-alertes.jpg)](docs/captures/graylog-09-alertes.jpg)<br>**Alertes & événements** | |
+| [![Alertes](docs/captures/graylog-09-alertes.jpg)](docs/captures/graylog-09-alertes.jpg)<br>**Alertes & événements** | [![Analytics](docs/captures/graylog-10-analytics.jpg)](docs/captures/graylog-10-analytics.jpg)<br>**Dashboard « OMNI - Analytics »** · ML / UEBA / SLA collecte / santé robots / bruit FP |
 
 ### PWA mobile — *application installable (web‑push)*
 
