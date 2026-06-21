@@ -26,6 +26,7 @@ anomaly:
   entities:                 # types d'entités scorés (champ de regroupement OpenSearch)
     host:
       group_by: "source"            # hôte émetteur de logs
+      segment: true                 # anomalie PAR classe d'actif (pare-feu vs serveur...)
     account:
       group_by: "winlogbeat_winlog_event_data_TargetUserName"   # compte AD
 

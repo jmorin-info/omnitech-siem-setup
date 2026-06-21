@@ -27,6 +27,36 @@ def load_cfg(path: str) -> dict:
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
+def _segmented_score(names, matrix, ents, classes, min_entities, kw):
+    """Anomalie par classe d'actif : un IsolationForest par classe (>= min_entities) ;
+    classes trop petites regroupées en « autres ». Fusionne et retrie par score."""
+    groups: dict = {}
+    for i, c in enumerate(classes):
+        c = c or "?"
+        groups.setdefault(c, ([], []))
+        groups[c][0].append(matrix[i])
+        groups[c][1].append(ents[i])
+    pool_m, pool_e, out = [], [], []
+    for c, (m, e) in groups.items():
+        if len(e) >= min_entities:
+            for r in anomaly.train_score(names, m, e, **kw):
+                r["cls"] = c
+                out.append(r)
+        else:
+            pool_m += m
+            pool_e += e
+    if len(pool_e) >= min_entities:
+        for r in anomaly.train_score(names, pool_m, pool_e, **kw):
+            r["cls"] = "autres"
+            out.append(r)
+    elif pool_e:
+        for ent in pool_e:
+            out.append({"entity": ent, "ml_score": 0.0, "ml_reason": "classe trop petite",
+                        "features": {}, "cls": "autres"})
+    out.sort(key=lambda d: d["ml_score"], reverse=True)
+    return out
+
+
 def cmd_anomaly(cfg: dict, args) -> int:
     os_cfg, an = cfg["opensearch"], cfg["anomaly"]
     state = cfg.get("state_dir", "/var/lib/oms-ml")
@@ -34,20 +64,23 @@ def cmd_anomaly(cfg: dict, args) -> int:
     gelf = Gelf(cfg["gelf"]) if args.push else None
 
     wanted = list(an["entities"].keys()) if args.entity == "all" else [args.entity]
+    me = an.get("min_entities", 12)
     rc = 0
     for etype in wanted:
         gb = an["entities"][etype]["group_by"]
-        names, matrix, ents = features.extract(os_cfg["url"], os_cfg["index"], gb, window)
-        if len(ents) < an.get("min_entities", 12):
+        names, matrix, ents, classes = features.extract(os_cfg["url"], os_cfg["index"], gb, window)
+        if len(ents) < me:
             log.warning("[%s] %d entités < min_entities=%s — modèle non fiable, on saute.",
-                        etype, len(ents), an.get("min_entities", 12))
+                        etype, len(ents), me)
             continue
-        res = anomaly.train_score(
-            names, matrix, ents,
-            contamination=an.get("contamination", "auto"),
-            n_estimators=an.get("n_estimators", 200),
-            model_path=f"{state}/anomaly_{etype}.pkl",
-        )
+        kw = dict(contamination=an.get("contamination", "auto"), n_estimators=an.get("n_estimators", 200))
+        # Segmentation par classe d'actif : compare un pare-feu à des pare-feux, un
+        # serveur à des serveurs... évite qu'un gros émetteur (FortiGate) domine.
+        if an["entities"][etype].get("segment") and len(set(classes)) > 1:
+            res = _segmented_score(names, matrix, ents, classes, me, kw)
+            log.info("[%s] anomalie segmentée par classe (%d classes)", etype, len(set(classes)))
+        else:
+            res = anomaly.train_score(names, matrix, ents, model_path=f"{state}/anomaly_{etype}.pkl", **kw)
         top = res[: args.top or an.get("top", 15)]
         thr = an.get("score_threshold", 70)
         print(f"\n=== Anomalies {etype} (window {window}, {len(ents)} entités) ===")

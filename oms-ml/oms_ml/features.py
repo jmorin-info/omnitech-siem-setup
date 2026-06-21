@@ -41,6 +41,9 @@ def _aggs(peer_field: str) -> dict[str, Any]:
         "n_countries": {"cardinality": {"field": "src_ip_country_code"}},
         "n_event_sources": {"cardinality": {"field": "event_source"}},
         "n_peers": {"cardinality": {"field": peer_field}},
+        # event_source dominant = proxy de classe d'actif (firewall/serveur/cloud...)
+        # pour segmenter l'anomalie (comparer un pare-feu a d'autres pare-feux).
+        "cls": {"terms": {"field": "event_source", "size": 1}},
     }
 
 
@@ -78,10 +81,13 @@ def extract(os_url: str, index: str, group_by: str, window: str,
 
     matrix: list[list[float]] = []
     entities: list[str] = []
+    classes: list[str] = []
     for b in buckets:
         key = b.get("key")
         if key in (None, "", "null", "-"):
             continue
+        cb = (b.get("cls", {}) or {}).get("buckets", [])
+        classes.append(str(cb[0]["key"]) if cb else "?")
         row = [
             float(b.get("doc_count", 0)),
             float(b.get("ev_detections", {}).get("doc_count", 0)),
@@ -97,4 +103,4 @@ def extract(os_url: str, index: str, group_by: str, window: str,
         matrix.append(row)
         entities.append(str(key))
     log.info("%d entités extraites (group_by=%s, window=%s)", len(entities), group_by, window)
-    return FEATURES, matrix, entities
+    return FEATURES, matrix, entities, classes

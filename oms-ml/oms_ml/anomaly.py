@@ -85,9 +85,14 @@ def train_score(features: list[str], matrix: list[list[float]], entities: list[s
             f"{LABELS.get(features[j], features[j])}={int(X[i][j])} (z={z[j]:+.1f})"
             for j in top if z[j] > 1.0
         ]
+        # Amortir le score par l'AMPLEUR réelle de l'anomalie (z-max), pas seulement
+        # le rang : sinon le « plus haut » d'une population/classe normale obtient 100
+        # par simple min-max. Une entité « dans la norme » (z-max < 1) est ramenée bas.
+        maxz = float(max(0.0, z.max()))
+        damp = min(1.0, maxz / 2.5)
         results.append({
             "entity": ent,
-            "ml_score": round(float(scores[i]), 1),
+            "ml_score": round(float(scores[i]) * damp, 1),
             "ml_reason": " ; ".join(reasons) if reasons else "profil dans la norme",
             "features": {features[j]: X[i][j] for j in range(len(features))},
         })
