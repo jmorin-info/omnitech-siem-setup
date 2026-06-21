@@ -161,7 +161,7 @@ Debian 13 · Graylog 7.1 · OpenSearch 2.19.x (3.x breaks Graylog) · MongoDB 8.
 
 ### Status & roadmap
 
-**Production.** **Delivered:** XDR correlation + local LLM triage (`oms-xdr` + Ollama), SOC web console + mobile PWA, threat‑intel (abuse.ch IOC) + leak/dark‑web monitoring, ATT&CK coverage matrix, AD account‑disable actuator (dry‑run), ISO clause‑10 register + dated audit‑evidence generator. **Next:** ESET endpoint isolation + arming the AD response (pending API access / AD delegation), optional cloud‑LLM advisory layer with deterministic tokenisation + Presidio backstop. Co‑managed MDR scoping in `docs/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md`.
+**Production.** **Delivered:** XDR correlation + local LLM triage (`oms-xdr` + Ollama), **ML scoring layer (`oms-ml`: unsupervised anomaly + supervised FP‑reduction)**, **premium SOC web console + mobile PWA** (ML/UEBA scores, free‑text search + CSV export, entity search, Entity‑360 scores, filterable attack graph, KPI trends, collection‑SLA/robot health, toasts, help, keyboard a11y, density), perf cache + offline test suite, threat‑intel (abuse.ch IOC) + leak/dark‑web monitoring, ATT&CK coverage matrix, AD account‑disable actuator (dry‑run), ISO clause‑10 register + dated audit‑evidence generator. **Next:** ESET endpoint isolation + arming the AD response (pending API access / AD delegation), optional cloud‑LLM advisory layer with deterministic tokenisation + Presidio backstop. Co‑managed MDR scoping in `docs/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md`.
 
 ---
 
@@ -264,7 +264,7 @@ Debian 13 · Graylog 7.1 · OpenSearch 2.19.x (la 3.x casse Graylog) · MongoDB 
 
 ### État & feuille de route
 
-**Production.** **Livré :** corrélation XDR + triage LLM local (`oms-xdr` + Ollama), console web SOC + PWA mobile, threat‑intel (IOC abuse.ch) + surveillance fuites/dark web, matrice de couverture ATT&CK, actionneur de désactivation de compte AD (dry‑run), registre clause 10 + générateur de preuves d'audit daté. **À venir :** isolation d'endpoint ESET + armement de la réponse AD (en attente des accès API / délégation AD), couche LLM cloud optionnelle (conseil) avec tokenisation déterministe + filet Presidio. Chiffrage du MDR co‑managé dans `docs/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md`.
+**Production.** **Livré :** corrélation XDR + triage LLM local (`oms-xdr` + Ollama), **couche de scoring ML (`oms-ml` : anomalie non‑supervisée + réduction de FP supervisée)**, **console web SOC premium + PWA mobile** (scores ML/UEBA, recherche libre + export CSV, recherche d'entité, Entité‑360 scorée, graphe d'attaque filtrable, tendances KPI, SLA de collecte/santé des robots, toasts, aide, accessibilité clavier, densité), cache de performance + suite de tests hors‑ligne, threat‑intel (IOC abuse.ch) + surveillance fuites/dark web, matrice de couverture ATT&CK, actionneur de désactivation de compte AD (dry‑run), registre clause 10 + générateur de preuves d'audit daté. **À venir :** isolation d'endpoint ESET + armement de la réponse AD (en attente des accès API / délégation AD), couche LLM cloud optionnelle (conseil) avec tokenisation déterministe + filet Presidio. Chiffrage du MDR co‑managé dans `docs/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md`.
 
 ---
 
