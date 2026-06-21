@@ -1,0 +1,11 @@
+[Unit]
+Description=OMS-ML - scoring d'anomalie non-supervise par entite (IsolationForest)
+After=network-online.target opensearch.service graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/omnitech-siem-setup/oms-ml
+ExecStart=/root/omnitech-siem-setup/oms-ml/.venv/bin/python -m oms_ml.run anomaly --entity all --push --config /etc/oms-ml/config.yaml
+Nice=10

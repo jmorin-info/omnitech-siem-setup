@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"; source ./00-vars.env; source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "root requis."
-[[ -x /usr/local/sbin/omni-self-health ]] || die "omni-self-health absent."
+[[ -x /usr/local/sbin/omni-self-health ]] || { echo "omni-self-health absent -> installation via 61"; bash ./61-supervision-robots.sh || die "echec 61-supervision-robots.sh"; }
 require_api
 
 echo "==> [1/2] Routage event_source=siem_health -> INT (+ exclusion M365)"

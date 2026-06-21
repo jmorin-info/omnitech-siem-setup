@@ -1,0 +1,11 @@
+[Unit]
+Description=OMS-ML - re-entrainement FP (quotidien, 03h40)
+
+[Timer]
+OnCalendar=*-*-* 03:40:00
+AccuracySec=5min
+Persistent=true
+Unit=oms-ml-fp.service
+
+[Install]
+WantedBy=timers.target

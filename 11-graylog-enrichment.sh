@@ -32,44 +32,7 @@ chown -R root:graylog "${LOOKUP_DIR}" 2>/dev/null || true
 ok "CSV deployes dans ${LOOKUP_DIR}"
 
 # ensure_lookup <nom> <titre> <csv> <key_col> <val_col>
-ensure_lookup() {
-  local NAME="$1" TITLE="$2" CSV="$3" KEY="$4" VAL="$5"
-  local AID CID TID
-  AID="$(api_get "/system/lookup/adapters" | jq -r --arg n "omni-${NAME}-adapter" '.data_adapters[]? | select(.name==$n) | .id')"
-  if [[ -z "${AID}" ]]; then
-    AID="$(jq -n --arg n "omni-${NAME}-adapter" --arg t "${TITLE} (adapter)" \
-                 --arg p "${LOOKUP_DIR}/${CSV}" --arg k "${KEY}" --arg v "${VAL}" '{
-            name:$n, title:$t, description:"provisionne par 11-graylog-enrichment.sh",
-            config:{ type:"csvfile", path:$p, separator:",", quotechar:"\"",
-                     key_column:$k, value_column:$v, check_interval:60,
-                     case_insensitive_lookup:true, cidr_lookup:false }
-          }' | api_post "/system/lookup/adapters" | jqr '.id')"
-    [[ -n "${AID}" && "${AID}" != "null" ]] || { warn "adapter ${NAME} refuse"; return 1; }
-  fi
-  CID="$(api_get "/system/lookup/caches" | jq -r --arg n "omni-${NAME}-cache" '.caches[]? | select(.name==$n) | .id')"
-  if [[ -z "${CID}" ]]; then
-    CID="$(jq -n --arg n "omni-${NAME}-cache" --arg t "${TITLE} (cache)" '{
-            name:$n, title:$t, description:"provisionne par 11-graylog-enrichment.sh",
-            config:{ type:"guava_cache", max_size:1000,
-                     expire_after_access:300, expire_after_access_unit:"SECONDS",
-                     expire_after_write:300,  expire_after_write_unit:"SECONDS",
-                     ignore_null:false, ttl_empty:60, ttl_empty_unit:"SECONDS" }
-          }' | api_post "/system/lookup/caches" | jqr '.id')"
-    [[ -n "${CID}" && "${CID}" != "null" ]] || { warn "cache ${NAME} refuse"; return 1; }
-  fi
-  TID="$(api_get "/system/lookup/tables" | jq -r --arg n "omni-${NAME}" '.lookup_tables[]? | select(.name==$n) | .id')"
-  if [[ -z "${TID}" ]]; then
-    TID="$(jq -n --arg n "omni-${NAME}" --arg t "${TITLE}" --arg a "${AID}" --arg c "${CID}" '{
-            name:$n, title:$t, description:"provisionne par 11-graylog-enrichment.sh",
-            data_adapter_id:$a, cache_id:$c,
-            default_single_value:"", default_single_value_type:"NULL",
-            default_multi_value:"",  default_multi_value_type:"NULL"
-          }' | api_post "/system/lookup/tables" | jqr '.id')"
-    [[ -n "${TID}" && "${TID}" != "null" ]] && ok "table 'omni-${NAME}'" || { warn "table ${NAME} refusee"; return 1; }
-  else
-    skip "table 'omni-${NAME}' existe"
-  fi
-}
+# ensure_lookup() centralise dans lib-graylog.sh (supprime la copie locale)
 
 ensure_lookup "win-event-action"     "OMNI EventID Security -> action"      "win-events.csv"         "event_id"    "action"
 ensure_lookup "win-event-category"   "OMNI EventID Security -> categorie"   "win-events.csv"         "event_id"    "category"

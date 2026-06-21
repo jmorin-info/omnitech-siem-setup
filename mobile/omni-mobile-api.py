@@ -19,6 +19,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import ssl
 import time
 import urllib.request
@@ -63,6 +64,70 @@ def os_search(index: str, body: dict) -> dict:
         return json.load(urllib.request.urlopen(req, timeout=30))
     except urllib.error.URLError:
         return {}
+
+
+# ------------------------------------------------- redaction (mode démo / captures)
+# Pseudonymise comptes / hôtes / IP de façon cohérente (réel -> pseudo stable) pour
+# produire des captures sans données réelles. Activé par MOBILE_REDACT=1 (sinon no-op).
+REDACT = CONF.get("MOBILE_REDACT", "") == "1"
+_RD_MAP: dict = {}
+_RD_REV: dict = {}     # pseudo -> réel (pour que l'Entité-360 fonctionne en mode rédigé)
+_IP_RE = re.compile(r"\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b")
+_SID_RE = re.compile(r"S-1-5-21(?:-\d+){1,5}")
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def _pseudo_ip(m):
+    return f"10.{int(m.group(2)) % 80 + 10}.{int(m.group(3)) % 80 + 10}.{int(m.group(4)) % 80 + 10}"
+
+
+def _rd(v):
+    """Pseudonymise une entité (compte/hôte/IP) et mémorise la correspondance."""
+    if not REDACT or not v:
+        return v
+    s = str(v)
+    if s in _RD_MAP:
+        return _RD_MAP[s]
+    if _IP_RE.fullmatch(s.strip()):
+        out = _IP_RE.sub(_pseudo_ip, s.strip())
+    else:
+        h = hashlib.md5(s.encode()).hexdigest()[:4]
+        if "\\" in s:                       # DOMAINE\compte
+            dom, _, _u = s.partition("\\")
+            out = f"{dom}\\ent-{h}"
+        elif s.endswith("$"):               # compte machine AD
+            out = f"HOST-{h.upper()}$"
+        else:                               # préfixe neutre (le type est déjà porté par une icône)
+            out = f"ent-{h}"
+    _RD_MAP[s] = out
+    _RD_REV[out] = s
+    return out
+
+
+def _scrub(text):
+    """Remplace dans un texte libre les entités connues (carte) + toute IP."""
+    if not REDACT or not isinstance(text, str) or not text:
+        return text
+    for real, pse in _RD_MAP.items():
+        if real and real in text:
+            text = text.replace(real, pse)
+    text = _IP_RE.sub(_pseudo_ip, text)
+    text = _SID_RE.sub("S-1-5-21-x-x-x", text)
+    text = _EMAIL_RE.sub("user@redacted.local", text)
+    return text
+
+
+def _walk_redact(o):
+    """Passe finale récursive sur la réponse : scrube les chaînes (texte libre)."""
+    if not REDACT:
+        return o
+    if isinstance(o, str):
+        return _scrub(o)
+    if isinstance(o, list):
+        return [_walk_redact(x) for x in o]
+    if isinstance(o, dict):
+        return {k: _walk_redact(v) for k, v in o.items()}
+    return o
 
 
 def sign_session(user: str) -> str:
@@ -131,7 +196,7 @@ def get_alerts(limit: int = 50) -> list:
             "ts": s.get("timestamp"),
             "title": s.get("event_definition_title") or s.get("message"),
             "priority": s.get("priority"),
-            "entity": s.get("key") or "",
+            "entity": _rd(s.get("key") or ""),
         })
     return out
 
@@ -153,7 +218,7 @@ def get_incidents(limit: int = 30) -> list:
             "title": s.get("short_message"),
             "severity": s.get("severity"),
             "rule": s.get("rule_id"),
-            "entities": s.get("entities"),
+            "entities": [_rd(e) for e in s["entities"]] if isinstance(s.get("entities"), list) else _rd(s.get("entities")),
             "mitre": s.get("mitre"),
             "narrative": s.get("full_message"),
             "remediation": s.get("remediation"),
@@ -255,8 +320,8 @@ def get_graph():
         if n["id"] not in seen:
             seen.add(n["id"]); nodes.append(n)
     for eb in res.get("aggregations", {}).get("e", {}).get("buckets", []):
-        ent = eb.get("key"); eid = "u:" + ent
-        add({"id": eid, "label": ent.split("\\")[-1], "full": ent, "type": "entity", "weight": eb.get("doc_count", 0)})
+        ent = eb.get("key"); eid = "u:" + ent; rent = _rd(ent)
+        add({"id": eid, "label": rent.split("\\")[-1], "full": rent, "type": "entity", "weight": eb.get("doc_count", 0)})
         for tb in eb.get("t", {}).get("buckets", []):
             tech = tb.get("key"); tid = "t:" + tech
             add({"id": tid, "label": tech, "type": "technique", "tactic": tt.get(tech, "?"), "weight": 0})
@@ -318,6 +383,7 @@ def update_case(b, who):
 def get_entity(name):
     if not name:
         return {"name": "", "total": 0, "techniques": [], "tactics": [], "events": []}
+    name = _RD_REV.get(name, name)   # mode rédigé : pseudo -> réel pour la requête
     q = {"bool": {"must": [{"term": {"user": name}}, {"exists": {"field": "alert_tag"}}],
                   "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}}
     res = os_search("omni-*", {"size": 20, "sort": [{"timestamp": {"order": "desc"}}], "query": q,
@@ -331,7 +397,7 @@ def get_entity(name):
         s = h.get("_source", {})
         ev.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
                    "msg": s.get("short_message") or s.get("message")})
-    return {"name": name, "total": ag.get("tot", {}).get("value", 0),
+    return {"name": _rd(name), "total": ag.get("tot", {}).get("value", 0),
             "techniques": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tech", {}).get("buckets", [])],
             "tactics": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tac", {}).get("buckets", [])],
             "events": ev}
@@ -358,7 +424,7 @@ def get_detections(tactic="", source="", tag="", technique=""):
         s = h.get("_source", {})
         items.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
                       "tactic": s.get("mitre_tactic"), "source": s.get("event_source"),
-                      "entity": s.get("user") or s.get("key"), "priority": s.get("priority"),
+                      "entity": _rd(s.get("user") or s.get("key")), "priority": s.get("priority"),
                       "msg": s.get("short_message") or s.get("message")})
     ag = res.get("aggregations", {})
     return {"items": items,
@@ -393,6 +459,40 @@ def get_geo_threats():
     return out
 
 
+def _top_ml(minutes=180, size=8):
+    """Top entités par score d'anomalie ML (event_source=ml_anomaly, oms-ml)."""
+    res = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"filter": [{"term": {"event_source": "ml_anomaly"}},
+                                      {"range": {"timestamp": {"gte": f"now-{minutes}m"}}}]}},
+        "aggs": {"e": {"terms": {"field": "entity", "size": size, "order": {"s": "desc"}},
+                       "aggs": {"s": {"max": {"field": "ml_score"}},
+                                "h": {"top_hits": {"size": 1, "_source": ["ml_reason", "entity_type"],
+                                                   "sort": [{"timestamp": {"order": "desc"}}]}}}}}})
+    out = []
+    for b in res.get("aggregations", {}).get("e", {}).get("buckets", []):
+        hit = (((b.get("h", {}) or {}).get("hits", {}) or {}).get("hits", []) or [{}])[0].get("_source", {})
+        out.append({"entity": _rd(b["key"]), "score": round((b.get("s", {}) or {}).get("value", 0) or 0, 1),
+                    "reason": hit.get("ml_reason", ""), "type": hit.get("entity_type", "")})
+    return out
+
+
+def _top_ueba(hours=24, size=8):
+    """Top entités par score UEBA statistique (event_source=ueba_score, 40-ueba-ndr)."""
+    res = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"filter": [{"term": {"event_source": "ueba_score"}},
+                                      {"range": {"timestamp": {"gte": f"now-{hours}h"}}}]}},
+        "aggs": {"e": {"terms": {"field": "ueba_entity", "size": size, "order": {"s": "desc"}},
+                       "aggs": {"s": {"max": {"field": "ueba_score"}},
+                                "h": {"top_hits": {"size": 1, "_source": ["ueba_top_factor"],
+                                                   "sort": [{"timestamp": {"order": "desc"}}]}}}}}})
+    out = []
+    for b in res.get("aggregations", {}).get("e", {}).get("buckets", []):
+        hit = (((b.get("h", {}) or {}).get("hits", {}) or {}).get("hits", []) or [{}])[0].get("_source", {})
+        out.append({"entity": _rd(b["key"]), "score": int((b.get("s", {}) or {}).get("value", 0) or 0),
+                    "factor": hit.get("ueba_top_factor", "")})
+    return out
+
+
 def get_risk():
     k = get_kpis()
     res = os_search("omni-*", {"size": 0,
@@ -400,20 +500,24 @@ def get_risk():
                            "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}},
         "aggs": {"u": {"terms": {"field": "user", "size": 8},
                        "aggs": {"t": {"cardinality": {"field": "mitre_technique"}}}}}})
-    ents = [{"k": b["key"], "n": b["doc_count"], "tech": (b.get("t", {}) or {}).get("value", 0)}
+    ents = [{"k": _rd(b["key"]), "n": b["doc_count"], "tech": (b.get("t", {}) or {}).get("value", 0)}
             for b in res.get("aggregations", {}).get("u", {}).get("buckets", [])]
+    ml_top = _top_ml()
+    ueba_top = _top_ueba()
     crit = k.get("incidents_critiques_7j", 0)
     ueba = k.get("hotes_risque_ueba", 0)
     kev = k.get("kev_exposees", 0)
+    ml_hi = sum(1 for m in ml_top if m["score"] >= 70)   # entités très anormales (ML)
     if crit >= 3:
         lvl = "CRITIQUE"
     elif crit >= 1:
         lvl = "ELEVE"
-    elif ueba > 0 or kev > 0:
+    elif ueba > 0 or kev > 0 or ml_hi > 0:
         lvl = "SURVEILLE"
     else:
         lvl = "NOMINAL"
-    return {"threat_level": lvl, "critical_incidents": crit, "ueba": ueba, "kev": kev, "top_entities": ents}
+    return {"threat_level": lvl, "critical_incidents": crit, "ueba": ueba, "kev": kev,
+            "top_entities": ents, "ml_top": ml_top, "ueba_top": ueba_top, "ml_high": ml_hi}
 
 
 def get_health():
@@ -483,7 +587,7 @@ class H(BaseHTTPRequestHandler):
         pass
 
     def _json(self, obj, code=200, cookie=None):
-        body = json.dumps(obj).encode()
+        body = json.dumps(_walk_redact(obj)).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -576,8 +680,8 @@ class H(BaseHTTPRequestHandler):
                     if ts:
                         last = ts
                     ev = {"ts": ts, "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
-                          "user": s.get("user"), "entity": s.get("key"), "priority": s.get("priority"),
-                          "msg": s.get("short_message") or s.get("message")}
+                          "user": _rd(s.get("user")), "entity": _rd(s.get("key")), "priority": s.get("priority"),
+                          "msg": _scrub(s.get("short_message") or s.get("message"))}
                     self.wfile.write(("data: " + json.dumps(ev) + "\n\n").encode()); self.wfile.flush()
                 self.wfile.write(b": hb\n\n"); self.wfile.flush()
                 _t.sleep(4)

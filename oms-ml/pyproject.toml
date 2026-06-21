@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oms-ml"
+version = "1.0.0"
+description = "Couche d'apprentissage (scoring ML : anomalie + reduction de FP) au-dessus de Graylog — OMNITECH Security"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "joblib>=1.3",
+]
+
+[project.scripts]
+oms-ml = "oms_ml.run:main"
+
+[tool.setuptools]
+packages = ["oms_ml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

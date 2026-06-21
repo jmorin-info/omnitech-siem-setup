@@ -116,3 +116,44 @@ connect_pipeline() {
     | api_post "/system/pipelines/connections/to_stream" >/dev/null \
     && ok "pipeline connecte au stream ${SID}"
 }
+
+# ensure_lookup NAME TITLE CSV KEY VAL [DESC] - cree (idempotent) adapter csvfile +
+# cache guava + table de lookup 'omni-NAME'. Version CANONIQUE unique (avant : copiee
+# dans 11/37/49/49-expo, ABSENTE de 48 -> lookup m365 jamais cree, echec silencieux).
+# Utilise $LOOKUP_DIR (defini par le script appelant). DESC optionnel (defaut generique).
+ensure_lookup() {
+  local NAME="$1" TITLE="$2" CSV="$3" KEY="$4" VAL="$5" DESC="${6:-provisionne par OMNITECH (lib-graylog.sh)}"
+  local AID CID TID
+  AID="$(api_get "/system/lookup/adapters" | jq -r --arg n "omni-${NAME}-adapter" '.data_adapters[]? | select(.name==$n) | .id')"
+  if [[ -z "${AID}" ]]; then
+    AID="$(jq -n --arg n "omni-${NAME}-adapter" --arg t "${TITLE} (adapter)" --arg d "${DESC}" \
+                 --arg p "${LOOKUP_DIR}/${CSV}" --arg k "${KEY}" --arg v "${VAL}" '{
+            name:$n, title:$t, description:$d,
+            config:{ type:"csvfile", path:$p, separator:",", quotechar:"\"",
+                     key_column:$k, value_column:$v, check_interval:60,
+                     case_insensitive_lookup:true, cidr_lookup:false }
+          }' | api_post "/system/lookup/adapters" | jqr '.id')"
+    [[ -n "${AID}" && "${AID}" != "null" ]] || { warn "adapter ${NAME} refuse"; return 1; }
+  fi
+  CID="$(api_get "/system/lookup/caches" | jq -r --arg n "omni-${NAME}-cache" '.caches[]? | select(.name==$n) | .id')"
+  if [[ -z "${CID}" ]]; then
+    CID="$(jq -n --arg n "omni-${NAME}-cache" --arg t "${TITLE} (cache)" --arg d "${DESC}" '{
+            name:$n, title:$t, description:$d,
+            config:{ type:"guava_cache", max_size:1000,
+                     expire_after_access:300, expire_after_access_unit:"SECONDS",
+                     expire_after_write:300,  expire_after_write_unit:"SECONDS",
+                     ignore_null:false, ttl_empty:60, ttl_empty_unit:"SECONDS" }
+          }' | api_post "/system/lookup/caches" | jqr '.id')"
+    [[ -n "${CID}" && "${CID}" != "null" ]] || { warn "cache ${NAME} refuse"; return 1; }
+  fi
+  TID="$(api_get "/system/lookup/tables" | jq -r --arg n "omni-${NAME}" '.lookup_tables[]? | select(.name==$n) | .id')"
+  if [[ -z "${TID}" ]]; then
+    jq -n --arg n "omni-${NAME}" --arg t "${TITLE}" --arg a "${AID}" --arg c "${CID}" --arg d "${DESC}" '{
+            name:$n, title:$t, description:$d,
+            data_adapter_id:$a, cache_id:$c,
+            default_single_value:"", default_single_value_type:"NULL",
+            default_multi_value:"",  default_multi_value_type:"NULL"
+          }' | api_post "/system/lookup/tables" | jqr '.id' >/dev/null \
+      && ok "table 'omni-${NAME}'" || { warn "table ${NAME} refusee"; return 1; }
+  else skip "table 'omni-${NAME}' existe"; fi
+}

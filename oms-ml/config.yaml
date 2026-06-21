@@ -1,0 +1,37 @@
+# =====================================================================
+#  OMS-ML — Couche de scoring ML au-dessus du SIEM OMNITECH (Site Oméga)
+#  Local-first : sklearn CPU, lecture OpenSearch, réinjection GELF.
+#  Aucun secret ici.
+# =====================================================================
+
+opensearch:
+  url: "http://127.0.0.1:9200"
+  index: "omni-*"
+
+gelf:                       # réinjection du ml_score (input GELF HTTP existant du SIEM)
+  host: "127.0.0.1"
+  port: 12201
+  proto: "http"             # http -> POST /gelf ; tcp -> trame \0
+
+state_dir: "/var/lib/oms-ml"   # modèles .pkl + baselines
+
+# ---- Détection d'anomalie non-supervisée (IsolationForest) ----------
+anomaly:
+  window: "7d"              # fenêtre d'agrégation des features (entraînement + scoring)
+  contamination: "auto"     # proportion attendue d'anomalies (auto = quantile interne)
+  n_estimators: 200
+  min_entities: 12          # en-deçà, pas assez de population pour un modèle fiable
+  score_threshold: 70       # ml_score >= seuil -> on pose alert_tag=ml_anomaly
+  top: 15                   # nb d'entités les plus anormales affichées/réinjectées
+  entities:                 # types d'entités scorés (champ de regroupement OpenSearch)
+    host:
+      group_by: "source"            # hôte émetteur de logs
+    account:
+      group_by: "winlogbeat_winlog_event_data_TargetUserName"   # compte AD
+
+# ---- Réduction de faux positifs supervisée (labels analystes) -------
+fp_reduction:
+  cases_file: "/var/lib/omni-mobile/cases.json"  # store de cas de la console SOC
+  min_labels: 30           # nb mini d'exemples étiquetés (2 classes) avant entraînement
+  window_score: "24h"      # fenêtre des alertes ouvertes à scorer
+  model: "gradient_boosting"

@@ -14,7 +14,7 @@ cd "$(dirname "$0")"
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "a lancer en root."
-[[ -x /usr/local/sbin/omni-collect-health ]] || die "/usr/local/sbin/omni-collect-health absent."
+[[ -x /usr/local/sbin/omni-collect-health ]] || { echo "omni-collect-health absent -> installation via 61"; bash ./61-supervision-robots.sh || die "echec 61-supervision-robots.sh"; }
 require_api
 
 # --- 1. Routage event_source=collecte_sla -----------------------------------
