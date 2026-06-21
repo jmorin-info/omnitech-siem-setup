@@ -54,6 +54,12 @@
 | [![Sources](docs/captures/graylog-07-sources.jpg)](docs/captures/graylog-07-sources.jpg)<br>**Dashboard « Sources »** · télémétrie par source | [![Streams](docs/captures/graylog-08-streams.jpg)](docs/captures/graylog-08-streams.jpg)<br>**Streams** · routage (index sets dédiés) |
 | [![Alertes](docs/captures/graylog-09-alertes.jpg)](docs/captures/graylog-09-alertes.jpg)<br>**Alertes & événements** | |
 
+### PWA mobile — *application installable (web‑push)*
+
+| | |
+|:---:|:---:|
+| [![PWA Menace](docs/captures/pwa-01-menace.jpg)](docs/captures/pwa-01-menace.jpg)<br>**Menace** · niveau, KPI, **anomalies ML & risque UEBA** (parité console) | [![PWA Synthèse](docs/captures/pwa-02-synthese.jpg)](docs/captures/pwa-02-synthese.jpg)<br>**Synthèse** · KPI, courbe & tactiques ATT&CK |
+
 ---
 
 ## English
