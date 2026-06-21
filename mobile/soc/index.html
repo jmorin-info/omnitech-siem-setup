@@ -548,9 +548,17 @@ const CMDS=[{k:"Vue d'ensemble",p:"overview"},{k:"Incidents",p:"incidents"},{k:"
 function goNav(p){const a=document.querySelector('#nav a[data-p="'+p+'"]');if(a)a.click();}
 function openPal(){$("#pal").classList.add("on");const i=$("#palIn");i.value="";renderPal("");setTimeout(()=>i.focus(),30);}
 function closePal(){$("#pal").classList.remove("on");}
-function renderPal(q){q=(q||"").toLowerCase().trim();
-  const items=CMDS.filter(c=>c.k.toLowerCase().includes(q));
-  $("#palList").innerHTML=items.map((c,i)=>`<div class="pi${i===0?" sel":""}" onclick="goNav('${c.p}');closePal();">▸ ${c.k}</div>`).join("")||'<div class="muted" style="padding:12px">Aucun résultat</div>';}
+let PALTOK=0,PALENT=[];
+function renderPal(q){q=(q||"").trim();const ql=q.toLowerCase();
+  const cmds=CMDS.filter(c=>c.k.toLowerCase().includes(ql));
+  const cmdHtml=cmds.map((c,i)=>`<div class="pi${i===0?" sel":""}" onclick="goNav('${c.p}');closePal();">▸ ${c.k}</div>`).join("");
+  $("#palList").innerHTML=cmdHtml||'<div class="muted" style="padding:12px">Tapez ≥ 2 caractères pour chercher une entité…</div>';
+  if(q.length>=2){const tok=++PALTOK;
+    j("/entity-search?q="+encodeURIComponent(q)).then(r=>{if(tok!==PALTOK)return;PALENT=r.results||[];
+      const ents=PALENT.map((e,i)=>`<div class="pi" onclick="openPalEnt(${i})">👤 ${esc(e.entity)} <span class="muted" style="font-size:11px">· ${(e.n||0).toLocaleString('fr')} évts</span></div>`).join("");
+      $("#palList").innerHTML=cmdHtml+(ents?'<div class="muted" style="padding:8px 12px 4px;font-size:10px;letter-spacing:1px">ENTITÉS</div>'+ents:'');
+    }).catch(()=>{});}}
+function openPalEnt(i){const e=PALENT[i];if(!e)return;closePal();openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
 document.addEventListener("keydown",e=>{
   if((e.metaKey||e.ctrlKey)&&(e.key==="k"||e.key==="K")){e.preventDefault();openPal();return;}
   if(e.key==="Escape"){closePal();closeEnt();}

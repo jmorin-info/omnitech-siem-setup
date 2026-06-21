@@ -416,6 +416,22 @@ def get_entity(name):
             "events": ev}
 
 
+def get_entity_search(q, size=8):
+    """Recherche d'entités (compte) par sous-chaîne, insensible à la casse — pour la palette."""
+    q = (q or "").strip()
+    if len(q) < 2:
+        return []
+    res = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": "now-7d"}}}],
+                           "must": [{"wildcard": {"user": {"value": f"*{q}*", "case_insensitive": True}}}]}},
+        "aggs": {"e": {"terms": {"field": "user", "size": size}}}})
+    out = []
+    for b in res.get("aggregations", {}).get("e", {}).get("buckets", []):
+        if b.get("key"):
+            out.append({"entity": _rd(b["key"]), "n": b["doc_count"]})
+    return out
+
+
 def get_detections(tactic="", source="", tag="", technique=""):
     must = [{"exists": {"field": "alert_tag"}}]
     if tactic:
@@ -680,6 +696,10 @@ class H(BaseHTTPRequestHandler):
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             return self._json(get_entity(qs.get("u", [""])[0]))
+        if p == "/m/api/entity-search":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return self._json({"results": get_entity_search(qs.get("q", [""])[0])})
         if p == "/m/api/stream":
             return self._sse()
         self._json({"error": "not found"}, 404)
