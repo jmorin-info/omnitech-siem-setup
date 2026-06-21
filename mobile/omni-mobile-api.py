@@ -21,6 +21,7 @@ import json
 import os
 import re
 import ssl
+import threading
 import time
 import urllib.request
 import urllib.error
@@ -330,6 +331,7 @@ def get_graph():
 
 
 CASES_FILE = CONF.get("MOBILE_CASES_FILE", "/var/lib/omni-mobile/cases.json")
+_CASES_LOCK = threading.Lock()   # serialise read-modify-write (ThreadingHTTPServer)
 
 
 def load_cases():
@@ -356,6 +358,7 @@ def get_cases():
         i["status"] = c.get("status", "new")
         i["assignee"] = c.get("assignee", "")
         i["notes"] = c.get("notes", [])
+        i["disposition"] = c.get("disposition", "")
     return incs
 
 
@@ -364,19 +367,29 @@ def update_case(b, who):
     if not cid:
         return {"ok": False}
     import datetime as _dt
-    st = load_cases()
-    c = st.setdefault(cid, {"status": "new", "assignee": "", "notes": []})
     act = b.get("action"); val = b.get("value", "")
-    if act == "status":
-        c["status"] = val if val in ("new", "in_progress", "closed") else "new"
-    elif act == "assign":
-        c["assignee"] = str(val)[:120]
-    elif act == "note":
-        txt = str(val).strip()
-        if txt:
-            c.setdefault("notes", []).append(
-                {"by": who or "?", "ts": _dt.datetime.now().isoformat(timespec="seconds"), "text": txt[:1000]})
-    save_cases(st)
+    with _CASES_LOCK:                       # verrou : cycle lecture-modif-ecriture atomique
+        st = load_cases()
+        c = st.setdefault(cid, {"status": "new", "assignee": "", "notes": []})
+        if act == "status":
+            c["status"] = val if val in ("new", "in_progress", "closed") else "new"
+        elif act == "assign":
+            c["assignee"] = str(val)[:120]
+        elif act == "disposition":
+            # Qualification analyste -> label du modele ML de reduction de FP (oms-ml).
+            if val in ("true_positive", "false_positive"):
+                c["disposition"] = val
+                c["disposition_by"] = who or "?"
+                if c.get("status") != "closed":
+                    c["status"] = "closed"
+            else:
+                c.pop("disposition", None)
+        elif act == "note":
+            txt = str(val).strip()
+            if txt:
+                c.setdefault("notes", []).append(
+                    {"by": who or "?", "ts": _dt.datetime.now().isoformat(timespec="seconds"), "text": txt[:1000]})
+        save_cases(st)
     return {"ok": True, "case": c}
 
 

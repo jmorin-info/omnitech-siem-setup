@@ -623,13 +623,16 @@ function renderCases(list){CASES=list||[];const el=$("#incFeed");
       <span class="chip ${chipCls(c)}">${esc((x.severity||'?').toUpperCase())}</span>
       <span class="ttl">${esc(x.title)}</span>
       <span class="cstat ${s[1]}">${s[0]}</span><span class="ts">${ago(x.ts)}</span></div>
-      <div class="meta">${esc(((x.entities||'')+' · '+(x.mitre||'')).toString())}${x.assignee?' · 👤 '+esc(x.assignee):''}${x.notes&&x.notes.length?' · 📝 '+x.notes.length:''}</div></div>`;}).join("");}
+      <div class="meta">${esc(((x.entities||'')+' · '+(x.mitre||'')).toString())}${x.assignee?' · 👤 '+esc(x.assignee):''}${x.notes&&x.notes.length?' · 📝 '+x.notes.length:''}${x.disposition?' · '+(x.disposition==='true_positive'?'<b style="color:var(--red)">✓ VP</b>':'<b style="color:var(--grn)">✕ FP</b>'):''}</div></div>`;}).join("");}
 function openCase(i){const x=CASES[i];if(!x)return;
   const notes=(x.notes||[]).map(n=>`<div class="erow"><span class="ts">${esc((n.ts||'').slice(0,16).replace('T',' '))} · ${esc(n.by||'')}</span><div>${esc(n.text)}</div></div>`).join("")||'<div class="muted">Aucune note</div>';
   $("#emc").innerHTML=`<div class="grip"></div><h2>◈ ${esc(x.title)}</h2>
     <div class="muted" style="margin-bottom:12px">${esc((x.entities||'').toString())} · ${esc((x.mitre||'').toString())} · ${ago(x.ts)}</div>
     <div class="blk"><div class="lbl">Statut</div><div class="stbtns">
       ${["new","in_progress","closed"].map(s=>`<button class="stb ${x.status===s?'on':''}" onclick="caseAct('${x.id}','status','${s}')">${ST[s][0]}</button>`).join("")}</div></div>
+    <div class="blk"><div class="lbl">Disposition · qualifie le cas (entraîne le modèle ML de réduction des faux positifs)</div><div class="stbtns">
+      <button class="stb ${x.disposition==='true_positive'?'on':''}" style="${x.disposition==='true_positive'?'background:var(--red);border-color:var(--red);color:#fff':''}" onclick="caseAct('${x.id}','disposition','true_positive')">✓ Vrai positif</button>
+      <button class="stb ${x.disposition==='false_positive'?'on':''}" style="${x.disposition==='false_positive'?'background:var(--grn);border-color:var(--grn);color:#04121a':''}" onclick="caseAct('${x.id}','disposition','false_positive')">✕ Faux positif</button></div></div>
     <div class="blk"><div class="lbl">Assigné à</div><input id="caseAsg" value="${esc(x.assignee||'')}" placeholder="compte AD"> <button class="stb" onclick="caseAct('${x.id}','assign',document.getElementById('caseAsg').value)">Assigner</button></div>
     ${x.narrative?`<div class="blk"><div class="lbl">Analyse</div><div class="emsg">${esc(x.narrative)}</div></div>`:''}
     ${x.remediation?`<div class="blk rem"><div class="lbl">Remédiation</div><div class="emsg">${esc(x.remediation)}</div></div>`:''}
