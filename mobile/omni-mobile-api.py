@@ -416,7 +416,7 @@ def get_detections(tactic="", source="", tag="", technique=""):
     res = os_search("omni-*", {"size": 60, "sort": [{"timestamp": {"order": "desc"}}],
         "query": {"bool": {"must": must, "filter": [{"range": {"timestamp": {"gte": "now-24h"}}}]}},
         "_source": ["timestamp", "alert_tag", "mitre_technique", "mitre_tactic", "event_source",
-                    "user", "key", "short_message", "message", "priority"],
+                    "user", "key", "short_message", "message", "priority", "risk_severity", "risk_score"],
         "aggs": {"tac": {"terms": {"field": "mitre_tactic", "size": 14}},
                  "src": {"terms": {"field": "event_source", "size": 15}}}})
     items = []
@@ -425,6 +425,7 @@ def get_detections(tactic="", source="", tag="", technique=""):
         items.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
                       "tactic": s.get("mitre_tactic"), "source": s.get("event_source"),
                       "entity": _rd(s.get("user") or s.get("key")), "priority": s.get("priority"),
+                      "sev": s.get("risk_severity"), "score": s.get("risk_score"),
                       "msg": s.get("short_message") or s.get("message")})
     ag = res.get("aggregations", {})
     return {"items": items,
@@ -674,13 +675,14 @@ class H(BaseHTTPRequestHandler):
                     "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}],
                                        "filter": [{"range": {"timestamp": rng}}]}},
                     "_source": ["timestamp", "alert_tag", "mitre_technique", "user", "short_message",
-                                "message", "priority", "key"]})
+                                "message", "priority", "key", "risk_severity"]})
                 for h in reversed(res.get("hits", {}).get("hits", [])):
                     s = h.get("_source", {}); ts = s.get("timestamp")
                     if ts:
                         last = ts
                     ev = {"ts": ts, "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
                           "user": _rd(s.get("user")), "entity": _rd(s.get("key")), "priority": s.get("priority"),
+                          "sev": s.get("risk_severity"),
                           "msg": _scrub(s.get("short_message") or s.get("message"))}
                     self.wfile.write(("data: " + json.dumps(ev) + "\n\n").encode()); self.wfile.flush()
                 self.wfile.write(b": hb\n\n"); self.wfile.flush()

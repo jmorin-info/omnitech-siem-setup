@@ -356,7 +356,8 @@ document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
   const pg=a.dataset.p; document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+pg));
   $("#ptitle").textContent=titles[pg];setDesc(pg);
-  if(pg==="graph")setTimeout(layoutGraph,80);});
+  if(pg==="graph"){j("/graph").then(g=>{renderGraph(g);setTimeout(layoutGraph,80);}).catch(()=>{});}
+  if(pg==="report"){j("/report").then(r=>renderReport(r)).catch(()=>{});}});
 
 // charts
 if(window.Chart){Chart.defaults.color="#7c8aa6";Chart.defaults.font.family="Segoe UI";Chart.defaults.borderColor="rgba(255,255,255,.05)";}
@@ -370,12 +371,12 @@ async function loadAll(){
       j("/kpis"),j("/timeseries"),j("/by-tactic"),j("/top-detections"),j("/top-sources"),j("/cases"),j("/attack-matrix")]);
     renderKpis(k.kpis); renderTs(ts.series); renderTac(tac.data); renderDet(det.data);
     renderSrc(src.data); renderMatrix(mtx.matrix); renderCases(inc.cases); loadDetections();
-    j("/graph").then(g=>renderGraph(g)).catch(()=>{});
     j("/leaks").then(l=>renderLeaks(l)).catch(()=>{});
     j("/health").then(h=>renderHealth(h)).catch(()=>{});
     j("/risk").then(r=>renderRisk(r)).catch(()=>{});
     j("/geo").then(g=>renderGeo(g)).catch(()=>{});
-    j("/report").then(r=>renderReport(r)).catch(()=>{});
+    // /graph et /report : charges a l'ouverture de leur onglet (cf. routeur #nav) -
+    // evite de relancer le graphe lourd + la matrice 300-termes toutes les 60 s.
   }catch(e){if(e==="auth")location.reload();}
 }
 let TOPE=[];
@@ -463,7 +464,7 @@ let liveN=0,liveES=null;
 function startLive(){try{if(liveES)liveES.close();liveES=new EventSource(API+"/stream");
   liveES.onmessage=e=>{try{addLive(JSON.parse(e.data));}catch(_){}};}catch(_){}}
 function addLive(ev){const el=$("#liveFeed");if(!el)return;if(liveN===0)el.innerHTML="";liveN++;
-  const c=ev.priority==3?"critical":ev.priority==2?"high":"medium";
+  const c=ev.sev?sevClass(ev.sev):(ev.priority==3?"critical":ev.priority==2?"high":"medium");
   const who=((ev.user||ev.entity||"")+"").split("\\").pop();
   const r=document.createElement("div");r.className="lrow sev-"+c;
   if(who)r.onclick=()=>openEntity(ev.user||ev.entity,who);
@@ -520,11 +521,11 @@ function renderDetections(d){d=d||{};DETI=d.items||[];
   const ft=$("#fTactic");if(ft&&ft.options.length<=1)(d.tactics||[]).forEach(t=>ft.add(new Option(t,t)));
   const fs=$("#fSource");if(fs&&fs.options.length<=1)(d.sources||[]).forEach(s=>fs.add(new Option(s,s)));
   if($("#detCount"))$("#detCount").textContent=(detF.technique?"▸ "+detF.technique+" · ":"")+DETI.length+" détection(s)";
-  $("#detFeed").innerHTML=DETI.length?DETI.map((x,i)=>{const c=x.priority==3?"critical":x.priority==2?"high":"medium";
+  $("#detFeed").innerHTML=DETI.length?DETI.map((x,i)=>{const c=x.sev?sevClass(x.sev):(x.priority==3?"critical":x.priority==2?"high":"medium");
     const who=((x.entity||"")+"").split("\\").pop();
     return `<div class="inc sev-${c}" onclick="openDet(${i})"><div class="top">
       <span class="chip ${chipCls(c)}">${esc((x.source||"").toUpperCase())}</span>
-      <span class="ttl">${nice(x.tag)}</span><span class="ts">${ago(x.ts)}</span></div>
+      <span class="ttl">${nice(x.tag)}</span>${x.score?`<span class="mono" style="color:var(--${c=='critical'?'red':c=='high'?'amb':'cy'});margin-left:auto;font-weight:700">${x.score}</span>`:""}<span class="ts">${ago(x.ts)}</span></div>
       <div class="meta">${esc(x.tech||"")}${x.tactic?" · "+esc(x.tactic):""}${who?" · 👤 "+esc(who):""}</div></div>`;}).join(""):'<div class="empty">Aucune détection pour ce filtre</div>';}
 function openDet(i){const x=DETI[i];if(!x||!x.entity)return;openEntity(x.entity,((x.entity||"")+"").split("\\").pop());}
 function renderLeaks(d){d=d||{};
