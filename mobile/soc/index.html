@@ -501,12 +501,14 @@ function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocale
    <h2>Incidents corrélés récents</h2><table><thead><tr><th>Sévérité</th><th>Titre</th><th>Entité</th><th>ATT&CK</th></tr></thead><tbody>${inc}</tbody></table>
    <h2>Sources de collecte (24 h)</h2><table><thead><tr><th>Source</th><th class="num">Volume</th></tr></thead><tbody>${src}</tbody></table>
    <div class="muted" style="margin-top:20px">Document généré automatiquement — démarche d'amélioration continue (ISO/IEC 27001:2022, clause 10). Preuve datée et reproductible.</div>`;}
-function renderHealth(d){d=d||{};
+function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{};
   $("#hkpis").innerHTML=[
     ["cy","Cluster",esc(d.cluster||'?'),"OpenSearch"],
     ["cy","Événements (24 h)",(d.events_24h||0).toLocaleString("fr"),"toutes sources"],
     ["vio","Sources actives",(d.sources||[]).length,"sur 24 h"],
-    ["amb","Shards actifs",(d.shards!=null?d.shards:'?'),((d.nodes!=null?d.nodes:'?'))+" nœud(s)"]
+    ["amb","Shards actifs",(d.shards!=null?d.shards:'?'),((d.nodes!=null?d.nodes:'?'))+" nœud(s)"],
+    ...(rb.health_total!=null?[[(rb.health_fail>0?"red":"cy"),"Robots actifs",(rb.health_ok||0)+"/"+rb.health_total,(rb.health_fail||0)+" en panne · auto‑supervision"]]:[]),
+    ...(sl.sla_coverage_pct!=null?[["cy","Couverture collecte",sl.sla_coverage_pct+"%",(sl.sla_go_dark||0)+" go‑dark / "+(sl.sla_expected||0)+" attendus"]]:[])
   ].map(([c,l,v,s])=>`<div class="kpi ${c}"><div class="lab">${l}</div><div class="val mono">${v}</div><div class="sub">${s}</div></div>`).join("");
   $("#hsrc").innerHTML=(d.sources||[]).map(x=>`<div class="inc"><div class="top">
     <span class="ttl">${esc(x.k)}</span>

@@ -534,9 +534,20 @@ def get_health():
     ag = res.get("aggregations", {})
     sources = [{"k": b["key"], "n": b["doc_count"], "last": (b.get("last", {}) or {}).get("value_as_string")}
                for b in ag.get("src", {}).get("buckets", [])]
+
+    def _latest(flt, fields):  # dernier doc d'un robot interne (siem_health / collecte_sla)
+        r = os_search("omni-*", {"size": 1, "sort": [{"timestamp": {"order": "desc"}}],
+                                 "query": {"bool": {"filter": flt}}, "_source": fields})
+        h = r.get("hits", {}).get("hits", [])
+        return h[0].get("_source", {}) if h else {}
+
+    robots = _latest([{"term": {"event_source": "siem_health"}}, {"term": {"health_type": "summary"}}],
+                     ["health_ok", "health_fail", "health_total"])
+    sla = _latest([{"term": {"event_source": "collecte_sla"}}, {"term": {"sla_type": "summary"}}],
+                  ["sla_coverage_pct", "sla_active_24h", "sla_go_dark", "sla_expected"])
     return {"cluster": ch.get("status", "?"), "nodes": ch.get("number_of_nodes"),
             "shards": ch.get("active_shards"), "events_24h": ag.get("tot", {}).get("value", 0),
-            "sources": sources}
+            "sources": sources, "robots": robots, "sla": sla}
 
 
 def get_leaks():
