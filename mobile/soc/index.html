@@ -133,6 +133,15 @@
   .erow{border-bottom:1px solid var(--bd);padding:9px 0;font-size:12px}
   .erow b{color:var(--fg)}.erow em{color:var(--vio);font-style:normal;font-size:11px;margin-left:6px}
   .erow .ts{color:var(--dim);font-size:11px}
+  .escRow{display:flex;gap:10px;margin:12px 0 4px;flex-wrap:wrap}
+  .escore{flex:1;min-width:130px;background:#0f1b2c;border:1px solid var(--bd);border-radius:10px;padding:10px 12px}
+  .escore .escK{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--mut);font-weight:700}
+  .escore .escV{font-size:24px;font-weight:800;line-height:1.1;margin-top:2px}
+  .escore .escR{font-size:11px;color:var(--dim);margin-top:4px}
+  .escore.cy .escV{color:var(--cy)}.escore.amb{border-color:#caa14a55}.escore.amb .escV{color:var(--amb)}
+  .escore.red{border-color:#d9534f55}.escore.red .escV{color:var(--red)}.escore.vio .escV{color:var(--vio)}
+  .entMore{display:block;width:100%;margin-top:10px;padding:9px;background:#10233a;border:1px solid #2563eb55;color:#9fd3e6;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer}
+  .entMore:hover{background:#16304f}
   .emsg{color:var(--mut);font-size:11px;margin-top:3px;line-height:1.4}
   .grip{width:40px;height:4px;background:#2a3654;border-radius:3px;margin:0 0 12px}
   .livedot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);animation:pulse 1.4s infinite;margin-right:5px;vertical-align:middle}
@@ -275,6 +284,9 @@
   ::-webkit-scrollbar-track{background:transparent}
   ::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#243a64,#15233c);border-radius:6px;border:2px solid transparent;background-clip:padding-box}
   ::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#2d4a7e,#1c2e4e);background-clip:padding-box}
+  .kpitrend{display:inline-block;margin-left:8px;font-size:11px;font-weight:700;vertical-align:middle;padding:1px 6px;border-radius:999px;line-height:1.5;letter-spacing:.2px}
+  .kt-bad{color:#fca5a5;background:rgba(239,68,68,.14)}
+  .kt-good{color:#86efac;background:rgba(34,197,94,.14)}
 
   @media print{aside,header,nav,#emodal,#pal{display:none!important}
     #app{display:block!important}main{padding:0!important}.page:not(#p-report){display:none!important}
@@ -369,13 +381,26 @@
         <div class="mlegend"><span><i style="background:#0c1424;opacity:.5"></i>Aucune activité</span><span><i style="background:#10233a;border-color:#2563eb66"></i>Faible</span><span><i style="background:#2a1f10;border-color:#f5a62366"></i>Modérée</span><span><i style="background:#2e1116;border-color:#fb3b5366"></i>Forte</span><span class="muted">— cellule = technique couverte · couleur = volume d'événements (7 j)</span></div></div>
     </section>
     <section class="page" id="p-graph">
-      <div class="card"><h3>🕸 Graphe d'attaque<span class="tag">entités ↔ techniques ATT&CK (7 j)</span></h3>
+      <div class="card"><h3>🕸 Graphe d'attaque<span class="tag" id="gCount">entités ↔ techniques ATT&CK (7 j)</span></h3>
+        <div class="dfilter" style="margin-top:4px">
+          <select id="gTactic" onchange="applyGraphFilter()"><option value="">Toutes tactiques</option></select>
+          <label class="muted" style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;font-size:12px">Volume min.
+            <input id="gMinVol" type="range" min="0" max="1" value="0" step="1" oninput="gMinLbl()" onchange="applyGraphFilter()" style="flex:1;accent-color:var(--cy)">
+            <span id="gMinVal" class="mono" style="color:var(--cy);min-width:42px">≥ 0</span></label>
+          <input id="gSearch" list="gEntList" oninput="gFocusEntity((this.value||'').trim().toLowerCase())" placeholder="🔎 Centrer une entité…" autocomplete="off"
+            style="background:#0c1525;border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:8px 12px;font-size:13px;min-width:200px;margin:0">
+          <datalist id="gEntList"></datalist>
+          <button class="stb" onclick="gClear()">Réinitialiser</button>
+        </div>
         <div id="cy"></div>
         <div class="leg"><span class="d e"></span> Entité (utilisateur) &nbsp; <span class="d t"></span> Technique ATT&CK &nbsp; <span class="muted">— épaisseur = volume</span></div></div>
     </section>
     <section class="page" id="p-leaks">
-      <div class="card"><h3>🔓 Fuites & Dark Web<span class="tag">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
-        <div class="lsrc" id="leakSrc"></div><div class="feed" id="leakFeed"></div></div>
+      <div class="grid kpis" id="leakSummary"></div>
+      <div class="card"><h3>🔓 Sources de fuite surveillées<span class="tag">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
+        <div class="lsrc" id="leakSrc"></div></div>
+      <div id="leakCats" style="display:flex;flex-direction:column;gap:16px;margin-top:16px"></div>
+      <div class="feed" id="leakFeed" style="display:none"></div>
     </section>
     <section class="page" id="p-health">
       <div class="grid kpis" id="hkpis"></div>
@@ -430,7 +455,7 @@ document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
   const pg=a.dataset.p; document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+pg));
   $("#ptitle").textContent=titles[pg];setDesc(pg);
-  if(pg==="graph"){j("/graph").then(g=>{renderGraph(g);setTimeout(layoutGraph,80);}).catch(()=>{});}
+  if(pg==="graph"){j("/graph").then(g=>{renderGraph(g);gPopulate();setTimeout(applyGraphFilter,80);}).catch(()=>{});}
   if(pg==="report"){j("/report").then(r=>renderReport(r)).catch(()=>{});}});
 
 // charts
@@ -445,9 +470,10 @@ async function loadAll(){
       j("/kpis"),j("/timeseries"),j("/by-tactic"),j("/top-detections"),j("/top-sources"),j("/cases"),j("/attack-matrix")]);
     renderKpis(k.kpis); renderTs(ts.series); renderTac(tac.data); renderDet(det.data);
     renderSrc(src.data); renderMatrix(mtx.matrix); renderCases(inc.cases); loadDetections();
-    j("/leaks").then(l=>renderLeaks(l)).catch(()=>{});
+    j("/leaks2").then(l=>renderLeaks(l)).catch(()=>{});
     j("/health").then(h=>renderHealth(h)).catch(()=>{});
     j("/risk").then(r=>renderRisk(r)).catch(()=>{});
+    j("/kpi-trend").then(t=>renderKpiTrend(t.trend)).catch(()=>{});
     j("/geo").then(g=>renderGeo(g)).catch(()=>{});
     // /graph et /report : charges a l'ouverture de leur onglet (cf. routeur #nav) -
     // evite de relancer le graphe lourd + la matrice 300-termes toutes les 60 s.
@@ -505,29 +531,36 @@ function renderDet(d){d=d||[];mk("cDet",{type:"bar",
 let cy=null,GRAPH=null;
 const GCFG={name:"cose",animate:false,padding:30,nodeRepulsion:9000,idealEdgeLength:95,nodeOverlap:14};
 function renderGraph(d){GRAPH=d||{nodes:[],edges:[]};buildGraph();}
-function buildGraph(){
-  if(!window.cytoscape||!$("#cy")||!GRAPH)return;
+function buildGraph(){buildGraphView(GRAPH);}
+function buildGraphView(view){
+  if(!window.cytoscape||!$("#cy")||!view)return;
   if(cy){cy.destroy();cy=null;}
   cy=cytoscape({container:$("#cy"),
-    elements:[...GRAPH.nodes.map(n=>({data:{...n,color:n.type==="technique"?(TACCOL[n.tactic]||"#a78bfa"):"#22d3ee"}})),...GRAPH.edges.map(e=>({data:e}))],
+    elements:[...(view.nodes||[]).map(n=>({data:{...n,color:n.type==="technique"?(TACCOL[n.tactic]||"#a78bfa"):"#22d3ee"}})),...(view.edges||[]).map(e=>({data:e}))],
     style:[
       {selector:'node[type="entity"]',style:{'background-color':'#22d3ee','label':'data(label)','color':'#cde8f2','font-size':11,'font-weight':'bold','width':'mapData(weight,0,4000,26,52)','height':'mapData(weight,0,4000,26,52)','text-valign':'bottom','text-margin-y':3,'border-width':2,'border-color':'#0e7490'}},
       {selector:'node[type="technique"]',style:{'background-color':'data(color)','shape':'round-diamond','label':'data(label)','color':'#cdd6e6','font-size':9,'width':24,'height':24,'text-valign':'bottom','text-margin-y':2}},
       {selector:'edge',style:{'width':'mapData(weight,0,3000,1,7)','line-color':'data(color)','line-color':'#2b3a55','target-arrow-shape':'triangle','target-arrow-color':'#2b3a55','curve-style':'bezier','opacity':.7}},
-      {selector:'node:selected',style:{'border-width':3,'border-color':'#fff'}}
+      {selector:'node:selected',style:{'border-width':3,'border-color':'#fff'}},
+      {selector:'.gdim',style:{'opacity':.12}},
+      {selector:'.ghit',style:{'border-width':4,'border-color':'#f5a623','opacity':1}}
     ],layout:GCFG});
   cy.on('tap','node[type="entity"]',e=>openEntity(e.target.data('full'),e.target.data('label')));
 }
-function openEntity(full,label){
-  fetch(API+"/entity?u="+encodeURIComponent(full||label),{credentials:"same-origin"}).then(r=>r.json()).then(d=>{
+function openEntity(full,label,size){
+  size=size||20;ENT_CUR={full:full,label:label};ENT_SIZE=size;
+  fetch(API+"/entity?u="+encodeURIComponent(full||label)+"&size="+size,{credentials:"same-origin"}).then(r=>r.json()).then(d=>{
     const techs=(d.techniques||[]).map(t=>`<span class="pchip">${esc(t.k)} · ${t.n}</span>`).join(" ")||'<span class="muted">—</span>';
     const tacs=(d.tactics||[]).map(t=>`<span class="pchip tac">${esc(t.k)}</span>`).join(" ");
     const evs=(d.events||[]).map(e=>`<div class="erow"><span class="ts">${ago(e.ts)}</span> <b>${nice(e.tag)}</b> <em>${esc(e.tech||"")}</em><div class="emsg">${esc((e.msg||"").slice(0,150))}</div></div>`).join("")||'<div class="muted">Aucun événement</div>';
+    const loaded=(d.events||[]).length;
+    const more=d.has_more?`<button class="entMore" onclick="entMore()">Charger plus (${loaded} / ${(d.total||0).toLocaleString("fr")})</button>`:(loaded>20?`<div class="muted" style="text-align:center;margin-top:8px;font-size:11px">${loaded} événements affichés</div>`:'');
     $("#emc").innerHTML=`<div class="grip"></div><h2>👤 ${esc(label)}</h2>
-      <div class="muted" style="margin-bottom:12px">${esc(full||"")} · <b style="color:var(--cy)">${(d.total||0).toLocaleString("fr")}</b> détections (7 j)</div>
+      <div class="muted" style="margin-bottom:4px">${esc(full||"")} · <b style="color:var(--cy)">${(d.total||0).toLocaleString("fr")}</b> détections (7 j)</div>
+      ${entScoreBanner(d)}
       <div class="blk"><div class="lbl">Tactiques</div><div>${tacs}</div></div>
       <div class="blk"><div class="lbl">Techniques ATT&CK</div><div>${techs}</div></div>
-      <div class="blk"><div class="lbl">Événements récents</div>${evs}</div>`;
+      <div class="blk"><div class="lbl">Événements récents</div>${evs}${more}</div>`;
     $("#emodal").classList.add("on");
   }).catch(()=>{});
 }
@@ -567,6 +600,96 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){closePal();closeEnt();}
   if(e.key==="Enter"&&$("#pal").classList.contains("on")){const f=$("#palList .pi");if(f)f.click();}});
 function layoutGraph(){if(cy){cy.resize();cy.layout(GCFG).run();cy.fit(undefined,30);}}
+var KTREND={};
+function renderKpiTrend(t){KTREND=t||{};
+  var keys=["incidents_critiques_7j","hotes_risque_ueba","alertes_24h","kev_exposees"];
+  var cards=document.querySelectorAll("#kpis .kpi");
+  for(var i=0;i<cards.length;i++){
+    var d=KTREND[keys[i]];
+    if(!d){continue;}
+    var old=cards[i].querySelector(".kpitrend");
+    if(old){old.parentNode.removeChild(old);}
+    if(d.dir==="flat"){continue;}
+    var up=d.dir==="up";
+    var arrow=up?"▲":"▼";
+    var cls=d.bad?"kt-bad":"kt-good";
+    var b=document.createElement("span");
+    b.className="kpitrend "+cls;
+    b.title="vs période précédente ("+((d.prev||0)).toLocaleString("fr")+")";
+    b.textContent=arrow+" "+(d.pct||0)+"%";
+    var val=cards[i].querySelector(".val");
+    if(val){val.appendChild(b);}else{cards[i].appendChild(b);}
+  }
+}
+// ===== Graphe d'attaque filtrable (filtrage 100% client) =====
+function gFilterState(){
+  var sel=$("#gTactic"),sl=$("#gMinVol"),se=$("#gSearch");
+  return {tactic: sel?sel.value:"", minVol: sl?(parseInt(sl.value,10)||0):0, q: se?(se.value||"").trim().toLowerCase():""};
+}
+function gPopulate(){
+  if(!GRAPH)return;
+  var nodes=GRAPH.nodes||[],edges=GRAPH.edges||[];
+  var present={};
+  nodes.forEach(function(n){if(n.type==="technique"&&n.tactic&&n.tactic!=="?")present[n.tactic]=1;});
+  var order=Object.keys(TACCOL),ordered=[];
+  order.forEach(function(t){if(present[t]){ordered.push(t);delete present[t];}});
+  Object.keys(present).forEach(function(t){ordered.push(t);});
+  var sel=$("#gTactic");
+  if(sel){var cur=sel.value;
+    sel.innerHTML='<option value="">Toutes tactiques</option>'+ordered.map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>';}).join("");
+    sel.value=cur;}
+  var dl=$("#gEntList");
+  if(dl){dl.innerHTML=nodes.filter(function(n){return n.type==="entity";}).map(function(n){return '<option value="'+esc(n.label)+'">';}).join("");}
+  var mx=0;edges.forEach(function(e){if((e.weight||0)>mx)mx=e.weight||0;});
+  var slv=$("#gMinVol");
+  if(slv){slv.max=mx>1?mx:1;if((parseInt(slv.value,10)||0)>slv.max)slv.value=0;gMinLbl();}
+}
+function gMinLbl(){var sl=$("#gMinVol"),lb=$("#gMinVal");if(sl&&lb)lb.textContent="≥ "+(parseInt(sl.value,10)||0);}
+function applyGraphFilter(){
+  if(!GRAPH){return;}
+  var f=gFilterState();
+  var nodes=GRAPH.nodes||[],edges=GRAPH.edges||[];
+  var byId={};nodes.forEach(function(n){byId[n.id]=n;});
+  var keepEdges=edges.filter(function(e){
+    if((e.weight||0)<f.minVol)return false;
+    if(f.tactic){var tn=byId[e.target];if(!tn||tn.tactic!==f.tactic)return false;}
+    return true;});
+  var keepN={};keepEdges.forEach(function(e){keepN[e.source]=1;keepN[e.target]=1;});
+  var keepNodes=nodes.filter(function(n){return keepN[n.id];});
+  buildGraphView({nodes:keepNodes,edges:keepEdges});
+  layoutGraph();
+  gFocusEntity(f.q);
+  var cnt=$("#gCount");if(cnt)cnt.textContent=keepNodes.length+" nœuds · "+keepEdges.length+" liens";
+}
+function gFocusEntity(q){
+  if(!cy)return;
+  cy.elements().removeClass("ghit gdim");
+  if(!q)return;
+  var hits=cy.nodes('[type="entity"]').filter(function(el){return (""+el.data("label")).toLowerCase().indexOf(q)>=0;});
+  if(hits.length===0)return;
+  cy.elements().addClass("gdim");
+  hits.closedNeighborhood().removeClass("gdim");
+  hits.addClass("ghit");
+  cy.animate({fit:{eles:hits,padding:120}},{duration:350});
+}
+function gClear(){if($("#gTactic"))$("#gTactic").value="";if($("#gMinVol"))$("#gMinVol").value=0;if($("#gSearch"))$("#gSearch").value="";gMinLbl();applyGraphFilter();}
+// ===== Entite-360 : scores + pagination =====
+var ENT_CUR=null,ENT_SIZE=20;
+function entMore(){ENT_SIZE+=20;if(ENT_CUR)openEntity(ENT_CUR.full,ENT_CUR.label,ENT_SIZE);}
+function entScoreBanner(d){
+  var ml=d.scores&&d.scores.ml?d.scores.ml:null;
+  var ue=d.scores&&d.scores.ueba?d.scores.ueba:null;
+  var cards="";
+  if(ml&&ml.score!==null&&ml.score!==undefined){
+    var mc=ml.score>=80?"red":ml.score>=50?"amb":"cy";
+    cards+='<div class="escore '+mc+'"><div class="escK">Score ML</div><div class="escV">'+esc((""+ml.score))+'</div>'+(ml.reason?'<div class="escR">'+esc((ml.reason+"").slice(0,80))+'</div>':'')+'</div>';
+  }
+  if(ue&&ue.score!==null&&ue.score!==undefined){
+    var uc=ue.score>=80?"red":ue.score>=60?"amb":"vio";
+    cards+='<div class="escore '+uc+'"><div class="escK">Score UEBA</div><div class="escV">'+esc((""+ue.score))+'</div>'+(ue.factor?'<div class="escR">'+esc((ue.factor+"").slice(0,80))+'</div>':'')+'</div>';
+  }
+  return cards?'<div class="escRow">'+cards+'</div>':'';
+}
 function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocaleString("fr");
   const top=(d.top_detections||[]).map(t=>`<tr><td>${nice(t.k)}</td><td class="num">${(t.n||0).toLocaleString("fr")}</td></tr>`).join("");
   const inc=(d.incidents||[]).map(i=>`<tr><td>${esc((i.severity||'?').toUpperCase())}</td><td>${esc(i.title)}</td><td>${esc((i.entities||'').toString())}</td><td>${esc((i.mitre||'').toString())}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">Aucun incident corrélé</td></tr>';
@@ -630,14 +753,58 @@ function exportDetections(){const rows=DETV.length?DETV:DETI;if(!rows.length)ret
   const csv=[cols.join(",")].concat(rows.map(r=>cols.map(k=>'"'+((r[k]==null?"":r[k])+"").replace(/"/g,'""')+'"').join(","))).join("\n");
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));a.download="detections_omni_soc.csv";a.click();}
 function openDet(i){const x=DETV[i];if(!x||!x.entity)return;openEntity(x.entity,((x.entity||"")+"").split("\\").pop());}
+var LEAK_CATS=[
+  {id:"extortion",ic:"🏴‍☠️",lab:"Extorsion ransomware",sub:"sites de fuite (RansomLook)",kpi:"red",sev:"critical",vc:"red"},
+  {id:"creds",ic:"🔑",lab:"Identifiants exposés",sub:"comptes / breaches (HIBP · Dehashed)",kpi:"amb",sev:"high",vc:"amb"},
+  {id:"github",ic:"💻",lab:"Fuites GitHub",sub:"secrets / code public exposé",kpi:"cy",sev:"medium",vc:"cy"}
+];
+function leakCatMeta(id){for(var i=0;i<LEAK_CATS.length;i++){if(LEAK_CATS[i].id===id)return LEAK_CATS[i];}return LEAK_CATS[0];}
+function leakItemRow(x){
+  var m=leakCatMeta(x.cat);
+  var crit=x.tag==="ransomware_mention";
+  var sev=crit?"critical":m.sev;
+  var chipC=sev==="critical"?"":sev==="high"?"h":"m";
+  var vc=sev==="critical"?"red":sev==="high"?"amb":"cy";
+  var ext=x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener" style="margin-left:6px;color:var(--'+vc+');text-decoration:none">↗</a>':"";
+  return '<div class="inc sev-'+sev+'"><div class="top">'
+    +'<span class="chip '+chipC+'">'+m.ic+' '+esc((x.source||m.id).toUpperCase())+'</span>'
+    +'<span class="ttl">'+esc(x.label||"—")+'</span><span class="ts">'+ago(x.ts)+ext+'</span></div>'
+    +'<div class="meta">'+esc(x.msg||"")+(x.breaches?' · '+esc(x.breaches):"")+'</div></div>';
+}
 function renderLeaks(d){d=d||{};
-  $("#leakSrc").innerHTML=(d.sources||[]).map(s=>`<span class="pchip">${esc((s.k||'?').toUpperCase())} · ${s.n}</span>`).join(" ")||'<span class="muted">Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)</span>';
-  const items=d.items||[];
-  $("#leakFeed").innerHTML=items.length?items.map(x=>{const crit=x.tag==="ransomware_mention";
-    return `<div class="inc sev-${crit?'critical':'high'}"><div class="top">
-      <span class="chip ${crit?'':'h'}">${esc((x.source||'').toUpperCase())}</span>
-      <span class="ttl">${esc(x.label)}</span><span class="ts">${ago(x.ts)}</span></div>
-      <div class="meta">${esc(x.msg||'')}${x.breaches?' · '+esc(x.breaches):''}</div></div>`;}).join(""):'<div class="empty">Aucune fuite détectée ✅</div>';}
+  var items=d.items||[];var cats=d.cats||{};var srcs=d.sources||[];
+  var total=d.total!=null?d.total:items.length;
+  var bn=$("#leakSummary");
+  if(bn){
+    var cells=LEAK_CATS.map(function(m){
+      var n=cats[m.id]!=null?cats[m.id]:0;
+      return '<div class="kpi '+m.kpi+'"><div class="lab">'+m.ic+' '+esc(m.lab)+'</div>'
+        +'<div class="val mono">'+(n).toLocaleString("fr")+'</div><div class="sub">'+esc(m.sub)+'</div></div>';
+    });
+    cells.push('<div class="kpi vio"><div class="lab">📊 Total (30 j)</div>'
+      +'<div class="val mono">'+(total).toLocaleString("fr")+'</div><div class="sub">événements de fuite</div></div>');
+    bn.innerHTML=cells.join("");
+  }
+  if($("#leakSrc"))$("#leakSrc").innerHTML=srcs.length
+    ?srcs.map(function(s){return '<span class="pchip">'+esc((s.k||"?").toUpperCase())+' · '+s.n+'</span>';}).join(" ")
+    :'<span class="muted">Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)</span>';
+  var wrap=$("#leakCats");if(!wrap)return;
+  if(!items.length){
+    wrap.innerHTML='<div class="card"><div class="empty" style="padding:42px 20px">'
+      +'<div style="font-size:40px;line-height:1">🛡️</div>'
+      +'<div style="font-size:15px;font-weight:700;color:var(--grn);margin-top:8px">Aucune fuite détectée</div>'
+      +'<div class="muted" style="margin-top:6px">Aucune mention d\'extorsion, d\'identifiant exposé ni de fuite GitHub sur les 30 derniers jours.</div>'
+      +'</div></div>';
+    return;
+  }
+  var html=LEAK_CATS.map(function(m){
+    var rows=items.filter(function(x){return x.cat===m.id;});
+    var head='<div class="card"><h3>'+m.ic+' '+esc(m.lab)+'<span class="tag">'+rows.length+' · '+esc(m.sub)+'</span></h3>';
+    var body=rows.length?'<div class="feed">'+rows.map(leakItemRow).join("")+'</div>':'<div class="empty" style="padding:18px">Rien à signaler ✅</div>';
+    return head+body+'</div>';
+  }).join("");
+  wrap.innerHTML=html;
+}
 function heat(n){return n===0?"h0":n<10?"h1":n<100?"h2":n<1000?"h3":"h4";}
 function renderMatrix(m){m=m||[];$("#atkMatrix").innerHTML=m.map(col=>`<div class="mcol">
   <div class="mhead">${esc(col.tactic)}<span>${col.techniques.length} tech.</span></div>

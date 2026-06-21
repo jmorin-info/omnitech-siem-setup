@@ -393,13 +393,51 @@ def update_case(b, who):
     return {"ok": True, "case": c}
 
 
-def get_entity(name):
+def _entity_scores(name):
+    """Score ML (ml_anomaly) et UEBA (ueba_score) de CETTE entite (forme complete OU compte nu)."""
+    bare = name.split("\\")[-1] if name else name
+    forms = [f for f in {name, bare} if f]
+    ml = {"score": None, "reason": ""}
+    rml = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"filter": [{"term": {"event_source": "ml_anomaly"}},
+                                      {"terms": {"entity": forms}},
+                                      {"range": {"timestamp": {"gte": "now-7d"}}}]}},
+        "aggs": {"s": {"max": {"field": "ml_score"}},
+                 "h": {"top_hits": {"size": 1, "_source": ["ml_reason"],
+                                    "sort": [{"timestamp": {"order": "desc"}}]}}}})
+    aml = rml.get("aggregations", {})
+    vml = (aml.get("s", {}) or {}).get("value")
+    if vml is not None:
+        hit = (((aml.get("h", {}) or {}).get("hits", {}) or {}).get("hits", []) or [{}])[0].get("_source", {})
+        ml = {"score": round(vml or 0, 1), "reason": _rd(hit.get("ml_reason", "")) or ""}
+    ue = {"score": None, "factor": ""}
+    rue = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"filter": [{"term": {"event_source": "ueba_score"}},
+                                      {"terms": {"ueba_entity": forms}},
+                                      {"range": {"timestamp": {"gte": "now-7d"}}}]}},
+        "aggs": {"s": {"max": {"field": "ueba_score"}},
+                 "h": {"top_hits": {"size": 1, "_source": ["ueba_top_factor"],
+                                    "sort": [{"timestamp": {"order": "desc"}}]}}}})
+    aue = rue.get("aggregations", {})
+    vue = (aue.get("s", {}) or {}).get("value")
+    if vue is not None:
+        hit = (((aue.get("h", {}) or {}).get("hits", {}) or {}).get("hits", []) or [{}])[0].get("_source", {})
+        ue = {"score": int(vue or 0), "factor": _rd(hit.get("ueba_top_factor", "")) or ""}
+    return {"ml": ml, "ueba": ue}
+
+
+def get_entity(name, size=20, frm=0):
     if not name:
-        return {"name": "", "total": 0, "techniques": [], "tactics": [], "events": []}
+        return {"name": "", "total": 0, "techniques": [], "tactics": [], "events": [],
+                "from": 0, "size": size, "loaded": 0, "has_more": False,
+                "scores": {"ml": {"score": None, "reason": ""}, "ueba": {"score": None, "factor": ""}}}
     name = _RD_REV.get(name, name)   # mode rédigé : pseudo -> réel pour la requête
+    size = max(1, min(int(size), 200))
+    frm = max(0, int(frm))
     q = {"bool": {"must": [{"term": {"user": name}}, {"exists": {"field": "alert_tag"}}],
                   "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}}
-    res = os_search("omni-*", {"size": 20, "sort": [{"timestamp": {"order": "desc"}}], "query": q,
+    res = os_search("omni-*", {"size": size, "from": frm, "track_total_hits": True,
+        "sort": [{"timestamp": {"order": "desc"}}], "query": q,
         "_source": ["timestamp", "alert_tag", "mitre_technique", "short_message", "message"],
         "aggs": {"tech": {"terms": {"field": "mitre_technique", "size": 8}},
                  "tac": {"terms": {"field": "mitre_tactic", "size": 8}},
@@ -410,7 +448,11 @@ def get_entity(name):
         s = h.get("_source", {})
         ev.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
                    "msg": s.get("short_message") or s.get("message")})
+    th = res.get("hits", {}).get("total", {})
+    th = th.get("value", 0) if isinstance(th, dict) else (th or 0)
     return {"name": _rd(name), "total": ag.get("tot", {}).get("value", 0),
+            "from": frm, "size": size, "loaded": frm + len(ev), "has_more": (frm + len(ev)) < th,
+            "scores": _entity_scores(name),
             "techniques": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tech", {}).get("buckets", [])],
             "tactics": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tac", {}).get("buckets", [])],
             "events": ev}
@@ -460,6 +502,77 @@ def get_detections(tactic="", source="", tag="", technique=""):
     return {"items": items,
             "tactics": [b["key"] for b in ag.get("tac", {}).get("buckets", [])],
             "sources": [b["key"] for b in ag.get("src", {}).get("buckets", [])]}
+
+
+def _leak_cat(source, tag, repo, account, breaches):
+    """Classe une fuite : github / creds / extortion (defaut)."""
+    src = (source or "").lower()
+    if repo or src == "github":
+        return "github"
+    if src in ("hibp", "dehashed") or account or breaches:
+        return "creds"
+    return "extortion"
+
+
+def get_leaks_v2():
+    """Version enrichie de get_leaks : items categorises + anonymises (_rd) + compteurs."""
+    res = os_search("omni-*", {"size": 60, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {"must": [{"term": {"event_source": "leak_intel"}}],
+                           "filter": [{"range": {"timestamp": {"gte": "now-30d"}}}]}},
+        "_source": ["timestamp", "leak_source", "alert_tag", "leak_victim", "leak_account",
+                    "leak_breaches", "leak_repo", "leak_url", "short_message"],
+        "aggs": {"src": {"terms": {"field": "leak_source", "size": 10}}}})
+    items = []
+    cats = {"extortion": 0, "creds": 0, "github": 0}
+    for h in res.get("hits", {}).get("hits", []):
+        s = h.get("_source", {})
+        source = s.get("leak_source"); tag = s.get("alert_tag")
+        repo = s.get("leak_repo"); account = s.get("leak_account")
+        breaches = s.get("leak_breaches"); victim = s.get("leak_victim")
+        cat = _leak_cat(source, tag, repo, account, breaches)
+        if cat in cats:
+            cats[cat] += 1
+        raw = victim or account or repo or ""
+        items.append({"ts": s.get("timestamp"), "source": source, "tag": tag,
+                      "cat": cat, "label": _rd(raw) if raw else "—",
+                      "msg": s.get("short_message"), "url": s.get("leak_url"),
+                      "breaches": _rd(breaches) if breaches else None})
+    counts = [{"k": b["key"], "n": b["doc_count"]} for b in res.get("aggregations", {}).get("src", {}).get("buckets", [])]
+    return {"items": items, "sources": counts, "cats": cats, "total": len(items)}
+
+
+def _trend(cur: int, prev: int) -> dict:
+    # delta en % vs fenetre precedente ; dir = sens (up/down/flat), bad = defavorable.
+    if prev <= 0:
+        pct = 100 if cur > 0 else 0
+    else:
+        pct = int(round((cur - prev) * 100.0 / prev))
+    if cur > prev:
+        d = "up"
+    elif cur < prev:
+        d = "down"
+    else:
+        d = "flat"
+    return {"cur": cur, "prev": prev, "pct": abs(pct), "dir": d, "bad": cur > prev}
+
+
+def get_kpi_trend() -> dict:
+    prev24 = {"range": {"timestamp": {"gte": "now-48h", "lt": "now-24h"}}}
+    prev7d = {"range": {"timestamp": {"gte": "now-14d", "lt": "now-7d"}}}
+    cur = get_kpis()
+    prev_alertes = _count({"bool": {"must": [{"exists": {"field": "alert_tag"}}], "filter": [prev24]}})
+    prev_inc = _count({"bool": {"must": [
+        {"term": {"event_source": "xdr_incident"}}, {"term": {"severity": "critical"}}],
+        "filter": [prev7d]}})
+    prev_ueba = _count({"bool": {"must": [{"term": {"event_source": "ueba_score"}},
+        {"range": {"ueba_score": {"gte": 80}}}], "filter": [prev24]}})
+    prev_kev = _count({"bool": {"must": [{"term": {"alert_tag": "vuln_kev"}}], "filter": [prev24]}})
+    return {
+        "alertes_24h": _trend(cur["alertes_24h"], prev_alertes),
+        "incidents_critiques_7j": _trend(cur["incidents_critiques_7j"], prev_inc),
+        "hotes_risque_ueba": _trend(cur["hotes_risque_ueba"], prev_ueba),
+        "kev_exposees": _trend(cur["kev_exposees"], prev_kev),
+    }
 
 
 def get_report():
@@ -706,11 +819,20 @@ class H(BaseHTTPRequestHandler):
         if p == "/m/api/entity":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
-            return self._json(get_entity(qs.get("u", [""])[0]))
+            def _qi(k, d):
+                try:
+                    return max(0, int(qs.get(k, [str(d)])[0]))
+                except (ValueError, TypeError):
+                    return d
+            return self._json(get_entity(qs.get("u", [""])[0], _qi("size", 20), _qi("from", 0)))
         if p == "/m/api/entity-search":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             return self._json({"results": get_entity_search(qs.get("q", [""])[0])})
+        if p == "/m/api/kpi-trend":
+            return self._json({"trend": get_kpi_trend()})
+        if p == "/m/api/leaks2":
+            return self._json(get_leaks_v2())
         if p == "/m/api/stream":
             return self._sse()
         self._json({"error": "not found"}, 404)
