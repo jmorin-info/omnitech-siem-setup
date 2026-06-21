@@ -939,5 +939,56 @@ def push_all(title: str, body: str) -> int:
     return ok
 
 
+# =========================================================== micro-cache mémoire
+# Cache mémoire à TTL, thread-safe. But (perf) : ne pas relancer la même agrégation
+# lourde (terms 300 de la matrice ATT&CK, fan-out de /report, kpi_trend = 8 _count,
+# health, geo) à chaque client/cycle de poll. Clé = nom + args + état REDACT (sinon
+# on servirait une réponse rédigée à un client non-rédigé). TTL court (25-45 s) :
+# fraîcheur quasi temps réel acceptable sur des agrégats. Jamais le SSE ni les POST.
+import functools as _functools
+
+_CACHE: dict = {}
+_CACHE_LOCK = threading.Lock()
+CACHE_TTL = int(CONF.get("MOBILE_CACHE_TTL", "30"))   # secondes ; 0 = désactivé
+
+
+def _cache_key(name, args, kwargs):
+    return (name, "1" if REDACT else "0", repr(args), repr(tuple(sorted(kwargs.items()))))
+
+
+def cached(ttl=None):
+    """Décorateur : mémorise le retour pendant `ttl` s. Signature inchangée."""
+    def deco(fn):
+        @_functools.wraps(fn)
+        def wrap(*args, **kwargs):
+            t = CACHE_TTL if ttl is None else ttl
+            if t <= 0:
+                return fn(*args, **kwargs)
+            key = _cache_key(fn.__name__, args, kwargs)
+            now = time.monotonic()
+            with _CACHE_LOCK:
+                hit = _CACHE.get(key)
+                if hit is not None and hit[0] > now:
+                    return hit[1]
+            val = fn(*args, **kwargs)   # calcul hors verrou
+            with _CACHE_LOCK:
+                _CACHE[key] = (time.monotonic() + t, val)
+            return val
+        return wrap
+    return deco
+
+
+# Ré-assignation APRÈS définition : get_report()/get_kpi_trend()/get_risk() appellent
+# alors les versions enveloppées. NON enveloppés : _sse, flux vivants, écritures.
+get_kpis          = cached()(get_kpis)
+get_kpi_trend     = cached()(get_kpi_trend)
+get_terms         = cached()(get_terms)
+get_attack_matrix = cached()(get_attack_matrix)
+get_health        = cached()(get_health)
+get_geo_threats   = cached()(get_geo_threats)
+get_report        = cached()(get_report)
+get_timeseries    = cached(20)(get_timeseries)
+
+
 if __name__ == "__main__":
     ThreadingHTTPServer(LISTEN, H).serve_forever()

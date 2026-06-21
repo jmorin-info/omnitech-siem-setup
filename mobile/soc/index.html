@@ -324,6 +324,50 @@
   nav a:focus-visible{outline-offset:-2px;box-shadow:0 0 0 3px rgba(34,211,238,.25),inset 2px 0 0 var(--cy)}
   .emc:focus-visible,.palbox:focus-visible{outline:none;box-shadow:none}
   a:focus:not(:focus-visible),button:focus:not(:focus-visible),[tabindex]:focus:not(:focus-visible),[role="button"]:focus:not(:focus-visible){outline:none}
+  /* === Modale d'aide === */
+  #help{position:fixed;inset:0;z-index:50;display:none}
+  #help.on{display:block}
+  #help .helpbox{position:absolute;top:8vh;left:50%;transform:translateX(-50%);width:680px;max-width:94vw;max-height:84vh;display:flex;flex-direction:column;background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--bd);border-radius:16px;box-shadow:0 30px 100px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.02) inset;overflow:hidden;animation:fade .16s ease}
+  #help .helphd{display:flex;align-items:flex-start;gap:14px;padding:18px 20px 14px;border-bottom:1px solid var(--bd);background:linear-gradient(90deg,rgba(34,211,238,.07),transparent 75%)}
+  #help .helphd h2{font-size:18px;margin:0;letter-spacing:.3px}
+  #help .helphd .helpClose{margin-left:auto;flex:0 0 auto}
+  #help .helpbody{padding:6px 20px 18px;overflow-y:auto}
+  #help .hsec{margin-top:18px}
+  #help .hsk{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--cy);margin-bottom:10px}
+  #help .hkeys{display:grid;grid-template-columns:1fr 1fr;gap:8px 22px}
+  #help .hkey{display:flex;align-items:center;gap:11px;font-size:12.5px;color:var(--mut)}
+  #help .hkey span{line-height:1.35}
+  #help kbd{flex:0 0 auto;min-width:38px;text-align:center;font:600 11px/1 'Segoe UI',sans-serif;color:var(--fg);background:#0c1525;border:1px solid var(--bd);border-bottom-width:2px;border-radius:7px;padding:5px 8px;box-shadow:0 1px 0 rgba(0,0,0,.4)}
+  #help .hpages,#help .hgloss{display:flex;flex-direction:column;gap:9px}
+  #help .hpg{display:flex;align-items:flex-start;gap:12px;background:var(--card2);border:1px solid var(--bd);border-radius:11px;padding:11px 13px}
+  #help .hpg .hic{flex:0 0 auto;width:26px;text-align:center;font-size:16px;line-height:1.4;filter:saturate(1.1)}
+  #help .hpg b{display:block;font-size:13px;color:var(--fg)}
+  #help .hpg em{display:block;font-style:normal;font-size:11.5px;color:var(--mut);line-height:1.45;margin-top:2px}
+  #help .hgl{border-left:2px solid var(--cy);background:linear-gradient(90deg,rgba(34,211,238,.06),transparent 80%);border-radius:0 9px 9px 0;padding:9px 13px}
+  #help .hgl b{display:block;font-size:12.5px;color:var(--fg);margin-bottom:2px}
+  #help .hgl span{font-size:11.5px;color:var(--mut);line-height:1.5}
+  #help .helpft{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;border-top:1px solid var(--bd);font-size:11px;color:var(--dim);background:rgba(8,11,20,.4)}
+  #help .helpft b{color:var(--mut);font-weight:600}
+  #densBtn .densLab{font-size:11px;letter-spacing:.3px}
+  @media(max-width:640px){#help .hkeys{grid-template-columns:1fr}#help .helpbox{top:5vh;max-height:90vh}}
+  /* === Densite compacte === */
+  body.compact{font-size:13px}
+  body.compact header{padding:0 16px;gap:10px}
+  body.compact main{padding:14px 16px}
+  body.compact .card{padding:11px 13px;border-radius:11px}
+  body.compact .card h3{margin-bottom:9px}
+  body.compact .grid{gap:11px}
+  body.compact .kpi{padding:12px 13px;border-radius:11px}
+  body.compact .kpi .val{font-size:26px}
+  body.compact .threat{padding:11px 16px;margin-bottom:14px}
+  body.compact .pdesc{padding:9px 13px;margin-bottom:14px}
+  body.compact .feed{gap:7px}
+  body.compact .inc{padding:9px 11px}
+  body.compact .lrow{padding:5px 8px}
+  body.compact .iconbtn{padding:5px 9px}
+  body.compact .pill{padding:4px 10px}
+  body.compact .emc{padding:14px 16px}
+  body.compact nav a{padding:8px 11px}
 
   @media print{aside,header,nav,#emodal,#pal{display:none!important}
     #app{display:block!important}main{padding:0!important}.page:not(#p-report){display:none!important}
@@ -376,7 +420,9 @@
     </select>
     <button class="iconbtn" onclick="openPal()" title="Recherche (Ctrl/Cmd+K)" aria-label="Recherche et navigation (Ctrl ou Cmd + K)">⌘K</button>
     <button class="iconbtn" id="refBtn" onclick="refreshNow()" title="Rafraîchir maintenant" aria-busy="false" aria-label="Rafraîchir les données">⟳</button>
-    <button class="iconbtn" onclick="logout()">⎋</button>
+    <button class="iconbtn" id="densBtn" onclick="toggleDensity()" aria-pressed="false" title="Densite confortable — cliquer pour compact" aria-label="Basculer la densite d'affichage">⇳ <span class="densLab">Confort</span></button>
+    <button class="iconbtn" id="helpBtn" onclick="openHelp()" aria-haspopup="dialog" aria-expanded="false" title="Aide et raccourcis (touche ?)" aria-label="Ouvrir l'aide et les raccourcis clavier">?</button>
+    <button class="iconbtn" onclick="logout()" title="Se deconnecter" aria-label="Se deconnecter">⎋</button>
   </header>
 
   <main>
@@ -460,6 +506,16 @@
   </main>
   <div id="emodal"><div class="scrim2" onclick="closeEnt()"></div><div class="emc" id="emc"></div></div>
   <div id="pal"><div class="scrim2" onclick="closePal()"></div><div class="palbox"><input id="palIn" placeholder="Rechercher / naviguer…  (pages, entités)" oninput="renderPal(this.value)"><div id="palList"></div></div></div>
+  <div id="help" aria-hidden="true"><div class="scrim2" onclick="closeHelp()"></div>
+    <div class="helpbox" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="helphd">
+        <div><h2 id="helpTitle">Aide &amp; raccourcis</h2><div class="muted" style="font-size:12px">Console SOC — OMNITECH SECURITY</div></div>
+        <button class="iconbtn helpClose" onclick="closeHelp()" title="Fermer (Echap)" aria-label="Fermer l'aide">✕</button>
+      </div>
+      <div id="helpBody" class="helpbody"></div>
+      <div class="helpft"><span>Densite : <b id="helpDensState">confortable</b></span><span class="mono" id="helpBuild">v1</span></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -642,8 +698,15 @@ function renderPal(q){q=(q||"").trim();const ql=q.toLowerCase();
 function openPalEnt(i){const e=PALENT[i];if(!e)return;closePal();openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
 document.addEventListener("keydown",e=>{
   if((e.metaKey||e.ctrlKey)&&(e.key==="k"||e.key==="K")){e.preventDefault();openPal();return;}
-  if(e.key==="Escape"){closePal();closeEnt();}
-  if(e.key==="Enter"&&$("#pal").classList.contains("on")){const f=$("#palList .pi");if(f)f.click();}});
+  if(e.key==="Escape"){closePal();closeEnt();closeHelp();}
+  if(e.key==="Enter"&&$("#pal").classList.contains("on")){const f=$("#palList .pi");if(f)f.click();}
+  if((e.key==="?"||((e.key==="/"||e.key==="Divide")&&e.shiftKey))&&!e.metaKey&&!e.ctrlKey&&!e.altKey){
+    var t=e.target,tn=t&&t.tagName;
+    if(tn==="INPUT"||tn==="TEXTAREA"||tn==="SELECT"||(t&&t.isContentEditable))return;
+    if($("#pal")&&$("#pal").classList.contains("on"))return;
+    if($("#emodal")&&$("#emodal").classList.contains("on"))return;
+    e.preventDefault();_hToggleHelp();return;
+  }});
 function layoutGraph(){if(cy){cy.resize();cy.layout(GCFG).run();cy.fit(undefined,30);}}
 // === Feedback non bloquant — toasts (verre + accent) =======================
 var TOAST_META={
@@ -827,6 +890,93 @@ function setCadence(v){
 function startRefresh(){
   if(!UPD_T){UPD_T=setInterval(tickUpd,1000);}
   applyCadence();
+}
+// === AXE D — Aide & ergonomie (panneau d'aide + bascule de densite) ========
+var SOC_BUILD = "v1 · build 2026-06-22";
+function _hToggleHelp(){var m=$("#help");if(m&&m.classList.contains("on"))closeHelp();else openHelp();}
+var HELP_OPENER=null;
+function openHelp(){
+  var m=$("#help");if(!m)return;
+  buildHelp();
+  var act=document.activeElement;
+  if(act&&!m.contains(act))HELP_OPENER=act;
+  m.classList.add("on");m.setAttribute("aria-hidden","false");
+  var b=$("#helpBtn");if(b)b.setAttribute("aria-expanded","true");
+  setTimeout(function(){var x=m.querySelector(".helpClose");if(x){try{x.focus();}catch(_){}}},40);
+}
+function closeHelp(){
+  var m=$("#help");if(!m||!m.classList.contains("on"))return;
+  m.classList.remove("on");m.setAttribute("aria-hidden","true");
+  var b=$("#helpBtn");if(b)b.setAttribute("aria-expanded","false");
+  if(HELP_OPENER){var o=HELP_OPENER;HELP_OPENER=null;setTimeout(function(){try{if(o&&o.focus)o.focus();}catch(_){}},0);}
+}
+document.addEventListener("keydown",function(e){
+  if(e.key!=="Tab")return;
+  var m=$("#help");if(!m||!m.classList.contains("on"))return;
+  var scope=m.querySelector(".helpbox")||m;
+  var nodes=scope.querySelectorAll('a[href],button,input,select,textarea,[tabindex]');
+  var f=[];for(var i=0;i<nodes.length;i++){var el=nodes[i];if(el.disabled)continue;if(el.getAttribute("tabindex")==="-1")continue;if(el.offsetParent===null&&el.tagName!=="INPUT")continue;f.push(el);}
+  if(!f.length){e.preventDefault();return;}
+  var first=f[0],last=f[f.length-1],a=document.activeElement;
+  if(!m.contains(a)){e.preventDefault();try{first.focus();}catch(_){}return;}
+  if(e.shiftKey&&a===first){e.preventDefault();try{last.focus();}catch(_){}}
+  else if(!e.shiftKey&&a===last){e.preventDefault();try{first.focus();}catch(_){}}
+},true);
+function _densRead(){var v=null;try{v=localStorage.getItem("soc.density");}catch(_){v=null;}return v==="compact"?"compact":"comfortable";}
+function applyDensity(mode){
+  var compact=mode==="compact";
+  document.body.classList.toggle("compact",compact);
+  try{localStorage.setItem("soc.density",compact?"compact":"comfortable");}catch(_){}
+  var btn=$("#densBtn");
+  if(btn){
+    btn.setAttribute("aria-pressed",compact?"true":"false");
+    btn.title=compact?"Densite compacte — cliquer pour confortable":"Densite confortable — cliquer pour compact";
+    var lab=btn.querySelector(".densLab");if(lab)lab.textContent=compact?"Compact":"Confort";
+  }
+  var hb=$("#helpDensState");if(hb)hb.textContent=compact?"compacte":"confortable";
+}
+function toggleDensity(){applyDensity(_densRead()==="compact"?"comfortable":"compact");}
+applyDensity(_densRead());
+function buildHelp(){
+  var box=$("#helpBody");if(!box||box.dataset.built)return;box.dataset.built="1";
+  var KEYS=[
+    ["Ctrl / Cmd + K","Ouvrir la palette — chercher une page ou une entite"],
+    ["?","Ouvrir / fermer ce panneau d'aide"],
+    ["Echap","Fermer la palette, une fiche ou l'aide"],
+    ["Entree / Espace","Activer l'element cible (lignes, cellules, KPI)"],
+    ["Tab","Naviguer au clavier — focus confine dans les modales"]
+  ];
+  var PAGES=[
+    ["▦","Vue d'ensemble","Posture en un coup d'oeil : KPI, activite 24 h, tactiques ATT&CK et flux temps reel. Tout est cliquable."],
+    ["◈","Incidents","File des cas correles (oms-xdr) : statut, assignation, notes d'investigation."],
+    ["◎","Detections","Detections taguees des dernieres 24 h, filtrables par tactique et par source ; export CSV."],
+    ["⊞","MITRE ATT&CK","Matrice de couverture : chaque cellule detectee, coloree selon le volume reel d'activite."],
+    ["🕸","Graphe d'attaque","Relie utilisateurs et techniques declenchees : taille = volume, couleur = tactique."],
+    ["🔓","Fuites & Dark Web","Sites d'extorsion (RansomLook), comptes exposes (HIBP/Dehashed), code public (GitHub)."],
+    ["💓","Sante & Collecte","Volume et fraicheur de chaque source ; decrochage = angle mort alerte (ISO A.8.15)."],
+    ["📄","Rapport","Synthese executive imprimable (PDF) pour la direction et l'audit ISO."]
+  ];
+  var GLOSS=[
+    ["Score ML","Anomalie attribuee par le modele non supervise oms-ml (IsolationForest). Plus le score est eleve, plus le comportement s'ecarte de la normale apprise."],
+    ["UEBA","User &amp; Entity Behavior Analytics — score de risque comportemental agrege par entite sur 24 h (volume, diversite de techniques, severite)."],
+    ["Severite","Gravite d'une detection : critique (rouge), elevee (ambre), moyenne, faible. Pilote le routage des alertes et la priorite de traitement."],
+    ["Go-dark","Hote muet : aucune donnee recue depuis &gt; 26 h. Signale une perte de visibilite (panne d'agent, isolement, contournement) a verifier."],
+    ["KEV","Known Exploited Vulnerabilities (CISA) — failles activement exploitees ; leur exposition est suivie en priorite."],
+    ["Kill-chain","Enchainement des etapes d'une attaque (acces initial → execution → … → impact) reconstitue par la correlation d'incidents."]
+  ];
+  var h="";
+  h+='<div class="hsec"><div class="hsk">Raccourcis clavier</div><div class="hkeys">';
+  for(var i=0;i<KEYS.length;i++)h+='<div class="hkey"><kbd>'+esc(KEYS[i][0])+'</kbd><span>'+esc(KEYS[i][1])+'</span></div>';
+  h+='</div></div>';
+  h+='<div class="hsec"><div class="hsk">Les pages</div><div class="hpages">';
+  for(var p=0;p<PAGES.length;p++)h+='<div class="hpg"><span class="hic">'+PAGES[p][0]+'</span><div><b>'+esc(PAGES[p][1])+'</b><em>'+esc(PAGES[p][2])+'</em></div></div>';
+  h+='</div></div>';
+  h+='<div class="hsec"><div class="hsk">Glossaire des signaux</div><div class="hgloss">';
+  for(var g=0;g<GLOSS.length;g++)h+='<div class="hgl"><b>'+esc(GLOSS[g][0])+'</b><span>'+GLOSS[g][1]+'</span></div>';
+  h+='</div></div>';
+  box.innerHTML=h;
+  var bf=$("#helpBuild");if(bf)bf.textContent=SOC_BUILD;
+  var hb=$("#helpDensState");if(hb)hb.textContent=_densRead()==="compact"?"compacte":"confortable";
 }
 function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocaleString("fr");
   const top=(d.top_detections||[]).map(t=>`<tr><td>${nice(t.k)}</td><td class="num">${(t.n||0).toLocaleString("fr")}</td></tr>`).join("");
