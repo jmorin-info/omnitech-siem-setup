@@ -377,9 +377,55 @@
     aside{display:none}header{grid-column:1}main{grid-column:1;padding:16px}
     .cols{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}
   }
+  /* === Icônes SVG (jeu sobre, line-icons) === */
+  .svi{width:16px;height:16px;flex:0 0 auto;vertical-align:-3px;stroke:currentColor;fill:none;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
+  nav a .ic{display:inline-flex;align-items:center;justify-content:center}
+  nav a .ic .svi{width:17px;height:17px;vertical-align:0}
+  .card h3 .svi{width:15px;height:15px;color:var(--cy);opacity:.85;margin-right:1px}
+  .iconbtn .svi{vertical-align:-3px}
+  .kpi .lab .svi{width:14px;height:14px;color:var(--accent,var(--cy));opacity:.95}
+  #help .hpg .hic .svi{width:18px;height:18px;color:var(--cy);opacity:.9}
+  /* === Rendu enterprise sobre : neon atténué (~moitié), profondeur conservée === */
+  .brand .logo{box-shadow:0 0 15px rgba(34,211,238,.30), inset 0 0 10px rgba(255,255,255,.16)}
+  nav a.on{box-shadow:inset 3px 0 0 var(--cy)}
+  nav a.on .ic{filter:none}
+  .card h3::before{box-shadow:0 0 5px rgba(34,211,238,.35)}
+  .card:hover{box-shadow:0 18px 40px -18px rgba(0,0,0,.8), 0 0 0 1px rgba(120,150,210,.10), inset 0 1px 0 rgba(255,255,255,.05)}
+  .kpi .val{filter:none}
+  header{box-shadow:0 1px 0 rgba(120,150,210,.10)}
+  .card::before{opacity:.4}
+  .iconbtn:hover{box-shadow:0 0 0 2px rgba(34,211,238,.07)}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 2l10 10-10 10L2 12z"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12" y2="16.5"/></symbol>
+<symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-matrix" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></symbol>
+<symbol id="i-network" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="9" r="2.2"/><circle cx="12" cy="18" r="2.2"/><line x1="6.8" y1="7" x2="10.5" y2="16.5"/><line x1="17.2" y1="10.3" x2="13.4" y2="16.6"/><line x1="6.9" y1="6.6" x2="17" y2="8.6"/></symbol>
+<symbol id="i-unlock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.9"/></symbol>
+<symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-7 4 14 2.5-7H21"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/><line x1="9" y1="13" x2="16" y2="13"/><line x1="9" y1="16.5" x2="16" y2="16.5"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M7 15l4-4 3 2.5 5-6"/></symbol>
+<symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3c3 3.5 4.5 6 4.5 9a4.5 4.5 0 0 1-9 0c0-1.6.6-2.8 1.7-3.8C10 11 11.5 8.5 12 3z"/></symbol>
+<symbol id="i-antenna" viewBox="0 0 24 24"><circle cx="12" cy="9" r="1.4"/><path d="M12 10.4V20M8 20h8"/><path d="M6 9a6 6 0 0 1 12 0"/><path d="M8.6 9a3.4 3.4 0 0 1 6.8 0"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5"/><line x1="9" y1="3" x2="9" y2="6"/><line x1="15" y1="3" x2="15" y2="6"/><line x1="9" y1="18" x2="9" y2="21"/><line x1="15" y1="18" x2="15" y2="21"/><line x1="3" y1="9" x2="6" y2="9"/><line x1="3" y1="15" x2="6" y2="15"/><line x1="18" y1="9" x2="21" y2="9"/><line x1="18" y1="15" x2="21" y2="15"/></symbol>
+<symbol id="i-bars" viewBox="0 0 24 24"><path d="M4 20h16"/><line x1="7" y1="20" x2="7" y2="11"/><line x1="12" y1="20" x2="12" y2="5"/><line x1="17" y1="20" x2="17" y2="14"/></symbol>
+<symbol id="i-warning" viewBox="0 0 24 24"><path d="M12 3l9.5 17H2.5z"/><line x1="12" y1="9.5" x2="12" y2="14.5"/><line x1="12" y1="17.5" x2="12" y2="17.5"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+<symbol id="i-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M7.5 7.5a6 6 0 0 0 0 9M16.5 7.5a6 6 0 0 1 0 9"/><path d="M4.5 4.5a10 10 0 0 0 0 15M19.5 4.5a10 10 0 0 1 0 15"/></symbol>
+<symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.5 5.2A10 10 0 0 1 12 5c5 0 9 4 10 7a16 16 0 0 1-3.3 4.3M6.3 6.5A16 16 0 0 0 2 12c1 3 5 7 10 7a10 10 0 0 0 3.3-.6"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 0 1 14.5-6L21 8"/><path d="M21 3v5h-5"/><path d="M20.5 12a8.5 8.5 0 0 1-14.5 6L3 16"/><path d="M3 21v-5h5"/></symbol>
+<symbol id="i-rows" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></symbol>
+<symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a3 3 0 1 1 4.3 3c-.9.6-1.5 1-1.5 2.1"/><line x1="12" y1="17" x2="12" y2="17"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M10 8l-4 4 4 4"/><line x1="6" y1="12" x2="16" y2="12"/></symbol>
+<symbol id="i-print" viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6h-2"/><rect x="8" y="14" width="8" height="6"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v5c0 5-3.5 8.2-8 10-4.5-1.8-8-5-8-10V6z"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><circle cx="9" cy="9" r="4.5"/><path d="M12.2 12.2L20 20M17 17l2-2"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/></symbol>
+</defs></svg>
 <div id="login">
   <form class="lcard" onsubmit="login(event)">
     <h1>⬢ OMNI <span style="color:var(--cy)">SOC</span></h1>
@@ -395,14 +441,14 @@
   <aside>
     <div class="brand"><div class="logo">⬢</div><div><b>OMNI SOC</b><span>OMNITECH SECURITY</span></div></div>
     <nav id="nav">
-      <a class="on" data-p="overview"><span class="ic">▦</span>Vue d'ensemble</a>
-      <a data-p="incidents"><span class="ic">◈</span>Incidents</a>
-      <a data-p="detections"><span class="ic">◎</span>Détections</a>
-      <a data-p="attack"><span class="ic">⊞</span>ATT&CK</a>
-      <a data-p="graph"><span class="ic">🕸</span>Graphe d'attaque</a>
-      <a data-p="leaks"><span class="ic">🔓</span>Fuites & Dark Web</a>
-      <a data-p="health"><span class="ic">💓</span>Santé & Collecte</a>
-      <a data-p="report"><span class="ic">📄</span>Rapport</a>
+      <a class="on" data-p="overview"><span class="ic"><svg class="svi"><use href="#i-grid"></use></svg></span>Vue d'ensemble</a>
+      <a data-p="incidents"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span>Incidents</a>
+      <a data-p="detections"><span class="ic"><svg class="svi"><use href="#i-target"></use></svg></span>Détections</a>
+      <a data-p="attack"><span class="ic"><svg class="svi"><use href="#i-matrix"></use></svg></span>ATT&CK</a>
+      <a data-p="graph"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span>Graphe d'attaque</a>
+      <a data-p="leaks"><span class="ic"><svg class="svi"><use href="#i-unlock"></use></svg></span>Fuites & Dark Web</a>
+      <a data-p="health"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span>Santé & Collecte</a>
+      <a data-p="report"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span>Rapport</a>
     </nav>
     <div class="side-foot">v1 · données temps réel<br>OpenSearch + oms-xdr</div>
   </aside>
@@ -419,10 +465,10 @@
       <option value="0">⏸ En pause</option>
     </select>
     <button class="iconbtn" onclick="openPal()" title="Recherche (Ctrl/Cmd+K)" aria-label="Recherche et navigation (Ctrl ou Cmd + K)">⌘K</button>
-    <button class="iconbtn" id="refBtn" onclick="refreshNow()" title="Rafraîchir maintenant" aria-busy="false" aria-label="Rafraîchir les données">⟳</button>
-    <button class="iconbtn" id="densBtn" onclick="toggleDensity()" aria-pressed="false" title="Densité confortable — cliquer pour compact" aria-label="Basculer la densité d'affichage">⇳ <span class="densLab">Confort</span></button>
-    <button class="iconbtn" id="helpBtn" onclick="openHelp()" aria-haspopup="dialog" aria-expanded="false" title="Aide et raccourcis (touche ?)" aria-label="Ouvrir l'aide et les raccourcis clavier">?</button>
-    <button class="iconbtn" onclick="logout()" title="Se déconnecter" aria-label="Se déconnecter">⎋</button>
+    <button class="iconbtn" id="refBtn" onclick="refreshNow()" title="Rafraîchir maintenant" aria-busy="false" aria-label="Rafraîchir les données"><svg class="svi"><use href="#i-refresh"></use></svg></button>
+    <button class="iconbtn" id="densBtn" onclick="toggleDensity()" aria-pressed="false" title="Densité confortable — cliquer pour compact" aria-label="Basculer la densité d'affichage"><svg class="svi"><use href="#i-rows"></use></svg> <span class="densLab">Confort</span></button>
+    <button class="iconbtn" id="helpBtn" onclick="openHelp()" aria-haspopup="dialog" aria-expanded="false" title="Aide et raccourcis (touche ?)" aria-label="Ouvrir l'aide et les raccourcis clavier"><svg class="svi"><use href="#i-help"></use></svg></button>
+    <button class="iconbtn" onclick="logout()" title="Se déconnecter" aria-label="Se déconnecter"><svg class="svi"><use href="#i-logout"></use></svg></button>
   </header>
 
   <main>
@@ -434,26 +480,26 @@
       </div>
       <div class="grid kpis" id="kpis"></div>
       <div class="grid cols" style="margin-bottom:16px">
-        <div class="card"><h3>📈 Détections (24 h)<span class="tag">par heure</span></h3><div class="chartbox"><canvas id="cTs"></canvas></div></div>
-        <div class="card"><h3>🎯 Tactiques ATT&CK<span class="tag">7 j</span></h3><div class="chartbox"><canvas id="cTac"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-i-chart"></use></svg> Détections (24 h)<span class="tag">par heure</span></h3><div class="chartbox"><canvas id="cTs"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-i-target"></use></svg> Tactiques ATT&CK<span class="tag">7 j</span></h3><div class="chartbox"><canvas id="cTac"></canvas></div></div>
       </div>
       <div class="grid cols">
-        <div class="card"><h3>🔥 Top détections<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cDet"></canvas></div></div>
-        <div class="card"><h3>🛰️ Sources<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cSrc"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-i-flame"></use></svg> Top détections<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cDet"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-i-antenna"></use></svg> Sources<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cSrc"></canvas></div></div>
       </div>
       <div class="grid cols" style="margin-top:18px">
-        <div class="card"><h3>🤖 Anomalies ML<span class="tag">oms-ml · IsolationForest · cliquer pour la fiche</span></h3><div class="feed" id="mlTop"></div></div>
-        <div class="card"><h3>📊 Risque UEBA<span class="tag">score comportemental · 24 h</span></h3><div class="feed" id="uebaTop"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-i-cpu"></use></svg> Anomalies ML<span class="tag">oms-ml · IsolationForest · cliquer pour la fiche</span></h3><div class="feed" id="mlTop"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-i-bars"></use></svg> Risque UEBA<span class="tag">score comportemental · 24 h</span></h3><div class="feed" id="uebaTop"></div></div>
       </div>
       <div class="grid cols" style="margin-top:18px">
-        <div class="card"><h3>⚠️ Top entités à risque<span class="tag">7 j · cliquer pour la fiche</span></h3><div class="feed" id="topEnt"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-i-warning"></use></svg> Top entités à risque<span class="tag">7 j · cliquer pour la fiche</span></h3><div class="feed" id="topEnt"></div></div>
         <div class="card"><h3><span class="livedot"></span> Flux temps réel<span class="tag" id="liveCount">live</span></h3><div class="live" id="liveFeed"><div class="muted">En attente d'événements…</div></div></div>
       </div>
-      <div class="card" style="margin-top:18px"><h3>🌍 Origines géographiques des sources externes<span class="tag">7 j · FortiGate GeoIP</span></h3><div id="geoFeed" class="geo"></div></div>
+      <div class="card" style="margin-top:18px"><h3><svg class="svi"><use href="#i-i-globe"></use></svg> Origines géographiques des sources externes<span class="tag">7 j · FortiGate GeoIP</span></h3><div id="geoFeed" class="geo"></div></div>
     </section>
 
-    <section class="page" id="p-incidents"><div class="card"><h3>◈ Incidents corrélés (oms-xdr)</h3><div class="feed" id="incFeed"></div></div></section>
-    <section class="page" id="p-detections"><div class="card"><h3>◎ Détections (24 h)
+    <section class="page" id="p-incidents"><div class="card"><h3><svg class="svi"><use href="#i-i-alert"></use></svg> Incidents corrélés (oms-xdr)</h3><div class="feed" id="incFeed"></div></div></section>
+    <section class="page" id="p-detections"><div class="card"><h3><svg class="svi"><use href="#i-i-target"></use></svg> Détections (24 h)
         <span class="tag" id="detCount"></span></h3>
       <div class="dfilter">
         <input id="detSearch" oninput="applyDetSearch()" placeholder="🔎 Rechercher (tag, entité, technique, message…)" autocomplete="off"
@@ -465,12 +511,12 @@
       </div>
       <div class="feed" id="detFeed"></div></div></section>
     <section class="page" id="p-attack">
-      <div class="card"><h3>⊞ Matrice MITRE ATT&CK<span class="tag">couverture × activité (7 j)</span></h3>
+      <div class="card"><h3><svg class="svi"><use href="#i-i-matrix"></use></svg> Matrice MITRE ATT&CK<span class="tag">couverture × activité (7 j)</span></h3>
         <div class="matrix" id="atkMatrix"></div>
         <div class="mlegend"><span><i style="background:#0c1424;opacity:.5"></i>Aucune activité</span><span><i style="background:#10233a;border-color:#2563eb66"></i>Faible</span><span><i style="background:#2a1f10;border-color:#f5a62366"></i>Modérée</span><span><i style="background:#2e1116;border-color:#fb3b5366"></i>Forte</span><span class="muted">— cellule = technique couverte · couleur = volume d'événements (7 j)</span></div></div>
     </section>
     <section class="page" id="p-graph">
-      <div class="card"><h3>🕸 Graphe d'attaque<span class="tag" id="gCount">entités ↔ techniques ATT&CK (7 j)</span></h3>
+      <div class="card"><h3><svg class="svi"><use href="#i-i-network"></use></svg> Graphe d'attaque<span class="tag" id="gCount">entités ↔ techniques ATT&CK (7 j)</span></h3>
         <div class="dfilter" style="margin-top:4px">
           <select id="gTactic" onchange="applyGraphFilter()"><option value="">Toutes tactiques</option></select>
           <label class="muted" style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;font-size:12px">Volume min.
@@ -486,7 +532,7 @@
     </section>
     <section class="page" id="p-leaks">
       <div class="grid kpis" id="leakSummary"></div>
-      <div class="card"><h3>🔓 Sources de fuite surveillées<span class="tag">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
+      <div class="card"><h3><svg class="svi"><use href="#i-i-unlock"></use></svg> Sources de fuite surveillées<span class="tag">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
         <div class="lsrc" id="leakSrc"></div></div>
       <div id="leakCats" style="display:flex;flex-direction:column;gap:16px;margin-top:16px"></div>
       <div class="feed" id="leakFeed" style="display:none"></div>
@@ -494,13 +540,13 @@
     <section class="page" id="p-health">
       <div class="grid kpis" id="hkpis"></div>
       <div class="grid cols" style="margin-top:16px">
-        <div class="card"><h3>🛰️ Sources de collecte (24 h)<span class="tag">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
-        <div class="card"><h3>🌑 Hôtes silencieux (go‑dark)<span class="tag">muets &gt; 26 h · à vérifier</span></h3><div class="feed" id="hdark"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-i-antenna"></use></svg> Sources de collecte (24 h)<span class="tag">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-i-eyeoff"></use></svg> Hôtes silencieux (go‑dark)<span class="tag">muets &gt; 26 h · à vérifier</span></h3><div class="feed" id="hdark"></div></div>
       </div>
     </section>
     <section class="page" id="p-report">
       <div style="display:flex;align-items:center;margin-bottom:14px"><h3 class="sec" style="margin:0">Rapport de posture</h3>
-        <button class="iconbtn" style="margin-left:auto" onclick="window.print()">🖨️ Imprimer / PDF</button></div>
+        <button class="iconbtn" style="margin-left:auto" onclick="window.print()"><svg class="svi"><use href="#i-i-print"></use></svg> Imprimer / PDF</button></div>
       <div id="reportBody" class="report"></div>
     </section>
   </main>
@@ -520,6 +566,7 @@
 
 <script>
 const API="/m/api", $=s=>document.querySelector(s);
+function ic(n){return '<svg class="svi"><use href="#i-'+n+'"></use></svg>';}
 const j=(u,o)=>fetch(API+u,{credentials:"same-origin",...o}).then(r=>{if(r.status===401)throw"auth";return r.json()});
 const esc=s=>(s==null?"":""+s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 const nice=s=>esc((s||"").toString().replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()));
@@ -608,10 +655,10 @@ function renderGeo(d){d=d||{};const cs=d.countries||[];const max=cs.length?cs[0]
     <span class="gn mono">${(c.n||0).toLocaleString("fr")}</span></div>`).join(""):'<div class="empty">Aucune donnée géo</div>';}
 function renderKpis(k){k=k||{};
   $("#kpis").innerHTML=[
-    ["red","⚠","Incidents critiques (7 j)",k.incidents_critiques_7j,"corrélés oms-xdr","incidents"],
-    ["amb","◎","Hôtes à risque (UEBA)",k.hotes_risque_ueba,"score ≥ 80","graph"],
-    ["cy","📡","Événements détectés (24 h)",k.alertes_24h,"détections taguées","detections"],
-    ["vio","🛡","CVE KEV exposées",k.kev_exposees,"catalogue CISA","detections"]
+    ["red",ic("warning"),"Incidents critiques (7 j)",k.incidents_critiques_7j,"corrélés oms-xdr","incidents"],
+    ["amb",ic("target"),"Hôtes à risque (UEBA)",k.hotes_risque_ueba,"score ≥ 80","graph"],
+    ["cy",ic("antenna"),"Événements détectés (24 h)",k.alertes_24h,"détections taguées","detections"],
+    ["vio",ic("shield"),"CVE KEV exposées",k.kev_exposees,"catalogue CISA","detections"]
   ].map(([c,i,l,v,s,p])=>`<div class="kpi ${c}" style="cursor:pointer" onclick="goNav('${p}')"><div class="lab">${i} ${l}</div>
     <div class="val mono">${(v??0).toLocaleString("fr")}</div><div class="sub">${s}</div></div>`).join("");
 }
@@ -947,14 +994,14 @@ function buildHelp(){
     ["Tab","Naviguer au clavier — focus confine dans les modales"]
   ];
   var PAGES=[
-    ["▦","Vue d'ensemble","Posture en un coup d'œil : KPI, activité 24 h, tactiques ATT&CK et flux temps réel. Tout est cliquable."],
-    ["◈","Incidents","File des cas corrélés (oms-xdr) : statut, assignation, notes d'investigation."],
-    ["◎","Détections","Détections taguées des dernières 24 h, filtrables par tactique et par source ; export CSV."],
-    ["⊞","MITRE ATT&CK","Matrice de couverture : chaque cellule détectée, colorée selon le volume réel d'activité."],
-    ["🕸","Graphe d'attaque","Relie utilisateurs et techniques déclenchées : taille = volume, couleur = tactique."],
-    ["🔓","Fuites & Dark Web","Sites d'extorsion (RansomLook), comptes exposés (HIBP/Dehashed), code public (GitHub)."],
-    ["💓","Santé & Collecte","Volume et fraîcheur de chaque source ; décrochage = angle mort alerte (ISO A.8.15)."],
-    ["📄","Rapport","Synthèse exécutive imprimable (PDF) pour la direction et l'audit ISO."]
+    [ic("grid"),"Vue d'ensemble","Posture en un coup d'œil : KPI, activité 24 h, tactiques ATT&CK et flux temps réel. Tout est cliquable."],
+    [ic("alert"),"Incidents","File des cas corrélés (oms-xdr) : statut, assignation, notes d'investigation."],
+    [ic("target"),"Détections","Détections taguées des dernières 24 h, filtrables par tactique et par source ; export CSV."],
+    [ic("matrix"),"MITRE ATT&CK","Matrice de couverture : chaque cellule détectée, colorée selon le volume réel d'activité."],
+    [ic("network"),"Graphe d'attaque","Relie utilisateurs et techniques déclenchées : taille = volume, couleur = tactique."],
+    [ic("unlock"),"Fuites & Dark Web","Sites d'extorsion (RansomLook), comptes exposés (HIBP/Dehashed), code public (GitHub)."],
+    [ic("pulse"),"Santé & Collecte","Volume et fraîcheur de chaque source ; décrochage = angle mort alerte (ISO A.8.15)."],
+    [ic("doc"),"Rapport","Synthèse exécutive imprimable (PDF) pour la direction et l'audit ISO."]
   ];
   var GLOSS=[
     ["Score ML","Anomalie attribuee par le modèle non supervisé oms-ml (IsolationForest). Plus le score est élevé, plus le comportement s'ecarte de la normale apprise."],
@@ -1080,7 +1127,7 @@ function renderLeaks(d){d=d||{};
   var wrap=$("#leakCats");if(!wrap)return;
   if(!items.length){
     wrap.innerHTML='<div class="card"><div class="empty" style="padding:42px 20px">'
-      +'<div style="font-size:40px;line-height:1">🛡️</div>'
+      +'<svg class="svi" style="width:40px;height:40px;color:var(--grn);stroke-width:1.4"><use href="#i-shield"></use></svg>'
       +'<div style="font-size:15px;font-weight:700;color:var(--grn);margin-top:8px">Aucune fuite détectée</div>'
       +'<div class="muted" style="margin-top:6px">Aucune mention d\'extorsion, d\'identifiant exposé ni de fuite GitHub sur les 30 derniers jours.</div>'
       +'</div></div>';
