@@ -571,7 +571,10 @@ function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocale
   const top=(d.top_detections||[]).map(t=>`<tr><td>${nice(t.k)}</td><td class="num">${(t.n||0).toLocaleString("fr")}</td></tr>`).join("");
   const inc=(d.incidents||[]).map(i=>`<tr><td>${esc((i.severity||'?').toUpperCase())}</td><td>${esc(i.title)}</td><td>${esc((i.entities||'').toString())}</td><td>${esc((i.mitre||'').toString())}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">Aucun incident corrélé</td></tr>';
   const src=(d.sources||[]).slice(0,12).map(s=>`<tr><td>${esc(s.k)}</td><td class="num">${(s.n||0).toLocaleString("fr")}</td></tr>`).join("");
-  const cov=d.coverage||{};
+  const cov=d.coverage||{};const sla=d.sla||{},rob=d.robots||{};
+  const mlr=(d.ml_top||[]).map(m=>`<tr><td>${esc(m.entity)}</td><td class="num">${m.score}</td><td>${esc((m.reason||"").slice(0,80))}</td></tr>`).join("")||'<tr><td colspan="3" class="muted">—</td></tr>';
+  const ubr=(d.ueba_top||[]).map(u=>`<tr><td>${esc(u.entity)}</td><td class="num">${u.score}</td><td>${esc(u.factor||"")}</td></tr>`).join("")||'<tr><td colspan="3" class="muted">—</td></tr>';
+  const dark=(d.dark_hosts||[]).map(h=>esc(h.host)+" ("+h.hours+"h)").join(", ");
   $("#reportBody").innerHTML=`
    <div class="rhead"><div><h1>OMNITECH SECURITY — Rapport de posture SOC</h1><div class="muted">Généré le ${dt} · plateforme SIEM/XDR (Graylog + oms-xdr)</div></div><div class="rlogo">⬢</div></div>
    <div class="rkpi"><div><b>${k.incidents_critiques_7j??0}</b><span>Incidents critiques (7 j)</span></div>
@@ -579,6 +582,12 @@ function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocale
      <div><b>${cov.techniques??'?'}</b><span>Techniques ATT&CK</span></div>
      <div><b>${(d.events_24h??0).toLocaleString("fr")}</b><span>Événements (24 h)</span></div></div>
    <h2>Couverture MITRE ATT&CK</h2><p>${cov.techniques??'?'} techniques sur ${cov.tactics??'?'} tactiques couvertes. État du cluster de collecte : <b>${esc(d.cluster||'?')}</b>.</p>
+   <h2>Posture opérationnelle</h2><p>Auto‑supervision des robots d'analyse : <b>${rob.health_ok??'?'}/${rob.health_total??'?'}</b> opérationnels${rob.health_fail?` — <b style="color:#b91c1c">${rob.health_fail} en panne</b>`:''}. Couverture de collecte : <b>${sla.sla_coverage_pct??'?'} %</b> (${sla.sla_go_dark??0} hôte(s) silencieux sur ${sla.sla_expected??0} attendus).${dark?`<br><span class="muted">Hôtes muets : ${dark}.</span>`:''}</p>
+   <h2>Entités à risque — scoring ML & UEBA</h2>
+   <div style="display:flex;gap:22px;flex-wrap:wrap">
+     <div style="flex:1;min-width:300px"><h3 style="font-size:13px;margin:0 0 6px">Anomalies ML (IsolationForest)</h3><table><thead><tr><th>Entité</th><th class="num">Score</th><th>Motif principal</th></tr></thead><tbody>${mlr}</tbody></table></div>
+     <div style="flex:1;min-width:300px"><h3 style="font-size:13px;margin:0 0 6px">Risque comportemental UEBA</h3><table><thead><tr><th>Entité</th><th class="num">Score</th><th>Facteur</th></tr></thead><tbody>${ubr}</tbody></table></div>
+   </div>
    <h2>Top détections (7 jours)</h2><table><thead><tr><th>Détection</th><th class="num">Volume</th></tr></thead><tbody>${top}</tbody></table>
    <h2>Incidents corrélés récents</h2><table><thead><tr><th>Sévérité</th><th>Titre</th><th>Entité</th><th>ATT&CK</th></tr></thead><tbody>${inc}</tbody></table>
    <h2>Sources de collecte (24 h)</h2><table><thead><tr><th>Source</th><th class="num">Volume</th></tr></thead><tbody>${src}</tbody></table>

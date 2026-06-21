@@ -469,6 +469,9 @@ def get_report():
             "coverage": {"techniques": sum(len(c["techniques"]) for c in cov), "tactics": len(cov)},
             "top_detections": get_terms("alert_tag", "now-7d", 10),
             "incidents": get_incidents(12),
+            "ml_top": _top_ml(size=6), "ueba_top": _top_ueba(size=6),
+            "sla": src.get("sla", {}), "robots": src.get("robots", {}),
+            "dark_hosts": src.get("dark_hosts", [])[:8],
             "sources": src.get("sources", []), "cluster": src.get("cluster"),
             "events_24h": src.get("events_24h")}
 
