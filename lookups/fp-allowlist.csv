@@ -1,0 +1,32 @@
+match_key,reason
+# =============================================================================
+# fp-allowlist.csv - Motifs BENINS connus (allowlist FP, script 81).
+# Colonne 'match_key' = motif NORMALISE EN MINUSCULES, compare en cle EXACTE :
+#   - service_install : winlogbeat_winlog_event_data_ServiceName (en minuscules)
+#   - scheduled_task  : winlogbeat_winlog_event_data_TaskName    (en minuscules)
+# Le lookup est case_insensitive mais on saisit en minuscules par convention.
+# AJOUT : ajouter une ligne  <motif_minuscule>,<raison>  (rafraichi <=60 s).
+# Les familles a SUFFIXE VARIABLE (chemins .exe constants : CredentialEnrollment
+# Manager, MicrosoftEdgeAutoLaunch, OneDrive Standalone Update Task-<SID>, etc.)
+# NE sont PAS ici : elles sont gerees par le bloc contains() de la regle 81.
+# Volumes mesures (OpenSearch omni-winsec*, 30 j) indiques en commentaire.
+# =============================================================================
+# --- service_install : ServiceName a nom STABLE (agents / outils legitimes) ---
+winlogbeat,service_install: agent SIEM winlogbeat (OMNITECH)
+sysmon64,service_install: agent Sysmon (OMNITECH)
+sysmondrv,service_install: driver Sysmon (OMNITECH)
+inteltacd,service_install: Intel Technology Access (pilote constructeur)
+teamviewer,service_install: TeamViewer (telemaintenance autorisee)
+anydesk,service_install: AnyDesk (telemaintenance autorisee)
+ntp,service_install: client NTP (synchro horaire)
+com.docker.service,service_install: Docker Desktop (poste dev)
+vboxnetlwf,service_install: Oracle VirtualBox (reseau)
+vboxsds,service_install: Oracle VirtualBox (SDS)
+vboxsup,service_install: Oracle VirtualBox (support driver)
+vboxusbmon,service_install: Oracle VirtualBox (USB)
+coworkvmservice,service_install: service cowork (poste dev)
+f5vpncleanup,service_install: F5 VPN (nettoyage session)
+adobeupdateservice,service_install: Adobe (mise a jour)
+# --- scheduled_task : TaskName a chemin EXACT stable ---
+\mozilla\firefox default browser agent 308046b0af4a39cb,scheduled_task: agent navigateur Firefox (MAJ)
+# (les familles a hash/SID variable sont gerees par les contains() de 81)
