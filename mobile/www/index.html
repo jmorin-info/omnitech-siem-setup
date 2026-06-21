@@ -24,13 +24,15 @@
     background-size:40px 40px;mask:radial-gradient(circle at 50% 20%,#000,transparent 95%)}
   .mono{font-family:ui-monospace,'SF Mono',Consolas,monospace}
   .hide{display:none!important}
+  .svi{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:-3px}
+  nav a .ic .svi{width:23px;height:23px;vertical-align:0}
 
   /* LOGIN */
   #login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:10}
   .lcard{width:100%;max-width:360px;background:linear-gradient(180deg,var(--card2),var(--card));
-    border:1px solid var(--bd);border-radius:18px;padding:32px 24px;box-shadow:0 0 60px rgba(34,211,238,.10)}
+    border:1px solid var(--bd);border-radius:18px;padding:32px 24px;box-shadow:0 18px 50px -20px rgba(0,0,0,.7)}
   .logo{width:54px;height:54px;border-radius:14px;margin:0 auto 14px;display:grid;place-items:center;font-size:28px;
-    background:radial-gradient(circle at 30% 30%,var(--cy),var(--blu));box-shadow:0 0 26px rgba(34,211,238,.5)}
+    background:radial-gradient(circle at 30% 30%,var(--cy),var(--blu));box-shadow:0 0 18px rgba(34,211,238,.28)}
   .lcard h1{font-size:22px;text-align:center;letter-spacing:.5px}
   .lcard .sub{color:var(--mut);text-align:center;font-size:12px;margin:4px 0 20px}
   input{width:100%;background:#070b15;border:1px solid var(--bd);border-radius:11px;color:var(--fg);
@@ -46,7 +48,7 @@
     display:flex;align-items:center;gap:10px;background:rgba(6,8,15,.82);backdrop-filter:blur(12px);
     border-bottom:1px solid var(--bd);z-index:5}
   .appbar .mark{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:16px;
-    background:radial-gradient(circle at 30% 30%,var(--cy),var(--blu));box-shadow:0 0 14px rgba(34,211,238,.45)}
+    background:radial-gradient(circle at 30% 30%,var(--cy),var(--blu));box-shadow:0 0 10px rgba(34,211,238,.22)}
   .appbar b{font-size:16px;letter-spacing:.5px}.spacer{flex:1}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:pulse 2s infinite}
   @keyframes pulse{50%{opacity:.4}}
@@ -96,7 +98,7 @@
   nav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
     color:var(--dim);text-decoration:none;font-size:11px;font-weight:600}
   nav a .ic{font-size:20px}
-  nav a.on{color:var(--cy)}nav a.on .ic{filter:drop-shadow(0 0 6px var(--cy))}
+  nav a.on{color:var(--cy)}nav a.on .ic{filter:drop-shadow(0 0 2px rgba(34,211,238,.5))}
 
   /* DETAIL SHEET */
   #sheet{position:fixed;inset:0;z-index:20;display:none}
@@ -137,6 +139,14 @@
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-inc" viewBox="0 0 24 24"><path d="M12 3 21 12 12 21 3 12z"/></symbol>
+  <symbol id="i-threat" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</svg>
 <div id="login">
   <form class="lcard" onsubmit="login(event)">
     <div class="logo">⬢</div>
@@ -154,7 +164,7 @@
     <div class="mark">⬢</div><b>OMNI SOC</b>
     <span class="spacer"></span>
     <span class="dot" title="opérationnel"></span>
-    <button class="ibtn" id="pushb" onclick="enablePush()">🔔</button>
+    <button class="ibtn" id="pushb" onclick="enablePush()" aria-label="Activer les notifications"><svg class="svi"><use href="#i-bell"></use></svg></button>
     <button class="ibtn" onclick="logout()">⎋</button>
   </div>
 
@@ -177,10 +187,10 @@
   </main>
 
   <nav id="nav">
-    <a class="on" data-p="home"><span class="ic">▦</span>Synthèse</a>
-    <a data-p="alerts"><span class="ic">🚨</span>Alertes</a>
-    <a data-p="inc"><span class="ic">◈</span>Incidents</a>
-    <a data-p="threat"><span class="ic">☢</span>Menace</a>
+    <a class="on" data-p="home"><span class="ic"><svg class="svi"><use href="#i-home"></use></svg></span>Synthèse</a>
+    <a data-p="alerts"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span>Alertes</a>
+    <a data-p="inc"><span class="ic"><svg class="svi"><use href="#i-inc"></use></svg></span>Incidents</a>
+    <a data-p="threat"><span class="ic"><svg class="svi"><use href="#i-threat"></use></svg></span>Menace</a>
   </nav>
 </div>
 
@@ -188,6 +198,7 @@
 
 <script>
 const API="/m/api",$=s=>document.querySelector(s);
+const ic=n=>'<svg class="svi"><use href="#i-'+n+'"></use></svg>';
 const j=(u,o)=>fetch(API+u,{credentials:"same-origin",...o}).then(r=>{if(r.status===401)throw"auth";return r.json()});
 const esc=s=>(s==null?"":""+s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 const nice=s=>esc((s||"").toString().replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()));
@@ -236,7 +247,7 @@ function renderTac(d){mk("cTac",{type:"doughnut",data:{labels:d.map(x=>nice(x.k)
   options:{maintainAspectRatio:false,cutout:"60%",plugins:{legend:{position:"bottom",labels:{boxWidth:9,padding:9,font:{size:10}}}}}});}
 
 function renderFeed(id,list,kind){const el=$("#"+id);
-  if(!list.length){el.innerHTML='<div class="empty">'+(kind==="inc"?"Aucun incident corrélé ✅":"RAS ✅")+'</div>';return;}
+  if(!list.length){el.innerHTML='<div class="empty">'+ic('check')+' '+(kind==="inc"?"Aucun incident corrélé":"RAS")+'</div>';return;}
   el.innerHTML=list.map((x,i)=>{
     const c=kind==="inc"?sevClass(x.severity):(x.priority==3?"critical":x.priority==2?"high":"medium");
     const badge=kind==="inc"?esc((x.severity||"?").toUpperCase()):"P"+(x.priority||"-");
@@ -294,7 +305,7 @@ function renderThreat(r){r=r||{};
   renderRiskList("uebaList",r.ueba_top||[],"ueba");
 }
 function renderRiskList(id,list,kind){const el=$("#"+id);if(!el)return;
-  if(!list.length){el.innerHTML='<div class="empty">Aucune anomalie ✅</div>';return;}
+  if(!list.length){el.innerHTML='<div class="empty">'+ic('check')+' Aucune anomalie</div>';return;}
   el.innerHTML=list.map(x=>{const sc=+x.score||0;
     const sub=kind==="ml"?(x.reason||x.type||""):(x.factor||"");
     return '<div class="rrow"><div class="rtop"><span class="rent">'+esc((x.entity||"—").split("\\").pop())
@@ -303,7 +314,7 @@ function renderRiskList(id,list,kind){const el=$("#"+id);if(!el)return;
       +(sub?'<div class="rsub">'+esc(sub)+'</div>':'')+'</div>';}).join("");}
 function renderDetMini(items){const el=$("#detMini");if(!el)return;
   DETM=items||[];
-  if(!DETM.length){el.innerHTML='<div class="empty">Aucune détection (24 h) ✅</div>';return;}
+  if(!DETM.length){el.innerHTML='<div class="empty">'+ic('check')+' Aucune détection (24 h)</div>';return;}
   el.innerHTML=DETM.slice(0,12).map((x,i)=>{
     const c=x.sev?sevClass(x.sev):(x.priority==3?"critical":x.priority==2?"high":"medium");
     const badge=x.sev?esc((x.sev||"").toUpperCase()):"P"+(x.priority||"-");
