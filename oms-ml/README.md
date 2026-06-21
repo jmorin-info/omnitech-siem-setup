@@ -42,10 +42,19 @@ python -m oms_ml.run fp --train
 `sudo ./77-ml-scoring.sh` : venv + `/etc/oms-ml/config.yaml` + timers systemd +
 routage `ml_anomaly` → stream « OMNI - Interne SIEM » (comme l'UEBA).
 
+## v2 — segmentation par classe d'actif
+Pour éviter qu'un gros émetteur (un pare-feu à 70 M d'événements) écrase la
+population et sorte toujours « anormal », l'anomalie des **hôtes** est calculée
+**par classe d'actif** (`event_source` dominant = pare-feu / serveur Windows /
+hyperviseur / cloud…) : un IsolationForest par classe, les petites classes
+regroupées en « autres ». On compare ainsi un pare-feu à d'autres pare-feux.
+De plus, le score est **amorti par l'ampleur réelle** de la déviation (z-max) et
+non par le simple rang — une entité « dans la norme » n'obtient plus 100 par
+min-max. Activé par `segment: true` (cf. `config.yaml`).
+
 ## Limites assumées (honnêteté senior)
-- **Population hétérogène** : mélanger pare-feu / serveurs / postes biaise
-  l'anomalie. Évolution v2 : segmenter par classe d'actif **ou** baseline
-  temporelle par entité (comparer l'entité à son propre passé, pas aux autres).
+- **Baseline temporelle** : la v2 segmente par classe ; une évolution ultérieure
+  comparerait aussi chaque entité à **son propre passé** (dérive individuelle).
 - **FP supervisé = besoin de labels** : tant que les analystes n'ont pas qualifié
   assez de cas (VP/FP) dans la console, le modèle s'auto-saute et le signale.
   → la disposition VP/FP à la clôture des cas est le carburant du modèle.
