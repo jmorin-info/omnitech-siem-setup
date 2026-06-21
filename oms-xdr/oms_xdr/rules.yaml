@@ -153,6 +153,45 @@ signals:
     type: presence
     entity_field: dest_ip
 
+  # --- Kill-chains additives (AXE C) : feuilles persistance / cred-use / lateral ---
+  S_PERSIST_SERVICE:
+    description: "Installation de service Windows (4697 / service_install — T1543.003)"
+    stream: ""
+    query: 'alert_tag:service_install'
+    type: presence
+    entity_field: host
+  S_PERSIST_TASK:
+    description: "Tâche planifiée créée (4698 / scheduled_task — T1053.005)"
+    stream: ""
+    query: 'alert_tag:scheduled_task'
+    type: presence
+    entity_field: host
+  S_PERSIST_AUTORUN:
+    description: "Persistance par autorun (Sysmon 13 / persistence_autorun — T1547.001)"
+    stream: ""
+    query: 'alert_tag:persistence_autorun'
+    type: presence
+    entity_field: host
+  S_EXPLICIT_CRED:
+    description: "Usage d'identifiants explicites / RunAs (4648 — T1078)"
+    stream: ""
+    query: 'alert_tag:explicit_cred_use'
+    type: presence
+    entity_field: host
+  S_ADMINSHARE:
+    description: "Accès à un partage administratif C$/ADMIN$ (5140 / admin_share — T1021.002)"
+    stream: ""
+    query: 'alert_tag:admin_share'
+    type: presence
+    entity_field: host
+  S_LSASS_6H:
+    description: "Accès mémoire LSASS — fenêtre 6h pour corrélation latérale lente (T1003.001)"
+    stream: ""
+    query: 'alert_tag:lsass_access'
+    type: presence
+    entity_field: host
+    window: 360
+
 # ---- RÈGLES DE CORRÉLATION ----------------------------------------
 # require_all : tous les signaux présents pour la MÊME entité dans la fenêtre
 # any_of      : au moins un des signaux listés
@@ -256,3 +295,37 @@ rules:
     any_of: [S_EXPOSITION]
     mitre: ["T1190"]
     tactic: ["Initial Access"]
+
+  # --- Kill-chains additives (AXE C) — validées par sonde (90j, co-occurrence/host) ---
+  CR_CREDDUMP_PERSIST:        # 18 incidents-host / 90j à 15min
+    title: "Vol d'identifiants LSASS suivi d'une persistance (même hôte)"
+    severity: critical
+    join_entity: true
+    require_all: [S_LSASS]
+    any_of: [S_PERSIST_SERVICE, S_PERSIST_TASK]
+    mitre: ["T1003.001", "T1543.003", "T1053.005"]
+    tactic: ["Credential Access", "Persistence"]
+  CR_OFFENSIVE_PS_PERSIST:   # 13 incidents-host / 90j à 15min
+    title: "PowerShell offensif suivi d'un dépôt de persistance (même hôte)"
+    severity: high
+    join_entity: true
+    require_all: [S_PSSCRIPTBLOCK]
+    any_of: [S_PERSIST_AUTORUN, S_PERSIST_SERVICE, S_PERSIST_TASK]
+    mitre: ["T1059.001", "T1547.001", "T1543.003", "T1053.005"]
+    tactic: ["Execution", "Persistence"]
+  CR_CREDUSE_ADMINSHARE:     # 7 incidents-host / 90j à 15min
+    title: "Usage d'identifiants explicites suivi d'un accès partage administratif (même hôte)"
+    severity: high
+    join_entity: true
+    require_all: [S_EXPLICIT_CRED]
+    any_of: [S_ADMINSHARE]
+    mitre: ["T1078", "T1021.002"]
+    tactic: ["Defense Evasion", "Lateral Movement"]
+  CR_CREDDUMP_LATERAL:       # 7 incidents-host / 90j à 360min (window override)
+    title: "Vol d'identifiants LSASS suivi d'un accès partage administratif (fenêtre 6h)"
+    severity: critical
+    join_entity: true
+    require_all: [S_LSASS_6H]
+    any_of: [S_ADMINSHARE]
+    mitre: ["T1003.001", "T1021.002"]
+    tactic: ["Credential Access", "Lateral Movement"]

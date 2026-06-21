@@ -129,6 +129,48 @@ PLAYBOOKS: dict[str, dict[str, Any]] = {
             {"text": "Durcir le service exposé (MFA, géo-IP, trusthost), vérifier son niveau de patch (KEV)."},
         ],
     },
+    "CR_CREDDUMP_PERSIST": {
+        "summary": "Vol d'identifiants LSASS suivi immédiatement d'un mécanisme de persistance (service/tâche) sur le même hôte.",
+        "steps": [
+            {"text": "Isoler l'hôte IMMÉDIATEMENT (NinjaOne, containment réseau) — séquence dump+persistance = compromission active.",
+             "action": "isolate_ninjaone"},
+            {"text": "Réinitialiser tous les comptes connectés récemment sur cet hôte + révoquer les sessions Kerberos.",
+             "action": "force_pwd_reset"},
+            {"text": "Identifier et supprimer le service (4697) / la tâche planifiée (4698) déposés ; capturer le binaire/ScriptBlock associé."},
+            {"text": "Analyse ESET EDR + recherche rétro-active du même outil de dump et de la même persistance sur tout le parc."},
+        ],
+    },
+    "CR_OFFENSIVE_PS_PERSIST": {
+        "summary": "PowerShell offensif suivi d'un dépôt de persistance (autorun/service/tâche) sur le même hôte.",
+        "steps": [
+            {"text": "Isoler l'hôte (NinjaOne) et geler l'état (mémoire/processus) avant nettoyage.",
+             "action": "isolate_ninjaone"},
+            {"text": "Collecter le ScriptBlock complet (4104) et l'arborescence Sysmon (1/13) ; extraire les IOC."},
+            {"text": "Supprimer la persistance déposée (clé Run/autorun, service, tâche) après preuve ; vérifier l'absence d'autres ancrages."},
+            {"text": "Recherche rétro-active des mêmes TTP (PS offensif + persistance) sur le parc via le SIEM."},
+        ],
+    },
+    "CR_CREDUSE_ADMINSHARE": {
+        "summary": "Usage d'identifiants explicites (4648) suivi d'un accès à un partage administratif (5140) sur le même hôte.",
+        "steps": [
+            {"text": "Qualifier l'usage 4648 : outil d'admin légitime (PsExec/RunAs planifié) ou détournement d'identifiants ?"},
+            {"text": "Vérifier la cible du partage admin (C$/ADMIN$) et l'IP source ; tracer le compte employé."},
+            {"text": "Si non légitime : réinitialiser le compte utilisé et isoler l'hôte source.",
+             "action": "force_pwd_reset"},
+            {"text": "Rechercher la propagation : mêmes identifiants utilisés vers d'autres hôtes (4648/5140) dans les 24 h."},
+        ],
+    },
+    "CR_CREDDUMP_LATERAL": {
+        "summary": "Vol d'identifiants LSASS puis accès à un partage administratif sur le même hôte (fenêtre 6 h) — amorce de mouvement latéral.",
+        "steps": [
+            {"text": "Isoler l'hôte (NinjaOne) et réinitialiser les comptes exposés (les identifiants volés servent déjà à se déplacer).",
+             "action": "isolate_ninjaone"},
+            {"text": "Révoquer les sessions Kerberos des comptes connectés ; forcer la rotation.",
+             "action": "force_pwd_reset"},
+            {"text": "Tracer les accès partage admin (5140) consécutifs : cartographier les hôtes atteints, chercher la persistance déposée."},
+            {"text": "Analyse ESET EDR + chasse aux outils de credential dumping et au pass-the-hash sur le segment."},
+        ],
+    },
 }
 
 # Fiches techniques MITRE (contexte court ajouté à la narration)
@@ -153,6 +195,10 @@ MITRE_CONTEXT: dict[str, str] = {
     "T1562.002": "Impair Defenses: Disable Windows Event Logging.",
     "T1047": "Windows Management Instrumentation — exécution / mouvement latéral via WMI.",
     "T1190": "Exploit Public-Facing Application — exploitation d'un service exposé.",
+    "T1543.003": "Create or Modify System Process: Windows Service — persistance par service.",
+    "T1053.005": "Scheduled Task — persistance/exécution par tâche planifiée.",
+    "T1547.001": "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder.",
+    "T1021.002": "Remote Services: SMB/Windows Admin Shares — accès C$/ADMIN$ (mouvement latéral).",
 }
 
 

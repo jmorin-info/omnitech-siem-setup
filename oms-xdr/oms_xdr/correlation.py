@@ -63,12 +63,17 @@ class Correlator:
 
     # ------------------------------------------------------------------
     def _eval_signal(self, sid: str) -> dict[str, int]:
-        """Retourne {entite: count} pour un signal."""
+        """Retourne {entite: count} pour un signal.
+
+        Fenêtre : `window` du signal si présent, sinon la fenêtre globale
+        (rétro-compatible ; requis pour S_LSASS_6H -> corrélation latérale lente).
+        """
         sig = self.signals[sid]
         stream = sig.get("stream", "")
         query = sig["query"]
         ef = sig["entity_field"]
-        agg = self.gl.aggregate(query, stream, ef, self.window)
+        window = int(sig.get("window", self.window))
+        agg = self.gl.aggregate(query, stream, ef, window)
         if sig["type"] == "count_by":
             thr = int(sig.get("threshold", 1))
             return {k: v for k, v in agg.items() if v >= thr}
