@@ -1,7 +1,57 @@
 # Journal des modifications — SIEM OMNITECH
 
 Toutes les évolutions notables du dispositif. Format : date — changement.
-*Dernière revue : 2026-06-14.*
+*Dernière revue : 2026-06-22.*
+
+## 2026-06-22 (couche ML, console enrichie, qualité)
+
+### Couche d'apprentissage `oms-ml`
+- **Détection d'anomalie non-supervisée** (IsolationForest, log1p + StandardScaler)
+  par entité (hôte/compte) — score 0-100 explicable (z-score), réinjecté en GELF
+  (`event_source=ml_anomaly`). Déployé (`77-ml-scoring.sh`, timers).
+- **Réduction de faux positifs supervisée** : labels = **disposition Vrai/Faux
+  positif** posée à la clôture des cas dans la console (boucle fermée) ; s'entraîne
+  dès ~30 cas qualifiés.
+- **`79-interne-indexset.sh`** : index set dédié `omni-interne` pour le stream
+  interne — corrige un angle mort : `ueba_score` (74 k), `collecte_sla`, `siem_health`,
+  `xdr_incident`, `ml_anomaly` étaient écrits dans `graylog_0`, invisibles à la console.
+
+### Console SOC — refonte visuelle premium + enrichissements
+- Interface premium (glassmorphism, glow, KPI métalliques teintés, micro-interactions).
+- **Vue d'ensemble** : cartes **Anomalies ML** + **Risque UEBA** (vrais scores),
+  **tendances KPI** (▲/▼ % vs période précédente).
+- **Détections** : recherche libre + export CSV + **sévérité réelle** (`risk_severity`
+  au lieu de `priority`, absent) + score de risque.
+- **Palette ⌘K** : recherche live d'entités → Entité-360.
+- **Incidents** : disposition VP/FP (alimente le ML) + verrou `cases.json` (race).
+- **Santé** : robots d'auto-supervision (X/Y), couverture de collecte (SLA),
+  liste des hôtes go-dark.
+- **Graphe d'attaque** filtrable (tactique / volume / centrage d'entité).
+- **Entité-360** : score ML + UEBA + pagination des événements.
+- **Fuites & Dark Web** : synthèse par catégorie + état « aucune fuite » rassurant.
+- **Rapport exécutif** enrichi (posture opérationnelle, entités à risque ML/UEBA).
+
+### Ergonomie / UX / mobile
+- Accessibilité clavier (focus visible, focus-trap, ARIA), **toasts** de feedback,
+  squelettes de chargement, **cadence de rafraîchissement** réglable, **panneau d'aide
+  (?)** + **bascule de densité**.
+- **PWA mobile** : onglet **Menace** (parité console : menace, KPI, ML/UEBA, détections).
+
+### Qualité / performance / corrections d'audit
+- **Cache mémoire à TTL** sur les agrégations lourdes (matrice ATT&CK ~783→7 ms,
+  rapport ~811→3 ms).
+- **Suite de tests** hors-ligne (`run-tests.sh`, 23 tests : rédaction + oms-ml).
+- **Mode rédaction** (`MOBILE_REDACT`) pour captures anonymisées.
+- Corrections de l'audit multi-agents : robots de supervision **versionnés**
+  (`61-supervision-robots.sh`), `ensure_lookup` **centralisé** dans `lib-graylog.sh`
+  (corrige l'échec silencieux du lookup m365), alerte **`service_stop_securite`**
+  (T1489, précurseur ransomware) câblée (`78`), honnêteté de la doc d'intégrité
+  (clé HMAC co-localisée).
+
+### Détections prêtes à déployer (NON déployées — `80-detection-extra2.sh`)
+3 tripwires 0 faux positif validés par sondage OpenSearch (30 j) : `defender_tamper`
+(T1562.001), `schtask_payload` (T1053.005), `amsi_bypass` (T1562.001). À déployer
+après revue (relancer ensuite `57` puis `14`).
 
 ## 2026-06-14 (audit de cohérence & nouvelles sources)
 
