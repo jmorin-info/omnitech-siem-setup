@@ -480,26 +480,26 @@
       </div>
       <div class="grid kpis" id="kpis"></div>
       <div class="grid cols" style="margin-bottom:16px">
-        <div class="card"><h3><svg class="svi"><use href="#i-i-chart"></use></svg> Détections (24 h)<span class="tag">par heure</span></h3><div class="chartbox"><canvas id="cTs"></canvas></div></div>
-        <div class="card"><h3><svg class="svi"><use href="#i-i-target"></use></svg> Tactiques ATT&CK<span class="tag">7 j</span></h3><div class="chartbox"><canvas id="cTac"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-chart"></use></svg> Détections (24 h)<span class="tag">par heure</span></h3><div class="chartbox"><canvas id="cTs"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-target"></use></svg> Tactiques ATT&CK<span class="tag">7 j</span></h3><div class="chartbox"><canvas id="cTac"></canvas></div></div>
       </div>
       <div class="grid cols">
-        <div class="card"><h3><svg class="svi"><use href="#i-i-flame"></use></svg> Top détections<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cDet"></canvas></div></div>
-        <div class="card"><h3><svg class="svi"><use href="#i-i-antenna"></use></svg> Sources<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cSrc"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-flame"></use></svg> Top détections<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cDet"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-antenna"></use></svg> Sources<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cSrc"></canvas></div></div>
       </div>
       <div class="grid cols" style="margin-top:18px">
-        <div class="card"><h3><svg class="svi"><use href="#i-i-cpu"></use></svg> Anomalies ML<span class="tag">oms-ml · IsolationForest · cliquer pour la fiche</span></h3><div class="feed" id="mlTop"></div></div>
-        <div class="card"><h3><svg class="svi"><use href="#i-i-bars"></use></svg> Risque UEBA<span class="tag">score comportemental · 24 h</span></h3><div class="feed" id="uebaTop"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-cpu"></use></svg> Anomalies ML<span class="tag">oms-ml · IsolationForest · cliquer pour la fiche</span></h3><div class="feed" id="mlTop"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-bars"></use></svg> Risque UEBA<span class="tag">score comportemental · 24 h</span></h3><div class="feed" id="uebaTop"></div></div>
       </div>
       <div class="grid cols" style="margin-top:18px">
-        <div class="card"><h3><svg class="svi"><use href="#i-i-warning"></use></svg> Top entités à risque<span class="tag">7 j · cliquer pour la fiche</span></h3><div class="feed" id="topEnt"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-warning"></use></svg> Top entités à risque<span class="tag">7 j · cliquer pour la fiche</span></h3><div class="feed" id="topEnt"></div></div>
         <div class="card"><h3><span class="livedot"></span> Flux temps réel<span class="tag" id="liveCount">live</span></h3><div class="live" id="liveFeed"><div class="muted">En attente d'événements…</div></div></div>
       </div>
-      <div class="card" style="margin-top:18px"><h3><svg class="svi"><use href="#i-i-globe"></use></svg> Origines géographiques des sources externes<span class="tag">7 j · FortiGate GeoIP</span></h3><div id="geoFeed" class="geo"></div></div>
+      <div class="card" style="margin-top:18px"><h3><svg class="svi"><use href="#i-globe"></use></svg> Origines géographiques des sources externes<span class="tag">7 j · FortiGate GeoIP</span></h3><div id="geoFeed" class="geo"></div></div>
     </section>
 
-    <section class="page" id="p-incidents"><div class="card"><h3><svg class="svi"><use href="#i-i-alert"></use></svg> Incidents corrélés (oms-xdr)</h3><div class="feed" id="incFeed"></div></div></section>
-    <section class="page" id="p-detections"><div class="card"><h3><svg class="svi"><use href="#i-i-target"></use></svg> Détections (24 h)
+    <section class="page" id="p-incidents"><div class="card"><h3><svg class="svi"><use href="#i-alert"></use></svg> Incidents corrélés (oms-xdr)</h3><div class="feed" id="incFeed"></div></div></section>
+    <section class="page" id="p-detections"><div class="card"><h3><svg class="svi"><use href="#i-target"></use></svg> Détections (24 h)
         <span class="tag" id="detCount"></span></h3>
       <div class="dfilter">
         <input id="detSearch" oninput="applyDetSearch()" placeholder="🔎 Rechercher (tag, entité, technique, message…)" autocomplete="off"
@@ -511,12 +511,12 @@
       </div>
       <div class="feed" id="detFeed"></div></div></section>
     <section class="page" id="p-attack">
-      <div class="card"><h3><svg class="svi"><use href="#i-i-matrix"></use></svg> Matrice MITRE ATT&CK<span class="tag">couverture × activité (7 j)</span></h3>
+      <div class="card"><h3><svg class="svi"><use href="#i-matrix"></use></svg> Matrice MITRE ATT&CK<span class="tag">couverture × activité (7 j)</span></h3>
         <div class="matrix" id="atkMatrix"></div>
         <div class="mlegend"><span><i style="background:#0c1424;opacity:.5"></i>Aucune activité</span><span><i style="background:#10233a;border-color:#2563eb66"></i>Faible</span><span><i style="background:#2a1f10;border-color:#f5a62366"></i>Modérée</span><span><i style="background:#2e1116;border-color:#fb3b5366"></i>Forte</span><span class="muted">— cellule = technique couverte · couleur = volume d'événements (7 j)</span></div></div>
     </section>
     <section class="page" id="p-graph">
-      <div class="card"><h3><svg class="svi"><use href="#i-i-network"></use></svg> Graphe d'attaque<span class="tag" id="gCount">entités ↔ techniques ATT&CK (7 j)</span></h3>
+      <div class="card"><h3><svg class="svi"><use href="#i-network"></use></svg> Graphe d'attaque<span class="tag" id="gCount">entités ↔ techniques ATT&CK (7 j)</span></h3>
         <div class="dfilter" style="margin-top:4px">
           <select id="gTactic" onchange="applyGraphFilter()"><option value="">Toutes tactiques</option></select>
           <label class="muted" style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;font-size:12px">Volume min.
@@ -532,7 +532,7 @@
     </section>
     <section class="page" id="p-leaks">
       <div class="grid kpis" id="leakSummary"></div>
-      <div class="card"><h3><svg class="svi"><use href="#i-i-unlock"></use></svg> Sources de fuite surveillées<span class="tag">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
+      <div class="card"><h3><svg class="svi"><use href="#i-unlock"></use></svg> Sources de fuite surveillées<span class="tag">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
         <div class="lsrc" id="leakSrc"></div></div>
       <div id="leakCats" style="display:flex;flex-direction:column;gap:16px;margin-top:16px"></div>
       <div class="feed" id="leakFeed" style="display:none"></div>
@@ -540,13 +540,13 @@
     <section class="page" id="p-health">
       <div class="grid kpis" id="hkpis"></div>
       <div class="grid cols" style="margin-top:16px">
-        <div class="card"><h3><svg class="svi"><use href="#i-i-antenna"></use></svg> Sources de collecte (24 h)<span class="tag">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
-        <div class="card"><h3><svg class="svi"><use href="#i-i-eyeoff"></use></svg> Hôtes silencieux (go‑dark)<span class="tag">muets &gt; 26 h · à vérifier</span></h3><div class="feed" id="hdark"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-antenna"></use></svg> Sources de collecte (24 h)<span class="tag">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-eyeoff"></use></svg> Hôtes silencieux (go‑dark)<span class="tag">muets &gt; 26 h · à vérifier</span></h3><div class="feed" id="hdark"></div></div>
       </div>
     </section>
     <section class="page" id="p-report">
       <div style="display:flex;align-items:center;margin-bottom:14px"><h3 class="sec" style="margin:0">Rapport de posture</h3>
-        <button class="iconbtn" style="margin-left:auto" onclick="window.print()"><svg class="svi"><use href="#i-i-print"></use></svg> Imprimer / PDF</button></div>
+        <button class="iconbtn" style="margin-left:auto" onclick="window.print()"><svg class="svi"><use href="#i-print"></use></svg> Imprimer / PDF</button></div>
       <div id="reportBody" class="report"></div>
     </section>
   </main>
@@ -627,7 +627,7 @@ async function loadAll(){
   }catch(e){if(e==="auth"){toastWarn("Session expirée — reconnexion à la console SOC…",{title:"Session",sticky:true});setTimeout(()=>location.reload(),1200);}else{toastNet();}}
   finally{RELOADING=false;setSpin(false);document.body.classList.remove("firstload");markUpdated();}
 }
-let TOPE=[];
+let TOPE=[];let MLT=[];
 function renderRisk(d){d=d||{};
   const M={CRITIQUE:["red","Compromission probable — action immédiate"],ELEVE:["amb","Activité critique en cours"],SURVEILLE:["blu","Signaux à surveiller"],NOMINAL:["grn","Aucune menace active"]};
   const m=M[d.threat_level]||M.NOMINAL;const t=$("#threat");

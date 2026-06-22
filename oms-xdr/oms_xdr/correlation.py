@@ -39,7 +39,7 @@ class Incident:
             "host": self.entities[0] if self.entities else "oms-xdr",
             "short_message": f"[{self.severity.upper()}] {self.title}",
             "full_message": self.evidence.get("narrative", self.title),
-            "level": {"low": 6, "medium": 4, "high": 3, "critical": 2}[self.severity],
+            "level": {"low": 6, "medium": 4, "high": 3, "critical": 2}.get(self.severity, 5),
             "_event_source": "xdr_incident",
             "_oms_event": "xdr_incident",
             "_rule_id": self.rule_id,
@@ -79,22 +79,52 @@ class Correlator:
             return {k: v for k, v in agg.items() if v >= thr}
         return {k: v for k, v in agg.items() if v > 0}
 
+    def _emit_health(self, failed: list[str]) -> None:
+        """Réinjecte un événement de santé quand des signaux échouent.
+
+        Sans cela, un signal en panne (timeout OpenSearch, mapping cassé) devient un
+        ensemble VIDE indistinguable d'un signal qui n'a légitimement rien déclenché :
+        toute règle `require_all` qui en dépend est alors SILENCIEUSEMENT supprimée.
+        On émet `xdr_health` pour que le SIEM alerte sur la perte de couverture.
+        """
+        if not getattr(self, "gl", None):
+            return
+        try:
+            self.gl.send_gelf({
+                "host": "oms-xdr",
+                "short_message": f"[XDR] {len(failed)} signal(aux) de corrélation en échec",
+                "full_message": ("Signaux en échec : " + ", ".join(failed)
+                                 + ". Les règles de corrélation qui en dépendent peuvent "
+                                   "ne pas se déclencher (perte de couverture)."),
+                "level": 4,
+                "_event_source": "xdr_health",
+                "_oms_event": "xdr_health",
+                "_signals_failed": ",".join(failed),
+                "_signals_failed_count": len(failed),
+            })
+        except Exception as exc:  # l'émission de santé ne doit jamais casser le cycle
+            log.error("Émission xdr_health échouée : %s", exc)
+
     def evaluate(self) -> list[Incident]:
         # cache des signaux (évite de réinterroger Graylog plusieurs fois)
         fired: dict[str, dict[str, int]] = {}
+        failed: list[str] = []
         for sid in self.signals:
             try:
                 fired[sid] = self._eval_signal(sid)
             except Exception as exc:  # robustesse : un signal cassé ne bloque pas le reste
                 log.warning("Signal %s en échec: %s", sid, exc)
                 fired[sid] = {}
+                failed.append(sid)
+        if failed:  # ne pas masquer la dégradation : la rendre visible dans le SIEM
+            self._emit_health(failed)
 
         incidents: list[Incident] = []
         for rid, rule in self.rules.items():
             inc = self._eval_rule(rid, rule, fired)
             incidents.extend(inc)
-        # tri par sévérité décroissante
-        incidents.sort(key=lambda i: _SEV_ORDER[i.severity], reverse=True)
+        # tri par sévérité décroissante (sévérité inconnue -> -1, jamais de KeyError)
+        incidents.sort(key=lambda i: _SEV_ORDER.get(i.severity, -1), reverse=True)
         return incidents
 
     def _eval_rule(self, rid: str, rule: dict,

@@ -102,3 +102,32 @@ def test_walk_redact_noop_quand_desactive(api):
     api.REDACT = False
     obj = {"ip": "203.0.113.9", "n": 1}
     assert api._walk_redact(obj) == obj
+
+
+def test_entites_jointes_virgule_masquees_dans_narrative(api):
+    """Régression P0 (fuite rédaction des incidents).
+
+    Le champ `entities` des incidents oms-xdr est une CHAÎNE jointe par virgules
+    (`",".join(...)`). S'il est pseudonymisé EN BLOC, chaque nom d'hôte/compte
+    n'entre pas dans _RD_MAP et reste EN CLAIR dans la narrative (texte libre) au
+    passage _walk_redact. Le correctif scinde la chaîne et pseudonymise chaque
+    entité — ce test verrouille l'invariant.
+    """
+    blob = "VM-BDX-NAV2018$,ninjaone"
+    narrative = "Vol d'identifiants LSASS sur VM-BDX-NAV2018$, pivot vers ninjaone."
+
+    # Comportement fautif (bloc entier) : la narrative N'est PAS masquée.
+    api._rd(blob)
+    assert "VM-BDX-NAV2018$" in api._scrub(narrative), \
+        "pré-condition : pseudonymiser le bloc entier ne masque pas les noms individuels"
+
+    # Correctif : on scinde puis _rd par entité (logique de get_incidents).
+    api._RD_MAP.clear()
+    api._RD_REV.clear()
+    ents = [api._rd(e) for e in blob.split(",") if e]
+    out = api._scrub(narrative)
+    assert "VM-BDX-NAV2018$" not in out, "hostname machine ($) toujours en clair"
+    assert "ninjaone" not in out, "compte de service toujours en clair"
+    # forme attendue + présence des pseudonymes dans la narrative masquée
+    assert ents[0].startswith("HOST-") and ents[0].endswith("$")
+    assert all(p in out for p in ents)

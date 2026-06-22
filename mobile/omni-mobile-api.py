@@ -219,7 +219,12 @@ def get_incidents(limit: int = 30) -> list:
             "title": s.get("short_message"),
             "severity": s.get("severity"),
             "rule": s.get("rule_id"),
-            "entities": [_rd(e) for e in s["entities"]] if isinstance(s.get("entities"), list) else _rd(s.get("entities")),
+            # `entities` est une chaîne jointe par virgules (oms-xdr ",".join).
+            # On scinde et pseudonymise CHAQUE entité pour peupler _RD_MAP par nom :
+            # sinon _rd() traite le bloc entier et les hôtes/comptes restent en clair
+            # dans la narrative (full_message) au passage _walk_redact. (fuite redaction)
+            "entities": ([_rd(e) for e in s["entities"]] if isinstance(s.get("entities"), list)
+                         else [_rd(e) for e in str(s.get("entities") or "").split(",") if e]),
             "mitre": s.get("mitre"),
             "narrative": s.get("full_message"),
             "remediation": s.get("remediation"),

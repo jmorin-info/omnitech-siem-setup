@@ -55,7 +55,7 @@ PEER = {
 
 
 def extract(os_url: str, index: str, group_by: str, window: str,
-            size: int = 1000) -> tuple[list[str], list[list[float]], list[str]]:
+            size: int = 1000) -> tuple[list[str], list[list[float]], list[str], list[str]]:
     """Retourne (noms_features, matrice, entités) pour le type d'entité `group_by`.
 
     matrice[i] = vecteur de features de l'entité entités[i].
@@ -77,7 +77,7 @@ def extract(os_url: str, index: str, group_by: str, window: str,
         buckets = r.json().get("aggregations", {}).get("ent", {}).get("buckets", [])
     except requests.RequestException as exc:
         log.error("Extraction OpenSearch échouée (%s) : %s", group_by, exc)
-        return FEATURES, [], []
+        return FEATURES, [], [], []   # 4-uplet : l'appelant (run.py) déballe classes
 
     matrix: list[list[float]] = []
     entities: list[str] = []
