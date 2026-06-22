@@ -42,6 +42,8 @@ done
 echo "[4] API Graylog & inputs"
 if [[ -f 00-vars.env && -f lib-graylog.sh ]]; then
   source ./00-vars.env 2>/dev/null; source ./lib-graylog.sh 2>/dev/null
+  # lib-graylog redefinit ok()/warn() -> on restaure notre affichage PASS/FAIL
+  ok(){ echo -e "  ${G}OK${N}  $1"; }; ko(){ echo -e "  ${R}KO  $1${N}"; FAIL=$((FAIL+1)); }; wn(){ echo -e "  ${Y}..${N}  $1"; }
   LC=$(api_get /system 2>/dev/null | jq -r '.lifecycle // "?"' 2>/dev/null)
   [[ "$LC" == "running" ]] && ok "Graylog lifecycle=running" || wn "Graylog lifecycle=$LC (peut prendre 1-2 min au demarrage)"
   IR=$(api_get /system/inputstates 2>/dev/null | jq '[.states[]?|select(.state=="RUNNING")]|length' 2>/dev/null)
