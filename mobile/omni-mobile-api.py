@@ -431,15 +431,60 @@ def _entity_scores(name):
     return {"ml": ml, "ueba": ue}
 
 
+# --- Corrélation d'identité : unifier les représentations d'un même humain -----
+# DOMAINE\user, user@dom, ADM-user, user-adm -> même identité logique. CONSERVATEUR :
+# les comptes machine ($) ne sont JAMAIS fusionnés ; un humain et son compte admin
+# (adm-X) sont reconnus comme la même personne (convention de nommage du parc).
+_ID_PREFIX = re.compile(r"^(adm|admin|a)[-_.]", re.I)
+_ID_SUFFIX = re.compile(r"[-_.](adm|admin)$", re.I)
+
+
+def _identity_key(name):
+    s = str(name or "").strip()
+    if not s:
+        return ""
+    if "\\" in s:
+        s = s.rsplit("\\", 1)[-1]
+    if "@" in s:
+        s = s.split("@", 1)[0]
+    s = s.strip().lower()
+    if not s or s.endswith("$"):          # compte machine -> identité = lui-même
+        return s
+    s = _ID_PREFIX.sub("", s)
+    s = _ID_SUFFIX.sub("", s)
+    return s
+
+
+def _linked_accounts(name, days=14):
+    """Comptes réels partageant l'identité logique de `name` (variantes domaine/admin)."""
+    real = _RD_REV.get(name, name)
+    key = _identity_key(real)
+    if not key or key.endswith("$") or len(key) < 3:
+        return [real] if real else []
+    try:
+        res = os_search("omni-*", {"size": 0,
+            "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": f"now-{days}d"}}}],
+                               "must": [{"wildcard": {"user": {"value": f"*{key}*", "case_insensitive": True}}}]}},
+            "aggs": {"u": {"terms": {"field": "user", "size": 50}}}})
+        out = [b["key"] for b in res.get("aggregations", {}).get("u", {}).get("buckets", [])
+               if b.get("key") and _identity_key(b["key"]) == key]
+    except Exception:
+        out = []
+    if real and real not in out:
+        out.append(real)
+    return out or [real]
+
+
 def get_entity(name, size=20, frm=0):
     if not name:
-        return {"name": "", "total": 0, "techniques": [], "tactics": [], "events": [],
+        return {"name": "", "total": 0, "techniques": [], "tactics": [], "events": [], "linked": [],
                 "from": 0, "size": size, "loaded": 0, "has_more": False,
                 "scores": {"ml": {"score": None, "reason": ""}, "ueba": {"score": None, "factor": ""}}}
     name = _RD_REV.get(name, name)   # mode rédigé : pseudo -> réel pour la requête
     size = max(1, min(int(size), 200))
     frm = max(0, int(frm))
-    q = {"bool": {"must": [{"term": {"user": name}}, {"exists": {"field": "alert_tag"}}],
+    linked = _linked_accounts(name, 7)   # vue UNIFIÉE : tous les comptes de la personne
+    q = {"bool": {"must": [{"terms": {"user": linked}}, {"exists": {"field": "alert_tag"}}],
                   "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}}
     res = os_search("omni-*", {"size": size, "from": frm, "track_total_hits": True,
         "sort": [{"timestamp": {"order": "desc"}}], "query": q,
@@ -458,6 +503,7 @@ def get_entity(name, size=20, frm=0):
     return {"name": _rd(name), "total": ag.get("tot", {}).get("value", 0),
             "from": frm, "size": size, "loaded": frm + len(ev), "has_more": (frm + len(ev)) < th,
             "scores": _entity_scores(name),
+            "linked": [_rd(u) for u in linked] if len(linked) > 1 else [],
             "techniques": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tech", {}).get("buckets", [])],
             "tactics": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tac", {}).get("buckets", [])],
             "events": ev}
@@ -507,9 +553,13 @@ def get_investigation(name, days=14):
     name = _RD_REV.get(name, name)              # pseudo -> réel pour la requête
     days = max(1, min(int(days), 90))
     gte = f"now-{days}d"
-    ent = {"bool": {"minimum_should_match": 1, "should": [
-        {"term": {"user": name}}, {"match_phrase": {"upn": name}},
-        {"term": {"identity": name}}, {"term": {"source": name}}]}}   # source -> entité hôte
+    # vue UNIFIÉE : on agrège sur TOUS les comptes de la personne (DOMAINE\X, ADM-X…)
+    linked = _linked_accounts(name, days)
+    key = _identity_key(name)
+    ent = {"bool": {"minimum_should_match": 1, "should": (
+        [{"term": {"user": u}} for u in linked]
+        + [{"match_phrase": {"upn": key or name}}, {"term": {"identity": name}},
+           {"term": {"source": name}}])}}   # + upn (email par base), identity, source (hôte)
 
     # --- A. Authentification M365 (sign-in) : géo, codes, IP, chronologie -------
     auth = {}
@@ -597,7 +647,8 @@ def get_investigation(name, days=14):
             for t in bb.get("prov", {}).get("tags", {}).get("buckets", [])]
     sources = [{"k": b["key"], "n": b["doc_count"]} for b in bb.get("sources", {}).get("buckets", [])]
     return {"entity": _rd(name), "days": days, "auth": auth, "winauth": winauth,
-            "detections": dets, "sources": sources}
+            "detections": dets, "sources": sources,
+            "linked": [_rd(u) for u in linked] if len(linked) > 1 else []}
 
 
 _GUIDANCE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lookups", "alert-guidance.json")
