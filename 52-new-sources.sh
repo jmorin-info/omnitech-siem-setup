@@ -357,6 +357,20 @@ then
 end
 EOF
 
+# [FIX waf_block] Anti-HALT stage 7 pour BunkerWeb : sans ce pass-through, un event
+# bunkerweb ne matche AUCUNE regle du stage 7 (qui n'avait que des regles ESET) -> le
+# pipeline 'match either' STOPPE -> le stage 10 saute -> omni-bunkerweb-10-block (et
+# 12-backend-down / 12-ua-outil) ne tournent jamais. Mesure : 1103 HTTP-403 reels,
+# 0 waf_block taggue. Ce pass-through laisse les events bunkerweb atteindre le stage 10.
+ensure_rule "omni-bunkerweb-07-pass" <<'EOF'
+rule "omni-bunkerweb-07-pass"
+when
+  to_string($message.event_source) == "bunkerweb"
+then
+  let noop = true;
+end
+EOF
+
 PL="$(ensure_pipeline "OMNI - Sources externes" <<'PIPE'
 pipeline "OMNI - Sources externes"
 stage 0 match either
@@ -379,6 +393,7 @@ rule "omni-bunkerweb-06-threatintel-src"
 stage 7 match either
 rule "omni-eset-07-outcome-ok"
 rule "omni-eset-07-pass"
+rule "omni-bunkerweb-07-pass"
 stage 10 match either
 rule "omni-eset-10-menace"
 rule "omni-bunkerweb-10-block"
