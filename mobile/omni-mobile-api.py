@@ -821,6 +821,7 @@ def get_entities_browse(days=7):
         return m
     ml_map = _scoremap("ml_anomaly", "ml_score", "entity")
     ue_map = _scoremap("ueba_score", "ueba_score", "ueba_entity")
+    wk = set(load_watch().keys())          # entités sous surveillance (1 lecture)
 
     def _top(field, is_user):
         r = os_search("omni-*", {"size": 0,
@@ -838,7 +839,8 @@ def get_entities_browse(days=7):
                   "ueba": {"score": ue_map.get(bare) if is_user else None}}
             fr = _fused_risk(sc, sev, b["doc_count"])
             out.append({"entity": _rd(b["key"]), "n": b["doc_count"],
-                        "risk": {"score": fr["score"], "label": fr["label"]}})
+                        "risk": {"score": fr["score"], "label": fr["label"]},
+                        "watched": _watch_key(b["key"]) in wk})
         out.sort(key=lambda e: -e["risk"]["score"])
         return out
     return {"users": _top("user", True), "machines": _top("source", False)}
@@ -1072,13 +1074,14 @@ def get_risk():
                 m[kk] = max(m.get(kk, 0), vv)
         return m
     _mlm, _uem = _smap("ml_anomaly", "ml_score", "entity"), _smap("ueba_score", "ueba_score", "ueba_entity")
+    _wk = set(load_watch().keys())
     ents = []
     for b in res.get("aggregations", {}).get("u", {}).get("buckets", []):
         bare = _bare(b.get("key"))
         sev = {x["key"]: x["doc_count"] for x in (b.get("sev", {}) or {}).get("buckets", [])}
         fr = _fused_risk({"ml": {"score": _mlm.get(bare)}, "ueba": {"score": _uem.get(bare)}}, sev, b["doc_count"])
         ents.append({"k": _rd(b["key"]), "n": b["doc_count"], "tech": (b.get("t", {}) or {}).get("value", 0),
-                     "risk": {"score": fr["score"], "label": fr["label"]}})
+                     "risk": {"score": fr["score"], "label": fr["label"]}, "watched": _watch_key(b.get("key")) in _wk})
     ents.sort(key=lambda e: -e["risk"]["score"])
     ents = ents[:8]
     ml_top = _top_ml()

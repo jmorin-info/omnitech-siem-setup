@@ -284,6 +284,7 @@
   .watchbtn.on{background:#2a1e08;border-color:#caa14a88;color:#f5c560}
   .wnote{flex:0 0 auto;max-width:40%;color:var(--dim);font-size:10.5px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto}
   .watchrow{border-left:2px solid #caa14a66}
+  .weye{font-size:10px;opacity:.75;vertical-align:middle}
   /* --- Chronologie unifiée (timeline) --- */
   .tl{position:relative;margin-top:4px;padding-left:6px}
   .tlrow{display:flex;align-items:flex-start;gap:10px;padding:7px 0 7px 14px;border-left:2px solid #1d2c44;position:relative;font-size:12.5px}
@@ -867,7 +868,7 @@ function toggleWatch(){var who=(ENT_CUR&&(ENT_CUR.full||ENT_CUR.label));if(!who)
   }).catch(()=>{});}
 function rkChip(r){if(!r||r.score==null)return '';var c=r.score>=80?"rk-c":r.score>=60?"rk-h":r.score>=35?"rk-m":"rk-l";
   return '<span class="rkchip '+c+'" title="'+t("risk_"+(r.label||"minimal"))+' — '+t("risk_fused")+'">'+r.score+'</span>';}
-function entRow(e,k,i){return '<div class="entrow" onclick="openEntB(\''+k+'\','+i+')">'+rkChip(e.risk)+'<span class="entk">'+(k==='m'?ic("cpu"):'👤')+'</span><span class="entn mono">'+esc(e.entity)+'</span><span class="entn2 mono">'+((e.n||0).toLocaleString('fr'))+'</span></div>';}
+function entRow(e,k,i){return '<div class="entrow" onclick="openEntB(\''+k+'\','+i+')">'+rkChip(e.risk)+'<span class="entk">'+(k==='m'?ic("cpu"):'👤')+'</span><span class="entn mono">'+esc(e.entity)+(e.watched?' <span class="weye" title="'+t("watch_on")+'">👁</span>':'')+'</span><span class="entn2 mono">'+((e.n||0).toLocaleString('fr'))+'</span></div>';}
 function openEntB(k,i){const e=(k==='m'?ENTB.machines:ENTB.users)[i];if(e)openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
 function openEntS(i){const e=ENTS[i];if(e)openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
 function entSearchDo(q){q=(q||"").trim();const r=$("#entResults");if(!r)return;
@@ -892,7 +893,7 @@ function renderRisk(d){d=d||{};
     $("#tstats").innerHTML=`<div><b>${d.critical_incidents||0}</b><span>incidents critiques</span></div><div><b>${d.ueba||0}</b><span>hôtes à risque</span></div><div><b>${d.kev||0}</b><span>CVE KEV</span></div>`;}
   TOPE=d.top_entities||[];
   $("#topEnt").innerHTML=TOPE.length?TOPE.map((e,i)=>{const who=((e.k||"")+"").split("\\").pop();
-    return `<div class="inc" onclick="openTopE(${i})"><div class="top">${rkChip(e.risk)}<span class="ttl">👤 ${esc(who)}</span>
+    return `<div class="inc" onclick="openTopE(${i})"><div class="top">${rkChip(e.risk)}<span class="ttl">👤 ${esc(who)}${e.watched?' <span class="weye" title="'+t("watch_on")+'">👁</span>':''}</span>
       <span class="ts" style="margin-left:auto">${(e.n||0).toLocaleString("fr")} dét. · ${e.tech||0} tech.</span></div></div>`;}).join(""):'<div class="empty">—</div>';
   const sevc=s=>s>=85?'var(--red)':s>=70?'var(--amb)':s>=40?'var(--blu)':'var(--grn)';
   MLT=d.ml_top||[];
