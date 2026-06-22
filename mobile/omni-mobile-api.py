@@ -283,9 +283,15 @@ def get_attack_matrix():
     res = os_search("omni-*", {"size": 0, "query": {"range": {"timestamp": {"gte": "now-7d"}}},
         "aggs": {"t": {"terms": {"field": "mitre_technique", "size": 300}}}})
     counts = {b.get("key"): b.get("doc_count") for b in res.get("aggregations", {}).get("t", {}).get("buckets", [])}
+    _SR = {"critique": 4, "critical": 4, "eleve": 3, "élevé": 3, "high": 3,
+           "moyen": 2, "medium": 2, "faible": 1, "low": 1}
     tac = {}
     for tech, name, tactic, sev in rows:
-        tac.setdefault(tactic, {}).setdefault(tech, {"id": tech, "name": name, "count": counts.get(tech, 0), "sev": sev})
+        d = tac.setdefault(tactic, {})
+        if tech not in d:
+            d[tech] = {"id": tech, "name": name, "count": counts.get(tech, 0), "sev": sev}
+        elif _SR.get((sev or "").lower(), 0) > _SR.get((d[tech]["sev"] or "").lower(), 0):
+            d[tech]["sev"] = sev          # technique mappée par N tags -> garder la sévérité MAX
     ORDER = ["Reconnaissance", "Resource Development", "Initial Access", "Execution", "Persistence",
              "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery",
              "Lateral Movement", "Collection", "Command and Control", "Exfiltration", "Impact"]
