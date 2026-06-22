@@ -50,6 +50,11 @@ PORT_MIN  = int(ENV.get("SCAN_PORT_MIN", "25"))    # dest_port distincts -> vert
 VERT_MAXH = int(ENV.get("SCAN_VERT_MAXHOSTS", "3"))# vertical = ports nombreux sur peu d'hotes
 ALLOW_SRC = set(x.strip() for x in (ENV.get("SCAN_ALLOW_SRC", "")).split(",") if x.strip())  # infra de gestion legitime
 MON_PORTS = {"161", "162"}                         # SNMP = supervision (NMS/sonde), pas du scan lateral
+# Ports d'ADMINISTRATION / mouvement LATERAL. Un balayage HORIZONTAL qui n'en refuse AUCUN
+# = trafic poste benin bloque (NetBIOS 137/138, push apps, proxy), PAS de la reconnaissance.
+# Mesure : 39/46 sources horizontales ont 0 port lateral (bruit) ; les 7 restantes (dont DC)
+# ont du vrai probing lateral. Le scan VERTICAL (multi-ports) reste alerte sans condition.
+LATERAL_PORTS = ["445", "139", "3389", "5985", "5986", "22", "23", "135", "1433", "3306", "5432", "389", "636", "88", "21", "5900"]
 
 def es(body):
     req = urllib.request.Request(f"{OS_URL}/omni-fortigate_*/_search", data=json.dumps(body).encode(),
@@ -77,6 +82,7 @@ def main():
         "aggs": {"s": {"terms": {"field": "src_ip", "size": 200},
                        "aggs": {"dips": {"cardinality": {"field": "dest_ip"}},
                                 "dports": {"cardinality": {"field": "dest_port"}},
+                                "lateral": {"filter": {"terms": {"dest_port": LATERAL_PORTS}}},
                                 "topports": {"terms": {"field": "dest_port", "size": 6}}}}}})
     found = 0
     for b in agg["aggregations"]["s"]["buckets"]:
@@ -94,11 +100,17 @@ def main():
         portset = set(str(p["key"]) for p in b["topports"]["buckets"])
         if horizontal and not vertical and portset and portset <= MON_PORTS:
             continue
+        # Balayage HORIZONTAL sans AUCUN port d'admin/lateral refuse = fan-out poste benin
+        # (NetBIOS/push/proxy), pas de la recon. Le scan vertical/multi-ports n'est pas concerne.
+        nlat = b.get("lateral", {}).get("doc_count", 0)
+        if horizontal and not vertical and nlat == 0:
+            continue
         stype = "horizontal" if horizontal else "vertical"
         found += 1
         gelf({"event_source": "ndr_scan", "alert_tag": "network_scan",
               "scan_type": stype, "entity_host": src, "scan_dest_count": int(ndip),
               "scan_port_count": int(ndport), "scan_deny": b["doc_count"], "scan_top_ports": ports,
+              "scan_lateral_deny": int(nlat),
               "short_message": f"SCAN {stype} depuis {src} : {int(ndip)} hotes / {int(ndport)} ports refuses ({b['doc_count']} deny)"})
         print(f"  [scan {stype}] {src}: dest_ips={int(ndip)} dest_ports={int(ndport)} deny={b['doc_count']}")
     print(f"[ndr-scan] sources_internes_analysees={len(agg['aggregations']['s']['buckets'])} scans={found} (fenetre {WINDOW_M}m)")
