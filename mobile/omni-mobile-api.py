@@ -1215,6 +1215,8 @@ get_health        = cached()(get_health)
 get_geo_threats   = cached()(get_geo_threats)
 get_report        = cached()(get_report)
 get_timeseries    = cached(20)(get_timeseries)
+get_entity        = cached()(get_entity)          # vue entité (unifiée, plus lourde)
+get_investigation = cached()(get_investigation)   # pivot d'investigation (multi-requêtes)
 
 
 if __name__ == "__main__":

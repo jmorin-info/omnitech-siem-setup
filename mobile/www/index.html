@@ -121,6 +121,16 @@
   .gval{color:#cfe0ee}
   .grow.gw .glbl{color:#7fb4d6}.grow.gc .glbl{color:#e0a93b}.grow.gr .glbl{color:#f08a8a}.grow.gf .glbl{color:#5fc98a}
   .grow.gr{background:#160e10}.grow.gf{background:#0c1612}
+  /* onglet Guides (playbooks) */
+  .gguide{margin:6px 0 16px}
+  .gtac{display:inline-block;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--cy);border:1px solid var(--bd);border-radius:7px;padding:3px 11px;margin-bottom:9px}
+  .gcd{background:var(--card2);border:1px solid var(--bd);border-radius:12px;padding:10px 11px;margin-bottom:9px}
+  .gcdh{display:flex;align-items:center;gap:7px;margin-bottom:2px;font-size:13.5px}.gcdh b{flex:1;min-width:0;word-break:break-word}
+  .gtech{font-size:10px;color:var(--mut);font-family:ui-monospace,monospace;white-space:nowrap}
+  .gsev{font-size:9px;font-weight:800;text-transform:uppercase;padding:1px 6px;border-radius:4px;white-space:nowrap}
+  .gsev.critique{background:rgba(251,59,83,.16);color:#fb7185}.gsev.eleve{background:rgba(245,166,35,.16);color:var(--amb)}
+  .gsev.moyen{background:rgba(34,211,238,.14);color:var(--cy)}.gsev.faible{background:rgba(124,138,166,.14);color:var(--mut)}
+  .gcd .blk{margin-top:6px}.gcd .blk .lbl{display:none}
   .raw{background:#070b15;border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:11px;
     color:var(--mut);white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto}
   ::-webkit-scrollbar{width:0}
@@ -152,6 +162,7 @@
   <symbol id="i-threat" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
 </svg>
 <div id="login">
   <form class="lcard" onsubmit="login(event)">
@@ -191,6 +202,11 @@
       <h3 class="sec" data-i18n="sec_ueba">Risque UEBA (24 h)</h3><div class="risk" id="uebaList"></div>
       <h3 class="sec" data-i18n="sec_topdet">Top détections (24 h)</h3><div class="feed" id="detMini"></div>
     </section>
+    <section class="page" id="p-guides">
+      <h3 class="sec" data-i18n="sec_guides">Playbooks de réponse</h3>
+      <input id="gSearch" data-i18n-ph="ph_guides" placeholder="Rechercher une détection, technique…" oninput="renderGuides(this.value)" autocomplete="off" autocapitalize="none">
+      <div id="gBody" style="margin-top:6px"></div>
+    </section>
   </main>
 
   <nav id="nav">
@@ -198,6 +214,7 @@
     <a data-p="alerts"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span><span data-i18n="nav_alerts">Alertes</span></a>
     <a data-p="inc"><span class="ic"><svg class="svi"><use href="#i-inc"></use></svg></span><span data-i18n="nav_inc">Incidents</span></a>
     <a data-p="threat"><span class="ic"><svg class="svi"><use href="#i-threat"></use></svg></span><span data-i18n="nav_threat">Menace</span></a>
+    <a data-p="guides"><span class="ic"><svg class="svi"><use href="#i-book"></use></svg></span><span data-i18n="nav_guides">Guides</span></a>
   </nav>
 </div>
 
@@ -224,7 +241,7 @@ const I18N={
  fr:{login_sub:"Centre des opérations · accès RSSI (VPN)",ph_account:"Compte AD",ph_password:"Mot de passe",btn_signin:"Se connecter",err_creds:"Identifiants invalides",err_net:"Erreur réseau",
   status_op:"opérationnel",push_al:"Activer les notifications",lang_al:"Changer la langue",
   sec_activity:"Activité (24 h)",card_detperhour:"Détections par heure",tag_live:"temps réel",sec_tactics:"Tactiques ATT&CK (7 j)",sec_alerts:"Alertes récentes (24 h)",sec_inc:"Incidents corrélés",sec_ml:"Anomalies ML (3 h)",sec_ueba:"Risque UEBA (24 h)",sec_topdet:"Top détections (24 h)",
-  nav_home:"Synthèse",nav_alerts:"Alertes",nav_inc:"Incidents",nav_threat:"Menace",
+  nav_home:"Synthèse",nav_alerts:"Alertes",nav_inc:"Incidents",nav_threat:"Menace",nav_guides:"Guides",sec_guides:"Playbooks de réponse",ph_guides:"Rechercher une détection, technique…",guides_none:"Aucune détection ne correspond.",
   kpi_critinc:"Incidents critiques",kpi_7d:"7 jours",kpi_riskhosts:"Hôtes à risque",kpi_uebage:"UEBA ≥ 80",kpi_det:"Détections",kpi_24h:"24 h",kpi_kev:"CVE KEV exposées",kpi_cisa:"CISA",
   empty_inc:"Aucun incident corrélé",empty_ras:"RAS",
   k_entities:"Entités",k_attack:"ATT&CK",k_rule:"Règle",blk_analysis:"Analyse",blk_remediation:"Remédiation",k_entity:"Entité",blk_detail:"Détail",lab_priority:"Priorité",g_title:"Guide d'action",g_what:"Ce que c'est",g_check:"À vérifier",g_remed:"Remédiation",g_correct:"Correction durable",
@@ -235,7 +252,7 @@ const I18N={
  en:{login_sub:"Operations center · CISO access (VPN)",ph_account:"AD account",ph_password:"Password",btn_signin:"Sign in",err_creds:"Invalid credentials",err_net:"Network error",
   status_op:"operational",push_al:"Enable notifications",lang_al:"Change language",
   sec_activity:"Activity (24h)",card_detperhour:"Detections per hour",tag_live:"live",sec_tactics:"ATT&CK tactics (7d)",sec_alerts:"Recent alerts (24h)",sec_inc:"Correlated incidents",sec_ml:"ML anomalies (3h)",sec_ueba:"UEBA risk (24h)",sec_topdet:"Top detections (24h)",
-  nav_home:"Overview",nav_alerts:"Alerts",nav_inc:"Incidents",nav_threat:"Threat",
+  nav_home:"Overview",nav_alerts:"Alerts",nav_inc:"Incidents",nav_threat:"Threat",nav_guides:"Guides",sec_guides:"Response playbooks",ph_guides:"Search a detection, technique…",guides_none:"No matching detection.",
   kpi_critinc:"Critical incidents",kpi_7d:"7 days",kpi_riskhosts:"At-risk hosts",kpi_uebage:"UEBA ≥ 80",kpi_det:"Detections",kpi_24h:"24h",kpi_kev:"Exposed KEV CVEs",kpi_cisa:"CISA",
   empty_inc:"No correlated incidents",empty_ras:"All clear",
   k_entities:"Entities",k_attack:"ATT&CK",k_rule:"Rule",blk_analysis:"Analysis",blk_remediation:"Remediation",k_entity:"Entity",blk_detail:"Detail",lab_priority:"Priority",g_title:"Action guide",g_what:"What it is",g_check:"To check",g_remed:"Remediation",g_correct:"Lasting fix",
@@ -250,7 +267,8 @@ function applyI18n(){document.querySelectorAll("[data-i18n]").forEach(e=>e.textC
   document.querySelectorAll("[data-i18n-t]").forEach(e=>e.setAttribute("title",t(e.getAttribute("data-i18n-t"))));}
 function updateLangBtn(){const b=$("#langLab");if(b)b.textContent=(LANG==="fr"?"EN":"FR");}
 function setLang(l){LANG=l;localStorage.setItem("soc_lang",l);document.documentElement.lang=l;applyI18n();updateLangBtn();
-  if(!$("#app").classList.contains("hide"))loadAll();}
+  if(!$("#app").classList.contains("hide")){loadAll();
+    const gp=$("#p-guides");if(gp&&gp.classList.contains("on"))renderGuides(($("#gSearch")||{}).value||"");}}
 
 function login(e){e.preventDefault();
   fetch(API+"/login",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
@@ -263,7 +281,8 @@ function start(){$("#login").classList.add("hide");$("#app").classList.remove("h
 
 document.querySelectorAll("#nav a").forEach(a=>a.onclick=e=>{e.preventDefault();
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
-  const p=a.dataset.p;document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+p));});
+  const p=a.dataset.p;document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+p));
+  if(p==="guides")renderGuides(($("#gSearch")||{}).value||"");});
 
 if(window.Chart){Chart.defaults.color="#7c8aa6";Chart.defaults.font.family="Segoe UI";Chart.defaults.borderColor="rgba(255,255,255,.05)";}
 const charts={};const mk=(id,cfg)=>{if(!window.Chart)return;if(charts[id])charts[id].destroy();charts[id]=new Chart($("#"+id),cfg);};
@@ -387,6 +406,28 @@ async function loadThreat(){try{
   const [r,det]=await Promise.all([j("/risk"),j("/detections")]);
   renderThreat(r||{});renderDetMini((det&&det.items)||[]);
 }catch(e){if(e==="auth")location.reload();}}
+
+// ===== onglet "Guides" (parité console : 70 playbooks par tactique ATT&CK) =====
+function renderGuides(q){const el=$("#gBody");if(!el)return;
+  if(!Object.keys(GUIDANCE).length){
+    j("/guidance").then(r=>{GUIDANCE=r.guidance||{};renderGuides(q);})
+      .catch(()=>{el.innerHTML='<div class="empty">'+ic('check')+' '+t("empty_anom")+'</div>';});
+    return;}
+  q=(q||"").trim().toLowerCase();
+  const groups={};
+  Object.keys(GUIDANCE).forEach(tag=>{const g=GUIDANCE[tag];
+    const hay=(tag+" "+(g.name||"")+" "+(g.technique||"")+" "+(g.tactic||"")+" "+(g.ce_que_cest||"")+" "+(g.remediation||"")).toLowerCase();
+    if(q&&hay.indexOf(q)<0)return;
+    const tac=g.tactic||"Autre";(groups[tac]=groups[tac]||[]).push(tag);});
+  const tacs=Object.keys(groups).sort();
+  if(!tacs.length){el.innerHTML='<div class="empty">'+t("guides_none")+'</div>';return;}
+  el.innerHTML=tacs.map(tac=>{
+    const items=groups[tac].sort().map(tag=>{const g=GUIDANCE[tag];
+      return '<div class="gcd"><div class="gcdh"><b>'+nice(tag)+'</b>'
+        +(g.technique?'<span class="gtech">'+esc(g.technique)+'</span>':'')
+        +(g.severity?'<span class="gsev '+esc(g.severity)+'">'+esc(g.severity)+'</span>':'')
+        +'</div>'+guidanceBlock(tag)+'</div>';}).join("");
+    return '<div class="gguide"><div class="gtac">'+esc(tac)+' · '+groups[tac].length+'</div>'+items+'</div>';}).join("");}
 
 document.documentElement.lang=LANG;applyI18n();updateLangBtn();
 if("serviceWorker"in navigator)navigator.serviceWorker.register("/m/sw.js");
