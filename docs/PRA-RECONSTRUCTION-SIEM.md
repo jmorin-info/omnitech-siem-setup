@@ -92,6 +92,7 @@ pendant la bascule).
 
 | Action | Fréquence |
 |---|---|
+| **Vérification de restaurabilité de l'archive** (déchiffrement + intégrité tar + présence dump Mongo/`server.conf`) | **Automatique, à chaque backup** (`30-backup-config.sh` §3b ; échec → GELF `siem_backup echec` + archive non expédiée) |
 | Vérifier la présence des 14 archives sur le partage | Mensuelle (PRO §2) |
 | Vérifier la passphrase et les secrets au coffre | Trimestrielle |
 | **Test de restauration réel sur VM jetable** | ≥ 1×/an (exigence A.8.13) |
@@ -99,3 +100,18 @@ pendant la bascule).
 
 Un PRA non testé n'est pas un PRA : le test annuel est **obligatoire** et son
 compte-rendu est conservé comme preuve d'audit.
+
+## 8. Journal des tests de restauration
+
+| Date | Type | Périmètre | Résultat | Preuve |
+|---|---|---|---|---|
+| **2026-06-22** | **Restaurabilité de la sauvegarde** (non destructif, hors-ligne) | Dernière archive `omni-siem-config_2026-06-22.tar.gz.enc` : déchiffrement AES-256 (passphrase coffre), intégrité `tar` et **complétude du contenu** | **PASS** | Déchiffrement OK (255 Mo) ; archive valide **18 044 entrées** ; **65 collections Mongo** (`mongodump/graylog/`) dont `streams`, `dashboards`, `event_definitions`, `inputs`, `users`, **`pipeline_processor_pipelines` + `pipeline_processor_rules` + `_pipelines_streams`** (toute la logique de détection + connexions), `event_notifications`, `grok_patterns`, `scheduler_*` ; `etc/graylog/server.conf`, `lookups`, `etc/opensearch` présents. Scratch **effacé (`shred`)**. |
+
+> **Portée du test du 22/06** : il valide la **chaîne de sauvegarde** (existence,
+> déchiffrabilité, intégrité, complétude de la config) — soit les modes de
+> défaillance les plus fréquents (archive corrompue, passphrase erronée,
+> collection manquante). Il **ne remplace pas** le **test de reconstruction
+> complet sur VM jetable** (§7, exigence A.8.13 annuelle), qui valide en plus la
+> ré-installation de la pile et la reprise de collecte — **toujours à planifier**
+> (infra VM requise). Constat utile : les règles de pipeline sont bien sauvegardées
+> sous `pipeline_processor_*` (et non `pipeline_processing_*`).

@@ -87,6 +87,23 @@ openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt \
 rm -f "${ARCH}"
 TAILLE_MB=$(( $(stat -c%s "${ARCH}.enc") / 1024 / 1024 ))
 
+# --- 3b. Verification de restaurabilite (ne JAMAIS expedier un backup illisible) -
+# Dechiffre l'archive qu'on vient de produire vers le scratch et controle son
+# integrite tar + la presence des composants critiques (dump Mongo + server.conf).
+# Capte les pannes les plus frequentes (passphrase erronee, archive corrompue,
+# dump vide) AU MOMENT du backup plutot qu'au PRA. Echec -> alerte GELF + abort
+# (l'archive n'est PAS expediee). Test A.8.13 en continu.
+VERIF="${TMP}/verify.tar.gz"
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "${ARCH}.enc" -out "${VERIF}" \
+  -pass "pass:${BACKUP_PASSPHRASE}" 2>/dev/null || fail "verif restaurabilite: dechiffrement impossible"
+tar tzf "${VERIF}" > "${TMP}/manifest.txt" 2>/dev/null || fail "verif restaurabilite: archive corrompue (tar illisible)"
+VENTRIES="$(wc -l < "${TMP}/manifest.txt")"
+[[ "${VENTRIES}" -ge 100 ]] || fail "verif restaurabilite: archive suspecte (${VENTRIES} entrees < 100)"
+grep -q 'mongodump/graylog/streams.bson' "${TMP}/manifest.txt" || fail "verif restaurabilite: dump Mongo Graylog absent"
+grep -q 'etc/graylog/server/server.conf'  "${TMP}/manifest.txt" || fail "verif restaurabilite: server.conf absent"
+shred -u "${VERIF}" "${TMP}/manifest.txt" 2>/dev/null || rm -f "${VERIF}" "${TMP}/manifest.txt"
+echo "[+] restaurabilite verifiee : ${VENTRIES} entrees, dump Mongo + server.conf presents"
+
 # --- 4. Export SMB ---------------------------------------------------------------
 if ! mountpoint -q "${MNT}"; then
   if [[ -f "${SMB_CRED_FILE}" ]]; then
