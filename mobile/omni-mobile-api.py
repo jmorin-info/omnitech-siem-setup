@@ -398,6 +398,70 @@ def update_case(b, who):
     return {"ok": True, "case": c}
 
 
+# --- Watchlist : entités à surveiller (compromission suspectée, suivi) ----------
+WATCH_FILE = CONF.get("MOBILE_WATCH_FILE", "/var/lib/omni-mobile/watchlist.json")
+_WATCH_LOCK = threading.Lock()
+
+
+def load_watch():
+    try:
+        with open(WATCH_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_watch(w):
+    os.makedirs(os.path.dirname(WATCH_FILE), exist_ok=True)
+    tmp = WATCH_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(w, f)
+    os.replace(tmp, WATCH_FILE)
+
+
+def _watch_key(ent):
+    return ((_identity_key(ent) or ent) if ent else "").lower()
+
+
+def is_watched(ent):
+    return _watch_key(ent) in load_watch() if ent else False
+
+
+def get_watchlist():
+    """Entités sous surveillance, triées par date d'ajout, avec leur risque fusionné réévalué."""
+    w = load_watch()
+    out = []
+    for key, e in sorted(w.items(), key=lambda kv: kv[1].get("ts", ""), reverse=True):
+        ent = e.get("entity", key)
+        try:
+            r = (get_entity(ent) or {}).get("risk", {}) or {}
+        except Exception:
+            r = {}
+        out.append({"entity": _rd(ent), "by": _rd(e.get("by", "")), "ts": e.get("ts", ""),
+                    "note": _rd(e.get("note", "")),
+                    "risk": {"score": r.get("score"), "label": r.get("label")}})
+    return out
+
+
+def update_watch(b, who):
+    ent = (b.get("entity") or "").strip()
+    if not ent:
+        return {"ok": False}
+    ent = _RD_REV.get(ent, ent)            # mode rédigé : pseudo -> réel
+    import datetime as _dt
+    key, act = _watch_key(ent), b.get("action", "toggle")
+    with _WATCH_LOCK:
+        w = load_watch()
+        if act == "remove" or (act == "toggle" and key in w):
+            w.pop(key, None); watched = False
+        else:
+            w[key] = {"entity": ent, "by": who or "?", "note": str(b.get("note", ""))[:300],
+                      "ts": _dt.datetime.now().isoformat(timespec="seconds")}
+            watched = True
+        save_watch(w)
+    return {"ok": True, "watched": watched, "count": len(w)}
+
+
 def _entity_scores(name):
     """Score ML (ml_anomaly) et UEBA (ueba_score) de CETTE entite (forme complete OU compte nu)."""
     bare = name.split("\\")[-1] if name else name
@@ -541,7 +605,7 @@ def get_entity(name, size=20, frm=0):
     sev_counts = {b["key"]: b["doc_count"] for b in ag.get("sev", {}).get("buckets", [])}
     return {"name": _rd(name), "total": ag.get("tot", {}).get("value", 0),
             "from": frm, "size": size, "loaded": frm + len(ev), "has_more": (frm + len(ev)) < th,
-            "scores": scores, "risk": _fused_risk(scores, sev_counts, th),
+            "scores": scores, "risk": _fused_risk(scores, sev_counts, th), "watched": is_watched(name),
             "linked": [_rd(u) for u in linked] if len(linked) > 1 else [],
             "techniques": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tech", {}).get("buckets", [])],
             "tactics": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tac", {}).get("buckets", [])],
@@ -1139,6 +1203,8 @@ class H(BaseHTTPRequestHandler):
             return self._json({"incidents": get_incidents()})
         if p == "/m/api/cases":
             return self._json({"cases": get_cases()})
+        if p == "/m/api/watchlist":
+            return self._json({"watchlist": get_watchlist()})
         if p == "/m/api/kpis":
             return self._json({"kpis": get_kpis()})
         if p == "/m/api/timeseries":
@@ -1258,6 +1324,10 @@ class H(BaseHTTPRequestHandler):
             if not self._user():
                 return self._json({"error": "auth"}, 401)
             return self._json(update_case(b, self._user()))
+        if p == "/m/api/watch":
+            if not self._user():
+                return self._json({"error": "auth"}, 401)
+            return self._json(update_watch(b, self._user()))
         if p == "/m/api/subscribe":
             if not self._user():
                 return self._json({"error": "auth"}, 401)

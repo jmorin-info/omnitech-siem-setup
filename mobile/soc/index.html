@@ -276,6 +276,14 @@
   .rk-h{background:#2e2206;color:#f5b740;border:1px solid #caa14a55}
   .rk-m{background:#231642;color:#b69bf0;border:1px solid #6b4ec055}
   .rk-l{background:#0e2336;color:#67b6d6;border:1px solid #2563eb44}
+  /* --- Watchlist --- */
+  .ehd{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .ehd h2{margin:0}
+  .watchbtn{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;background:#10233a;border:1px solid var(--bd);color:var(--mut);transition:all .12s}
+  .watchbtn:hover{border-color:#2563eb66;color:#bcd}
+  .watchbtn.on{background:#2a1e08;border-color:#caa14a88;color:#f5c560}
+  .wnote{flex:0 0 auto;max-width:40%;color:var(--dim);font-size:10.5px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto}
+  .watchrow{border-left:2px solid #caa14a66}
   /* --- Chronologie unifiée (timeline) --- */
   .tl{position:relative;margin-top:4px;padding-left:6px}
   .tlrow{display:flex;align-items:flex-start;gap:10px;padding:7px 0 7px 14px;border-left:2px solid #1d2c44;position:relative;font-size:12.5px}
@@ -643,6 +651,7 @@
     </section>
     <section class="page" id="p-entities">
       <div class="card"><h3><svg class="svi"><use href="#i-network"></use></svg> <span data-i18n="ent_pgt">Recherche d'entités</span><span class="tag" data-i18n="ent_pgs">comptes &amp; machines — dossier 360° unifié</span></h3>
+        <div id="entWatch"></div>
         <input id="entSearch" oninput="entSearchDo(this.value)" placeholder="🔎 Compte AD, e-mail, ou nom de machine…" data-i18n-ph="ent_ph" autocomplete="off"
           style="width:100%;margin:6px 0 4px;padding:11px 13px;background:#0c1424;border:1px solid var(--bd);border-radius:10px;color:var(--fg);font-size:14px">
         <div id="entResults"></div>
@@ -681,7 +690,7 @@ const TACCOL={"Initial Access":"#fb3b53","Execution":"#f97316","Persistence":"#f
 let LANG=localStorage.getItem("soc_lang")||"fr";
 const I18N={
  fr:{
-  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",maint_title:"Maintenance requise",
+  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",maint_title:"Maintenance requise",watch_on:"Surveillée",watch_off:"Surveiller",watch_hint:"Ajouter/retirer de la liste de surveillance",watch_added:"Ajoutée à la surveillance",watch_removed:"Retirée de la surveillance",watch_section:"Sous surveillance",
   cluster_ok:"Cluster opérationnel",dens_comfort:"Confort",dens_compact:"Compact",
   al_search:"Recherche et navigation (Ctrl ou Cmd + K)",al_refresh:"Rafraîchir les données",al_density:"Basculer la densité d'affichage",al_help:"Ouvrir l'aide et les raccourcis clavier",al_logout:"Se déconnecter",al_lang:"Changer la langue (FR/EN)",
   t_search:"Recherche (Ctrl/Cmd+K)",t_refresh:"Rafraîchir maintenant",t_help:"Aide et raccourcis (touche ?)",t_logout:"Se déconnecter",t_lang:"Langue : Français — cliquer pour English",
@@ -701,7 +710,7 @@ const I18N={
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
  en:{
-  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",maint_title:"Maintenance required",
+  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",maint_title:"Maintenance required",watch_on:"Watched",watch_off:"Watch",watch_hint:"Add/remove from watchlist",watch_added:"Added to watchlist",watch_removed:"Removed from watchlist",watch_section:"Watchlist",
   cluster_ok:"Cluster operational",dens_comfort:"Comfort",dens_compact:"Compact",
   al_search:"Search and navigation (Ctrl or Cmd + K)",al_refresh:"Refresh data",al_density:"Toggle display density",al_help:"Open help and keyboard shortcuts",al_logout:"Sign out",al_lang:"Change language (FR/EN)",
   t_search:"Search (Ctrl/Cmd+K)",t_refresh:"Refresh now",t_help:"Help and shortcuts (press ?)",t_logout:"Sign out",t_lang:"Language: English — click for Français",
@@ -842,9 +851,20 @@ function guidanceForMitre(mitreStr){
   return `<div class="blk"><div class="lbl">${t("g_title")}</div>`+tags.map(tag=>`<div class="pbcard"><div class="pbhd"><b>${nice(tag)}</b><span class="srcb">${esc(GUIDANCE[tag].technique)}</span></div>${guidanceBlock(tag)}</div>`).join("")+`</div>`;}
 // --- Page Entités : recherche comptes/machines -> dossier 360° ---
 let ENTB={users:[],machines:[]},ENTS=[];
-function loadEntities(){j("/entities").then(d=>{ENTB=d||{users:[],machines:[]};
+function loadEntities(){loadWatchlist();j("/entities").then(d=>{ENTB=d||{users:[],machines:[]};
   $("#entUsers").innerHTML=(ENTB.users||[]).map((e,i)=>entRow(e,'u',i)).join("")||'<div class="muted gpad">—</div>';
   $("#entMachines").innerHTML=(ENTB.machines||[]).map((e,i)=>entRow(e,'m',i)).join("")||'<div class="muted gpad">—</div>';}).catch(()=>{});}
+let WATCHL=[];
+function loadWatchlist(){var w=$("#entWatch");if(!w)return;
+  j("/watchlist").then(d=>{WATCHL=(d&&d.watchlist)||[];
+    w.innerHTML=WATCHL.length?('<div class="lbl2">'+ic("eyeoff")+' '+t("watch_section")+' ('+WATCHL.length+')</div>'+WATCHL.map((e,i)=>'<div class="entrow watchrow" onclick="openWatch('+i+')">'+rkChip(e.risk)+'<span class="entk">👁</span><span class="entn mono">'+esc(e.entity)+'</span>'+(e.note?'<span class="wnote" title="'+esc(e.note)+'">'+esc((e.note+"").slice(0,42))+'</span>':'')+'<span class="entn2 mono">'+esc((e.ts||"").slice(0,10))+'</span></div>').join("")):"";
+  }).catch(()=>{});}
+function openWatch(i){var e=WATCHL[i];if(e)openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
+function toggleWatch(){var who=(ENT_CUR&&(ENT_CUR.full||ENT_CUR.label));if(!who)return;
+  fetch(API+"/watch",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({entity:who,action:"toggle"})}).then(r=>r.json()).then(r=>{
+    var b=$("#watchBtn");if(b){b.className="watchbtn"+(r.watched?" on":"");var sp=b.querySelector("span");if(sp)sp.textContent=r.watched?t("watch_on"):t("watch_off");}
+    toast(r.watched?t("watch_added"):t("watch_removed"),"ok");loadWatchlist();
+  }).catch(()=>{});}
 function rkChip(r){if(!r||r.score==null)return '';var c=r.score>=80?"rk-c":r.score>=60?"rk-h":r.score>=35?"rk-m":"rk-l";
   return '<span class="rkchip '+c+'" title="'+t("risk_"+(r.label||"minimal"))+' — '+t("risk_fused")+'">'+r.score+'</span>';}
 function entRow(e,k,i){return '<div class="entrow" onclick="openEntB(\''+k+'\','+i+')">'+rkChip(e.risk)+'<span class="entk">'+(k==='m'?ic("cpu"):'👤')+'</span><span class="entn mono">'+esc(e.entity)+'</span><span class="entn2 mono">'+((e.n||0).toLocaleString('fr'))+'</span></div>';}
@@ -940,7 +960,8 @@ function openEntity(full,label,size){
     const evs=(d.events||[]).map(e=>`<div class="erow"><span class="ts">${ago(e.ts)}</span> <b>${nice(e.tag)}</b> <em>${esc(e.tech||"")}</em><div class="emsg">${esc((e.msg||"").slice(0,150))}</div></div>`).join("")||'<div class="muted">'+t("empty_event")+'</div>';
     const loaded=(d.events||[]).length;
     const more=d.has_more?`<button class="entMore" onclick="entMore()">${t("load_more")} (${loaded} / ${(d.total||0).toLocaleString("fr")})</button>`:(loaded>20?`<div class="muted" style="text-align:center;margin-top:8px;font-size:11px">${loaded} ${t("events_shown")}</div>`:'');
-    $("#emc").innerHTML=`<div class="grip"></div><h2>👤 ${esc(label)}</h2>
+    $("#emc").innerHTML=`<div class="grip"></div>
+      <div class="ehd"><h2>👤 ${esc(label)}</h2><button class="watchbtn${d.watched?' on':''}" id="watchBtn" onclick="toggleWatch()" title="${t("watch_hint")}">👁 <span>${d.watched?t("watch_on"):t("watch_off")}</span></button></div>
       <div class="muted" style="margin-bottom:4px">${esc(full||"")} · <b style="color:var(--cy)">${(d.total||0).toLocaleString("fr")}</b> ${t("ent_detn")}</div>
       ${(d.linked&&d.linked.length>1)?`<div class="idu"><span class="idulb">${ic("network")} ${t("id_unified").replace("{n}",d.linked.length)}</span> ${d.linked.map(a=>`<span class="idchip">${esc(a)}</span>`).join("")}</div>`:''}
       ${entScoreBanner(d)}
