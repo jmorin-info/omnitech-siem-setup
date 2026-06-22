@@ -479,6 +479,76 @@ def get_entity_search(q, size=8):
     return out
 
 
+def get_investigation(name, days=14):
+    """Pivot d'investigation par entité (utilisateur M365 / compte AD / hôte).
+
+    Répond à « d'où ça vient » sur un compte ciblé (ex. spray M365 distribué) :
+      - profil d'authentification : cartographie géo des sources, chronologie
+        succès/échec, IP sources (avec part de réussite), codes de statut ;
+      - provenance des détections (alert_tag x source) et présence multi-sources.
+    Rédaction : les IP/entités sont pseudonymisées ; pays/codes/volumes conservés.
+    """
+    if not name:
+        return {"entity": "", "days": days, "auth": {}, "detections": [], "sources": []}
+    name = _RD_REV.get(name, name)              # pseudo -> réel pour la requête
+    days = max(1, min(int(days), 90))
+    gte = f"now-{days}d"
+    ent = {"bool": {"minimum_should_match": 1, "should": [
+        {"term": {"user": name}}, {"match_phrase": {"upn": name}}, {"term": {"identity": name}}]}}
+
+    # --- A. Authentification M365 (sign-in) : géo, codes, IP, chronologie -------
+    auth = {}
+    a = os_search("omni-m365*", {"size": 0, "track_total_hits": True,
+        "query": {"bool": {"must": [{"term": {"m365_type": "signin"}}, ent],
+                           "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
+        "aggs": {
+            "ok": {"filter": {"term": {"status_code": 0}}},
+            "codes": {"terms": {"field": "status_code", "size": 12}},
+            "countries": {"terms": {"field": "src_ip_country_code", "size": 20}},
+            "ips": {"terms": {"field": "src_ip", "size": 12}, "aggs": {
+                "cc": {"terms": {"field": "src_ip_country_code", "size": 1}},
+                "ok": {"filter": {"term": {"status_code": 0}}}}},
+            "tl": {"date_histogram": {"field": "timestamp", "calendar_interval": "day", "min_doc_count": 0},
+                   "aggs": {"ok": {"filter": {"term": {"status_code": 0}}}}}}})
+    aa = a.get("aggregations", {})
+    at = a.get("hits", {}).get("total", {})
+    at = at.get("value", 0) if isinstance(at, dict) else (at or 0)
+    if at:
+        ok = aa.get("ok", {}).get("doc_count", 0)
+        def _cc(b):
+            bk = b.get("cc", {}).get("buckets", [])
+            return bk[0]["key"] if bk else ""
+        auth = {
+            "total": at, "success": ok, "fail": at - ok,
+            "codes": [{"k": b["key"], "n": b["doc_count"]} for b in aa.get("codes", {}).get("buckets", [])],
+            "countries": [{"k": b["key"], "n": b["doc_count"]} for b in aa.get("countries", {}).get("buckets", [])],
+            "ips": [{"ip": _rd(b["key"]), "cc": _cc(b), "n": b["doc_count"],
+                     "ok": b.get("ok", {}).get("doc_count", 0)} for b in aa.get("ips", {}).get("buckets", [])],
+            "timeline": [{"t": (b.get("key_as_string") or "")[:10],
+                          "ok": b.get("ok", {}).get("doc_count", 0),
+                          "ko": b["doc_count"] - b.get("ok", {}).get("doc_count", 0)}
+                         for b in aa.get("tl", {}).get("buckets", [])]}
+
+    # --- B. Provenance des détections + présence multi-sources ------------------
+    bq = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"must": [ent], "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
+        "aggs": {
+            "sources": {"terms": {"field": "event_source", "size": 12}},
+            "prov": {"filter": {"exists": {"field": "alert_tag"}}, "aggs": {
+                "tags": {"terms": {"field": "alert_tag", "size": 12}, "aggs": {
+                    "src": {"terms": {"field": "event_source", "size": 1}},
+                    "last": {"max": {"field": "timestamp"}}}}}}}})
+    bb = bq.get("aggregations", {})
+    def _src(t):
+        bk = t.get("src", {}).get("buckets", [])
+        return bk[0]["key"] if bk else ""
+    dets = [{"tag": t["key"], "n": t["doc_count"], "source": _src(t),
+             "last": (t.get("last", {}).get("value_as_string") or "")[:19]}
+            for t in bb.get("prov", {}).get("tags", {}).get("buckets", [])]
+    sources = [{"k": b["key"], "n": b["doc_count"]} for b in bb.get("sources", {}).get("buckets", [])]
+    return {"entity": _rd(name), "days": days, "auth": auth, "detections": dets, "sources": sources}
+
+
 def get_detections(tactic="", source="", tag="", technique=""):
     must = [{"exists": {"field": "alert_tag"}}]
     if tactic:
@@ -830,6 +900,14 @@ class H(BaseHTTPRequestHandler):
                 except (ValueError, TypeError):
                     return d
             return self._json(get_entity(qs.get("u", [""])[0], _qi("size", 20), _qi("from", 0)))
+        if p == "/m/api/investigate":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            try:
+                _days = max(1, min(90, int(qs.get("days", ["14"])[0])))
+            except (ValueError, TypeError):
+                _days = 14
+            return self._json(get_investigation(qs.get("u", [""])[0], _days))
         if p == "/m/api/entity-search":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}

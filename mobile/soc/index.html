@@ -206,6 +206,22 @@
   .gbar{flex:1;height:8px;background:#0c1424;border:1px solid var(--bd);border-radius:5px;overflow:hidden}
   .gbar div{height:100%;background:linear-gradient(90deg,var(--cy),var(--vio))}
   .gn{width:96px;text-align:right;color:var(--mut)}
+  /* --- Investigation (Entité-360) --- */
+  .blk.inv{background:#0b1422;border:1px solid #1e2f48;border-radius:10px;padding:12px 13px}
+  .lbl2{font-size:10.5px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 7px}
+  .invk{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:6px}
+  .ik{background:#0c1626;border:1px solid var(--bd);border-radius:8px;padding:8px 6px;text-align:center}
+  .ik.ok{border-color:#15643f}.ik.ko{border-color:#7f2230}
+  .ikv{font-size:18px;font-weight:800;color:var(--fg)}.ik.ok .ikv{color:var(--grn)}.ik.ko .ikv{color:#f87171}
+  .iks{font-size:9.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+  .invtl{height:150px;margin-bottom:4px}
+  .iprow{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:4px 0;border-bottom:1px solid #131f30}
+  .ipa{flex:1;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ipc{width:26px;color:var(--mut)}.ipn{width:34px;text-align:right;color:var(--mut)}
+  .ipb{width:84px;text-align:right;font-size:11px;font-weight:700}
+  .ipb.bok{color:var(--grn)}.ipb.bko{color:var(--mut)}
+  .srcb{display:inline-block;background:#10233a;border:1px solid #2b3a55;color:#8fb4c8;border-radius:5px;padding:1px 6px;font-size:10px;margin:0 4px}
+  @media(max-width:520px){.invk{grid-template-columns:repeat(3,1fr)}}
   .report{background:#fff;color:#111827;border-radius:10px;padding:32px;max-width:920px}
   .report h1{font-size:20px;color:#0b1322;margin:0}.report h2{font-size:14px;margin:20px 0 8px;color:#0b1322;border-bottom:1px solid #e2e8f0;padding-bottom:5px}
   .report .muted{color:#64748b}
@@ -706,12 +722,51 @@ function openEntity(full,label,size){
     $("#emc").innerHTML=`<div class="grip"></div><h2>👤 ${esc(label)}</h2>
       <div class="muted" style="margin-bottom:4px">${esc(full||"")} · <b style="color:var(--cy)">${(d.total||0).toLocaleString("fr")}</b> détections (7 j)</div>
       ${entScoreBanner(d)}
+      <div id="invWrap"></div>
       <div class="blk"><div class="lbl">Tactiques</div><div>${tacs}</div></div>
       <div class="blk"><div class="lbl">Techniques ATT&CK</div><div>${techs}</div></div>
       <div class="blk"><div class="lbl">Événements récents</div>${evs}${more}</div>`;
     $("#emodal").classList.add("on");
+    loadInvestigation(full||label);
   }).catch(()=>{});
 }
+const M365CODE={"0":"Succès","50053":"Compte verrouillé (lockout)","50055":"Mot de passe expiré","50057":"Compte désactivé","50074":"MFA requise","50076":"MFA requise (CA)","50079":"MFA à enregistrer","50126":"Identifiants invalides","50158":"Conditional Access","53003":"Bloqué (Conditional Access)","500121":"MFA refusée / timeout"};
+function codeLabel(c){return M365CODE[String(c)]||("code "+esc(String(c)));}
+function loadInvestigation(who){const w=$("#invWrap");if(!w)return;
+  w.innerHTML=`<div class="blk inv"><div class="lbl">${ic("globe")} Investigation — provenance &amp; cartographie</div><div class="muted">Analyse en cours…</div></div>`;
+  fetch(API+"/investigate?u="+encodeURIComponent(who)+"&days=14",{credentials:"same-origin"})
+    .then(r=>r.json()).then(renderInvestigation).catch(()=>{});}
+function renderInvestigation(d){const w=$("#invWrap");if(!w||!d)return;
+  const a=d.auth||{},det=d.detections||[],src=d.sources||[];let h='';
+  if(a.total){const cs=a.countries||[],cmax=cs.length?cs[0].n:1;
+    h+=`<div class="invk">
+      <div class="ik"><div class="ikv mono">${(a.total||0).toLocaleString("fr")}</div><div class="iks">tentatives</div></div>
+      <div class="ik ok"><div class="ikv mono">${(a.success||0).toLocaleString("fr")}</div><div class="iks">réussies</div></div>
+      <div class="ik ko"><div class="ikv mono">${(a.fail||0).toLocaleString("fr")}</div><div class="iks">échecs</div></div>
+      <div class="ik"><div class="ikv mono">${cs.length}</div><div class="iks">pays</div></div>
+      <div class="ik"><div class="ikv mono">${(a.ips||[]).length}</div><div class="iks">IP sources</div></div></div>`;
+    h+=`<div class="lbl2">Cartographie des sources d'authentification</div>`+
+      cs.slice(0,10).map(c=>`<div class="georow"><span class="gflag">${flagOf(c.k)}</span><span class="gcc">${esc(c.k)}</span>
+        <div class="gbar"><div style="width:${Math.max(4,Math.round(c.n/cmax*100))}%"></div></div>
+        <span class="gn mono">${(c.n||0).toLocaleString("fr")}</span></div>`).join("");
+    h+=`<div class="lbl2">Chronologie — réussis / échecs</div><div class="invtl"><canvas id="invTl"></canvas></div>`;
+    h+=`<div class="lbl2">IP sources <span class="muted" style="font-weight:400">— une réussite depuis l'étranger = à investiguer</span></div>`+
+      (a.ips||[]).map(i=>`<div class="iprow"><span class="gflag">${flagOf(i.cc)}</span>
+        <span class="ipa mono">${esc(i.ip)}</span><span class="ipc">${esc(i.cc||"")}</span>
+        <span class="ipn mono">${i.n}</span><span class="ipb ${i.ok>0?'bok':'bko'}">${i.ok>0?i.ok+" réussis":"0 réussi"}</span></div>`).join("");
+    h+=`<div class="lbl2">Codes de statut</div><div>`+
+      (a.codes||[]).map(c=>`<span class="pchip">${codeLabel(c.k)} · ${c.n}</span>`).join(" ")+`</div>`;}
+  if(det.length){h+=`<div class="lbl2">Provenance des détections</div>`+
+    det.map(x=>`<div class="erow"><b>${nice(x.tag)}</b> <span class="srcb">${esc(x.source||"")}</span> <span class="mono">${x.n}</span> <span class="ts">${ago(x.last)}</span></div>`).join("");}
+  if(src.length){h+=`<div class="lbl2">Présence par source (${d.days} j)</div><div>`+
+    src.map(s=>`<span class="pchip">${esc(s.k)} · ${(s.n||0).toLocaleString("fr")}</span>`).join(" ")+`</div>`;}
+  w.innerHTML=`<div class="blk inv"><div class="lbl">${ic("globe")} Investigation — provenance &amp; cartographie</div>${h||'<div class="muted">Aucune donnée d\'investigation pour cette entité</div>'}</div>`;
+  if(a.total&&(a.timeline||[]).length){const tl=a.timeline;
+    mk("invTl",{type:"bar",data:{labels:tl.map(x=>(x.t||"").slice(5)),datasets:[
+      {label:"Réussis",data:tl.map(x=>x.ok),backgroundColor:"#34d399",stack:"s"},
+      {label:"Échecs",data:tl.map(x=>x.ko),backgroundColor:"#f87171",stack:"s"}]},
+      options:{maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},
+        scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true}}}});}}
 function closeEnt(){$("#emodal").classList.remove("on");}
 
 // --- Flux temps réel (SSE) ---
