@@ -86,3 +86,6 @@ certutil_download,T1105,Ingress Tool Transfer,Command and Control,eleve,7
 wevtutil_clear,T1070.001,Indicator Removal: Clear Windows Event Logs,Defense Evasion,critique,9
 fsutil_usn,T1070,Indicator Removal,Defense Evasion,eleve,8
 wmic_exec,T1047,Windows Management Instrumentation,Execution,eleve,7
+ifeo_debugger,T1574.012,Hijack Execution Flow: IFEO Injection,Privilege Escalation,critique,8
+service_host_shell,T1068,Exploitation for Privilege Escalation,Privilege Escalation,critique,9
+winrm_lateral,T1021.006,Remote Services: Windows Remote Management,Lateral Movement,eleve,7

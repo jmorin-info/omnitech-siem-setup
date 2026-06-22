@@ -226,13 +226,13 @@
     },
     {
       "techniqueID": "T1204.002",
-      "score": 7,
+      "score": 9,
       "enabled": true,
-      "comment": "Malicious File : defender (score 7)",
+      "comment": "Malicious File : defender, office_spawn_shell (score 9)",
       "metadata": [
         {
           "name": "detections",
-          "value": "defender"
+          "value": "defender, office_spawn_shell"
         }
       ]
     },
@@ -420,11 +420,11 @@
       "techniqueID": "T1047",
       "score": 8,
       "enabled": true,
-      "comment": "Windows Management Instrumentation : wmi_lateral_exec (score 8)",
+      "comment": "Windows Management Instrumentation : wmi_lateral_exec, wmic_exec (score 8)",
       "metadata": [
         {
           "name": "detections",
-          "value": "wmi_lateral_exec"
+          "value": "wmi_lateral_exec, wmic_exec"
         }
       ]
     },
@@ -634,13 +634,13 @@
     },
     {
       "techniqueID": "T1070.001",
-      "score": 8,
+      "score": 9,
       "enabled": true,
-      "comment": "Clear Windows Event Logs : log_cleared (score 8)",
+      "comment": "Clear Windows Event Logs : log_cleared, wevtutil_clear (score 9)",
       "metadata": [
         {
           "name": "detections",
-          "value": "log_cleared"
+          "value": "log_cleared, wevtutil_clear"
         }
       ]
     },
@@ -653,6 +653,66 @@
         {
           "name": "detections",
           "value": "installutil_proxy"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1105",
+      "score": 7,
+      "enabled": true,
+      "comment": "Ingress Tool Transfer : certutil_download (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "certutil_download"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1070",
+      "score": 8,
+      "enabled": true,
+      "comment": "Indicator Removal : fsutil_usn (score 8)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "fsutil_usn"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1574.012",
+      "score": 8,
+      "enabled": true,
+      "comment": "Hijack Execution Flow: IFEO Injection : ifeo_debugger (score 8)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "ifeo_debugger"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1068",
+      "score": 9,
+      "enabled": true,
+      "comment": "Exploitation for Privilege Escalation : service_host_shell (score 9)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "service_host_shell"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1021.006",
+      "score": 7,
+      "enabled": true,
+      "comment": "Remote Services: Windows Remote Management : winrm_lateral (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "winrm_lateral"
         }
       ]
     }
