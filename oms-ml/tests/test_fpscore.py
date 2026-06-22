@@ -111,3 +111,42 @@ def test_alert_features_timestamp_invalide():
     assert f[0] == 0.0           # risk_score None -> 0
     assert f[3] == 0.0          # heure non parsable -> 0
     assert f[4] == 1.0         # 0h considéré hors-heures (< 7)
+
+
+def test_alert_entity_priorite():
+    # hôte (source) prioritaire, puis compte AD, sinon vide
+    assert fpscore.alert_entity({"source": "BX-SRV-01"}) == "BX-SRV-01"
+    assert fpscore.alert_entity(
+        {"winlogbeat_winlog_event_data_TargetUserName": "svc_sql"}) == "svc_sql"
+    assert fpscore.alert_entity({"risk_score": 5}) == ""
+
+
+def test_alert_features_sans_contexte_a_zero():
+    # ctx absent -> les 3 features contextuelles valent 0, vecteur de longueur 8
+    voc: dict = {}
+    f = fpscore.alert_features({"alert_tag": "lsass_access", "source": "WS-1"}, voc)
+    assert len(f) == 8 == len(fpscore.FEATURE_NAMES)
+    assert f[5] == 0.0 and f[6] == 0.0 and f[7] == 0.0
+
+
+def test_alert_features_contexte_routine_vs_anomalie():
+    """Les features contextuelles distinguent VP/FP À L'INTÉRIEUR d'un même tag."""
+    voc: dict = {}
+    # entité 'routinière' : fait CE tag 95 fois sur 100 détections, peu de diversité
+    ctx = {
+        "WS-ROUTINE": {"det": 100, "same_tag": {"service_install": 95}, "distinct": 2},
+        "SRV-COMPROMIS": {"det": 8, "same_tag": {"service_install": 1}, "distinct": 7},
+    }
+    routine = fpscore.alert_features(
+        {"alert_tag": "service_install", "source": "WS-ROUTINE"}, voc, ctx)
+    compromis = fpscore.alert_features(
+        {"alert_tag": "service_install", "source": "SRV-COMPROMIS"}, voc, ctx)
+    # ent_det_30d (idx 5)
+    assert routine[5] == 100.0 and compromis[5] == 8.0
+    # ent_same_tag_ratio (idx 6) : routinier ~0.95 (FP), compromis ~0.125 (VP)
+    assert routine[6] == pytest.approx(0.95)
+    assert compromis[6] == pytest.approx(1 / 8)
+    assert routine[6] > compromis[6]
+    # ent_distinct_tags_30d (idx 7) : diversité élevée côté compromis (signal VP)
+    assert compromis[7] == 7.0 and routine[7] == 2.0
+    assert compromis[7] > routine[7]
