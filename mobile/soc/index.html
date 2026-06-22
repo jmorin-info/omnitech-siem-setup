@@ -815,7 +815,8 @@ function loadInvestigation(who){const w=$("#invWrap");if(!w)return;
     .then(r=>r.json()).then(renderInvestigation).catch(()=>{});}
 const LTYPE={"2":"Interactive","3":"Network","4":"Batch","5":"Service","7":"Unlock","8":"NetworkCleartext","9":"NewCredentials","10":"RDP","11":"CachedInteractive"};
 function ltype(k){return (LTYPE[String(k)]||"type")+" ("+esc(String(k))+")";}
-function niceReason(s){return esc(String(s||"").replace(/_/g," "));}
+const FAILR_EN={"restriction_compte":"account restriction","utilisateur_inexistant":"unknown user","mot_de_passe_errone":"wrong password","compte_verrouille":"account locked","compte_desactive":"account disabled","desynchronisation_horloge":"clock skew","mot_de_passe_expire":"password expired","erreur_pendant_logon":"logon error"};
+function niceReason(s){const k=String(s||"");if(LANG==="en"&&FAILR_EN[k])return esc(FAILR_EN[k]);return esc(k.replace(/_/g," "));}
 function renderInvestigation(d){const w=$("#invWrap");if(!w||!d)return;
   const a=d.auth||{},wn=d.winauth||{},det=d.detections||[],src=d.sources||[];const daySuffix=(LANG==="en"?"d":"j");let h='';
   if(a.total){const cs=a.countries||[],cmax=cs.length?cs[0].n:1;
