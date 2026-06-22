@@ -150,10 +150,20 @@ when
        AND contains(to_string($message.winlogbeat_winlog_event_data_TargetObject), "\\run\\onedrive", true) )
     OR ( contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\edge\\application\\msedge.exe", true)
        AND contains(to_string($message.winlogbeat_winlog_event_data_TargetObject), "\\runonce\\", true) )
+    // [Audit FP] ecrivain = binaire signe MS/editeur dans SON chemin de confiance (auto-reference) :
+    // OneDrive (Setup/Sync), msedge (toute cle Run), VS Installer, EdgeWebView, Copilot. CHEMIN-ancre
+    // (pas le nom seul) -> garde-fou usurpation. Mesure : ~817/1000 residuels couverts, 0 suspect.
+    OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\microsoft onedrive\\", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\appdata\\local\\microsoft\\onedrive\\", true)
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\onedrivesetup.exe", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\edge\\application\\msedge.exe", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\microsoft visual studio\\installer\\setup.exe", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\edgewebview\\application\\", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\microsoft\\copilot\\application\\mscopilot.exe", true)
   )
 then
   set_field("fp_allowlist", true);
-  set_field("fp_allowlist_reason", "persistence_autorun: navigateur/OneDrive/Lists legitime (allowlist 81)");
+  set_field("fp_allowlist_reason", "persistence_autorun: navigateur/OneDrive/VS/Copilot signe (allowlist 81)");
   remove_field("alert_tag");
 end
 EOF
@@ -194,6 +204,24 @@ then
 end
 EOF
 
+# --- admin_share (5140/5145) : acces C$ en LOOPBACK ---------------------------
+# Mesure (audit FP) : ~99% du volume = la machine accedant a SON PROPRE C$ via
+# 127.0.0.1/::1 -> PAS du mouvement lateral (le lateral est DISTANT par definition :
+# la cible logue l'IP source distante de l'attaquant, jamais loopback). Les acces
+# C$ DISTANTS (autre IP) continuent d'alerter (vrai vecteur PsExec/SMB). 0 VP perdu.
+ensure_rule "omni-fp-25-adminshare-loopback" <<'EOF'
+rule "omni-fp-25-adminshare-loopback"
+when
+  to_string($message.alert_tag) == "admin_share"
+  AND ( to_string($message.winlogbeat_winlog_event_data_IpAddress) == "127.0.0.1"
+     OR to_string($message.winlogbeat_winlog_event_data_IpAddress) == "::1" )
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_allowlist_reason", "admin_share: acces C$ local (loopback) = pas de lateral");
+  remove_field("alert_tag");
+end
+EOF
+
 echo "==> [3/4] Pipeline 'OMNI - Allowlist FP' (stage 25) + connexion streams"
 # Stage 25 = APRES MITRE (20) donc risk_score/mitre_* deja poses (scoring garde),
 # AVANT la reduction ISO (30). match either : une seule des 3 regles s'applique.
@@ -204,6 +232,7 @@ rule "omni-fp-25-service-install"
 rule "omni-fp-25-scheduled-task"
 rule "omni-fp-25-autorun"
 rule "omni-fp-25-sysmon-injection"
+rule "omni-fp-25-adminshare-loopback"
 end
 PIPE
 )"
