@@ -18,6 +18,118 @@ require_api
 CSV="lookups/mitre-attack.csv"
 add_mitre() { grep -q "^$1," "${CSV}" || { echo "$1,$2,$3,$4,$5,$6" >> "${CSV}"; ok "MITRE +$1"; }; }
 
+echo "==> [0/5] Detecteur omni-ndr-lateral (VERSIONNE ici)"
+# Auparavant non versionne (binaire suppose present, lance plus bas) -> source dans le repo.
+install -d /usr/local/sbin
+cat > /usr/local/sbin/omni-ndr-lateral <<'NDREOF'
+#!/usr/bin/env python3
+# =============================================================================
+# omni-ndr-lateral - Detection de MOUVEMENT LATERAL REUSSI (propagation).
+#   Complementaire du password spraying (qui compte les ECHECS) : ici on compte
+#   les CONNEXIONS REUSSIES. Un meme compte NON-MACHINE qui ouvre des sessions
+#   reseau (4624 LogonType 3) ou RDP (LogonType 10) reussies vers BEAUCOUP
+#   d'hotes DISTINCTS en peu de temps = propagation laterale (pass-the-hash,
+#   reutilisation de credentials, RDP en chaine).
+#   Au-dela de Graylog : agrege 4624 par compte et calcule la CARDINALITE des
+#   hotes de destination sur une fenetre glissante, puis exclut les comptes
+#   machine ($) et les comptes de service/scan legitimes (whitelist).
+#   Emet GELF event_source=ndr_lateral, alert_tag=lateral_movement (T1021).
+# Lance par timer (15 min). Config 00-vars.env : LAT_*.
+#
+# CHAMPS LIVE VERIFIES (omni-winsec_*) :
+#   event_id = "4624" (STRING), logon_type_label = reseau (type3) /
+#   rdp_interactif_distant (type10). Il N'Y A PAS de champ numerique logon_type
+#   cote pipeline -> on filtre sur logon_type_label. user / host normalises ;
+#   host = hote de DESTINATION (la ou la session s'ouvre). Comptes machine =
+#   user finissant par '$'.
+# =============================================================================
+import json, os, re, sys, urllib.request
+
+OS_URL   = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM     = "bx-it-graylog-vm"
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+ENV = load_env()
+
+# os.environ a priorite (tests/override ponctuel) puis 00-vars.env puis defaut.
+def cfg(key, default):
+    return os.environ.get(key, ENV.get(key, default))
+
+WINDOW_M = int(cfg("LAT_WINDOW_M", "60"))     # fenetre glissante (minutes)
+HOST_MIN = int(cfg("LAT_HOST_MIN", "15"))     # hotes distincts -> mouvement lateral
+# comptes de service / scan legitimes (vuln scan, RMM, sauvegarde, admin outil)
+# qui touchent legitimement beaucoup d'hotes. Liste insensible a la casse,
+# separateur virgule. Defaut : ninjaone (RMM observe a 19 hotes/h en prod).
+WHITELIST = set(u.strip().lower() for u in cfg("LAT_WHITELIST", "ninjaone").split(",") if u.strip())
+
+def es(body):
+    req = urllib.request.Request(f"{OS_URL}/omni-winsec_*/_search",
+                                 data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+def gelf(fields):
+    if os.environ.get("UEBA_DRY"):
+        return
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "ndr_lateral")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def main():
+    agg = es({"size": 0,
+        "query": {"bool": {"must": [
+            {"term": {"event_id": "4624"}},
+            {"terms": {"logon_type_label": ["reseau", "rdp_interactif_distant"]}},
+            {"range": {"timestamp": {"gte": f"now-{WINDOW_M}m"}}}],
+            "must_not": [{"wildcard": {"user": "*$"}}]}},   # exclut les comptes machine
+        "aggs": {"u": {"terms": {"field": "user", "size": 500},
+                       "aggs": {"hosts":   {"cardinality": {"field": "host"}},
+                                "tophosts":{"terms": {"field": "host", "size": 12}},
+                                "logtypes":{"terms": {"field": "logon_type_label", "size": 4}}}}}})
+    buckets = agg["aggregations"]["u"]["buckets"]
+    found = 0
+    for b in buckets:
+        user = b["key"]
+        if not user or user.lower() in WHITELIST:
+            continue
+        nhosts = b["hosts"]["value"]
+        if nhosts < HOST_MIN:
+            continue
+        hosts_sample = ", ".join(h["key"] for h in b["tophosts"]["buckets"])
+        types = "+".join(t["key"] for t in b["logtypes"]["buckets"])
+        found += 1
+        gelf({"event_source": "ndr_lateral", "alert_tag": "lateral_movement",
+              "entity_user": user, "lateral_host_count": int(nhosts),
+              "lateral_logon_count": b["doc_count"], "lateral_logon_types": types,
+              "lateral_window_min": WINDOW_M, "lateral_hosts_sample": hosts_sample,
+              "short_message": (f"MOUVEMENT LATERAL : {user} -> {int(nhosts)} hotes distincts "
+                                f"en {WINDOW_M}min ({b['doc_count']} logons reussis {types})")})
+        print(f"  [lateral] {user}: hosts={int(nhosts)} logons={b['doc_count']} ({types})")
+    print(f"[ndr-lateral] comptes_non_machine_analyses={len(buckets)} "
+          f"mouvements={found} (fenetre {WINDOW_M}m, seuil {HOST_MIN} hotes)")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-ndr-lateral KO:", e, file=sys.stderr); sys.exit(1)
+NDREOF
+chmod 755 /usr/local/sbin/omni-ndr-lateral
+
 echo "==> [1/5] Mappings MITRE (format corrige)"
 add_mitre adcs_abuse        T1649     "Steal or Forge Authentication Certificates" "Credential Access" critique 9
 add_mitre wmi_lateral_exec  T1047     "Windows Management Instrumentation"         "Lateral Movement"  eleve    8

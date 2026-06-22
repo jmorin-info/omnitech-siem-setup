@@ -17,6 +17,122 @@ source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || { echo "root requis"; exit 1; }
 require_api
+
+echo "==> [0/5] Detecteur omni-ndr-exfil (VERSIONNE ici)"
+# Auparavant non versionne (l'en-tete disait "deploye ici" sans l'ecrire) -> source dans le repo.
+install -d /usr/local/sbin
+cat > /usr/local/sbin/omni-ndr-exfil <<'NDREOF'
+#!/usr/bin/env python3
+# =============================================================================
+# omni-ndr-exfil - Detection d'EXFILTRATION par VOLUME (FortiGate).
+#   Au-dela de Graylog : agrege sum(bytes_sent) par couple (src_ip INTERNE,
+#   dest_ip EXTERNE) sur la derniere heure et flag les flux SORTANTS dont le
+#   volume cumule depasse un seuil (defaut 1 Go). Cible un hote interne qui
+#   televerse un volume anormal vers une destination Internet.
+#   src interne / dest externe determines par CIDR RFC1918 (PAS reserved_ip cote
+#   pipeline) : src_ip via term src_ip_reserved_ip=true (pose par GeoIP, DISPO
+#   cote OpenSearch) ; dest externe via must_not terms CIDR sur dest_ip (type ip).
+#   Emet GELF event_source=ndr_exfil, alert_tag=data_exfil (MITRE T1048).
+# Lance par timer horaire. Config 00-vars.env : EXFIL_* + SOAR_WHITELIST.
+# =============================================================================
+import json, os, re, sys, urllib.request
+
+OS_URL   = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM     = "bx-it-graylog-vm"
+PRIVATE  = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+            "127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10"]
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+# os.environ a priorite sur 00-vars.env (permet override ponctuel / tests).
+ENV = load_env(); ENV.update({k: v for k, v in os.environ.items() if k.startswith("EXFIL_")})
+WINDOW_M  = int(ENV.get("EXFIL_WINDOW_M", "60"))                 # fenetre glissante
+THRESHOLD = int(float(ENV.get("EXFIL_BYTES_GB", "1")) * (1024 ** 3))  # seuil octets (defaut 1 Go)
+TOP_PAIRS = int(ENV.get("EXFIL_TOP", "50"))                      # nb de couples examines
+# Destinations connues a ne JAMAIS flaguer (CDN/SaaS/backup/IP entreprise).
+# Reutilise SOAR_WHITELIST + un EXFIL_ALLOW_DEST dedie (CSV d'IP/prefixes).
+ALLOW = set()
+for v in (ENV.get("SOAR_WHITELIST", ""), ENV.get("EXFIL_ALLOW_DEST", "")):
+    ALLOW.update(x.strip() for x in v.split(",") if x.strip())
+ALLOW_SRC = set(x.strip() for x in ENV.get("EXFIL_ALLOW_SRC", "").split(",") if x.strip())
+
+def es(body):
+    req = urllib.request.Request(f"{OS_URL}/omni-fortigate_*/_search",
+                                 data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=90) as r:
+        return json.load(r)
+
+def gelf(fields):
+    if os.environ.get("EXFIL_DRY"):
+        return                          # test a blanc : pas d'emission GELF
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "ndr_exfil")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def main():
+    # Couples (src interne, dest externe) tries par volume sortant cumule.
+    agg = es({"size": 0,
+        "query": {"bool": {
+            "must": [
+                {"range": {"timestamp": {"gte": f"now-{WINDOW_M}m"}}},
+                {"range": {"bytes_sent": {"gt": 0}}},
+                {"term": {"src_ip_reserved_ip": True}},     # src INTERNE (RFC1918)
+                {"term": {"subtype": "forward"}},           # trafic TRANSIT (evite local/app-ctrl/double compte)
+            ],
+            "must_not": [
+                {"terms": {"dest_ip": PRIVATE}},            # dest EXTERNE (exclut RFC1918)
+            ]}},
+        "aggs": {"pair": {
+            "multi_terms": {"terms": [{"field": "src_ip"}, {"field": "dest_ip"}],
+                            "size": TOP_PAIRS, "order": {"vol": "desc"}},
+            "aggs": {"vol":  {"sum": {"field": "bytes_sent"}},
+                     "ports": {"cardinality": {"field": "dest_port"}}}}}})
+
+    buckets = agg["aggregations"]["pair"]["buckets"]
+    found = 0
+    for b in buckets:
+        src, dst = b["key"][0], b["key"][1]
+        sent = int(b["vol"]["value"])
+        if sent < THRESHOLD:
+            break                       # tries desc : plus rien au-dessus du seuil
+        if dst in ALLOW or src in ALLOW_SRC:
+            continue                    # destination/source legitime connue
+        sessions = b["doc_count"]
+        gb = round(sent / (1024 ** 3), 2)
+        found += 1
+        gelf({"event_source": "ndr_exfil", "alert_tag": "data_exfil",
+              "entity_host": src, "src_ip": src, "dest_ip": dst,
+              "exfil_bytes_sent": sent, "exfil_gb": gb,
+              "exfil_sessions": sessions,
+              "exfil_dest_ports": int(b["ports"]["value"]),
+              "exfil_window_m": WINDOW_M,
+              "short_message": f"EXFIL volume : {src} -> {dst} = {gb} Go sortants "
+                               f"en {WINDOW_M}min ({sessions} sessions)"})
+        print(f"  [exfil] {src} -> {dst}: sent={gb}Go "
+              f"sessions={sessions} ports={int(b['ports']['value'])}")
+    print(f"[ndr-exfil] couples_externes={len(buckets)} exfil={found} "
+          f"(fenetre {WINDOW_M}m, seuil {round(THRESHOLD/1024/1024/1024,2)}Go)")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-ndr-exfil KO:", e, file=sys.stderr); sys.exit(1)
+NDREOF
+chmod 755 /usr/local/sbin/omni-ndr-exfil
 WD="winlogbeat_winlog_event_data"
 CSV="lookups/mitre-attack.csv"
 add_mitre() { grep -q "^$1," "${CSV}" || { echo "$1,$2,$3,$4,$5,$6" >> "${CSV}"; ok "MITRE +$1"; }; }
