@@ -1,0 +1,362 @@
+{
+"lsass_access": {
+"ce_que_cest": "Acces a la memoire de LSASS : tentative de vol d'identifiants (dump type mimikatz).",
+"a_verifier": "",
+"remediation": "Isoler le poste, scan ESET complet, reinitialiser les comptes qui s'y sont connectes, capturer la memoire.",
+"correction": ""
+},
+"dcsync": {
+"ce_que_cest": "Replication AD demandee par un compte NON contrôleur de domaine : extraction possible de tous les hachages (DCSync).",
+"a_verifier": "",
+"remediation": "Isoler la source, reinitialiser krbtgt deux fois, auditer les droits de replication delegues.",
+"correction": ""
+},
+"kerberoasting": {
+"ce_que_cest": "Demande anormale de tickets de service en RC4 : collecte de SPN pour cassage hors-ligne.",
+"a_verifier": "",
+"remediation": "Verifier le compte demandeur, basculer les comptes de service en gMSA, surveiller l'AES anormal (0x12).",
+"correction": ""
+},
+"sysmon_injection": {
+"ce_que_cest": "Injection de code dans un processus legitime : evasion et execution furtive.",
+"a_verifier": "",
+"remediation": "Isoler le poste, identifier le processus parent, scan complet, conserver la memoire pour analyse.",
+"correction": ""
+},
+"powershell_suspect": {
+"ce_que_cest": "PowerShell obfusque ou encode (-enc, downloadstring, iex) : execution potentiellement malveillante.",
+"a_verifier": "",
+"remediation": "Examiner la ligne de commande et l'utilisateur, isoler si confirme, chercher la persistance.",
+"correction": ""
+},
+"threat_intel": {
+"ce_que_cest": "Communication avec une IP reputee malveillante (Tor / Spamhaus DROP).",
+"a_verifier": "",
+"remediation": "Bloquer l'IP via SOAR, identifier l'hote source, inspecter les flux associes.",
+"correction": ""
+},
+"fortigate_utm": {
+"ce_que_cest": "Le FortiGate a bloque une menace (IPS / antivirus / webfilter) sur un flux expose.",
+"a_verifier": "",
+"remediation": "Verifier la cible et la signature, confirmer le blocage, correler avec les autres detections de l'hote.",
+"correction": ""
+},
+"winsec_critique": {
+"ce_que_cest": "Sabotage de la journalisation Windows : effacement de journal ou desactivation de l'audit.",
+"a_verifier": "",
+"remediation": "CRITIQUE : isoler, restaurer l'audit, enqueter - signe frequent d'une compromission active.",
+"correction": ""
+},
+"vsphere_vm_destroy": {
+"ce_que_cest": "Suppression de machine virtuelle sur vSphere (hors snapshot Veeam).",
+"a_verifier": "",
+"remediation": "Verifier l'auteur et l'autorisation, restaurer depuis sauvegarde si illegitime, durcir les droits vCenter.",
+"correction": ""
+},
+"vsphere_shell_ssh": {
+"ce_que_cest": "Ouverture de shell / SSH sur un hote ESXi ou vCenter.",
+"a_verifier": "",
+"remediation": "Confirmer l'intervention planifiee, sinon couper l'acces, auditer les comptes vSphere.",
+"correction": ""
+},
+"vsphere_auth_fail": {
+"ce_que_cest": "Echecs d'authentification repetes sur vSphere.",
+"a_verifier": "",
+"remediation": "Identifier la source, verifier s'il s'agit d'un service casse ou d'une attaque, durcir / verrouiller.",
+"correction": ""
+},
+"m365_etranger": {
+"ce_que_cest": "Connexion M365 depuis un pays inhabituel.",
+"a_verifier": "",
+"remediation": "Confirmer le deplacement aupres de l'utilisateur, sinon revoquer les sessions et reinitialiser le mot de passe + MFA.",
+"correction": ""
+},
+"m365_risque": {
+"ce_que_cest": "Connexion M365 signalee a risque par Entra ID.",
+"a_verifier": "",
+"remediation": "Revoquer les sessions, exiger MFA, verifier les regles de boite et les consentements OAuth.",
+"correction": ""
+},
+"m365_mail_forward": {
+"ce_que_cest": "Regle de transfert de courrier vers un domaine externe : exfiltration de messagerie.",
+"a_verifier": "",
+"remediation": "Supprimer la regle, reinitialiser le compte, verifier l'etendue des messages transferes.",
+"correction": ""
+},
+"m365_partage_externe": {
+"ce_que_cest": "Partage externe de fichier (lien anonyme / invite).",
+"a_verifier": "",
+"remediation": "Verifier la legitimite, restreindre le partage si sensible, sensibiliser l'utilisateur.",
+"correction": ""
+},
+"m365_role": {
+"ce_que_cest": "Attribution de role privilegie M365 / Entra ID.",
+"a_verifier": "",
+"remediation": "Confirmer le changement aupres de l'administrateur, revoquer si non justifie.",
+"correction": ""
+},
+"m365_mailbox_deleg": {
+"ce_que_cest": "Delegation de boite aux lettres ajoutee.",
+"a_verifier": "",
+"remediation": "Verifier la demande, retirer la delegation si non justifiee, auditer les acces a la boite.",
+"correction": ""
+},
+"admin_share": {
+"ce_que_cest": "Acces a des partages d'administration (ADMIN$ / C$) sur plusieurs hotes : balayage lateral.",
+"a_verifier": "",
+"remediation": "Identifier le compte, verifier la legitimite, isoler si propagation, reinitialiser le compte.",
+"correction": ""
+},
+"canary": {
+"ce_que_cest": "Un compte leurre (canari) a ete touche : aucune utilisation legitime possible.",
+"a_verifier": "",
+"remediation": "CRITIQUE : tout acces est suspect - isoler la source, enqueter immediatement, reinitialiser les comptes voisins.",
+"correction": ""
+},
+"veeam_job_echec": {
+"ce_que_cest": "Tache de sauvegarde Veeam en echec : risque sur la capacite de restauration.",
+"a_verifier": "",
+"remediation": "Investiguer la session VBR, corriger la cause, relancer la sauvegarde du serveur concerne.",
+"correction": ""
+},
+"defender": {
+"ce_que_cest": "Microsoft Defender a detecte ou a ete desactive sur un poste.",
+"a_verifier": "",
+"remediation": "Confirmer la remediation Defender, scan complet, verifier qu'il n'a pas ete desactive par un attaquant.",
+"correction": ""
+},
+"ransomware_indicator": {
+"ce_que_cest": "Indicateur de rancongiciel : effacement des clichés (vssadmin / wbadmin / bcdedit).",
+"a_verifier": "",
+"remediation": "CRITIQUE : isoler immediatement, couper les partages, declencher le plan de reponse rancongiciel.",
+"correction": ""
+},
+"impossible_travel": {
+"ce_que_cest": "Deux connexions geographiquement incompatibles dans un delai trop court (compte partage ou vole).",
+"a_verifier": "",
+"remediation": "Revoquer les sessions, reinitialiser le mot de passe + MFA, verifier l'origine des connexions.",
+"correction": ""
+},
+"beaconing": {
+"ce_que_cest": "Communications periodiques regulieres vers une IP externe : balise de commande et contrôle (C2).",
+"a_verifier": "",
+"remediation": "Bloquer la destination (SOAR), isoler l'hote, identifier le processus emetteur, scan complet.",
+"correction": ""
+},
+"volume_spike": {
+"ce_que_cest": "Pic anormal de volume de logs/flux pour une source : exfiltration ou incident possible.",
+"a_verifier": "",
+"remediation": "Identifier la cause, verifier s'il s'agit d'exfiltration, correler avec les autres detections.",
+"correction": ""
+},
+"volume_drop": {
+"ce_que_cest": "Chute anormale de volume : source muette (panne de collecte ou desactivation volontaire).",
+"a_verifier": "",
+"remediation": "Verifier l'agent/la source concernee, restaurer la collecte, ecarter une desactivation malveillante.",
+"correction": ""
+},
+"dns_tunneling": {
+"ce_que_cest": "Requetes DNS a forte entropie / sous-domaines multiples : tunnel DNS d'exfiltration ou C2.",
+"a_verifier": "",
+"remediation": "Bloquer le domaine, isoler l'hote, inspecter le processus, durcir le filtrage DNS.",
+"correction": ""
+},
+"gpo_modification": {
+"ce_que_cest": "Modification de strategie de groupe (GPO) : vecteur de persistance / elevation a l'echelle du domaine.",
+"a_verifier": "",
+"remediation": "Verifier l'auteur et le contenu, annuler si non autorise, auditer les liens de GPO.",
+"correction": ""
+},
+"asrep_roasting": {
+"ce_que_cest": "Compte sans pre-authentification Kerberos cible (AS-REP roasting) : cassage hors-ligne possible.",
+"a_verifier": "",
+"remediation": "Activer la pre-authentification sur le compte, durcir le mot de passe, surveiller la source.",
+"correction": ""
+},
+"lolbin_suspect": {
+"ce_que_cest": "Binaire systeme detourne (certutil / regsvr32 / rundll32 / mshta / bitsadmin) : execution / telechargement furtif.",
+"a_verifier": "",
+"remediation": "Examiner la ligne de commande, isoler si malveillant, chercher la charge telechargee.",
+"correction": ""
+},
+"persistence_autorun": {
+"ce_que_cest": "Cle de demarrage / Run ajoutee : mecanisme de persistance.",
+"a_verifier": "",
+"remediation": "Verifier l'entree et le binaire associe, supprimer si malveillant, scan complet.",
+"correction": ""
+},
+"m365_oauth_consent": {
+"ce_que_cest": "Consentement OAuth accorde a une application : vol potentiel de jeton d'acces.",
+"a_verifier": "",
+"remediation": "Revoquer le consentement, auditer les permissions de l'application, restreindre le consentement utilisateur.",
+"correction": ""
+},
+"network_scan": {
+"ce_que_cest": "Balayage reseau interne (decouverte de services / ports) : reconnaissance.",
+"a_verifier": "",
+"remediation": "Identifier la source, verifier s'il s'agit d'un outil legitime, isoler si reconnaissance hostile.",
+"correction": ""
+},
+"masquerading": {
+"ce_que_cest": "Binaire portant un nom legitime mais hors emplacement attendu (usurpation).",
+"a_verifier": "",
+"remediation": "Verifier le chemin et la signature, isoler si malveillant, comparer au binaire d'origine.",
+"correction": ""
+},
+"explicit_cred_use": {
+"ce_que_cest": "Utilisation explicite d'identifiants (RunAs / 4648) via un service : reutilisation suspecte.",
+"a_verifier": "",
+"remediation": "Verifier le compte source et la cible, ecarter un mouvement lateral, reinitialiser si besoin.",
+"correction": ""
+},
+"exposition_internet": {
+"ce_que_cest": "Service interne expose directement sur Internet.",
+"a_verifier": "",
+"remediation": "Verifier la necessite de l'exposition, restreindre / fermer la regle, durcir le service expose.",
+"correction": ""
+},
+"data_exfil": {
+"ce_que_cest": "Volume sortant anormalement eleve vers une destination : exfiltration probable.",
+"a_verifier": "",
+"remediation": "Identifier l'hote et la destination, bloquer si confirme, evaluer les donnees concernees.",
+"correction": ""
+},
+"gpp_creds_access": {
+"ce_que_cest": "Acces aux preferences de strategie de groupe (mots de passe GPP en clair).",
+"a_verifier": "",
+"remediation": "Supprimer les GPP contenant des secrets, reinitialiser les comptes exposes, durcir SYSVOL.",
+"correction": ""
+},
+"kerberos_rc4": {
+"ce_que_cest": "Ticket Kerberos en RC4 anormal : indicateur de Kerberoasting.",
+"a_verifier": "",
+"remediation": "Verifier le compte, basculer en AES/gMSA, surveiller les pics de tickets de service.",
+"correction": ""
+},
+"local_admin_add": {
+"ce_que_cest": "Ajout dans le groupe administrateurs local : elevation / persistance.",
+"a_verifier": "",
+"remediation": "Confirmer le changement, retirer si non autorise, auditer les administrateurs locaux du parc.",
+"correction": ""
+},
+"local_account_create": {
+"ce_que_cest": "Creation d'un compte local : persistance possible.",
+"a_verifier": "",
+"remediation": "Verifier la legitimite, supprimer si non justifie, auditer les comptes locaux de l'hote.",
+"correction": ""
+},
+"new_country": {
+"ce_que_cest": "Premiere connexion depuis un nouveau pays pour ce compte.",
+"a_verifier": "",
+"remediation": "Confirmer le deplacement, sinon revoquer les sessions et reinitialiser le compte + MFA.",
+"correction": ""
+},
+"adcs_abuse": {
+"ce_que_cest": "Abus de l'autorite de certification AD (ESC1 / ESC8) : usurpation par certificat.",
+"a_verifier": "",
+"remediation": "CRITIQUE : verifier les demandes de certificat, revoquer, corriger les gabarits vulnerables.",
+"correction": ""
+},
+"wmi_lateral_exec": {
+"ce_que_cest": "Execution via WMI avec un binaire detourne : mouvement lateral.",
+"a_verifier": "",
+"remediation": "Isoler l'hote, identifier le compte, scan complet, verifier les hotes adjacents.",
+"correction": ""
+},
+"shadow_credentials": {
+"ce_que_cest": "Modification de msDS-KeyCredentialLink : persistance par identifiants fantomes.",
+"a_verifier": "",
+"remediation": "CRITIQUE : retirer la cle ajoutee, reinitialiser le compte cible, auditer les ecritures sur l'attribut.",
+"correction": ""
+},
+"ldap_recon": {
+"ce_que_cest": "Requetes LDAP anormales : reconnaissance d'annuaire (comptes / groupes).",
+"a_verifier": "",
+"remediation": "Identifier la source, verifier l'outil, isoler si reconnaissance hostile, durcir les droits de lecture.",
+"correction": ""
+},
+"lateral_movement": {
+"ce_que_cest": "Un compte ouvre une session sur plusieurs hotes en peu de temps : mouvement lateral.",
+"a_verifier": "",
+"remediation": "Verifier la legitimite, isoler la source si compromise, reinitialiser le compte, tracer le chemin.",
+"correction": ""
+},
+"eset_detection": {
+"ce_que_cest": "ESET a detecte une menace sur un endpoint.",
+"a_verifier": "",
+"remediation": "Isoler le poste, scan complet ESET, confirmer la remediation, enqueter sur la source.",
+"correction": ""
+},
+"waf_block": {
+"ce_que_cest": "Le WAF (BunkerWeb) a bloque une requete d'exploitation.",
+"a_verifier": "",
+"remediation": "Verifier le vhost et l'URL, bloquer l'IP si exploit, inspecter les journaux applicatifs.",
+"correction": ""
+},
+"vault_auth_fail": {
+"ce_que_cest": "Echecs d'authentification sur Vaultwarden (coffre de mots de passe).",
+"a_verifier": "",
+"remediation": "Identifier la source, verrouiller si attaque, ecarter un service casse, durcir l'acces au coffre.",
+"correction": ""
+},
+"vault_admin": {
+"ce_que_cest": "Action d'administration sur Vaultwarden.",
+"a_verifier": "",
+"remediation": "Confirmer l'operation aupres de l'administrateur, revoquer si non justifiee.",
+"correction": ""
+},
+"vault_admin_abuse": {
+"ce_que_cest": "Tentatives repetees / abus sur l'administration Vaultwarden.",
+"a_verifier": "",
+"remediation": "CRITIQUE : verrouiller l'acces, enqueter, reinitialiser les secrets exposes.",
+"correction": ""
+},
+"scheduled_task": {
+"ce_que_cest": "Tache planifiee creee : mecanisme courant de persistance / elevation.",
+"a_verifier": "",
+"remediation": "Verifier la tache et son auteur, supprimer si malveillante, scan complet.",
+"correction": ""
+},
+"service_install": {
+"ce_que_cest": "Installation d'un nouveau service Windows : persistance / elevation.",
+"a_verifier": "",
+"remediation": "Verifier le binaire et le compte, supprimer si non autorise, scan complet.",
+"correction": ""
+},
+"uac_bypass": {
+"ce_que_cest": "Contournement du controle de compte utilisateur (UAC) : elevation furtive.",
+"a_verifier": "",
+"remediation": "Isoler le poste, identifier le processus, scan complet, verifier la persistance.",
+"correction": ""
+},
+"m365_brute_externe": {
+"ce_que_cest": "Tentatives de force brute M365 depuis l'externe.",
+"a_verifier": "",
+"remediation": "Verrouiller / proteger les comptes vises, exiger MFA, bloquer les IP sources.",
+"correction": ""
+},
+"remote_discovery": {
+"ce_que_cest": "Decouverte de systemes distants : reconnaissance reseau.",
+"a_verifier": "",
+"remediation": "Identifier la source, verifier l'outil, isoler si reconnaissance hostile.",
+"correction": ""
+},
+"service_stop_securite": {
+"ce_que_cest": "Arret d'un service de securite : tentative de neutralisation des defenses.",
+"a_verifier": "",
+"remediation": "Isoler le poste, relancer le service, enqueter sur l'auteur, scan complet.",
+"correction": ""
+},
+"file_sensitive_access": {
+"ce_que_cest": "Acces a des fichiers sensibles sur partage reseau.",
+"a_verifier": "",
+"remediation": "Verifier la legitimite de l'acces, restreindre les droits si necessaire, auditer le partage.",
+"correction": ""
+},
+"file_delete_sensible": {
+"ce_que_cest": "Suppression de fichiers sensibles : destruction de donnees possible.",
+"a_verifier": "",
+"remediation": "Verifier l'auteur, restaurer depuis sauvegarde si illegitime, auditer les droits sur le partage.",
+"correction": ""
+}
+}

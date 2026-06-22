@@ -222,6 +222,17 @@
   .ipb.bok{color:var(--grn)}.ipb.bko{color:var(--mut)}
   .srcb{display:inline-block;background:#10233a;border:1px solid #2b3a55;color:#8fb4c8;border-radius:5px;padding:1px 6px;font-size:10px;margin:0 4px}
   @media(max-width:520px){.invk{grid-template-columns:repeat(3,1fr)}}
+  /* --- Guide d'action (remédiation / correction) --- */
+  .gxrow{cursor:pointer;border-radius:6px;padding:5px 6px;transition:background .12s}
+  .gxrow:hover{background:#101e30}.gcar{display:inline-block;width:12px;color:var(--mut);transition:transform .15s}
+  .gwrap{margin:2px 0 8px}.gpad{padding:8px 10px;font-size:12px}
+  .gcard{background:#0a1320;border:1px solid #1b2c44;border-left:3px solid var(--cy);border-radius:8px;padding:4px 0;margin:2px 0 6px}
+  .grow{display:flex;gap:9px;padding:7px 11px;font-size:12.5px;line-height:1.45;border-top:1px solid #131f30}
+  .grow:first-child{border-top:none}
+  .glbl{flex:0 0 116px;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);padding-top:1px}
+  .gval{flex:1;color:#cfe0ee}
+  .grow.gw .glbl{color:#7fb4d6}.grow.gc .glbl{color:#e0a93b}.grow.gr .glbl{color:#f08a8a}.grow.gf .glbl{color:#5fc98a}
+  .grow.gr{background:#160e10}.grow.gf{background:#0c1612}
   .report{background:#fff;color:#111827;border-radius:10px;padding:32px;max-width:920px}
   .report h1{font-size:20px;color:#0b1322;margin:0}.report h2{font-size:14px;margin:20px 0 8px;color:#0b1322;border-bottom:1px solid #e2e8f0;padding-bottom:5px}
   .report .muted{color:#64748b}
@@ -611,7 +622,7 @@ const I18N={
   empty_waiting:"En attente d'événements…",empty_ml:"Aucune anomalie ML récente",empty_ueba:"Aucun score UEBA récent",empty_geo:"Aucune donnée géo",empty_event:"Aucun événement",
   ent_tactics:"Tactiques",ent_techniques:"Techniques ATT&CK",ent_events:"Événements récents",ent_detn:"détections (7 j)",load_more:"Charger plus",events_shown:"événements affichés",
   inv_title:"Investigation — provenance & cartographie",inv_authmap:"Cartographie des sources d'authentification",inv_timeline:"Chronologie — réussis / échecs",inv_ips:"IP sources",inv_ips_hint:"— une réussite depuis l'étranger = à investiguer",inv_codes:"Codes de statut",inv_prov:"Provenance des détections",inv_presence:"Présence par source",inv_analyzing:"Analyse en cours…",inv_none:"Aucune donnée d'investigation pour cette entité",inv_winauth:"Authentification Windows (logons 4624/4625)",inv_logontypes:"Types de logon",inv_failreasons:"Motifs d'échec",k_logons:"logons",pal_evts:"évts",
-  rep_title:"OMNITECH SECURITY — Rapport de posture SOC",rep_gen:"Généré le",rep_plat:"plateforme SIEM/XDR (Graylog + oms-xdr)",rep_k_inc:"Incidents critiques (7 j)",rep_k_det:"Détections (24 h)",rep_k_tech:"Techniques ATT&CK",rep_k_evt:"Événements (24 h)",rep_cov:"Couverture MITRE ATT&CK",rep_cov1:"techniques sur",rep_cov2:"tactiques couvertes. État du cluster de collecte :",rep_posture:"Posture opérationnelle",rep_robots:"Auto-supervision des robots d'analyse :",rep_oper:"opérationnels",rep_down:"en panne",rep_collect:"Couverture de collecte :",rep_sil1:"hôte(s) silencieux sur",rep_sil2:"attendus",rep_silh:"Hôtes muets :",rep_risk:"Entités à risque — scoring ML & UEBA",rep_mlanom:"Anomalies ML (IsolationForest)",rep_uebar:"Risque comportemental UEBA",rep_h_ent:"Entité",rep_h_score:"Score",rep_h_reason:"Motif principal",rep_h_factor:"Facteur",rep_topdet:"Top détections (7 jours)",rep_h_det:"Détection",rep_h_vol:"Volume",rep_recinc:"Incidents corrélés récents",rep_h_sev:"Sévérité",rep_h_title:"Titre",rep_noinc:"Aucun incident corrélé",rep_collsrc:"Sources de collecte (24 h)",rep_h_src:"Source",rep_foot:"Document généré automatiquement — démarche d'amélioration continue (ISO/IEC 27001:2022, clause 10). Preuve datée et reproductible.",leak_none:"Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)",esc_ml:"Score ML",esc_ueba:"Score UEBA",
+  rep_title:"OMNITECH SECURITY — Rapport de posture SOC",rep_gen:"Généré le",rep_plat:"plateforme SIEM/XDR (Graylog + oms-xdr)",rep_k_inc:"Incidents critiques (7 j)",rep_k_det:"Détections (24 h)",rep_k_tech:"Techniques ATT&CK",rep_k_evt:"Événements (24 h)",rep_cov:"Couverture MITRE ATT&CK",rep_cov1:"techniques sur",rep_cov2:"tactiques couvertes. État du cluster de collecte :",rep_posture:"Posture opérationnelle",rep_robots:"Auto-supervision des robots d'analyse :",rep_oper:"opérationnels",rep_down:"en panne",rep_collect:"Couverture de collecte :",rep_sil1:"hôte(s) silencieux sur",rep_sil2:"attendus",rep_silh:"Hôtes muets :",rep_risk:"Entités à risque — scoring ML & UEBA",rep_mlanom:"Anomalies ML (IsolationForest)",rep_uebar:"Risque comportemental UEBA",rep_h_ent:"Entité",rep_h_score:"Score",rep_h_reason:"Motif principal",rep_h_factor:"Facteur",rep_topdet:"Top détections (7 jours)",rep_h_det:"Détection",rep_h_vol:"Volume",rep_recinc:"Incidents corrélés récents",rep_h_sev:"Sévérité",rep_h_title:"Titre",rep_noinc:"Aucun incident corrélé",rep_collsrc:"Sources de collecte (24 h)",rep_h_src:"Source",rep_foot:"Document généré automatiquement — démarche d'amélioration continue (ISO/IEC 27001:2022, clause 10). Preuve datée et reproductible.",leak_none:"Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)",esc_ml:"Score ML",esc_ueba:"Score UEBA",g_title:"Guide d'action",g_what:"Ce que c'est",g_check:"À vérifier",g_remed:"Remédiation",g_correct:"Correction durable",g_none:"Pas de guide pour cette détection.",g_hint:"cliquer pour le guide d'action",
   k_attempts:"tentatives",k_success:"réussies",k_fail:"échecs",k_countries:"pays",k_ips:"IP sources",ch_ok:"Réussis",ch_ko:"Échecs",succ_suffix:"réussis",none_suffix:"0 réussi",
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
@@ -631,7 +642,7 @@ const I18N={
   empty_waiting:"Waiting for events…",empty_ml:"No recent ML anomaly",empty_ueba:"No recent UEBA score",empty_geo:"No geo data",empty_event:"No event",
   ent_tactics:"Tactics",ent_techniques:"ATT&CK techniques",ent_events:"Recent events",ent_detn:"detections (7d)",load_more:"Load more",events_shown:"events shown",
   inv_title:"Investigation — provenance & map",inv_authmap:"Authentication source map",inv_timeline:"Timeline — success / failure",inv_ips:"Source IPs",inv_ips_hint:"— a success from abroad = investigate",inv_codes:"Status codes",inv_prov:"Detection provenance",inv_presence:"Presence by source",inv_analyzing:"Analyzing…",inv_none:"No investigation data for this entity",inv_winauth:"Windows authentication (4624/4625 logons)",inv_logontypes:"Logon types",inv_failreasons:"Failure reasons",k_logons:"logons",pal_evts:"events",
-  rep_title:"OMNITECH SECURITY — SOC Posture Report",rep_gen:"Generated on",rep_plat:"SIEM/XDR platform (Graylog + oms-xdr)",rep_k_inc:"Critical incidents (7d)",rep_k_det:"Detections (24h)",rep_k_tech:"ATT&CK techniques",rep_k_evt:"Events (24h)",rep_cov:"MITRE ATT&CK coverage",rep_cov1:"techniques across",rep_cov2:"tactics covered. Collection cluster state:",rep_posture:"Operational posture",rep_robots:"Analysis-robot self-monitoring:",rep_oper:"operational",rep_down:"down",rep_collect:"Collection coverage:",rep_sil1:"silent host(s) of",rep_sil2:"expected",rep_silh:"Silent hosts:",rep_risk:"At-risk entities — ML & UEBA scoring",rep_mlanom:"ML anomalies (IsolationForest)",rep_uebar:"UEBA behavioral risk",rep_h_ent:"Entity",rep_h_score:"Score",rep_h_reason:"Main reason",rep_h_factor:"Factor",rep_topdet:"Top detections (7 days)",rep_h_det:"Detection",rep_h_vol:"Volume",rep_recinc:"Recent correlated incidents",rep_h_sev:"Severity",rep_h_title:"Title",rep_noinc:"No correlated incidents",rep_collsrc:"Collection sources (24h)",rep_h_src:"Source",rep_foot:"Automatically generated document — continual improvement (ISO/IEC 27001:2022, clause 10). Dated, reproducible evidence.",leak_none:"No active source (RansomLook running; HIBP/Dehashed awaiting keys)",esc_ml:"ML score",esc_ueba:"UEBA score",
+  rep_title:"OMNITECH SECURITY — SOC Posture Report",rep_gen:"Generated on",rep_plat:"SIEM/XDR platform (Graylog + oms-xdr)",rep_k_inc:"Critical incidents (7d)",rep_k_det:"Detections (24h)",rep_k_tech:"ATT&CK techniques",rep_k_evt:"Events (24h)",rep_cov:"MITRE ATT&CK coverage",rep_cov1:"techniques across",rep_cov2:"tactics covered. Collection cluster state:",rep_posture:"Operational posture",rep_robots:"Analysis-robot self-monitoring:",rep_oper:"operational",rep_down:"down",rep_collect:"Collection coverage:",rep_sil1:"silent host(s) of",rep_sil2:"expected",rep_silh:"Silent hosts:",rep_risk:"At-risk entities — ML & UEBA scoring",rep_mlanom:"ML anomalies (IsolationForest)",rep_uebar:"UEBA behavioral risk",rep_h_ent:"Entity",rep_h_score:"Score",rep_h_reason:"Main reason",rep_h_factor:"Factor",rep_topdet:"Top detections (7 days)",rep_h_det:"Detection",rep_h_vol:"Volume",rep_recinc:"Recent correlated incidents",rep_h_sev:"Severity",rep_h_title:"Title",rep_noinc:"No correlated incidents",rep_collsrc:"Collection sources (24h)",rep_h_src:"Source",rep_foot:"Automatically generated document — continual improvement (ISO/IEC 27001:2022, clause 10). Dated, reproducible evidence.",leak_none:"No active source (RansomLook running; HIBP/Dehashed awaiting keys)",esc_ml:"ML score",esc_ueba:"UEBA score",g_title:"Action guide",g_what:"What it is",g_check:"To check",g_remed:"Remediation",g_correct:"Lasting fix",g_none:"No guidance for this detection.",g_hint:"click for the action guide",
   k_attempts:"attempts",k_success:"successful",k_fail:"failures",k_countries:"countries",k_ips:"source IPs",ch_ok:"Successful",ch_ko:"Failures",succ_suffix:"successful",none_suffix:"0 successful",
   case_status:"Case status updated.",case_disp:"Disposition saved — the false-positive reduction model will adjust.",case_assign:"Case assigned.",case_note:"Investigation note added.",case_def:"Case updated."
  }
@@ -659,7 +670,8 @@ function logout(){fetch(API+"/logout",{method:"POST",credentials:"same-origin"})
 function start(){$("#login").style.display="none";$("#app").style.display="grid";
   document.documentElement.lang=LANG;applyI18n();updateLangBtn();
   const tt=$("#ptitle");if(tt)tt.textContent=(titles[LANG]||titles.fr).overview;setDesc("overview");
-  document.body.classList.add("firstload");loadAll();startLive();startRefresh();}
+  document.body.classList.add("firstload");loadAll();startLive();startRefresh();
+  j("/guidance").then(r=>{GUIDANCE=r.guidance||{};}).catch(()=>{});}
 
 // nav
 const titles={
@@ -718,7 +730,12 @@ async function loadAll(){
   }catch(e){if(e==="auth"){toastWarn("Session expirée — reconnexion à la console SOC…",{title:"Session",sticky:true});setTimeout(()=>location.reload(),1200);}else{toastNet();}}
   finally{RELOADING=false;setSpin(false);document.body.classList.remove("firstload");markUpdated();}
 }
-let TOPE=[];let MLT=[];
+let TOPE=[];let MLT=[];let GUIDANCE={};
+function toggleG(id){const e=$("#"+id);if(e)e.style.display=e.style.display==="none"?"block":"none";}
+function guidanceBlock(tag){const g=GUIDANCE[tag];
+  if(!g||!(g.ce_que_cest||g.remediation))return '<div class="gpad muted">'+t("g_none")+'</div>';
+  const row=(lbl,v,cls)=>v?`<div class="grow ${cls}"><span class="glbl">${lbl}</span><span class="gval">${esc(v)}</span></div>`:'';
+  return '<div class="gcard">'+row(t("g_what"),g.ce_que_cest,"gw")+row(t("g_check"),g.a_verifier,"gc")+row(t("g_remed"),g.remediation,"gr")+row(t("g_correct"),g.correction,"gf")+'</div>';}
 function renderRisk(d){d=d||{};
   const M={CRITIQUE:["red","Compromission probable — action immédiate"],ELEVE:["amb","Activité critique en cours"],SURVEILLE:["blu","Signaux à surveiller"],NOMINAL:["grn","Aucune menace active"]};
   const m=M[d.threat_level]||M.NOMINAL;const t=$("#threat");
@@ -850,8 +867,8 @@ function renderInvestigation(d){const w=$("#invWrap");if(!w||!d)return;
     h+=`<div class="lbl2">${t("inv_ips")}</div>`+
       (wn.ips||[]).map(i=>`<div class="iprow"><span class="ipa mono">${esc(i.ip)}</span>
         <span class="ipn mono">${i.n}</span><span class="ipb ${i.ok>0?'bok':'bko'}">${i.ok>0?i.ok+" "+t("succ_suffix"):t("none_suffix")}</span></div>`).join("");}
-  if(det.length){h+=`<div class="lbl2">${t("inv_prov")}</div>`+
-    det.map(x=>`<div class="erow"><b>${nice(x.tag)}</b> <span class="srcb">${esc(x.source||"")}</span> <span class="mono">${x.n}</span> <span class="ts">${ago(x.last)}</span></div>`).join("");}
+  if(det.length){h+=`<div class="lbl2">${t("inv_prov")} <span class="muted" style="font-weight:400">— ${t("g_hint")}</span></div>`+
+    det.map((x,gi)=>`<div class="erow gxrow" onclick="toggleG('gx${gi}')"><span class="gcar">▸</span><b>${nice(x.tag)}</b> <span class="srcb">${esc(x.source||"")}</span> <span class="mono">${x.n}</span> <span class="ts">${ago(x.last)}</span></div><div id="gx${gi}" class="gwrap" style="display:none">${guidanceBlock(x.tag)}</div>`).join("");}
   if(src.length){h+=`<div class="lbl2">${t("inv_presence")} (${d.days} ${daySuffix})</div><div>`+
     src.map(s=>`<span class="pchip">${esc(s.k)} · ${(s.n||0).toLocaleString("fr")}</span>`).join(" ")+`</div>`;}
   w.innerHTML=`<div class="blk inv"><div class="lbl">${ic("globe")} ${t("inv_title")}</div>${h||'<div class="muted">'+t("inv_none")+'</div>'}</div>`;

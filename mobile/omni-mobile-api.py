@@ -600,6 +600,25 @@ def get_investigation(name, days=14):
             "detections": dets, "sources": sources}
 
 
+_GUIDANCE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lookups", "alert-guidance.json")
+_GUIDANCE = {"mtime": -1.0, "data": {}}
+
+
+def get_guidance():
+    """Aide à la décision par détection (`alert_tag`) : ce que c'est, à vérifier
+    (triage), remédiation, correction durable. Connaissance STATIQUE (aucune PII) ;
+    rechargée à chaud si le fichier change. Sert le triage/réponse côté console+PWA."""
+    try:
+        m = os.path.getmtime(_GUIDANCE_PATH)
+        if m != _GUIDANCE["mtime"]:
+            with open(_GUIDANCE_PATH, encoding="utf-8") as fh:
+                _GUIDANCE["data"] = json.load(fh)
+            _GUIDANCE["mtime"] = m
+    except Exception:
+        pass
+    return _GUIDANCE["data"]
+
+
 def get_detections(tactic="", source="", tag="", technique=""):
     must = [{"exists": {"field": "alert_tag"}}]
     if tactic:
@@ -959,6 +978,8 @@ class H(BaseHTTPRequestHandler):
             except (ValueError, TypeError):
                 _days = 14
             return self._json(get_investigation(qs.get("u", [""])[0], _days))
+        if p == "/m/api/guidance":
+            return self._json({"guidance": get_guidance()})
         if p == "/m/api/entity-search":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
