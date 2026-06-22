@@ -271,6 +271,11 @@
   .entk{width:18px;text-align:center;color:var(--mut)}.entk .svi{width:15px;height:15px}
   .entn{flex:1;color:#cfe0ee;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .entn2{color:var(--mut);font-size:11px}
+  .rkchip{flex:0 0 auto;min-width:26px;text-align:center;font-size:11px;font-weight:800;padding:2px 6px;border-radius:6px;font-family:var(--mono,monospace)}
+  .rk-c{background:#3a0f17;color:#fb6b7e;border:1px solid #d9534f55}
+  .rk-h{background:#2e2206;color:#f5b740;border:1px solid #caa14a55}
+  .rk-m{background:#231642;color:#b69bf0;border:1px solid #6b4ec055}
+  .rk-l{background:#0e2336;color:#67b6d6;border:1px solid #2563eb44}
   /* --- Chronologie unifiée (timeline) --- */
   .tl{position:relative;margin-top:4px;padding-left:6px}
   .tlrow{display:flex;align-items:flex-start;gap:10px;padding:7px 0 7px 14px;border-left:2px solid #1d2c44;position:relative;font-size:12.5px}
@@ -838,9 +843,11 @@ function guidanceForMitre(mitreStr){
 // --- Page Entités : recherche comptes/machines -> dossier 360° ---
 let ENTB={users:[],machines:[]},ENTS=[];
 function loadEntities(){j("/entities").then(d=>{ENTB=d||{users:[],machines:[]};
-  $("#entUsers").innerHTML=(ENTB.users||[]).map((e,i)=>entRow(e.entity,e.n,'u',i)).join("")||'<div class="muted gpad">—</div>';
-  $("#entMachines").innerHTML=(ENTB.machines||[]).map((e,i)=>entRow(e.entity,e.n,'m',i)).join("")||'<div class="muted gpad">—</div>';}).catch(()=>{});}
-function entRow(name,n,k,i){return '<div class="entrow" onclick="openEntB(\''+k+'\','+i+')"><span class="entk">'+(k==='m'?ic("cpu"):'👤')+'</span><span class="entn mono">'+esc(name)+'</span><span class="entn2 mono">'+(n||0).toLocaleString('fr')+'</span></div>';}
+  $("#entUsers").innerHTML=(ENTB.users||[]).map((e,i)=>entRow(e,'u',i)).join("")||'<div class="muted gpad">—</div>';
+  $("#entMachines").innerHTML=(ENTB.machines||[]).map((e,i)=>entRow(e,'m',i)).join("")||'<div class="muted gpad">—</div>';}).catch(()=>{});}
+function rkChip(r){if(!r||r.score==null)return '';var c=r.score>=80?"rk-c":r.score>=60?"rk-h":r.score>=35?"rk-m":"rk-l";
+  return '<span class="rkchip '+c+'" title="'+t("risk_"+(r.label||"minimal"))+' — '+t("risk_fused")+'">'+r.score+'</span>';}
+function entRow(e,k,i){return '<div class="entrow" onclick="openEntB(\''+k+'\','+i+')">'+rkChip(e.risk)+'<span class="entk">'+(k==='m'?ic("cpu"):'👤')+'</span><span class="entn mono">'+esc(e.entity)+'</span><span class="entn2 mono">'+((e.n||0).toLocaleString('fr'))+'</span></div>';}
 function openEntB(k,i){const e=(k==='m'?ENTB.machines:ENTB.users)[i];if(e)openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
 function openEntS(i){const e=ENTS[i];if(e)openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
 function entSearchDo(q){q=(q||"").trim();const r=$("#entResults");if(!r)return;

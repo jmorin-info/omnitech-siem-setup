@@ -734,19 +734,50 @@ def get_entity_timeline(name, days=14, limit=60):
 
 
 def get_entities_browse(days=7):
-    """Page Entités : top COMPTES et top MACHINES par activité de détection — point
-    de départ pour parcourir/sélectionner (la recherche couvre tout le reste)."""
+    """Page Entités : top COMPTES et top MACHINES, classés par SCORE DE RISQUE FUSIONNÉ
+    (ML + UEBA + sévérité détections) — point de départ priorisé. Efficient : 2 cartes de
+    score (ml/ueba par nom nu) + 2 requêtes top avec sous-agg sévérité, pas de boucle/entité."""
     days = max(1, min(int(days), 90))
     gte = f"now-{days}d"
 
-    def _top(field):
+    def _bare(s):
+        return str(s or "").split("\\")[-1].split("@")[0].strip().lower()
+
+    def _scoremap(src, score_field, key_field):
+        r = os_search("omni-*", {"size": 0,
+            "query": {"bool": {"filter": [{"term": {"event_source": src}},
+                                          {"range": {"timestamp": {"gte": gte}}}]}},
+            "aggs": {"e": {"terms": {"field": key_field, "size": 80},
+                           "aggs": {"s": {"max": {"field": score_field}}}}}})
+        m = {}
+        for b in r.get("aggregations", {}).get("e", {}).get("buckets", []):
+            k, v = _bare(b.get("key")), (b.get("s", {}) or {}).get("value")
+            if k and v is not None:
+                m[k] = max(m.get(k, 0), v)
+        return m
+    ml_map = _scoremap("ml_anomaly", "ml_score", "entity")
+    ue_map = _scoremap("ueba_score", "ueba_score", "ueba_entity")
+
+    def _top(field, is_user):
         r = os_search("omni-*", {"size": 0,
             "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}, {"exists": {"field": field}}],
                                "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
-            "aggs": {"e": {"terms": {"field": field, "size": 18}}}})
-        return [{"entity": _rd(b["key"]), "n": b["doc_count"]}
-                for b in r.get("aggregations", {}).get("e", {}).get("buckets", []) if b.get("key")]
-    return {"users": _top("user"), "machines": _top("source")}
+            "aggs": {"e": {"terms": {"field": field, "size": 18},
+                           "aggs": {"sev": {"terms": {"field": "risk_severity", "size": 6}}}}}})
+        out = []
+        for b in r.get("aggregations", {}).get("e", {}).get("buckets", []):
+            if not b.get("key"):
+                continue
+            sev = {x["key"]: x["doc_count"] for x in (b.get("sev", {}) or {}).get("buckets", [])}
+            bare = _bare(b["key"])
+            sc = {"ml": {"score": ml_map.get(bare) if is_user else None},
+                  "ueba": {"score": ue_map.get(bare) if is_user else None}}
+            fr = _fused_risk(sc, sev, b["doc_count"])
+            out.append({"entity": _rd(b["key"]), "n": b["doc_count"],
+                        "risk": {"score": fr["score"], "label": fr["label"]}})
+        out.sort(key=lambda e: -e["risk"]["score"])
+        return out
+    return {"users": _top("user", True), "machines": _top("source", False)}
 
 
 _LOOKDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lookups")
