@@ -52,19 +52,49 @@ def feodo():
             out[row[1].strip()] = row[5].strip() or "C2"
     return out
 
+# Domaines d'INFRA PARTAGEE : le malware y vit a une URL/chemin precis, jamais "tout le
+# domaine". Un match DNS sur le domaine NU = 100% FP inexploitable (tout le monde interroge
+# github/drive.google/discord...). La detection de ces plateformes appartient a la couche
+# URL/proxy (FortiGate web filter / qhash), pas au DNS -> on les EXCLUT du lookup qname.
+# (Audit FP : 3460 events/7j = 9 domaines, tous d'infra partagee.)
+TI_SHARED_INFRA = {
+    "github.com", "raw.githubusercontent.com", "githubusercontent.com", "gist.github.com",
+    "objects.githubusercontent.com", "codeload.github.com", "gitlab.com", "bitbucket.org",
+    "drive.google.com", "drive.usercontent.google.com", "docs.google.com",
+    "storage.googleapis.com", "firebasestorage.googleapis.com",
+    "cdn.discordapp.com", "media.discordapp.net", "discord.com",
+    "cdn.jsdelivr.net", "jsdelivr.net", "res.cloudinary.com",
+    "dropbox.com", "dl.dropboxusercontent.com", "dropboxusercontent.com",
+    "1drv.ms", "onedrive.live.com", "sharepoint.com",
+    "amazonaws.com", "blob.core.windows.net",
+    "pastebin.com", "paste.ee", "mega.nz", "mediafire.com", "anonfiles.com",
+    "t.me", "telegram.org", "bit.ly", "tinyurl.com",
+}
+
+def _shared_infra(h):
+    return any(h == d or h.endswith("." + d) for d in TI_SHARED_INFRA)
+
 def urlhaus():
     out = {}
     try:
         txt = fetch("https://urlhaus.abuse.ch/downloads/text_recent/")
     except Exception as e:
         print("urlhaus KO:", e); return out
+    skipped = 0
     for line in txt.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
         host = urlparse(line).hostname
-        if host and "." in host and not host.replace(".", "").isdigit():
-            out[host.lower()] = "urlhaus"
+        if not (host and "." in host and not host.replace(".", "").isdigit()):
+            continue
+        h = host.lower()
+        if _shared_infra(h):       # infra partagee : match DNS inexploitable -> on saute
+            skipped += 1
+            continue
+        out[h] = "urlhaus"
+    if skipped:
+        print(f"urlhaus: {skipped} domaine(s) d'infra partagee exclus (detection -> couche URL, pas DNS)")
     return out
 
 c2 = feodo(); dom = urlhaus()
