@@ -217,6 +217,9 @@ when
   AND NOT contains(to_string($message.message), "ProcessStats", false)
   AND NOT contains(to_string($message.message), "SOAP request returned HTTP failure", true)
   AND NOT contains(to_string($message.message), "ssoAdminServer", true)
+  // Erreur interne de cast de jeton (vpxd Authorize) = bug/transitoire, PAS un echec d'auth
+  // client (663 events/7j, 0 recouvrement avec les vrais echecs).
+  AND NOT contains(to_string($message.message), "Failed to cast authentication token helper", true)
   // Exclure les comptes de service vCenter/ESXi (auth interne permanente = PAS du brute-force)
   // et localhost. Sinon vpxuser/dcui generent des centaines de faux positifs/jour.
   AND lowercase(to_string($message.user)) != "vpxuser"
