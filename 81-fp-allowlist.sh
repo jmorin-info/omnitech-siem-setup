@@ -265,6 +265,28 @@ then
 end
 EOF
 
+# --- sysmon_injection EventID 25 (ProcessTampering) : Git Bash + Claude Code ----
+# Mesure : les sysmon_injection résiduels (~534/90min, 97% du 'critique') sont des
+# EventID 25 (ProcessTampering, T1055.012) — pas des EventID 8/10. Ils n'ont PAS de
+# SourceImage (champ = Image), donc l'allowlist injection ne les voyait pas. 0 ciblant
+# lsass. Le gros = Git Bash (bash.exe dans \Git\, 92%) qui réécrit son image (fork/exec)
+# + Claude Code. GARDE-FOU : on n'allowliste QUE ces 2 binaires CHEMIN-ancrés ; smss/
+# System32/<unknown process>/AppData-hors-claude RESTENT alertés (risque de hollowing).
+ensure_rule "omni-fp-25-proctamper" <<'EOF'
+rule "omni-fp-25-proctamper"
+when
+  to_string($message.alert_tag) == "sysmon_injection"
+  AND to_long($message.winlogbeat_winlog_event_id, 0) == 25
+  AND ( contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\git\\usr\\", true)
+     OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\git\\bin\\bash.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\claude.exe", true) )
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_allowlist_reason", "sysmon_injection: ProcessTampering (EventID 25) Git Bash/Claude Code (chemin de confiance, jamais lsass)");
+  remove_field("alert_tag");
+end
+EOF
+
 echo "==> [3/4] Pipeline 'OMNI - Allowlist FP' (stage 25) + connexion streams"
 # Stage 25 = APRES MITRE (20) donc risk_score/mitre_* deja poses (scoring garde),
 # AVANT la reduction ISO (30). match either : une seule des 3 regles s'applique.
@@ -277,6 +299,7 @@ rule "omni-fp-25-autorun"
 rule "omni-fp-25-sysmon-injection"
 rule "omni-fp-25-adminshare-loopback"
 rule "omni-fp-25-ps-claude"
+rule "omni-fp-25-proctamper"
 end
 PIPE
 )"
