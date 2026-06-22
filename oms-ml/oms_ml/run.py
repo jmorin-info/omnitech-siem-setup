@@ -27,9 +27,18 @@ def load_cfg(path: str) -> dict:
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
-def _segmented_score(names, matrix, ents, classes, min_entities, kw):
+def _segmented_score(names, matrix, ents, classes, min_entities, kw, state=None, etype=""):
     """Anomalie par classe d'actif : un IsolationForest par classe (>= min_entities) ;
-    classes trop petites regroupées en « autres ». Fusionne et retrie par score."""
+    classes trop petites regroupées en « autres ». Fusionne et retrie par score.
+
+    Persiste un modèle PAR classe (anomaly_<etype>_<classe>.pkl) pour rester
+    symétrique avec le mode global (sinon aucun .pkl n'est écrit en mode segmenté)."""
+    def _mp(label):
+        if not state:
+            return None
+        safe = "".join(ch if ch.isalnum() else "_" for ch in str(label))
+        return f"{state}/anomaly_{etype}_{safe}.pkl"
+
     groups: dict = {}
     for i, c in enumerate(classes):
         c = c or "?"
@@ -39,14 +48,14 @@ def _segmented_score(names, matrix, ents, classes, min_entities, kw):
     pool_m, pool_e, out = [], [], []
     for c, (m, e) in groups.items():
         if len(e) >= min_entities:
-            for r in anomaly.train_score(names, m, e, **kw):
+            for r in anomaly.train_score(names, m, e, model_path=_mp(c), **kw):
                 r["cls"] = c
                 out.append(r)
         else:
             pool_m += m
             pool_e += e
     if len(pool_e) >= min_entities:
-        for r in anomaly.train_score(names, pool_m, pool_e, **kw):
+        for r in anomaly.train_score(names, pool_m, pool_e, model_path=_mp("autres"), **kw):
             r["cls"] = "autres"
             out.append(r)
     elif pool_e:
@@ -77,7 +86,7 @@ def cmd_anomaly(cfg: dict, args) -> int:
         # Segmentation par classe d'actif : compare un pare-feu à des pare-feux, un
         # serveur à des serveurs... évite qu'un gros émetteur (FortiGate) domine.
         if an["entities"][etype].get("segment") and len(set(classes)) > 1:
-            res = _segmented_score(names, matrix, ents, classes, me, kw)
+            res = _segmented_score(names, matrix, ents, classes, me, kw, state, etype)
             log.info("[%s] anomalie segmentée par classe (%d classes)", etype, len(set(classes)))
         else:
             res = anomaly.train_score(names, matrix, ents, model_path=f"{state}/anomaly_{etype}.pkl", **kw)
