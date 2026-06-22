@@ -89,6 +89,12 @@
     "correction": "Activer la protection anti-tampering ESET/Defender (verrouillée par mot de passe console), retirer les droits admin locaux aux utilisateurs (LAPS), WDAC, et alerter en temps réel sur toute modification de l'état de protection.",
     "remediation": "Isoler immédiatement l'hôte via NinjaOne, capturer la mémoire, forcer un scan ESET depuis la console (hors contrôle local). Révoquer les sessions et reset du compte. Rechercher la charge et la persistance."
   },
+  "dns_tunneling": {
+    "a_verifier": "Hôte, domaine PARENT (le serveur de tunnel), processus émetteur. Volume/fréquence/entropie des sous‑domaines. Écarter le légitime (certains AV/CDN/sécurité font des requêtes longues, DNS‑over‑HTTPS). Croiser avec une détection en amont sur l'hôte (macro, download, beaconing).",
+    "ce_que_cest": "Tunnel / exfiltration DNS (T1071.004 / T1048) : un hôte encode des données dans des requêtes DNS (sous‑domaines longs, à forte entropie) pour exfiltrer ou maintenir un canal C2 en contournant le filtrage web/proxy. Détecté par l'entropie + le volume des requêtes (oms‑ndr‑dns).",
+    "correction": "Forcer le DNS interne uniquement (bloquer le DNS sortant direct vers Internet), filtrage DNS (catégories tunnel/DGA/newly‑registered), surveillance de l'entropie DNS (déjà : oms‑ndr‑dns), EDR, segmentation.",
+    "remediation": "Isoler l'hôte, identifier le processus + le domaine de tunnel, bloquer le domaine (FortiGate DNS filter / SOAR), rechercher les données exfiltrées + la charge initiale, capturer les requêtes pour analyse forensique."
+  },
   "eset_detection": {
     "a_verifier": "En premier : nom de la détection, ligne de commande complète, hôte/utilisateur et parent process. Distinguer un script d'admin/GPO légitime d'un one-liner offusqué/encodé lancé depuis Office ou un navigateur.",
     "ce_que_cest": "ESET a levé une détection sur un interpréteur de commandes/scripting (cmd, PowerShell, wscript) exécutant du code suspect. Indique une activité d'exécution potentiellement malveillante captée par l'EDR.",
