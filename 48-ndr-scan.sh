@@ -11,8 +11,106 @@ cd "$(dirname "$0")"
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "a lancer en root."
-[[ -x /usr/local/sbin/omni-ndr-scan ]] || die "/usr/local/sbin/omni-ndr-scan absent."
 require_api
+
+echo "==> [0/3] Detecteur omni-ndr-scan (VERSIONNE ici)"
+# Auparavant non versionne (binaire suppose present) -> source desormais dans le repo,
+# reproductible. + resserrement structurel : on ignore le balayage horizontal dont les
+# SEULS ports refuses sont SNMP (161/162) = supervision (NMS/sonde), pas un scan lateral.
+install -d /usr/local/sbin
+cat > /usr/local/sbin/omni-ndr-scan <<'NDREOF'
+#!/usr/bin/env python3
+# =============================================================================
+# omni-ndr-scan - Detection de scan reseau / reconnaissance (FortiGate deny).
+#   Agrege les connexions REFUSEES par source INTERNE et mesure la cardinalite des
+#   destinations / ports -> balayage HORIZONTAL (1 src -> N hotes) ou scan VERTICAL
+#   (1 src -> N ports sur peu d'hotes). Cible les sources INTERNES (mouvement lateral /
+#   reconnaissance interne), pas le scan Internet entrant (constant, peu actionnable).
+#   Emet GELF event_source=ndr_scan, alert_tag=network_scan (T1046/T1018).
+# Lance par timer (15 min). Config 00-vars.env : SCAN_*.
+# =============================================================================
+import json, os, re, sys, urllib.request
+
+OS_URL = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM = "bx-it-graylog-vm"
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+ENV = load_env()
+WINDOW_M  = int(ENV.get("SCAN_WINDOW_M", "60"))    # fenetre glissante (scans souvent lents)
+HOST_MIN  = int(ENV.get("SCAN_HOST_MIN", "30"))    # dest_ip distincts -> horizontal
+PORT_MIN  = int(ENV.get("SCAN_PORT_MIN", "25"))    # dest_port distincts -> vertical
+VERT_MAXH = int(ENV.get("SCAN_VERT_MAXHOSTS", "3"))# vertical = ports nombreux sur peu d'hotes
+ALLOW_SRC = set(x.strip() for x in (ENV.get("SCAN_ALLOW_SRC", "")).split(",") if x.strip())  # infra de gestion legitime
+MON_PORTS = {"161", "162"}                         # SNMP = supervision (NMS/sonde), pas du scan lateral
+
+def es(body):
+    req = urllib.request.Request(f"{OS_URL}/omni-fortigate_*/_search", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+def gelf(fields):
+    if os.environ.get("UEBA_DRY"):
+        return
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "ndr_scan")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def main():
+    agg = es({"size": 0,
+        "query": {"bool": {"must": [{"term": {"action": "deny"}},
+                                    {"term": {"src_ip_reserved_ip": True}},
+                                    {"range": {"timestamp": {"gte": f"now-{WINDOW_M}m"}}}]}},
+        "aggs": {"s": {"terms": {"field": "src_ip", "size": 200},
+                       "aggs": {"dips": {"cardinality": {"field": "dest_ip"}},
+                                "dports": {"cardinality": {"field": "dest_port"}},
+                                "topports": {"terms": {"field": "dest_port", "size": 6}}}}}})
+    found = 0
+    for b in agg["aggregations"]["s"]["buckets"]:
+        src = b["key"]; ndip = b["dips"]["value"]; ndport = b["dports"]["value"]
+        if src in ALLOW_SRC:
+            continue                       # source d'infra de gestion legitime (allowlist)
+        horizontal = ndip >= HOST_MIN
+        vertical = ndport >= PORT_MIN and ndip <= VERT_MAXH
+        if not (horizontal or vertical):
+            continue
+        ports = ",".join(str(p["key"]) for p in b["topports"]["buckets"])
+        # Supervision SNMP : balayage horizontal dont les SEULS ports refuses sont SNMP
+        # (161/162) = NMS/sonde interrogeant le parc, PAS du scan lateral. Couvre tous les
+        # superviseurs sans liste d'IP. (Le scan vertical / multi-ports reste alerte.)
+        portset = set(str(p["key"]) for p in b["topports"]["buckets"])
+        if horizontal and not vertical and portset and portset <= MON_PORTS:
+            continue
+        stype = "horizontal" if horizontal else "vertical"
+        found += 1
+        gelf({"event_source": "ndr_scan", "alert_tag": "network_scan",
+              "scan_type": stype, "entity_host": src, "scan_dest_count": int(ndip),
+              "scan_port_count": int(ndport), "scan_deny": b["doc_count"], "scan_top_ports": ports,
+              "short_message": f"SCAN {stype} depuis {src} : {int(ndip)} hotes / {int(ndport)} ports refuses ({b['doc_count']} deny)"})
+        print(f"  [scan {stype}] {src}: dest_ips={int(ndip)} dest_ports={int(ndport)} deny={b['doc_count']}")
+    print(f"[ndr-scan] sources_internes_analysees={len(agg['aggregations']['s']['buckets'])} scans={found} (fenetre {WINDOW_M}m)")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-ndr-scan KO:", e, file=sys.stderr); sys.exit(1)
+NDREOF
+chmod 755 /usr/local/sbin/omni-ndr-scan
+ok "detecteur omni-ndr-scan ecrit (versionne + skip SNMP)"
 
 echo "==> [1/3] Mapping MITRE (network_scan -> T1046)"
 CSV="lookups/mitre-attack.csv"
