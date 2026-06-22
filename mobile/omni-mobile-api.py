@@ -651,14 +651,34 @@ def get_investigation(name, days=14):
             "linked": [_rd(u) for u in linked] if len(linked) > 1 else []}
 
 
-_GUIDANCE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lookups", "alert-guidance.json")
+_LOOKDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lookups")
+_GUIDANCE_PATH = os.path.join(_LOOKDIR, "alert-guidance.json")
+_MITRE_PATH = os.path.join(_LOOKDIR, "mitre-attack.csv")
 _GUIDANCE = {"mtime": -1.0, "data": {}}
+_MITRE = {"mtime": -1.0, "data": {}}
+
+
+def _load_mitre():
+    try:
+        m = os.path.getmtime(_MITRE_PATH)
+        if m != _MITRE["mtime"]:
+            import csv
+            d = {}
+            with open(_MITRE_PATH, encoding="utf-8") as fh:
+                for r in csv.DictReader(fh):
+                    d[r["alert_tag"]] = {"technique": r.get("technique", ""), "name": r.get("technique_name", ""),
+                                         "tactic": r.get("tactic", ""), "severity": r.get("severity", "")}
+            _MITRE["data"] = d
+            _MITRE["mtime"] = m
+    except Exception:
+        pass
+    return _MITRE["data"]
 
 
 def get_guidance():
     """Aide à la décision par détection (`alert_tag`) : ce que c'est, à vérifier
-    (triage), remédiation, correction durable. Connaissance STATIQUE (aucune PII) ;
-    rechargée à chaud si le fichier change. Sert le triage/réponse côté console+PWA."""
+    (triage), remédiation, correction durable + contexte MITRE (tactique/technique).
+    Connaissance STATIQUE (aucune PII) ; rechargée à chaud. Triage/réponse + Playbooks."""
     try:
         m = os.path.getmtime(_GUIDANCE_PATH)
         if m != _GUIDANCE["mtime"]:
@@ -667,7 +687,8 @@ def get_guidance():
             _GUIDANCE["mtime"] = m
     except Exception:
         pass
-    return _GUIDANCE["data"]
+    mit = _load_mitre()
+    return {tag: {**g, **mit.get(tag, {})} for tag, g in _GUIDANCE["data"].items()}
 
 
 def get_detections(tactic="", source="", tag="", technique=""):

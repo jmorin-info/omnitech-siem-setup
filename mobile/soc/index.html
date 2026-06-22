@@ -238,6 +238,14 @@
   .idulb{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5fc98a}
   .idulb .svi{width:13px;height:13px}
   .idchip{background:#10233a;border:1px solid #2b4a3a;color:#bfe8d2;border-radius:6px;padding:2px 8px;font-size:11px;font-family:ui-monospace,monospace}
+  /* --- Playbooks --- */
+  .pbgrp{margin:16px 0}
+  .pbtac{display:inline-block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:3px 11px;border:1px solid;border-radius:7px;margin-bottom:10px}
+  .pbcard{background:#0b1422;border:1px solid #1b2c44;border-radius:9px;padding:9px 11px;margin-bottom:9px}
+  .pbhd{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px}.pbhd b{color:var(--fg)}
+  .pbsev{font-size:9px;font-weight:800;text-transform:uppercase;padding:1px 6px;border-radius:4px;margin-left:auto}
+  .pbsev.critique{background:#3a1418;color:#fb7185}.pbsev.eleve{background:#3a2a12;color:#f5a623}.pbsev.moyen{background:#0e2a3a;color:#22d3ee}.pbsev.faible{background:#1a2030;color:#8aa0bf}
+  .pbcard .gcard{border-left-color:#39507a;margin:0}
   .report{background:#fff;color:#111827;border-radius:10px;padding:32px;max-width:920px}
   .report h1{font-size:20px;color:#0b1322;margin:0}.report h2{font-size:14px;margin:20px 0 8px;color:#0b1322;border-bottom:1px solid #e2e8f0;padding-bottom:5px}
   .report .muted{color:#64748b}
@@ -481,6 +489,7 @@
       <a data-p="leaks"><span class="ic"><svg class="svi"><use href="#i-unlock"></use></svg></span><span data-i18n="nav_leaks">Fuites & Dark Web</span></a>
       <a data-p="health"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span><span data-i18n="nav_health">Santé & Collecte</span></a>
       <a data-p="report"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span><span data-i18n="nav_report">Rapport</span></a>
+      <a data-p="playbooks"><span class="ic"><svg class="svi"><use href="#i-help"></use></svg></span><span data-i18n="nav_playbooks">Playbooks</span></a>
     </nav>
     <div class="side-foot">v1 · données temps réel<br>OpenSearch + oms-xdr</div>
   </aside>
@@ -582,6 +591,12 @@
         <button class="iconbtn" style="margin-left:auto" onclick="window.print()"><svg class="svi"><use href="#i-print"></use></svg> <span data-i18n="btn_print">Imprimer / PDF</span></button></div>
       <div id="reportBody" class="report"></div>
     </section>
+    <section class="page" id="p-playbooks">
+      <div class="card"><h3><svg class="svi"><use href="#i-help"></use></svg> <span data-i18n="pb_title">Playbooks de réponse</span><span class="tag" data-i18n="pb_sub">guide d'action par détection, regroupé par tactique ATT&CK</span></h3>
+        <input id="pbSearch" oninput="renderPlaybooks(this.value)" placeholder="🔎 Rechercher une détection, technique, mot-clé…" data-i18n-ph="pb_search" autocomplete="off"
+          style="width:100%;margin:6px 0 4px;padding:9px 12px;background:#0c1424;border:1px solid var(--bd);border-radius:9px;color:var(--fg);font-size:13px">
+        <div id="pbBody"></div></div>
+    </section>
   </main>
   <div id="emodal"><div class="scrim2" onclick="closeEnt()"></div><div class="emc" id="emc"></div></div>
   <div id="pal"><div class="scrim2" onclick="closePal()"></div><div class="palbox"><input id="palIn" placeholder="Rechercher / naviguer…  (pages, entités)" data-i18n-ph="ph_palette" oninput="renderPal(this.value)"><div id="palList"></div></div></div>
@@ -612,7 +627,7 @@ const TACCOL={"Initial Access":"#fb3b53","Execution":"#f97316","Persistence":"#f
 let LANG=localStorage.getItem("soc_lang")||"fr";
 const I18N={
  fr:{
-  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",
+  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",
   cluster_ok:"Cluster opérationnel",dens_comfort:"Confort",dens_compact:"Compact",
   al_search:"Recherche et navigation (Ctrl ou Cmd + K)",al_refresh:"Rafraîchir les données",al_density:"Basculer la densité d'affichage",al_help:"Ouvrir l'aide et les raccourcis clavier",al_logout:"Se déconnecter",al_lang:"Changer la langue (FR/EN)",
   t_search:"Recherche (Ctrl/Cmd+K)",t_refresh:"Rafraîchir maintenant",t_help:"Aide et raccourcis (touche ?)",t_logout:"Se déconnecter",t_lang:"Langue : Français — cliquer pour English",
@@ -632,7 +647,7 @@ const I18N={
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
  en:{
-  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",
+  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",
   cluster_ok:"Cluster operational",dens_comfort:"Comfort",dens_compact:"Compact",
   al_search:"Search and navigation (Ctrl or Cmd + K)",al_refresh:"Refresh data",al_density:"Toggle display density",al_help:"Open help and keyboard shortcuts",al_logout:"Sign out",al_lang:"Change language (FR/EN)",
   t_search:"Search (Ctrl/Cmd+K)",t_refresh:"Refresh now",t_help:"Help and shortcuts (press ?)",t_logout:"Sign out",t_lang:"Language: English — click for Français",
@@ -680,8 +695,8 @@ function start(){$("#login").style.display="none";$("#app").style.display="grid"
 
 // nav
 const titles={
-  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport"},
-  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",attack:"MITRE ATT&CK",graph:"Attack graph",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report"}};
+  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
+  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",attack:"MITRE ATT&CK",graph:"Attack graph",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
 const PDESC={
  fr:{
   overview:"<b>Posture en un coup d'œil</b> — indicateurs clés, activité des dernières 24 h, tactiques ATT&CK et flux d'événements en temps réel. Chaque indicateur est cliquable.",
@@ -691,7 +706,8 @@ const PDESC={
   graph:"<b>Graphe d'attaque</b> — relie les utilisateurs aux techniques qu'ils ont déclenchées. Taille du nœud = volume, couleur = tactique. Cliquez un nœud bleu pour la fiche entité.",
   leaks:"<b>Fuites & Dark Web</b> — surveille les sites d'extorsion ransomware (RansomLook), les comptes exposés (HIBP/Dehashed) et le code public (GitHub).",
   health:"<b>Santé de la collecte</b> — volume et fraîcheur de chaque source. Une source qui décroche = angle mort, alerté automatiquement (preuve ISO A.8.15).",
-  report:"<b>Rapport de posture</b> — synthèse exécutive imprimable (PDF) pour la direction et l'audit ISO. Bouton « Imprimer / PDF » en haut à droite."
+  report:"<b>Rapport de posture</b> — synthèse exécutive imprimable (PDF) pour la direction et l'audit ISO. Bouton « Imprimer / PDF » en haut à droite.",
+  playbooks:"<b>Playbooks de réponse</b> — pour chaque détection : ce que c'est, comment trier (vrai/faux positif), comment remédier et corriger durablement. Cherchez, ou parcourez par tactique ATT&CK."
  },
  en:{
   overview:"<b>Posture at a glance</b> — key indicators, last-24h activity, ATT&CK tactics and a real-time event feed. Every indicator is clickable.",
@@ -701,7 +717,8 @@ const PDESC={
   graph:"<b>Attack graph</b> — links users to the techniques they triggered. Node size = volume, color = tactic. Click a blue node for the entity profile.",
   leaks:"<b>Leaks & Dark Web</b> — monitors ransomware extortion sites (RansomLook), exposed accounts (HIBP/Dehashed) and public code (GitHub).",
   health:"<b>Collection health</b> — volume and freshness of each source. A source going dark = blind spot, alerted automatically (ISO A.8.15 evidence).",
-  report:"<b>Posture report</b> — printable executive summary (PDF) for management and ISO audit. “Print / PDF” button at top right."
+  report:"<b>Posture report</b> — printable executive summary (PDF) for management and ISO audit. “Print / PDF” button at top right.",
+  playbooks:"<b>Response playbooks</b> — for each detection: what it is, how to triage (true/false positive), how to remediate and harden. Search, or browse by ATT&CK tactic."
  }
 };
 function setDesc(pg){if($("#pdesc"))$("#pdesc").innerHTML=(PDESC[LANG]||PDESC.fr)[pg]||"";}
@@ -710,7 +727,23 @@ document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   const pg=a.dataset.p; document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+pg));
   $("#ptitle").textContent=(titles[LANG]||titles.fr)[pg];setDesc(pg);
   if(pg==="graph"){j("/graph").then(g=>{renderGraph(g);gPopulate();setTimeout(applyGraphFilter,80);}).catch(()=>{});}
-  if(pg==="report"){j("/report").then(r=>renderReport(r)).catch(()=>{});}});
+  if(pg==="report"){j("/report").then(r=>renderReport(r)).catch(()=>{});}
+  if(pg==="playbooks"){var s=$("#pbSearch");renderPlaybooks(s?s.value:"");}});
+function renderPlaybooks(q){const body=$("#pbBody");if(!body)return;
+  if(!Object.keys(GUIDANCE).length){j("/guidance").then(r=>{GUIDANCE=r.guidance||{};renderPlaybooks(q);}).catch(()=>{});return;}
+  q=(q||"").trim().toLowerCase();
+  const groups={};
+  Object.keys(GUIDANCE).forEach(tag=>{const g=GUIDANCE[tag];
+    const hay=(tag+" "+(g.name||"")+" "+(g.technique||"")+" "+(g.tactic||"")+" "+(g.ce_que_cest||"")+" "+(g.remediation||"")).toLowerCase();
+    if(q&&hay.indexOf(q)<0)return;
+    const tac=g.tactic||"Autre";(groups[tac]=groups[tac]||[]).push(tag);});
+  const tacs=Object.keys(groups).sort();
+  if(!tacs.length){body.innerHTML='<div class="muted gpad">'+t("pb_none")+'</div>';return;}
+  body.innerHTML=tacs.map(tac=>{
+    const items=groups[tac].sort().map(tag=>{const g=GUIDANCE[tag];
+      return '<div class="pbcard"><div class="pbhd"><b>'+nice(tag)+'</b>'+(g.technique?'<span class="srcb">'+esc(g.technique)+'</span>':'')+(g.severity?'<span class="pbsev '+esc(g.severity)+'">'+esc(g.severity)+'</span>':'')+'</div>'+guidanceBlock(tag)+'</div>';}).join("");
+    return '<div class="pbgrp"><div class="pbtac" style="border-color:'+(TACCOL[tac]||"#39507a")+';color:'+(TACCOL[tac]||"#9fb2cf")+'">'+esc(tac)+' · '+groups[tac].length+'</div>'+items+'</div>';
+  }).join("");}
 
 // charts
 if(window.Chart){Chart.defaults.color="#7c8aa6";Chart.defaults.font.family="Segoe UI";Chart.defaults.borderColor="rgba(255,255,255,.05)";}
