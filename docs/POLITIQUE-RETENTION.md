@@ -25,6 +25,8 @@ La rétention « supprime » (delete) les index une fois la fenêtre dépassée.
 |                                 |                  |        | sécurité (deny/UTM/VPN) restent corrélables sur toute la fenêtre        |
 | BunkerWeb (WAF)                 | `omni-bunkerweb` | 90 j   | Logs HTTP/WAF à fort volume ; 90 j couvrent le besoin d'investigation   |
 | Vaultwarden (coffre MDP)        | `omni-vaultwarden` | 90 j | Coffre de mots de passe : échecs d'auth, accès admin. **Index dédié** pour éviter que le volume/rejeu n'évince les events internes du SIEM |
+| FortiManager (admin/config)     | `omni-fortimanager` | 365 j | Journaux d'administration/configuration FAZ (changements, accès admin) : valeur de traçabilité/audit élevée, alignée sur les sources sécurité. **Index dédié** (créé par `63`) |
+| Interne SIEM (UEBA/ML/santé)    | `omni-interne`   | 90 j   | Événements réinjectés : scores UEBA/ML, SLA de collecte, santé robots, incidents XDR. 90 j couvrent l'analyse de tendance et l'entraînement ML (fenêtres ≤ 7 j). **Index dédié** (créé par `79`) |
 
 Sources annexes :
 - **NPS / RADIUS** : champs mappés et index prêts côté SIEM, mais la collecte
