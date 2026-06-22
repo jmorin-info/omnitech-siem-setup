@@ -81,3 +81,4 @@ inhibit_recovery,T1490,Inhibit System Recovery,Impact,critique,9
 lsass_dump_comsvcs,T1003.001,OS Credential Dumping: LSASS Memory,Credential Access,critique,9
 ntds_ifm_dump,T1003.003,OS Credential Dumping: NTDS,Credential Access,critique,9
 installutil_proxy,T1218.004,System Binary Proxy Execution: InstallUtil,Defense Evasion,eleve,7
+office_spawn_shell,T1204.002,User Execution: Malicious File,Execution,critique,9

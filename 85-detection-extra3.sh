@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # 85-detection-extra3.sh - Detecteurs ATT&CK haute-fidelite / FP mesure nul
-#   Quatre tripwires valides sur les donnees REELLES du parc (sonde OpenSearch
+#   Cinq tripwires valides sur les donnees REELLES du parc (sonde OpenSearch
 #   omni-sysmon_*). FENETRE REELLE MESUREE : ~11 j (2026-06-11 -> 2026-06-22),
 #   ~10,6 M d'EID1 Sysmon, 85 hotes (l'index Sysmon ne couvre PAS 90 j). Pour
 #   chaque signature OFFENSIVE precise : baseline observee = 0 -> alerte count>=1.
@@ -126,6 +126,39 @@ then
 end
 EOF
 
+# --- 5) Application Office lance un interpreteur (T1204.002) ------------------
+# Macro/document malveillant : une appli Office (winword/excel/powerpnt/outlook/
+# mspub/onenote) lance un shell/script/LOLBin. Mesure 7j : 0 occurrence (Office ne
+# lance JAMAIS cmd/powershell/wscript/cscript/mshta/regsvr32/rundll32/certutil/
+# bitsadmin/schtasks en regime normal) -> tout hit = execution de macro = incident.
+ensure_rule "omni-x3-13-office-shell" <<'EOF'
+rule "omni-x3-13-office-shell"
+when
+  to_string($message.event_source) == "sysmon"
+  AND to_string($message.winlogbeat_winlog_event_id) == "1"
+  AND ( ends_with(to_string($message.winlogbeat_winlog_event_data_ParentImage), "\\winword.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_ParentImage), "\\excel.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_ParentImage), "\\powerpnt.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_ParentImage), "\\outlook.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_ParentImage), "\\mspub.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_ParentImage), "\\onenote.exe", true) )
+  AND ( ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\cmd.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\powershell.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\pwsh.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\wscript.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\cscript.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\mshta.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\regsvr32.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\rundll32.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\certutil.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\bitsadmin.exe", true)
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\schtasks.exe", true) )
+then
+  set_field("alert_tag", "office_spawn_shell");
+  set_field("event_action", "execution_macro_office");
+end
+EOF
+
 echo "==> [2/4] Pipeline 'OMNI - Detections extra3' (stage 13) + connexion stream Sysmon"
 PL="$(ensure_pipeline "OMNI - Detections extra3" <<'PIPE'
 pipeline "OMNI - Detections extra3"
@@ -134,6 +167,7 @@ rule "omni-x3-13-inhibit-recovery"
 rule "omni-x3-13-comsvcs-lsass"
 rule "omni-x3-13-ntdsutil-ifm"
 rule "omni-x3-13-installutil-proxy"
+rule "omni-x3-13-office-shell"
 end
 PIPE
 )"
@@ -147,6 +181,7 @@ add_mitre inhibit_recovery   T1490     "Inhibit System Recovery"                
 add_mitre lsass_dump_comsvcs T1003.001 "OS Credential Dumping: LSASS Memory"        "Credential Access" critique 9
 add_mitre ntds_ifm_dump      T1003.003 "OS Credential Dumping: NTDS"                "Credential Access" critique 9
 add_mitre installutil_proxy  T1218.004 "System Binary Proxy Execution: InstallUtil" "Defense Evasion"   eleve    7
+add_mitre office_spawn_shell  T1204.002 "User Execution: Malicious File"             "Execution"         critique 9
 install -m 644 "$CSV" /etc/graylog/lookup/mitre-attack.csv
 chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true
 ok "MITRE inhibit_recovery / lsass_dump_comsvcs / ntds_ifm_dump / installutil_proxy"
@@ -168,7 +203,8 @@ mk_a "OMNI - Destruction des sauvegardes (vssadmin/wbadmin/bcdedit)" "alert_tag:
 mk_a "OMNI - Dump LSASS via comsvcs.dll MiniDump"                    "alert_tag:lsass_dump_comsvcs" "$SYS"
 mk_a "OMNI - Extraction NTDS.dit via ntdsutil IFM"                   "alert_tag:ntds_ifm_dump"      "$SYS"
 mk_a "OMNI - Execution proxy via InstallUtil"                        "alert_tag:installutil_proxy"  "$SYS"
+mk_a "OMNI - Application Office lance un interpreteur (macro)"        "alert_tag:office_spawn_shell" "$SYS"
 echo
-echo "=== 85 termine. 4 techniques : T1490 (inhibit_recovery), T1003.001 (lsass_dump_comsvcs),"
+echo "=== 85 termine. 5 techniques (+T1204.002 office_spawn_shell) : T1490 (inhibit_recovery), T1003.001 (lsass_dump_comsvcs),"
 echo "    T1003.003 (ntds_ifm_dump), T1218.004 (installutil_proxy). Baseline 0 mesuree sur ~11 j."
 echo "    Relancer 57 (carte ATT&CK) puis 14 (couleurs/dashboards). ==="

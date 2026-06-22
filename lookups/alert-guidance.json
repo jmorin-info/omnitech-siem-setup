@@ -311,6 +311,12 @@
     "correction": "Tiering AD, restreindre l'accès admin aux DC, alerter sur ntdsutil, Protected Users/Credential Guard, et accès aux DC via PAW uniquement.",
     "remediation": "Isoler le DC via NinjaOne, capturer la mémoire, saisir/supprimer le média IFM. Reset double du krbtgt + comptes privilégiés, révocation des tickets. Réponse compromission domaine."
   },
+  "office_spawn_shell": {
+    "a_verifier": "Identifier l'hôte, l'utilisateur, le document parent et la LIGNE DE COMMANDE de l'enfant. Décoder la commande (souvent encodée/obfusquée : -enc, FromBase64String, IEX, DownloadString). D'où vient le document (pièce jointe mail, partage, web) ? Ouverture volontaire ? Croiser avec les détections suivantes sur l'hôte (téléchargement 2e étage, persistance, beaconing C2).",
+    "ce_que_cest": "Une application Office (Word/Excel/PowerPoint/Outlook/Publisher/OneNote) a lancé un interpréteur de commandes ou un LOLBin (cmd/PowerShell/wscript/cscript/mshta/regsvr32/rundll32/certutil/bitsadmin/schtasks). Signature quasi-certaine d'une MACRO ou d'un document malveillant exécuté (T1204.002) — vecteur d'accès initial classique. Baseline mesurée = 0 sur le parc, donc tout déclenchement est un incident.",
+    "correction": "GPO « Bloquer l'exécution des macros Office provenant d'Internet » + désactiver les macros non signées ; règle ASR « Empêcher les applications Office de créer des processus enfants » ; filtrage des pièces jointes (mail) ; EDR (ESET) ; sensibilisation au phishing.",
+    "remediation": "Isoler l'hôte (NinjaOne). Tuer les processus enfant + parent. Préserver le document + la mémoire (preuves). Révoquer identifiants/sessions de l'utilisateur. Rechercher la charge utile téléchargée, la persistance (autoruns/tâches) et le mouvement latéral. Bloquer l'expéditeur/le domaine source."
+  },
   "persistence_autorun": {
     "a_verifier": "En premier : valeur ajoutée (chemin/binaire), hôte, compte et parent process ayant écrit la clé. Distinguer un logiciel légitime installé d'un binaire en chemin temp/utilisateur, non signé ou offusqué.",
     "ce_que_cest": "Persistance via clé Run du registre ou dossier Démarrage (T1547.001) — exécution automatique d'une charge au logon/démarrage. Mécanisme de maintien d'accès très courant.",
