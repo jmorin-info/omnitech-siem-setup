@@ -204,10 +204,14 @@ VERDICT="OK"
 [ "$GL" != "active" ] && VERDICT="DEGRADE: graylog=$GL"
 printf '%s | cryptdata=%s /data=%s mongod=%s opensearch=%s graylog=%s cluster=%s | %s\n' \
   "$(date -u +%FT%TZ)" "$CD" "$DM" "$MO" "$OS" "$GL" "$CL" "$VERDICT" >> /var/log/omni-postboot.log
-# GELF best-effort (ne marche que si graylog est up)
-TAG=$([ "$VERDICT" = "OK" ] && echo siem_boot_ok || echo siem_job_fail)
+# GELF best-effort (ne marche que si graylog est up).
+# Succes -> evenement de SANTE (health_type=boot_ok) SANS alert_tag : un boot reussi
+# est un signal POSITIF, il ne doit pas polluer le namespace de detection (alert_tag).
+# Echec -> alert_tag=siem_job_fail (vraie alerte : faute interne SIEM, alerte existante).
+# Dans les deux cas le statut reste tracable via event_source=siem_boot + boot_verdict.
+if [ "$VERDICT" = "OK" ]; then TAGF="\"_health_type\":\"boot_ok\""; else TAGF="\"_alert_tag\":\"siem_job_fail\""; fi
 curl -s -m 10 -X POST http://127.0.0.1:12201/gelf -H 'Content-Type: application/json' \
-  -d "{\"version\":\"1.1\",\"host\":\"bx-it-graylog-vm\",\"short_message\":\"SIEM post-boot: ${VERDICT} (/data=${DM}, graylog=${GL}, cluster=${CL})\",\"_event_source\":\"siem_boot\",\"_alert_tag\":\"${TAG}\",\"_boot_verdict\":\"${VERDICT}\"}" >/dev/null 2>&1 || true
+  -d "{\"version\":\"1.1\",\"host\":\"bx-it-graylog-vm\",\"short_message\":\"SIEM post-boot: ${VERDICT} (/data=${DM}, graylog=${GL}, cluster=${CL})\",\"_event_source\":\"siem_boot\",${TAGF},\"_boot_verdict\":\"${VERDICT}\"}" >/dev/null 2>&1 || true
 OMNISBIN
 chmod 755 /usr/local/sbin/omni-postboot-check
 cat > /etc/systemd/system/omni-postboot-check.service <<'OMNIUNIT'
