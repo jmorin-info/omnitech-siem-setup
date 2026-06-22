@@ -366,10 +366,13 @@ ensure_event "OMNI - DCSync suspect" 3 \
   'alert_tag:dcsync' "[\"${ST_WINSEC}\"]" \
   '[]' '[]' "${NOCOND}" 5 1
 
-ensure_event "OMNI - Kerberoasting suspect (>=5 SPN / compte / 10 min)" 3 \
-  'alert_tag:kerberoasting' "[\"${ST_WINSEC}\"]" \
-  '["user"]' "$(card_series winlogbeat_winlog_event_data_ServiceName)" \
-  "$(card_ge winlogbeat_winlog_event_data_ServiceName 5)" 10 2
+# [DEDUP 84] Redondant avec « OMNI - Kerberoasting (ticket Kerberos RC4 demande) »
+# du script 73 (source canonique, count>=1). Desactive pour eviter le doublon.
+# Voir 84-kerberoast-dedup.sh.
+# ensure_event "OMNI - Kerberoasting suspect (>=5 SPN / compte / 10 min)" 3 \
+#   'alert_tag:kerberoasting' "[\"${ST_WINSEC}\"]" \
+#   '["user"]' "$(card_series winlogbeat_winlog_event_data_ServiceName)" \
+#   "$(card_ge winlogbeat_winlog_event_data_ServiceName 5)" 10 2
 
 ensure_event "OMNI - Defender : détection ou désactivation" 3 \
   'alert_tag:defender' "[\"${ST_WINOTH}\"]" \
@@ -533,9 +536,11 @@ ensure_event "OMNI - VPN monté depuis l'étranger" 3 \
 ensure_event "OMNI - Modification de GPO par un humain (5136)" 3 \
   'alert_tag:gpo_modification' "[\"${ST_WINSEC}\"]" \
   '["user"]' "${COUNT_SERIES}" "$(count_ge 1)" 60 10
-ensure_event "OMNI - AS-REP roasting (compte sans pré-auth)" 3 \
-  'alert_tag:asrep_roasting' "[\"${ST_WINSEC}\"]" \
-  '["user"]' "${COUNT_SERIES}" "$(count_ge 1)" 30 5
+# [DEDUP 84] Redondant avec « OMNI - AS-REP Roasting (compte sans pre-auth
+# Kerberos) » du script 73 (canonique, count>=1, 5min). Desactive (doublon).
+# ensure_event "OMNI - AS-REP roasting (compte sans pré-auth)" 3 \
+#   'alert_tag:asrep_roasting' "[\"${ST_WINSEC}\"]" \
+#   '["user"]' "${COUNT_SERIES}" "$(count_ge 1)" 30 5
 ensure_event "OMNI - LOLBin suspect (binaire système détourné)" 2 \
   'alert_tag:lolbin_suspect' "[\"${ST_SYSMON}\"]" \
   '["host"]' "${COUNT_SERIES}" "$(count_ge 1)" 30 5
@@ -598,9 +603,11 @@ ensure_event "OMNI - Exfiltration par volume (flux sortant anormal)" 2 \
 ensure_event "OMNI - Accès credentials GPP/SYSVOL (T1552.006)" 3 \
   'alert_tag:gpp_creds_access' "[\"${ST_WINSEC}\"]" \
   '["user"]' "${COUNT_SERIES}" "$(count_ge 1)" 30 10
-ensure_event "OMNI - Kerberos RC4 / downgrade (kerberoasting)" 3 \
-  'alert_tag:kerberos_rc4' "[\"${ST_WINSEC}\"]" \
-  '["user"]' "${COUNT_SERIES}" "$(count_ge 5)" 30 10
+# [DEDUP 84] Redondant avec le tripwire kerberoasting du script 73 (count>=1).
+# Le tag kerberos_rc4 n'est plus consomme par aucune alerte. Desactive (doublon).
+# ensure_event "OMNI - Kerberos RC4 / downgrade (kerberoasting)" 3 \
+#   'alert_tag:kerberos_rc4' "[\"${ST_WINSEC}\"]" \
+#   '["user"]' "${COUNT_SERIES}" "$(count_ge 5)" 30 10
 ensure_event "OMNI - Ajout au groupe Administrateurs LOCAL (4732)" 2 \
   'alert_tag:local_admin_add' "[\"${ST_WINSEC}\"]" \
   '["host"]' "${COUNT_SERIES}" "$(count_ge 1)" 30 10
