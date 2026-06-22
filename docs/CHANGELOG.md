@@ -53,6 +53,27 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
 (T1562.001), `schtask_payload` (T1053.005), `amsi_bypass` (T1562.001). À déployer
 après revue (relancer ensuite `57` puis `14`).
 
+### Durcissement Graylog (streams / index / dashboards / corrélation / FP)
+- **Réduction des faux positifs (`81-fp-allowlist.sh`, déployé)** : pipeline
+  « OMNI - Allowlist FP » (stage 25) — pour des motifs bénins **mesurés**
+  (scheduled_task 97 % FP, service_install 86 % FP, dont nos propres agents
+  winlogbeat/Sysmon), pose `fp_allowlist=true` et **retire `alert_tag`** (l'alerte
+  ne tire plus ; l'événement reste indexé). Réversible (lookup `fp-allowlist.csv`).
+- **Dashboard « OMNI - Analytics » (`82-...`, déployé)** : 5 onglets — vue
+  d'ensemble, anomalies ML, UEBA, couverture & santé, bruit/FP.
+- **Corrélation kill-chain (`oms-xdr/rules.yaml`)** : 4 règles multi-signaux
+  (vol LSASS→persistance, PowerShell offensif→persistance, usage creds→partage
+  admin, LSASS→latéral 6 h) + 6 signaux + fenêtre par signal. Additif, réponse
+  dry-run préservée ; live au prochain cycle du timer `oms-xdr`.
+- **Rétention consolidée (`83-...`, dry-run par défaut)** : source unique de
+  vérité (valeurs = `POLITIQUE-RETENTION.md`) ; corrige le routage
+  `OMNI - FortiManager` (graylog_0 → `omni-fortimanager`). `APPLY=1` pour appliquer
+  (0 suppression immédiate ; auto-purge au-delà des seuils ensuite).
+- **Consolidation alertes Kerberos (`84-kerberoast-dedup.sh`, dry-run par défaut)** :
+  kerberoasting/RC4 ×3 et AS-REP ×2 sur le même événement → **5 alertes → 2**
+  (source canonique = `73`), garde-fou anti-perte de couverture. Posture AES
+  confirmée (zéro RC4/0x17 en 90 j → bruit latent). `APPLY=1` pour consolider.
+
 ## 2026-06-14 (audit de cohérence & nouvelles sources)
 
 ### Nouvelles sources intégrées (`52-new-sources.sh`)
