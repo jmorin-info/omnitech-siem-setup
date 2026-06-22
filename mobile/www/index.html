@@ -151,10 +151,10 @@
   <form class="lcard" onsubmit="login(event)">
     <div class="logo">⬢</div>
     <h1>OMNI <span style="color:var(--cy)">SOC</span></h1>
-    <div class="sub">Centre des opérations · accès RSSI (VPN)</div>
-    <input id="u" placeholder="Compte AD" autocomplete="username" autocapitalize="none">
-    <input id="p" type="password" placeholder="Mot de passe" autocomplete="current-password">
-    <button class="btn">Se connecter</button>
+    <div class="sub" data-i18n="login_sub">Centre des opérations · accès RSSI (VPN)</div>
+    <input id="u" data-i18n-ph="ph_account" placeholder="Compte AD" autocomplete="username" autocapitalize="none">
+    <input id="p" type="password" data-i18n-ph="ph_password" placeholder="Mot de passe" autocomplete="current-password">
+    <button class="btn" data-i18n="btn_signin">Se connecter</button>
     <div class="err" id="lerr"></div>
   </form>
 </div>
@@ -163,34 +163,35 @@
   <div class="appbar">
     <div class="mark">⬢</div><b>OMNI SOC</b>
     <span class="spacer"></span>
-    <span class="dot" title="opérationnel"></span>
-    <button class="ibtn" id="pushb" onclick="enablePush()" aria-label="Activer les notifications"><svg class="svi"><use href="#i-bell"></use></svg></button>
+    <span class="dot" data-i18n-t="status_op" title="opérationnel"></span>
+    <button class="ibtn" id="langBtn" onclick="setLang(LANG==='fr'?'en':'fr')" data-i18n-al="lang_al" aria-label="Changer la langue"><span id="langLab">EN</span></button>
+    <button class="ibtn" id="pushb" onclick="enablePush()" data-i18n-al="push_al" aria-label="Activer les notifications"><svg class="svi"><use href="#i-bell"></use></svg></button>
     <button class="ibtn" onclick="logout()">⎋</button>
   </div>
 
   <main>
     <section class="page on" id="p-home">
       <div class="kpis" id="kpis"></div>
-      <h3 class="sec">Activité (24 h)</h3>
-      <div class="card"><div class="ct">Détections par heure<span class="t">temps réel</span></div><div class="chartbox"><canvas id="cTs"></canvas></div></div>
-      <h3 class="sec">Tactiques ATT&CK (7 j)</h3>
+      <h3 class="sec" data-i18n="sec_activity">Activité (24 h)</h3>
+      <div class="card"><div class="ct"><span data-i18n="card_detperhour">Détections par heure</span><span class="t" data-i18n="tag_live">temps réel</span></div><div class="chartbox"><canvas id="cTs"></canvas></div></div>
+      <h3 class="sec" data-i18n="sec_tactics">Tactiques ATT&CK (7 j)</h3>
       <div class="card"><div class="chartbox"><canvas id="cTac"></canvas></div></div>
     </section>
-    <section class="page" id="p-alerts"><h3 class="sec">Alertes récentes (24 h)</h3><div class="feed" id="alFeed"></div></section>
-    <section class="page" id="p-inc"><h3 class="sec">Incidents corrélés</h3><div class="feed" id="incFeed"></div></section>
+    <section class="page" id="p-alerts"><h3 class="sec" data-i18n="sec_alerts">Alertes récentes (24 h)</h3><div class="feed" id="alFeed"></div></section>
+    <section class="page" id="p-inc"><h3 class="sec" data-i18n="sec_inc">Incidents corrélés</h3><div class="feed" id="incFeed"></div></section>
     <section class="page" id="p-threat">
       <div class="thban" id="thBanner"></div>
-      <h3 class="sec">Anomalies ML (3 h)</h3><div class="risk" id="mlList"></div>
-      <h3 class="sec">Risque UEBA (24 h)</h3><div class="risk" id="uebaList"></div>
-      <h3 class="sec">Top détections (24 h)</h3><div class="feed" id="detMini"></div>
+      <h3 class="sec" data-i18n="sec_ml">Anomalies ML (3 h)</h3><div class="risk" id="mlList"></div>
+      <h3 class="sec" data-i18n="sec_ueba">Risque UEBA (24 h)</h3><div class="risk" id="uebaList"></div>
+      <h3 class="sec" data-i18n="sec_topdet">Top détections (24 h)</h3><div class="feed" id="detMini"></div>
     </section>
   </main>
 
   <nav id="nav">
-    <a class="on" data-p="home"><span class="ic"><svg class="svi"><use href="#i-home"></use></svg></span>Synthèse</a>
-    <a data-p="alerts"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span>Alertes</a>
-    <a data-p="inc"><span class="ic"><svg class="svi"><use href="#i-inc"></use></svg></span>Incidents</a>
-    <a data-p="threat"><span class="ic"><svg class="svi"><use href="#i-threat"></use></svg></span>Menace</a>
+    <a class="on" data-p="home"><span class="ic"><svg class="svi"><use href="#i-home"></use></svg></span><span data-i18n="nav_home">Synthèse</span></a>
+    <a data-p="alerts"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span><span data-i18n="nav_alerts">Alertes</span></a>
+    <a data-p="inc"><span class="ic"><svg class="svi"><use href="#i-inc"></use></svg></span><span data-i18n="nav_inc">Incidents</span></a>
+    <a data-p="threat"><span class="ic"><svg class="svi"><use href="#i-threat"></use></svg></span><span data-i18n="nav_threat">Menace</span></a>
   </nav>
 </div>
 
@@ -202,19 +203,52 @@ const ic=n=>'<svg class="svi"><use href="#i-'+n+'"></use></svg>';
 const j=(u,o)=>fetch(API+u,{credentials:"same-origin",...o}).then(r=>{if(r.status===401)throw"auth";return r.json()});
 const esc=s=>(s==null?"":""+s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 const nice=s=>esc((s||"").toString().replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()));
-const ago=t=>{if(!t)return"";let d=(Date.now()-new Date((""+t).replace(" ","T").replace(/(Z|[+-]\d\d:?\d\d)?$/,"Z")).getTime())/1000;
-  return d<60?"à l'instant":d<3600?(d/60|0)+" min":d<86400?(d/3600|0)+" h":(d/86400|0)+" j"};
+const ago=ts=>{if(!ts)return"";let d=(Date.now()-new Date((""+ts).replace(" ","T").replace(/(Z|[+-]\d\d:?\d\d)?$/,"Z")).getTime())/1000;
+  return d<60?t("ago_now"):d<3600?(d/60|0)+" min":d<86400?(d/3600|0)+" h":(d/86400|0)+" "+t("ago_day")};
 const PAL=["#22d3ee","#a78bfa","#fb3b53","#f5a623","#34d399","#3b82f6","#e879f9","#2dd4bf"];
 const sevClass=s=>{s=(s||"").toLowerCase();return s.includes("crit")?"critical":(s.includes("high")||s.includes("elev"))?"high":(s.includes("med")||s.includes("moy"))?"medium":"low";};
 const chipCls=c=>c==="high"?"h":c==="medium"?"m":c==="low"?"l":"";
 let DATA={alerts:[],incidents:[]};
+// ===== i18n FR/EN (même clé localStorage que la console SOC) =====
+let LANG=localStorage.getItem("soc_lang")||"fr";
+const I18N={
+ fr:{login_sub:"Centre des opérations · accès RSSI (VPN)",ph_account:"Compte AD",ph_password:"Mot de passe",btn_signin:"Se connecter",err_creds:"Identifiants invalides",err_net:"Erreur réseau",
+  status_op:"opérationnel",push_al:"Activer les notifications",lang_al:"Changer la langue",
+  sec_activity:"Activité (24 h)",card_detperhour:"Détections par heure",tag_live:"temps réel",sec_tactics:"Tactiques ATT&CK (7 j)",sec_alerts:"Alertes récentes (24 h)",sec_inc:"Incidents corrélés",sec_ml:"Anomalies ML (3 h)",sec_ueba:"Risque UEBA (24 h)",sec_topdet:"Top détections (24 h)",
+  nav_home:"Synthèse",nav_alerts:"Alertes",nav_inc:"Incidents",nav_threat:"Menace",
+  kpi_critinc:"Incidents critiques",kpi_7d:"7 jours",kpi_riskhosts:"Hôtes à risque",kpi_uebage:"UEBA ≥ 80",kpi_det:"Détections",kpi_24h:"24 h",kpi_kev:"CVE KEV exposées",kpi_cisa:"CISA",
+  empty_inc:"Aucun incident corrélé",empty_ras:"RAS",
+  k_entities:"Entités",k_attack:"ATT&CK",k_rule:"Règle",blk_analysis:"Analyse",blk_remediation:"Remédiation",k_entity:"Entité",blk_detail:"Détail",lab_priority:"Priorité",
+  push_hint:"Installe l'app (Partager → Sur l'écran d'accueil) pour activer le push.",
+  thr_level:"Niveau de menace",thr_critinc:"Incidents critiques · 7 j",thr_riskhosts:"Hôtes à risque · UEBA",thr_kev:"CVE KEV exposées",
+  empty_anom:"Aucune anomalie",empty_det:"Aucune détection (24 h)",det_fallback:"Détection",
+  k_tactic:"Tactique",k_technique:"Technique",k_source:"Source",blk_message:"Message",chip_score:"score",ago_now:"à l'instant",ago_day:"j"},
+ en:{login_sub:"Operations center · CISO access (VPN)",ph_account:"AD account",ph_password:"Password",btn_signin:"Sign in",err_creds:"Invalid credentials",err_net:"Network error",
+  status_op:"operational",push_al:"Enable notifications",lang_al:"Change language",
+  sec_activity:"Activity (24h)",card_detperhour:"Detections per hour",tag_live:"live",sec_tactics:"ATT&CK tactics (7d)",sec_alerts:"Recent alerts (24h)",sec_inc:"Correlated incidents",sec_ml:"ML anomalies (3h)",sec_ueba:"UEBA risk (24h)",sec_topdet:"Top detections (24h)",
+  nav_home:"Overview",nav_alerts:"Alerts",nav_inc:"Incidents",nav_threat:"Threat",
+  kpi_critinc:"Critical incidents",kpi_7d:"7 days",kpi_riskhosts:"At-risk hosts",kpi_uebage:"UEBA ≥ 80",kpi_det:"Detections",kpi_24h:"24h",kpi_kev:"Exposed KEV CVEs",kpi_cisa:"CISA",
+  empty_inc:"No correlated incidents",empty_ras:"All clear",
+  k_entities:"Entities",k_attack:"ATT&CK",k_rule:"Rule",blk_analysis:"Analysis",blk_remediation:"Remediation",k_entity:"Entity",blk_detail:"Detail",lab_priority:"Priority",
+  push_hint:"Install the app (Share → Add to Home Screen) to enable push.",
+  thr_level:"Threat level",thr_critinc:"Critical incidents · 7d",thr_riskhosts:"At-risk hosts · UEBA",thr_kev:"Exposed KEV CVEs",
+  empty_anom:"No anomaly",empty_det:"No detection (24h)",det_fallback:"Detection",
+  k_tactic:"Tactic",k_technique:"Technique",k_source:"Source",blk_message:"Message",chip_score:"score",ago_now:"just now",ago_day:"d"}};
+function t(k){const v=(I18N[LANG]||{})[k];return v!==undefined?v:((I18N.fr||{})[k]!==undefined?I18N.fr[k]:k);}
+function applyI18n(){document.querySelectorAll("[data-i18n]").forEach(e=>e.textContent=t(e.getAttribute("data-i18n")));
+  document.querySelectorAll("[data-i18n-ph]").forEach(e=>e.setAttribute("placeholder",t(e.getAttribute("data-i18n-ph"))));
+  document.querySelectorAll("[data-i18n-al]").forEach(e=>e.setAttribute("aria-label",t(e.getAttribute("data-i18n-al"))));
+  document.querySelectorAll("[data-i18n-t]").forEach(e=>e.setAttribute("title",t(e.getAttribute("data-i18n-t"))));}
+function updateLangBtn(){const b=$("#langLab");if(b)b.textContent=(LANG==="fr"?"EN":"FR");}
+function setLang(l){LANG=l;localStorage.setItem("soc_lang",l);document.documentElement.lang=l;applyI18n();updateLangBtn();
+  if(!$("#app").classList.contains("hide"))loadAll();}
 
 function login(e){e.preventDefault();
   fetch(API+"/login",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({username:u.value,password:p.value})})
-   .then(r=>r.ok?start():$("#lerr").textContent="Identifiants invalides").catch(()=>$("#lerr").textContent="Erreur réseau");}
+   .then(r=>r.ok?start():$("#lerr").textContent=t("err_creds")).catch(()=>$("#lerr").textContent=t("err_net"));}
 function logout(){fetch(API+"/logout",{method:"POST",credentials:"same-origin"}).then(()=>location.reload());}
-function start(){$("#login").classList.add("hide");$("#app").classList.remove("hide");loadAll();
+function start(){$("#login").classList.add("hide");$("#app").classList.remove("hide");applyI18n();updateLangBtn();loadAll();
   setInterval(()=>{if(!document.hidden)loadAll()},60000);}
 
 document.querySelectorAll("#nav a").forEach(a=>a.onclick=e=>{e.preventDefault();
@@ -234,10 +268,10 @@ async function loadAll(){
   }catch(e){if(e==="auth")location.reload();}
 }
 function renderKpis(k){$("#kpis").innerHTML=[
-  ["red","Incidents critiques",k.incidents_critiques_7j,"7 jours"],
-  ["amb","Hôtes à risque",k.hotes_risque_ueba,"UEBA ≥ 80"],
-  ["cy","Détections",k.alertes_24h,"24 h"],
-  ["vio","CVE KEV exposées",k.kev_exposees,"CISA"]
+  ["red",t("kpi_critinc"),k.incidents_critiques_7j,t("kpi_7d")],
+  ["amb",t("kpi_riskhosts"),k.hotes_risque_ueba,t("kpi_uebage")],
+  ["cy",t("kpi_det"),k.alertes_24h,t("kpi_24h")],
+  ["vio",t("kpi_kev"),k.kev_exposees,t("kpi_cisa")]
 ].map(([c,l,v,s])=>`<div class="kpi ${c}"><div class="l">${l}</div><div class="v mono">${(v??0).toLocaleString("fr")}</div><div class="s">${s}</div></div>`).join("");}
 function renderTs(s){const lab=s.map(x=>new Date(x.t).getHours()+"h"),d=s.map(x=>x.n);
   mk("cTs",{type:"line",data:{labels:lab,datasets:[{data:d,borderColor:"#22d3ee",borderWidth:2,fill:true,tension:.35,pointRadius:0,
@@ -247,7 +281,7 @@ function renderTac(d){mk("cTac",{type:"doughnut",data:{labels:d.map(x=>nice(x.k)
   options:{maintainAspectRatio:false,cutout:"60%",plugins:{legend:{position:"bottom",labels:{boxWidth:9,padding:9,font:{size:10}}}}}});}
 
 function renderFeed(id,list,kind){const el=$("#"+id);
-  if(!list.length){el.innerHTML='<div class="empty">'+ic('check')+' '+(kind==="inc"?"Aucun incident corrélé":"RAS")+'</div>';return;}
+  if(!list.length){el.innerHTML='<div class="empty">'+ic('check')+' '+(kind==="inc"?t("empty_inc"):t("empty_ras"))+'</div>';return;}
   el.innerHTML=list.map((x,i)=>{
     const c=kind==="inc"?sevClass(x.severity):(x.priority==3?"critical":x.priority==2?"high":"medium");
     const badge=kind==="inc"?esc((x.severity||"?").toUpperCase()):"P"+(x.priority||"-");
@@ -259,15 +293,15 @@ function renderFeed(id,list,kind){const el=$("#"+id);
 function openSheet(kind,i){const x=(kind==="inc"?DATA.incidents:DATA.alerts)[i];if(!x)return;
   const c=kind==="inc"?sevClass(x.severity):(x.priority==3?"critical":x.priority==2?"high":"medium");
   let h=`<div class="grip"></div><h2>${esc(x.title)}</h2>
-    <div style="margin-bottom:8px"><span class="chip ${chipCls(c)}">${kind==="inc"?esc((x.severity||"?").toUpperCase()):"Priorité "+(x.priority||"-")}</span>
+    <div style="margin-bottom:8px"><span class="chip ${chipCls(c)}">${kind==="inc"?esc((x.severity||"?").toUpperCase()):t("lab_priority")+" "+(x.priority||"-")}</span>
     <span class="ts" style="color:var(--dim);font-size:12px;margin-left:8px">${ago(x.ts)}</span></div>`;
   if(kind==="inc"){
-    if(x.entities)h+=kv("Entités",x.entities);if(x.mitre)h+=kv("ATT&CK",x.mitre);if(x.rule)h+=kv("Règle",x.rule);
-    if(x.narrative)h+=blk("Analyse",esc(x.narrative));
-    if(x.remediation)h+=blk("Remédiation",esc(x.remediation),"rem");
+    if(x.entities)h+=kv(t("k_entities"),x.entities);if(x.mitre)h+=kv(t("k_attack"),x.mitre);if(x.rule)h+=kv(t("k_rule"),x.rule);
+    if(x.narrative)h+=blk(t("blk_analysis"),esc(x.narrative));
+    if(x.remediation)h+=blk(t("blk_remediation"),esc(x.remediation),"rem");
   }else{
-    if(x.entity)h+=kv("Entité",x.entity);
-    h+=`<div class="blk"><div class="lbl">Détail</div><div class="raw">${esc(JSON.stringify(x,null,2))}</div></div>`;
+    if(x.entity)h+=kv(t("k_entity"),x.entity);
+    h+=`<div class="blk"><div class="lbl">${t("blk_detail")}</div><div class="raw">${esc(JSON.stringify(x,null,2))}</div></div>`;
   }
   $("#sheetc").innerHTML=h;$("#sheet").classList.add("on");}
 const kv=(k,v)=>`<div class="kv"><span class="k">${k}</span><span class="v">${esc((v||"").toString())}</span></div>`;
@@ -277,7 +311,7 @@ function closeSheet(){$("#sheet").classList.remove("on");}
 // web-push
 const b64=s=>{const p="=".repeat((4-s.length%4)%4);const b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from([...b].map(c=>c.charCodeAt(0)));};
 async function enablePush(){try{
-  if(!("serviceWorker"in navigator)||!("PushManager"in window)){alert("Installe l'app (Partager → Sur l'écran d'accueil) pour activer le push.");return;}
+  if(!("serviceWorker"in navigator)||!("PushManager"in window)){alert(t("push_hint"));return;}
   if(await Notification.requestPermission()!=="granted")return;
   const reg=await navigator.serviceWorker.ready,{publicKey}=await j("/vapid");
   const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64(publicKey)});
@@ -294,18 +328,18 @@ function threatCls(l){l=(l||"").toUpperCase();return l.indexOf("CRIT")>=0?"criti
 function renderThreat(r){r=r||{};
   const c=threatCls(r.threat_level),lab=esc(r.threat_level||"NOMINAL");
   const box=$("#thBanner");
-  if(box)box.innerHTML='<div class="thlvl sev-'+c+'"><div class="thl">Niveau de menace</div>'
+  if(box)box.innerHTML='<div class="thlvl sev-'+c+'"><div class="thl">'+t("thr_level")+'</div>'
     +'<div class="thv chip '+chipCls(c)+'">'+lab+'</div></div>'
     +'<div class="thgrid">'
-    +'<div class="thm"><div class="tmv mono" style="color:var(--red)">'+((r.critical_incidents||0).toLocaleString("fr"))+'</div><div class="tml">Incidents critiques · 7 j</div></div>'
-    +'<div class="thm"><div class="tmv mono" style="color:var(--amb)">'+((r.ueba||0).toLocaleString("fr"))+'</div><div class="tml">Hôtes à risque · UEBA</div></div>'
-    +'<div class="thm"><div class="tmv mono" style="color:var(--vio)">'+((r.kev||0).toLocaleString("fr"))+'</div><div class="tml">CVE KEV exposées</div></div>'
+    +'<div class="thm"><div class="tmv mono" style="color:var(--red)">'+((r.critical_incidents||0).toLocaleString("fr"))+'</div><div class="tml">'+t("thr_critinc")+'</div></div>'
+    +'<div class="thm"><div class="tmv mono" style="color:var(--amb)">'+((r.ueba||0).toLocaleString("fr"))+'</div><div class="tml">'+t("thr_riskhosts")+'</div></div>'
+    +'<div class="thm"><div class="tmv mono" style="color:var(--vio)">'+((r.kev||0).toLocaleString("fr"))+'</div><div class="tml">'+t("thr_kev")+'</div></div>'
     +'</div>';
   renderRiskList("mlList",r.ml_top||[],"ml");
   renderRiskList("uebaList",r.ueba_top||[],"ueba");
 }
 function renderRiskList(id,list,kind){const el=$("#"+id);if(!el)return;
-  if(!list.length){el.innerHTML='<div class="empty">'+ic('check')+' Aucune anomalie</div>';return;}
+  if(!list.length){el.innerHTML='<div class="empty">'+ic('check')+' '+t("empty_anom")+'</div>';return;}
   el.innerHTML=list.map(x=>{const sc=+x.score||0;
     const sub=kind==="ml"?(x.reason||x.type||""):(x.factor||"");
     return '<div class="rrow"><div class="rtop"><span class="rent">'+esc((x.entity||"—").split("\\").pop())
@@ -314,11 +348,11 @@ function renderRiskList(id,list,kind){const el=$("#"+id);if(!el)return;
       +(sub?'<div class="rsub">'+esc(sub)+'</div>':'')+'</div>';}).join("");}
 function renderDetMini(items){const el=$("#detMini");if(!el)return;
   DETM=items||[];
-  if(!DETM.length){el.innerHTML='<div class="empty">'+ic('check')+' Aucune détection (24 h)</div>';return;}
+  if(!DETM.length){el.innerHTML='<div class="empty">'+ic('check')+' '+t("empty_det")+'</div>';return;}
   el.innerHTML=DETM.slice(0,12).map((x,i)=>{
     const c=x.sev?sevClass(x.sev):(x.priority==3?"critical":x.priority==2?"high":"medium");
     const badge=x.sev?esc((x.sev||"").toUpperCase()):"P"+(x.priority||"-");
-    const ttl=esc(x.tag?nice(x.tag):(x.msg||"Détection"));
+    const ttl=esc(x.tag?nice(x.tag):(x.msg||t("det_fallback")));
     const meta=[x.entity,x.tactic?nice(x.tactic):"",x.source].filter(Boolean).map(esc).join(" · ");
     return '<div class="item sev-'+c+'" onclick="openDetSheet('+i+')"><div class="top">'
       +'<span class="chip '+chipCls(c)+'">'+badge+'</span>'
@@ -326,22 +360,23 @@ function renderDetMini(items){const el=$("#detMini");if(!el)return;
       +(meta?'<div class="meta">'+meta+'</div>':'')+'</div>';}).join("");}
 function openDetSheet(i){const x=DETM[i];if(!x)return;
   const c=x.sev?sevClass(x.sev):(x.priority==3?"critical":x.priority==2?"high":"medium");
-  const badge=x.sev?esc((x.sev||"").toUpperCase()):"Priorité "+(x.priority||"-");
-  let h='<div class="grip"></div><h2>'+esc(x.tag?nice(x.tag):"Détection")+'</h2>'
+  const badge=x.sev?esc((x.sev||"").toUpperCase()):t("lab_priority")+" "+(x.priority||"-");
+  let h='<div class="grip"></div><h2>'+esc(x.tag?nice(x.tag):t("det_fallback"))+'</h2>'
     +'<div style="margin-bottom:8px"><span class="chip '+chipCls(c)+'">'+badge+'</span>'
-    +(x.score!=null?'<span class="chip l" style="margin-left:6px">score '+esc(""+x.score)+'</span>':'')
+    +(x.score!=null?'<span class="chip l" style="margin-left:6px">'+t("chip_score")+' '+esc(""+x.score)+'</span>':'')
     +'<span class="ts" style="color:var(--dim);font-size:12px;margin-left:8px">'+ago(x.ts)+'</span></div>';
-  if(x.entity)h+=kv("Entité",x.entity);
-  if(x.tactic)h+=kv("Tactique",nice(x.tactic));
-  if(x.tech)h+=kv("Technique",x.tech);
-  if(x.source)h+=kv("Source",x.source);
-  if(x.msg)h+=blk("Message",esc(x.msg));
+  if(x.entity)h+=kv(t("k_entity"),x.entity);
+  if(x.tactic)h+=kv(t("k_tactic"),nice(x.tactic));
+  if(x.tech)h+=kv(t("k_technique"),x.tech);
+  if(x.source)h+=kv(t("k_source"),x.source);
+  if(x.msg)h+=blk(t("blk_message"),esc(x.msg));
   $("#sheetc").innerHTML=h;$("#sheet").classList.add("on");}
 async function loadThreat(){try{
   const [r,det]=await Promise.all([j("/risk"),j("/detections")]);
   renderThreat(r||{});renderDetMini((det&&det.items)||[]);
 }catch(e){if(e==="auth")location.reload();}}
 
+document.documentElement.lang=LANG;applyI18n();updateLangBtn();
 if("serviceWorker"in navigator)navigator.serviceWorker.register("/m/sw.js");
 j("/me").then(d=>{if(d.user)start();}).catch(()=>{});
 </script>
