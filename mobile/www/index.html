@@ -115,6 +115,12 @@
   .kv .v{color:var(--fg);word-break:break-word}
   .blk{margin-top:14px}.blk .lbl{font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;margin-bottom:5px}
   .blk.rem .lbl{color:var(--grn)}.blk .txt{font-size:13px;line-height:1.55}
+  .gcard{background:#0a1320;border:1px solid #1b2c44;border-left:3px solid var(--cy);border-radius:8px}
+  .grow{padding:7px 10px;font-size:12.5px;line-height:1.45;border-top:1px solid #131f30}.grow:first-child{border-top:none}
+  .glbl{display:block;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);margin-bottom:2px}
+  .gval{color:#cfe0ee}
+  .grow.gw .glbl{color:#7fb4d6}.grow.gc .glbl{color:#e0a93b}.grow.gr .glbl{color:#f08a8a}.grow.gf .glbl{color:#5fc98a}
+  .grow.gr{background:#160e10}.grow.gf{background:#0c1612}
   .raw{background:#070b15;border:1px solid var(--bd);border-radius:9px;padding:10px;font-size:11px;
     color:var(--mut);white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto}
   ::-webkit-scrollbar{width:0}
@@ -208,7 +214,10 @@ const ago=ts=>{if(!ts)return"";let d=(Date.now()-new Date((""+ts).replace(" ","T
 const PAL=["#22d3ee","#a78bfa","#fb3b53","#f5a623","#34d399","#3b82f6","#e879f9","#2dd4bf"];
 const sevClass=s=>{s=(s||"").toLowerCase();return s.includes("crit")?"critical":(s.includes("high")||s.includes("elev"))?"high":(s.includes("med")||s.includes("moy"))?"medium":"low";};
 const chipCls=c=>c==="high"?"h":c==="medium"?"m":c==="low"?"l":"";
-let DATA={alerts:[],incidents:[]};
+let DATA={alerts:[],incidents:[]};let GUIDANCE={};
+function guidanceBlock(tag){const g=GUIDANCE[tag];if(!g||!(g.ce_que_cest||g.remediation))return "";
+  const row=(l,v,c)=>v?'<div class="grow '+c+'"><span class="glbl">'+l+'</span><span class="gval">'+esc(v)+'</span></div>':'';
+  return '<div class="blk"><div class="lbl">'+t("g_title")+'</div><div class="gcard">'+row(t("g_what"),g.ce_que_cest,"gw")+row(t("g_check"),g.a_verifier,"gc")+row(t("g_remed"),g.remediation,"gr")+row(t("g_correct"),g.correction,"gf")+'</div></div>';}
 // ===== i18n FR/EN (même clé localStorage que la console SOC) =====
 let LANG=localStorage.getItem("soc_lang")||"fr";
 const I18N={
@@ -218,7 +227,7 @@ const I18N={
   nav_home:"Synthèse",nav_alerts:"Alertes",nav_inc:"Incidents",nav_threat:"Menace",
   kpi_critinc:"Incidents critiques",kpi_7d:"7 jours",kpi_riskhosts:"Hôtes à risque",kpi_uebage:"UEBA ≥ 80",kpi_det:"Détections",kpi_24h:"24 h",kpi_kev:"CVE KEV exposées",kpi_cisa:"CISA",
   empty_inc:"Aucun incident corrélé",empty_ras:"RAS",
-  k_entities:"Entités",k_attack:"ATT&CK",k_rule:"Règle",blk_analysis:"Analyse",blk_remediation:"Remédiation",k_entity:"Entité",blk_detail:"Détail",lab_priority:"Priorité",
+  k_entities:"Entités",k_attack:"ATT&CK",k_rule:"Règle",blk_analysis:"Analyse",blk_remediation:"Remédiation",k_entity:"Entité",blk_detail:"Détail",lab_priority:"Priorité",g_title:"Guide d'action",g_what:"Ce que c'est",g_check:"À vérifier",g_remed:"Remédiation",g_correct:"Correction durable",
   push_hint:"Installe l'app (Partager → Sur l'écran d'accueil) pour activer le push.",
   thr_level:"Niveau de menace",thr_critinc:"Incidents critiques · 7 j",thr_riskhosts:"Hôtes à risque · UEBA",thr_kev:"CVE KEV exposées",
   empty_anom:"Aucune anomalie",empty_det:"Aucune détection (24 h)",det_fallback:"Détection",
@@ -229,7 +238,7 @@ const I18N={
   nav_home:"Overview",nav_alerts:"Alerts",nav_inc:"Incidents",nav_threat:"Threat",
   kpi_critinc:"Critical incidents",kpi_7d:"7 days",kpi_riskhosts:"At-risk hosts",kpi_uebage:"UEBA ≥ 80",kpi_det:"Detections",kpi_24h:"24h",kpi_kev:"Exposed KEV CVEs",kpi_cisa:"CISA",
   empty_inc:"No correlated incidents",empty_ras:"All clear",
-  k_entities:"Entities",k_attack:"ATT&CK",k_rule:"Rule",blk_analysis:"Analysis",blk_remediation:"Remediation",k_entity:"Entity",blk_detail:"Detail",lab_priority:"Priority",
+  k_entities:"Entities",k_attack:"ATT&CK",k_rule:"Rule",blk_analysis:"Analysis",blk_remediation:"Remediation",k_entity:"Entity",blk_detail:"Detail",lab_priority:"Priority",g_title:"Action guide",g_what:"What it is",g_check:"To check",g_remed:"Remediation",g_correct:"Lasting fix",
   push_hint:"Install the app (Share → Add to Home Screen) to enable push.",
   thr_level:"Threat level",thr_critinc:"Critical incidents · 7d",thr_riskhosts:"At-risk hosts · UEBA",thr_kev:"Exposed KEV CVEs",
   empty_anom:"No anomaly",empty_det:"No detection (24h)",det_fallback:"Detection",
@@ -249,6 +258,7 @@ function login(e){e.preventDefault();
    .then(r=>r.ok?start():$("#lerr").textContent=t("err_creds")).catch(()=>$("#lerr").textContent=t("err_net"));}
 function logout(){fetch(API+"/logout",{method:"POST",credentials:"same-origin"}).then(()=>location.reload());}
 function start(){$("#login").classList.add("hide");$("#app").classList.remove("hide");applyI18n();updateLangBtn();loadAll();
+  j("/guidance").then(r=>{GUIDANCE=r.guidance||{};}).catch(()=>{});
   setInterval(()=>{if(!document.hidden)loadAll()},60000);}
 
 document.querySelectorAll("#nav a").forEach(a=>a.onclick=e=>{e.preventDefault();
@@ -301,6 +311,7 @@ function openSheet(kind,i){const x=(kind==="inc"?DATA.incidents:DATA.alerts)[i];
     if(x.remediation)h+=blk(t("blk_remediation"),esc(x.remediation),"rem");
   }else{
     if(x.entity)h+=kv(t("k_entity"),x.entity);
+    h+=guidanceBlock(x.tag);
     h+=`<div class="blk"><div class="lbl">${t("blk_detail")}</div><div class="raw">${esc(JSON.stringify(x,null,2))}</div></div>`;
   }
   $("#sheetc").innerHTML=h;$("#sheet").classList.add("on");}
@@ -370,6 +381,7 @@ function openDetSheet(i){const x=DETM[i];if(!x)return;
   if(x.tech)h+=kv(t("k_technique"),x.tech);
   if(x.source)h+=kv(t("k_source"),x.source);
   if(x.msg)h+=blk(t("blk_message"),esc(x.msg));
+  h+=guidanceBlock(x.tag);
   $("#sheetc").innerHTML=h;$("#sheet").classList.add("on");}
 async function loadThreat(){try{
   const [r,det]=await Promise.all([j("/risk"),j("/detections")]);
