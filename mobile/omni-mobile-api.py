@@ -651,6 +651,65 @@ def get_investigation(name, days=14):
             "linked": [_rd(u) for u in linked] if len(linked) > 1 else []}
 
 
+def get_entity_timeline(name, days=14, limit=60):
+    """Chronologie UNIFIÉE d'une entité (tous comptes liés) : le RÉCIT — détections,
+    échecs d'authentification Windows (4625) et sign-ins M365 fusionnés et triés par
+    date. On exclut les logons Windows RÉUSSIS (4624) = bruit routinier ; on garde le
+    signal (détections + échecs + auth cloud) pour raconter ce qui s'est passé."""
+    if not name:
+        return {"items": [], "linked": []}
+    name = _RD_REV.get(name, name)
+    days = max(1, min(int(days), 90))
+    limit = max(10, min(int(limit), 200))
+    linked = _linked_accounts(name, days)
+    key = _identity_key(name)
+    ent = {"bool": {"minimum_should_match": 1, "should": (
+        [{"term": {"user": u}} for u in linked]
+        + [{"match_phrase": {"upn": key or name}}, {"term": {"source": name}}])}}
+    sig = {"bool": {"minimum_should_match": 1, "should": [
+        {"exists": {"field": "alert_tag"}},                 # détections
+        {"term": {"event_id": "4625"}},                     # logon Windows échoué
+        {"term": {"m365_type": "signin"}}]}}                # sign-in M365 (succès/échec)
+    res = os_search("omni-*", {"size": limit, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {"must": [ent, sig], "filter": [{"range": {"timestamp": {"gte": f"now-{days}d"}}}]}},
+        "_source": ["timestamp", "alert_tag", "mitre_technique", "risk_severity", "event_source",
+                    "short_message", "message", "m365_type", "status_code", "m365_fail_label",
+                    "event_id", "src_ip", "src_ip_country_code"]})
+    out = []
+    for h in res.get("hits", {}).get("hits", []):
+        s = h.get("_source", {})
+        tag, eid = s.get("alert_tag"), str(s.get("event_id") or "")
+        if tag:
+            out.append({"ts": s.get("timestamp"), "kind": "detection", "sev": s.get("risk_severity") or "",
+                        "label": tag, "tech": s.get("mitre_technique") or "", "src": s.get("event_source") or "",
+                        "detail": (s.get("short_message") or s.get("message") or "")[:140]})
+        elif s.get("m365_type") == "signin":
+            ok = str(s.get("status_code")) == "0"
+            out.append({"ts": s.get("timestamp"), "kind": "m365", "ok": ok, "label": "M365 sign-in",
+                        "ip": _rd(s.get("src_ip") or ""), "cc": s.get("src_ip_country_code") or "",
+                        "code": s.get("status_code"), "detail": s.get("m365_fail_label") or ""})
+        elif eid == "4625":
+            out.append({"ts": s.get("timestamp"), "kind": "winlogon", "ok": False, "label": "Windows logon",
+                        "ip": _rd(s.get("src_ip") or ""), "detail": ""})
+    return {"items": out, "linked": [_rd(u) for u in linked] if len(linked) > 1 else []}
+
+
+def get_entities_browse(days=7):
+    """Page Entités : top COMPTES et top MACHINES par activité de détection — point
+    de départ pour parcourir/sélectionner (la recherche couvre tout le reste)."""
+    days = max(1, min(int(days), 90))
+    gte = f"now-{days}d"
+
+    def _top(field):
+        r = os_search("omni-*", {"size": 0,
+            "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}, {"exists": {"field": field}}],
+                               "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
+            "aggs": {"e": {"terms": {"field": field, "size": 18}}}})
+        return [{"entity": _rd(b["key"]), "n": b["doc_count"]}
+                for b in r.get("aggregations", {}).get("e", {}).get("buckets", []) if b.get("key")]
+    return {"users": _top("user"), "machines": _top("source")}
+
+
 _LOOKDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lookups")
 _GUIDANCE_PATH = os.path.join(_LOOKDIR, "alert-guidance.json")
 _MITRE_PATH = os.path.join(_LOOKDIR, "mitre-attack.csv")
@@ -1050,6 +1109,16 @@ class H(BaseHTTPRequestHandler):
             except (ValueError, TypeError):
                 _days = 14
             return self._json(get_investigation(qs.get("u", [""])[0], _days))
+        if p == "/m/api/entity-timeline":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            try:
+                _days = max(1, min(90, int(qs.get("days", ["14"])[0])))
+            except (ValueError, TypeError):
+                _days = 14
+            return self._json(get_entity_timeline(qs.get("u", [""])[0], _days))
+        if p == "/m/api/entities":
+            return self._json(get_entities_browse())
         if p == "/m/api/guidance":
             return self._json({"guidance": get_guidance()})
         if p == "/m/api/entity-search":
@@ -1217,6 +1286,8 @@ get_report        = cached()(get_report)
 get_timeseries    = cached(20)(get_timeseries)
 get_entity        = cached()(get_entity)          # vue entité (unifiée, plus lourde)
 get_investigation = cached()(get_investigation)   # pivot d'investigation (multi-requêtes)
+get_entity_timeline = cached()(get_entity_timeline)   # chronologie unifiée
+get_entities_browse = cached()(get_entities_browse)   # page Entités (top comptes/machines)
 
 
 if __name__ == "__main__":

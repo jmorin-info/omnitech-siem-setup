@@ -248,6 +248,22 @@
   .pbcard .gcard{border-left-color:#39507a;margin:0}
   .dgbtn{margin-left:8px;color:var(--cy);cursor:pointer;font-weight:600;font-size:10.5px;white-space:nowrap}
   .dgbtn:hover{text-decoration:underline}
+  /* --- Page Entités --- */
+  .entcols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
+  @media(max-width:680px){.entcols{grid-template-columns:1fr}}
+  .entrow{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;border-bottom:1px solid #131f30;transition:background .12s}
+  .entrow:hover{background:#101e30}
+  .entk{width:18px;text-align:center;color:var(--mut)}.entk .svi{width:15px;height:15px}
+  .entn{flex:1;color:#cfe0ee;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .entn2{color:var(--mut);font-size:11px}
+  /* --- Chronologie unifiée (timeline) --- */
+  .tl{position:relative;margin-top:4px;padding-left:6px}
+  .tlrow{display:flex;align-items:flex-start;gap:10px;padding:7px 0 7px 14px;border-left:2px solid #1d2c44;position:relative;font-size:12.5px}
+  .tlrow::before{content:"";position:absolute;left:-5px;top:11px;width:8px;height:8px;border-radius:50%;background:var(--tlc,#39507a);box-shadow:0 0 0 2px #0b1422}
+  .tlrow.tl-critical{--tlc:#fb3b53}.tlrow.tl-high{--tlc:#f5a623}.tlrow.tl-medium{--tlc:#3b82f6}.tlrow.tl-low{--tlc:#52607d}.tlrow.tl-ok{--tlc:#34d399}
+  .tlt{flex:0 0 86px;color:var(--mut);font-size:10.5px;padding-top:1px}
+  .tli{color:var(--tlc,#7c8aa6)}.tli .svi{width:14px;height:14px}
+  .tlx{flex:1;color:#cdd9e8;line-height:1.4}.tlx .src{color:var(--mut);font-size:10px;margin-left:6px}
   .report{background:#fff;color:#111827;border-radius:10px;padding:32px;max-width:920px}
   .report h1{font-size:20px;color:#0b1322;margin:0}.report h2{font-size:14px;margin:20px 0 8px;color:#0b1322;border-bottom:1px solid #e2e8f0;padding-bottom:5px}
   .report .muted{color:#64748b}
@@ -486,6 +502,7 @@
       <a class="on" data-p="overview"><span class="ic"><svg class="svi"><use href="#i-grid"></use></svg></span><span data-i18n="nav_overview">Vue d'ensemble</span></a>
       <a data-p="incidents"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span><span data-i18n="nav_incidents">Incidents</span></a>
       <a data-p="detections"><span class="ic"><svg class="svi"><use href="#i-target"></use></svg></span><span data-i18n="nav_detections">Détections</span></a>
+      <a data-p="entities"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span><span data-i18n="nav_entities">Entités</span></a>
       <a data-p="attack"><span class="ic"><svg class="svi"><use href="#i-matrix"></use></svg></span><span data-i18n="nav_attack">ATT&CK</span></a>
       <a data-p="graph"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span><span data-i18n="nav_graph">Graphe d'attaque</span></a>
       <a data-p="leaks"><span class="ic"><svg class="svi"><use href="#i-unlock"></use></svg></span><span data-i18n="nav_leaks">Fuites & Dark Web</span></a>
@@ -599,6 +616,16 @@
           style="width:100%;margin:6px 0 4px;padding:9px 12px;background:#0c1424;border:1px solid var(--bd);border-radius:9px;color:var(--fg);font-size:13px">
         <div id="pbBody"></div></div>
     </section>
+    <section class="page" id="p-entities">
+      <div class="card"><h3><svg class="svi"><use href="#i-network"></use></svg> <span data-i18n="ent_pgt">Recherche d'entités</span><span class="tag" data-i18n="ent_pgs">comptes &amp; machines — dossier 360° unifié</span></h3>
+        <input id="entSearch" oninput="entSearchDo(this.value)" placeholder="🔎 Compte AD, e-mail, ou nom de machine…" data-i18n-ph="ent_ph" autocomplete="off"
+          style="width:100%;margin:6px 0 4px;padding:11px 13px;background:#0c1424;border:1px solid var(--bd);border-radius:10px;color:var(--fg);font-size:14px">
+        <div id="entResults"></div>
+        <div class="entcols">
+          <div><div class="lbl2"><span data-i18n="ent_topu">Comptes les plus actifs</span></div><div id="entUsers"></div></div>
+          <div><div class="lbl2"><span data-i18n="ent_topm">Machines les plus actives</span></div><div id="entMachines"></div></div>
+        </div></div>
+    </section>
   </main>
   <div id="emodal"><div class="scrim2" onclick="closeEnt()"></div><div class="emc" id="emc"></div></div>
   <div id="pal"><div class="scrim2" onclick="closePal()"></div><div class="palbox"><input id="palIn" placeholder="Rechercher / naviguer…  (pages, entités)" data-i18n-ph="ph_palette" oninput="renderPal(this.value)"><div id="palList"></div></div></div>
@@ -629,7 +656,7 @@ const TACCOL={"Initial Access":"#fb3b53","Execution":"#f97316","Persistence":"#f
 let LANG=localStorage.getItem("soc_lang")||"fr";
 const I18N={
  fr:{
-  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",
+  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",
   cluster_ok:"Cluster opérationnel",dens_comfort:"Confort",dens_compact:"Compact",
   al_search:"Recherche et navigation (Ctrl ou Cmd + K)",al_refresh:"Rafraîchir les données",al_density:"Basculer la densité d'affichage",al_help:"Ouvrir l'aide et les raccourcis clavier",al_logout:"Se déconnecter",al_lang:"Changer la langue (FR/EN)",
   t_search:"Recherche (Ctrl/Cmd+K)",t_refresh:"Rafraîchir maintenant",t_help:"Aide et raccourcis (touche ?)",t_logout:"Se déconnecter",t_lang:"Langue : Français — cliquer pour English",
@@ -649,7 +676,7 @@ const I18N={
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
  en:{
-  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",
+  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",
   cluster_ok:"Cluster operational",dens_comfort:"Comfort",dens_compact:"Compact",
   al_search:"Search and navigation (Ctrl or Cmd + K)",al_refresh:"Refresh data",al_density:"Toggle display density",al_help:"Open help and keyboard shortcuts",al_logout:"Sign out",al_lang:"Change language (FR/EN)",
   t_search:"Search (Ctrl/Cmd+K)",t_refresh:"Refresh now",t_help:"Help and shortcuts (press ?)",t_logout:"Sign out",t_lang:"Language: English — click for Français",
@@ -697,8 +724,8 @@ function start(){$("#login").style.display="none";$("#app").style.display="grid"
 
 // nav
 const titles={
-  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
-  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",attack:"MITRE ATT&CK",graph:"Attack graph",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
+  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",entities:"Recherche d'entités",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
+  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",entities:"Entity search",attack:"MITRE ATT&CK",graph:"Attack graph",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
 const PDESC={
  fr:{
   overview:"<b>Posture en un coup d'œil</b> — indicateurs clés, activité des dernières 24 h, tactiques ATT&CK et flux d'événements en temps réel. Chaque indicateur est cliquable.",
@@ -709,7 +736,8 @@ const PDESC={
   leaks:"<b>Fuites & Dark Web</b> — surveille les sites d'extorsion ransomware (RansomLook), les comptes exposés (HIBP/Dehashed) et le code public (GitHub).",
   health:"<b>Santé de la collecte</b> — volume et fraîcheur de chaque source. Une source qui décroche = angle mort, alerté automatiquement (preuve ISO A.8.15).",
   report:"<b>Rapport de posture</b> — synthèse exécutive imprimable (PDF) pour la direction et l'audit ISO. Bouton « Imprimer / PDF » en haut à droite.",
-  playbooks:"<b>Playbooks de réponse</b> — pour chaque détection : ce que c'est, comment trier (vrai/faux positif), comment remédier et corriger durablement. Cherchez, ou parcourez par tactique ATT&CK."
+  playbooks:"<b>Playbooks de réponse</b> — pour chaque détection : ce que c'est, comment trier (vrai/faux positif), comment remédier et corriger durablement. Cherchez, ou parcourez par tactique ATT&CK.",
+  entities:"<b>Recherche d'entités</b> — cherchez n'importe quel compte ou machine et ouvrez son <b>dossier 360°</b> : identité unifiée (comptes liés), authentifications, logons, détections, chronologie et guides d'action. Ou parcourez les plus actifs."
  },
  en:{
   overview:"<b>Posture at a glance</b> — key indicators, last-24h activity, ATT&CK tactics and a real-time event feed. Every indicator is clickable.",
@@ -720,7 +748,8 @@ const PDESC={
   leaks:"<b>Leaks & Dark Web</b> — monitors ransomware extortion sites (RansomLook), exposed accounts (HIBP/Dehashed) and public code (GitHub).",
   health:"<b>Collection health</b> — volume and freshness of each source. A source going dark = blind spot, alerted automatically (ISO A.8.15 evidence).",
   report:"<b>Posture report</b> — printable executive summary (PDF) for management and ISO audit. “Print / PDF” button at top right.",
-  playbooks:"<b>Response playbooks</b> — for each detection: what it is, how to triage (true/false positive), how to remediate and harden. Search, or browse by ATT&CK tactic."
+  playbooks:"<b>Response playbooks</b> — for each detection: what it is, how to triage (true/false positive), how to remediate and harden. Search, or browse by ATT&CK tactic.",
+  entities:"<b>Entity search</b> — search any account or machine and open its <b>360° dossier</b>: unified identity (linked accounts), authentications, logons, detections, timeline and action guides. Or browse the most active."
  }
 };
 function setDesc(pg){if($("#pdesc"))$("#pdesc").innerHTML=(PDESC[LANG]||PDESC.fr)[pg]||"";}
@@ -730,7 +759,8 @@ document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   $("#ptitle").textContent=(titles[LANG]||titles.fr)[pg];setDesc(pg);
   if(pg==="graph"){j("/graph").then(g=>{renderGraph(g);gPopulate();setTimeout(applyGraphFilter,80);}).catch(()=>{});}
   if(pg==="report"){j("/report").then(r=>renderReport(r)).catch(()=>{});}
-  if(pg==="playbooks"){var s=$("#pbSearch");renderPlaybooks(s?s.value:"");}});
+  if(pg==="playbooks"){var s=$("#pbSearch");renderPlaybooks(s?s.value:"");}
+  if(pg==="entities"){loadEntities();}});
 function renderPlaybooks(q){const body=$("#pbBody");if(!body)return;
   if(!Object.keys(GUIDANCE).length){j("/guidance").then(r=>{GUIDANCE=r.guidance||{};renderPlaybooks(q);}).catch(()=>{});return;}
   q=(q||"").trim().toLowerCase();
@@ -785,6 +815,29 @@ function guidanceForMitre(mitreStr){
     if(tech&&techs.indexOf(tech)>=0&&!seen[tech]){seen[tech]=1;tags.push(tag);}});
   if(!tags.length)return "";
   return `<div class="blk"><div class="lbl">${t("g_title")}</div>`+tags.map(tag=>`<div class="pbcard"><div class="pbhd"><b>${nice(tag)}</b><span class="srcb">${esc(GUIDANCE[tag].technique)}</span></div>${guidanceBlock(tag)}</div>`).join("")+`</div>`;}
+// --- Page Entités : recherche comptes/machines -> dossier 360° ---
+let ENTB={users:[],machines:[]},ENTS=[];
+function loadEntities(){j("/entities").then(d=>{ENTB=d||{users:[],machines:[]};
+  $("#entUsers").innerHTML=(ENTB.users||[]).map((e,i)=>entRow(e.entity,e.n,'u',i)).join("")||'<div class="muted gpad">—</div>';
+  $("#entMachines").innerHTML=(ENTB.machines||[]).map((e,i)=>entRow(e.entity,e.n,'m',i)).join("")||'<div class="muted gpad">—</div>';}).catch(()=>{});}
+function entRow(name,n,k,i){return '<div class="entrow" onclick="openEntB(\''+k+'\','+i+')"><span class="entk">'+(k==='m'?ic("cpu"):'👤')+'</span><span class="entn mono">'+esc(name)+'</span><span class="entn2 mono">'+(n||0).toLocaleString('fr')+'</span></div>';}
+function openEntB(k,i){const e=(k==='m'?ENTB.machines:ENTB.users)[i];if(e)openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
+function openEntS(i){const e=ENTS[i];if(e)openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
+function entSearchDo(q){q=(q||"").trim();const r=$("#entResults");if(!r)return;
+  if(q.length<2){r.innerHTML="";return;}
+  j("/entity-search?q="+encodeURIComponent(q)).then(d=>{ENTS=d.results||[];
+    r.innerHTML=ENTS.length?'<div class="lbl2">'+t("ent_res")+'</div>'+ENTS.map((e,i)=>'<div class="entrow" onclick="openEntS('+i+')"><span class="entk">'+(e.kind==='host'?ic("cpu"):'👤')+'</span><span class="entn mono">'+esc(e.entity)+'</span><span class="entn2 mono">'+(e.n||0).toLocaleString('fr')+' '+t("pal_evts")+'</span></div>').join(""):'<div class="muted gpad">'+t("ent_nores")+'</div>';
+  }).catch(()=>{});}
+// --- Chronologie unifiée (timeline d'entité, dans le dossier) ---
+function loadTimeline(who){const w=$("#tlWrap");if(!w)return;w.innerHTML="";
+  fetch(API+"/entity-timeline?u="+encodeURIComponent(who)+"&days=14",{credentials:"same-origin"}).then(r=>r.json()).then(d=>renderTimeline(w,d)).catch(()=>{});}
+function renderTimeline(w,d){const items=(d&&d.items)||[];if(!w)return;if(!items.length){w.innerHTML="";return;}
+  const row=x=>{let icon,cls,txt;
+    if(x.kind==="detection"){cls="tl-"+(x.sev?sevClass(x.sev):"medium");icon=ic("warning");txt='<b>'+nice(x.label)+'</b> '+(x.tech?'<span class="srcb">'+esc(x.tech)+'</span>':'')+(x.src?'<span class="src">'+esc(x.src)+'</span>':'');}
+    else if(x.kind==="m365"){cls=x.ok?"tl-ok":"tl-high";icon=ic("globe");txt='<b>M365</b> '+(x.ok?'<span style="color:var(--grn)">'+t("tl_ok")+'</span>':'<span style="color:#f5a623">'+esc(x.detail||codeLabel(x.code))+'</span>')+' '+(x.ip?'<span class="mono">'+esc(x.ip)+'</span> '+(x.cc?flagOf(x.cc):''):'');}
+    else {cls="tl-high";icon=ic("alert");txt='<b>Windows</b> <span style="color:#f5a623">'+t("tl_fail")+'</span> '+(x.ip?'<span class="mono">'+esc(x.ip)+'</span>':'');}
+    return '<div class="tlrow '+cls+'"><span class="tlt">'+ago(x.ts)+'</span><span class="tli">'+icon+'</span><span class="tlx">'+txt+'</span></div>';};
+  w.innerHTML='<div class="blk"><div class="lbl">'+ic("bars")+' '+t("tl_title")+' <span class="muted" style="font-weight:400">'+t("tl_sub")+'</span></div><div class="tl">'+items.map(row).join("")+'</div></div>';}
 function renderRisk(d){d=d||{};
   const M={CRITIQUE:["red","Compromission probable — action immédiate"],ELEVE:["amb","Activité critique en cours"],SURVEILLE:["blu","Signaux à surveiller"],NOMINAL:["grn","Aucune menace active"]};
   const m=M[d.threat_level]||M.NOMINAL;const t=$("#threat");
@@ -865,11 +918,12 @@ function openEntity(full,label,size){
       ${(d.linked&&d.linked.length>1)?`<div class="idu"><span class="idulb">${ic("network")} ${t("id_unified").replace("{n}",d.linked.length)}</span> ${d.linked.map(a=>`<span class="idchip">${esc(a)}</span>`).join("")}</div>`:''}
       ${entScoreBanner(d)}
       <div id="invWrap"></div>
+      <div id="tlWrap"></div>
       <div class="blk"><div class="lbl">${t("ent_tactics")}</div><div>${tacs}</div></div>
       <div class="blk"><div class="lbl">${t("ent_techniques")}</div><div>${techs}</div></div>
       <div class="blk"><div class="lbl">${t("ent_events")}</div>${evs}${more}</div>`;
     $("#emodal").classList.add("on");
-    loadInvestigation(full||label);
+    loadInvestigation(full||label);loadTimeline(full||label);
   }).catch(()=>{});
 }
 const M365CODE={
