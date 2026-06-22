@@ -209,11 +209,17 @@ def enrich(ev):
         pr = params(ev)
         out["_deleg_target"] = str(pr.get("User") or pr.get("Trustee") or "")[:200] or None
     # --- SharePoint / OneDrive : partage externe / lien anonyme ---
+    # NB : 'CompanyLinkCreated/Used' = lien a l'echelle de l'ORG (interne par definition)
+    # -> JAMAIS un partage externe. On l'exclut (audit FP : 248/268 FP venaient de la,
+    # le domaine du tenant n'etant pas dans M365_INTERNAL_DOMAINS). Le vrai risque
+    # (AnonymousLink*) ne genere de toute facon aucun de ces events.
     if op in ("AnonymousLinkCreated", "AnonymousLinkUsed", "SecureLinkCreated",
-              "AddedToSecureLink", "SharingInvitationCreated", "CompanyLinkCreated"):
+              "AddedToSecureLink", "SharingInvitationCreated"):
         # externe seulement si invite hors domaine, ou lien anonyme (toujours risque)
         tgt = ev.get("TargetUserOrGroupName") or ev.get("UserId") or ""
-        if op.startswith("Anonymous") or is_external(tgt):
+        # acteur systeme SharePoint (app@sharepoint) = jamais un partage humain externe
+        actor = (ev.get("UserId") or "").lower()
+        if (op.startswith("Anonymous") or is_external(tgt)) and actor != "app@sharepoint":
             out["_external_share"] = 1
             out["_share_target"] = str(tgt)[:200] or None
             out["_share_file"] = ev.get("SourceFileName") or ev.get("ObjectId")
