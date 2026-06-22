@@ -140,6 +140,21 @@
   .escore .escR{font-size:11px;color:var(--dim);margin-top:4px}
   .escore.cy .escV{color:var(--cy)}.escore.amb{border-color:#caa14a55}.escore.amb .escV{color:var(--amb)}
   .escore.red{border-color:#d9534f55}.escore.red .escV{color:var(--red)}.escore.vio .escV{color:var(--vio)}
+  /* --- Jauge de risque fusionné --- */
+  .riskbanner{display:flex;gap:16px;align-items:center;background:linear-gradient(90deg,#0f1b2c,#0c1422);border:1px solid var(--bd);border-left:4px solid var(--cy);border-radius:12px;padding:13px 16px;margin:12px 0 6px}
+  .riskbanner.amb{border-left-color:var(--amb)}.riskbanner.red{border-left-color:var(--red)}.riskbanner.vio{border-left-color:var(--vio)}
+  .riskbanner .rg{display:flex;align-items:center;gap:11px;flex:0 0 auto;padding-right:14px;border-right:1px solid #1d2c44}
+  .riskbanner .rgs{font-size:38px;font-weight:800;line-height:1;color:var(--cy)}
+  .riskbanner.amb .rgs{color:var(--amb)}.riskbanner.red .rgs{color:var(--red)}.riskbanner.vio .rgs{color:var(--vio)}
+  .riskbanner .rgl{font-size:14px;font-weight:800;color:#dfe9f3;text-transform:uppercase;letter-spacing:.5px}
+  .riskbanner .rgsub{font-size:10px;color:var(--mut);margin-top:2px}
+  .rcomp{flex:1;display:flex;flex-direction:column;gap:5px;min-width:160px}
+  .rbk{display:flex;align-items:center;gap:8px;font-size:11px}
+  .rbl{flex:0 0 78px;color:var(--mut);text-align:right}
+  .rbt{flex:1;height:7px;background:#16243a;border-radius:4px;overflow:hidden}
+  .rbf{display:block;height:100%;border-radius:4px;transition:width .4s}
+  .rbv{flex:0 0 26px;color:#cdd9e8;font-weight:700}
+  .rcorr{font-size:10.5px;color:var(--cy);margin-top:2px;display:flex;align-items:center;gap:5px}.rcorr .svi{width:12px;height:12px}
   .entMore{display:block;width:100%;margin-top:10px;padding:9px;background:#10233a;border:1px solid #2563eb55;color:#9fd3e6;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer}
   .entMore:hover{background:#16304f}
   .emsg{color:var(--mut);font-size:11px;margin-top:3px;line-height:1.4}
@@ -676,7 +691,7 @@ const I18N={
   empty_waiting:"En attente d'événements…",empty_ml:"Aucune anomalie ML récente",empty_ueba:"Aucun score UEBA récent",empty_geo:"Aucune donnée géo",empty_event:"Aucun événement",
   ent_tactics:"Tactiques",ent_techniques:"Techniques ATT&CK",ent_events:"Événements récents",ent_detn:"détections (7 j)",load_more:"Charger plus",events_shown:"événements affichés",id_unified:"Identité unifiée — {n} comptes liés (vue agrégée) :",
   inv_title:"Investigation — provenance & cartographie",inv_authmap:"Cartographie des sources d'authentification",inv_timeline:"Chronologie — réussis / échecs",inv_ips:"IP sources",inv_ips_hint:"— une réussite depuis l'étranger = à investiguer",inv_codes:"Codes de statut",inv_prov:"Provenance des détections",inv_presence:"Présence par source",inv_analyzing:"Analyse en cours…",inv_none:"Aucune donnée d'investigation pour cette entité",inv_winauth:"Authentification Windows (logons 4624/4625)",inv_logontypes:"Types de logon",inv_failreasons:"Motifs d'échec",k_logons:"logons",pal_evts:"évts",
-  rep_title:"OMNITECH SECURITY — Rapport de posture SOC",rep_gen:"Généré le",rep_plat:"plateforme SIEM/XDR (Graylog + oms-xdr)",rep_k_inc:"Incidents critiques (7 j)",rep_k_det:"Détections (24 h)",rep_k_tech:"Techniques ATT&CK",rep_k_evt:"Événements (24 h)",rep_cov:"Couverture MITRE ATT&CK",rep_cov1:"techniques sur",rep_cov2:"tactiques couvertes. État du cluster de collecte :",rep_posture:"Posture opérationnelle",rep_robots:"Auto-supervision des robots d'analyse :",rep_oper:"opérationnels",rep_down:"en panne",rep_collect:"Couverture de collecte :",rep_sil1:"hôte(s) silencieux sur",rep_sil2:"attendus",rep_silh:"Hôtes muets :",rep_risk:"Entités à risque — scoring ML & UEBA",rep_mlanom:"Anomalies ML (IsolationForest)",rep_uebar:"Risque comportemental UEBA",rep_h_ent:"Entité",rep_h_score:"Score",rep_h_reason:"Motif principal",rep_h_factor:"Facteur",rep_topdet:"Top détections (7 jours)",rep_h_det:"Détection",rep_h_vol:"Volume",rep_recinc:"Incidents corrélés récents",rep_h_sev:"Sévérité",rep_h_title:"Titre",rep_noinc:"Aucun incident corrélé",rep_collsrc:"Sources de collecte (24 h)",rep_h_src:"Source",rep_foot:"Document généré automatiquement — démarche d'amélioration continue (ISO/IEC 27001:2022, clause 10). Preuve datée et reproductible.",leak_none:"Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)",esc_ml:"Score ML",esc_ueba:"Score UEBA",g_title:"Guide d'action",g_what:"Ce que c'est",g_check:"À vérifier",g_remed:"Remédiation",g_correct:"Correction durable",g_none:"Pas de guide pour cette détection.",g_hint:"cliquer pour le guide d'action",g_show:"Guide d'action ▸",empty_det:"Aucune détection",
+  rep_title:"OMNITECH SECURITY — Rapport de posture SOC",rep_gen:"Généré le",rep_plat:"plateforme SIEM/XDR (Graylog + oms-xdr)",rep_k_inc:"Incidents critiques (7 j)",rep_k_det:"Détections (24 h)",rep_k_tech:"Techniques ATT&CK",rep_k_evt:"Événements (24 h)",rep_cov:"Couverture MITRE ATT&CK",rep_cov1:"techniques sur",rep_cov2:"tactiques couvertes. État du cluster de collecte :",rep_posture:"Posture opérationnelle",rep_robots:"Auto-supervision des robots d'analyse :",rep_oper:"opérationnels",rep_down:"en panne",rep_collect:"Couverture de collecte :",rep_sil1:"hôte(s) silencieux sur",rep_sil2:"attendus",rep_silh:"Hôtes muets :",rep_risk:"Entités à risque — scoring ML & UEBA",rep_mlanom:"Anomalies ML (IsolationForest)",rep_uebar:"Risque comportemental UEBA",rep_h_ent:"Entité",rep_h_score:"Score",rep_h_reason:"Motif principal",rep_h_factor:"Facteur",rep_topdet:"Top détections (7 jours)",rep_h_det:"Détection",rep_h_vol:"Volume",rep_recinc:"Incidents corrélés récents",rep_h_sev:"Sévérité",rep_h_title:"Titre",rep_noinc:"Aucun incident corrélé",rep_collsrc:"Sources de collecte (24 h)",rep_h_src:"Source",rep_foot:"Document généré automatiquement — démarche d'amélioration continue (ISO/IEC 27001:2022, clause 10). Preuve datée et reproductible.",leak_none:"Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)",esc_ml:"Score ML",esc_ueba:"Score UEBA",risk_fused:"Risque fusionné · ML + UEBA + détections",risk_det:"Détections",risk_corrob:"signaux corroborés",risk_critical:"Critique",risk_high:"Élevé",risk_moderate:"Modéré",risk_low:"Faible",risk_minimal:"Minimal",g_title:"Guide d'action",g_what:"Ce que c'est",g_check:"À vérifier",g_remed:"Remédiation",g_correct:"Correction durable",g_none:"Pas de guide pour cette détection.",g_hint:"cliquer pour le guide d'action",g_show:"Guide d'action ▸",empty_det:"Aucune détection",
   k_attempts:"tentatives",k_success:"réussies",k_fail:"échecs",k_countries:"pays",k_ips:"IP sources",ch_ok:"Réussis",ch_ko:"Échecs",succ_suffix:"réussis",none_suffix:"0 réussi",
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
@@ -696,7 +711,7 @@ const I18N={
   empty_waiting:"Waiting for events…",empty_ml:"No recent ML anomaly",empty_ueba:"No recent UEBA score",empty_geo:"No geo data",empty_event:"No event",
   ent_tactics:"Tactics",ent_techniques:"ATT&CK techniques",ent_events:"Recent events",ent_detn:"detections (7d)",load_more:"Load more",events_shown:"events shown",id_unified:"Unified identity — {n} linked accounts (aggregated view):",
   inv_title:"Investigation — provenance & map",inv_authmap:"Authentication source map",inv_timeline:"Timeline — success / failure",inv_ips:"Source IPs",inv_ips_hint:"— a success from abroad = investigate",inv_codes:"Status codes",inv_prov:"Detection provenance",inv_presence:"Presence by source",inv_analyzing:"Analyzing…",inv_none:"No investigation data for this entity",inv_winauth:"Windows authentication (4624/4625 logons)",inv_logontypes:"Logon types",inv_failreasons:"Failure reasons",k_logons:"logons",pal_evts:"events",
-  rep_title:"OMNITECH SECURITY — SOC Posture Report",rep_gen:"Generated on",rep_plat:"SIEM/XDR platform (Graylog + oms-xdr)",rep_k_inc:"Critical incidents (7d)",rep_k_det:"Detections (24h)",rep_k_tech:"ATT&CK techniques",rep_k_evt:"Events (24h)",rep_cov:"MITRE ATT&CK coverage",rep_cov1:"techniques across",rep_cov2:"tactics covered. Collection cluster state:",rep_posture:"Operational posture",rep_robots:"Analysis-robot self-monitoring:",rep_oper:"operational",rep_down:"down",rep_collect:"Collection coverage:",rep_sil1:"silent host(s) of",rep_sil2:"expected",rep_silh:"Silent hosts:",rep_risk:"At-risk entities — ML & UEBA scoring",rep_mlanom:"ML anomalies (IsolationForest)",rep_uebar:"UEBA behavioral risk",rep_h_ent:"Entity",rep_h_score:"Score",rep_h_reason:"Main reason",rep_h_factor:"Factor",rep_topdet:"Top detections (7 days)",rep_h_det:"Detection",rep_h_vol:"Volume",rep_recinc:"Recent correlated incidents",rep_h_sev:"Severity",rep_h_title:"Title",rep_noinc:"No correlated incidents",rep_collsrc:"Collection sources (24h)",rep_h_src:"Source",rep_foot:"Automatically generated document — continual improvement (ISO/IEC 27001:2022, clause 10). Dated, reproducible evidence.",leak_none:"No active source (RansomLook running; HIBP/Dehashed awaiting keys)",esc_ml:"ML score",esc_ueba:"UEBA score",g_title:"Action guide",g_what:"What it is",g_check:"To check",g_remed:"Remediation",g_correct:"Lasting fix",g_none:"No guidance for this detection.",g_hint:"click for the action guide",g_show:"Action guide ▸",empty_det:"No detection",
+  rep_title:"OMNITECH SECURITY — SOC Posture Report",rep_gen:"Generated on",rep_plat:"SIEM/XDR platform (Graylog + oms-xdr)",rep_k_inc:"Critical incidents (7d)",rep_k_det:"Detections (24h)",rep_k_tech:"ATT&CK techniques",rep_k_evt:"Events (24h)",rep_cov:"MITRE ATT&CK coverage",rep_cov1:"techniques across",rep_cov2:"tactics covered. Collection cluster state:",rep_posture:"Operational posture",rep_robots:"Analysis-robot self-monitoring:",rep_oper:"operational",rep_down:"down",rep_collect:"Collection coverage:",rep_sil1:"silent host(s) of",rep_sil2:"expected",rep_silh:"Silent hosts:",rep_risk:"At-risk entities — ML & UEBA scoring",rep_mlanom:"ML anomalies (IsolationForest)",rep_uebar:"UEBA behavioral risk",rep_h_ent:"Entity",rep_h_score:"Score",rep_h_reason:"Main reason",rep_h_factor:"Factor",rep_topdet:"Top detections (7 days)",rep_h_det:"Detection",rep_h_vol:"Volume",rep_recinc:"Recent correlated incidents",rep_h_sev:"Severity",rep_h_title:"Title",rep_noinc:"No correlated incidents",rep_collsrc:"Collection sources (24h)",rep_h_src:"Source",rep_foot:"Automatically generated document — continual improvement (ISO/IEC 27001:2022, clause 10). Dated, reproducible evidence.",leak_none:"No active source (RansomLook running; HIBP/Dehashed awaiting keys)",esc_ml:"ML score",esc_ueba:"UEBA score",risk_fused:"Fused risk · ML + UEBA + detections",risk_det:"Detections",risk_corrob:"corroborated signals",risk_critical:"Critical",risk_high:"High",risk_moderate:"Moderate",risk_low:"Low",risk_minimal:"Minimal",g_title:"Action guide",g_what:"What it is",g_check:"To check",g_remed:"Remediation",g_correct:"Lasting fix",g_none:"No guidance for this detection.",g_hint:"click for the action guide",g_show:"Action guide ▸",empty_det:"No detection",
   k_attempts:"attempts",k_success:"successful",k_fail:"failures",k_countries:"countries",k_ips:"source IPs",ch_ok:"Successful",ch_ko:"Failures",succ_suffix:"successful",none_suffix:"0 successful",
   case_status:"Case status updated.",case_disp:"Disposition saved — the false-positive reduction model will adjust.",case_assign:"Case assigned.",case_note:"Investigation note added.",case_def:"Case updated."
  }
@@ -1165,18 +1180,28 @@ function gClear(){if($("#gTactic"))$("#gTactic").value="";if($("#gMinVol"))$("#g
 var ENT_CUR=null,ENT_SIZE=20;
 function entMore(){ENT_SIZE+=20;if(ENT_CUR)openEntity(ENT_CUR.full,ENT_CUR.label,ENT_SIZE);}
 function entScoreBanner(d){
+  var r=d.risk||null, out="";
   var ml=d.scores&&d.scores.ml?d.scores.ml:null;
   var ue=d.scores&&d.scores.ueba?d.scores.ueba:null;
+  // Jauge de RISQUE FUSIONNÉ (ML + UEBA + détections) = la priorisation
+  if(r&&r.score!==null&&r.score!==undefined){
+    var rc=r.score>=80?"red":r.score>=60?"amb":r.score>=35?"vio":"cy";
+    var c=r.components||{};
+    var bar=function(v,lab){v=v||0;var bc=v>=70?"#fb3b53":v>=45?"#f5a623":"#3b82f6";
+      return '<div class="rbk"><span class="rbl">'+lab+'</span><span class="rbt"><span class="rbf" style="width:'+Math.max(3,Math.min(100,v))+'%;background:'+bc+'"></span></span><span class="rbv mono">'+v+'</span></div>';};
+    out+='<div class="riskbanner '+rc+'"><div class="rg"><div class="rgs mono">'+r.score+'</div>'+
+      '<div class="rgmeta"><div class="rgl">'+t("risk_"+(r.label||"minimal"))+'</div><div class="rgsub">'+t("risk_fused")+'</div></div></div>'+
+      '<div class="rcomp">'+bar(c.ml,t("esc_ml"))+bar(c.ueba,t("esc_ueba"))+bar(c.detection,t("risk_det"))+
+      (r.corroboration>=2?'<div class="rcorr">'+ic("network")+' '+t("risk_corrob")+'</div>':'')+'</div></div>';
+  }
+  // Détail ML/UEBA (motif/facteur) en complément
   var cards="";
-  if(ml&&ml.score!==null&&ml.score!==undefined){
-    var mc=ml.score>=80?"red":ml.score>=50?"amb":"cy";
-    cards+='<div class="escore '+mc+'"><div class="escK">'+t("esc_ml")+'</div><div class="escV">'+esc((""+ml.score))+'</div>'+(ml.reason?'<div class="escR">'+esc((ml.reason+"").slice(0,80))+'</div>':'')+'</div>';
-  }
-  if(ue&&ue.score!==null&&ue.score!==undefined){
-    var uc=ue.score>=80?"red":ue.score>=60?"amb":"vio";
-    cards+='<div class="escore '+uc+'"><div class="escK">'+t("esc_ueba")+'</div><div class="escV">'+esc((""+ue.score))+'</div>'+(ue.factor?'<div class="escR">'+esc((ue.factor+"").slice(0,80))+'</div>':'')+'</div>';
-  }
-  return cards?'<div class="escRow">'+cards+'</div>':'';
+  if(ml&&ml.score!==null&&ml.score!==undefined&&ml.reason)
+    cards+='<div class="escore cy"><div class="escK">'+t("esc_ml")+'</div><div class="escV">'+esc(""+ml.score)+'</div><div class="escR">'+esc((ml.reason+"").slice(0,80))+'</div></div>';
+  if(ue&&ue.score!==null&&ue.score!==undefined&&ue.factor)
+    cards+='<div class="escore vio"><div class="escK">'+t("esc_ueba")+'</div><div class="escV">'+esc(""+ue.score)+'</div><div class="escR">'+esc((ue.factor+"").slice(0,80))+'</div></div>';
+  if(cards)out+='<div class="escRow">'+cards+'</div>';
+  return out;
 }
 /* ===== Polish chargement / rafraichissement (additif) ===== */
 var UPD_AT=0, UPD_T=null, REFRESH_T=null, RELOADING=false;

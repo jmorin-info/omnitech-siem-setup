@@ -431,6 +431,42 @@ def _entity_scores(name):
     return {"ml": ml, "ueba": ue}
 
 
+_SEVMAP = {"critical": 92, "critique": 92, "high": 72, "eleve": 72, "élevé": 72, "eleve ": 72,
+           "medium": 48, "moyen": 48, "low": 22, "faible": 22, "info": 12, "informational": 12}
+
+def _fused_risk(scores, sev_counts, total_det):
+    """Score de risque FUSIONNÉ d'une entité : combine 3 signaux INDÉPENDANTS — anomalie ML
+    (oms-ml), comportement UEBA, et sévérité des détections déterministes. Le signal dominant
+    fixe le plancher (une détection critique = critique, même sans ML/UEBA), et la
+    CORROBORATION (plusieurs signaux élevés = plus de confiance) ajoute un bonus borné.
+    But : une seule jauge de priorisation d'entité, avec la décomposition pour l'analyste."""
+    ml = round((scores.get("ml") or {}).get("score") or 0)
+    ueba = round((scores.get("ueba") or {}).get("score") or 0)
+    # Détections : une CRITIQUE pose un plancher élevé (rare + grave) ; les "hautes" comptent
+    # par CONCENTRATION — une règle qui tire est courante, une RAFALE de hautes est un signal.
+    # (Sinon le max-de-sévérité sur 7 j rendrait toute entité active « critique ».)
+    crit = high = med = 0
+    for sev, n in (sev_counts or {}).items():
+        v = _SEVMAP.get(str(sev).strip().lower(), 30)
+        if v >= 90:
+            crit += n
+        elif v >= 72:
+            high += n
+        elif v >= 40:
+            med += n
+    det = (min(96, 86 + min(10, crit)) if crit else
+           66 if high >= 10 else 52 if high >= 3 else 40 if high >= 1 else 28 if med else 12)
+    comps = {"ml": ml, "ueba": ueba, "detection": det}
+    base = max(comps.values())
+    elevated = sum(1 for v in comps.values() if v >= 50)
+    boost = min(15, (elevated - 1) * 8) if elevated >= 2 else 0   # corroboration
+    fused = min(100, round(base + boost))
+    label = ("critical" if fused >= 80 else "high" if fused >= 60 else
+             "moderate" if fused >= 35 else "low" if fused >= 15 else "minimal")
+    return {"score": fused, "label": label, "components": comps,
+            "corroboration": elevated, "n_detections": int(total_det or 0)}
+
+
 # --- Corrélation d'identité : unifier les représentations d'un même humain -----
 # DOMAINE\user, user@dom, ADM-user, user-adm -> même identité logique. CONSERVATEUR :
 # les comptes machine ($) ne sont JAMAIS fusionnés ; un humain et son compte admin
@@ -491,6 +527,7 @@ def get_entity(name, size=20, frm=0):
         "_source": ["timestamp", "alert_tag", "mitre_technique", "short_message", "message"],
         "aggs": {"tech": {"terms": {"field": "mitre_technique", "size": 8}},
                  "tac": {"terms": {"field": "mitre_tactic", "size": 8}},
+                 "sev": {"terms": {"field": "risk_severity", "size": 6}},
                  "tot": {"value_count": {"field": "alert_tag"}}}})
     ag = res.get("aggregations", {})
     ev = []
@@ -500,9 +537,11 @@ def get_entity(name, size=20, frm=0):
                    "msg": s.get("short_message") or s.get("message")})
     th = res.get("hits", {}).get("total", {})
     th = th.get("value", 0) if isinstance(th, dict) else (th or 0)
+    scores = _entity_scores(name)
+    sev_counts = {b["key"]: b["doc_count"] for b in ag.get("sev", {}).get("buckets", [])}
     return {"name": _rd(name), "total": ag.get("tot", {}).get("value", 0),
             "from": frm, "size": size, "loaded": frm + len(ev), "has_more": (frm + len(ev)) < th,
-            "scores": _entity_scores(name),
+            "scores": scores, "risk": _fused_risk(scores, sev_counts, th),
             "linked": [_rd(u) for u in linked] if len(linked) > 1 else [],
             "techniques": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tech", {}).get("buckets", [])],
             "tactics": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tac", {}).get("buckets", [])],
