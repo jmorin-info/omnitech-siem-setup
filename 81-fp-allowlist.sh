@@ -158,6 +158,42 @@ then
 end
 EOF
 
+# --- sysmon_injection (Sysmon 8/25) -------------------------------------------
+# Mesure : ~99% FP. Parc TRES orienté dev -> le bruit dominant = les DEBUGGEURS
+# Visual Studio (devenv/msvsmon) qui "injectent" dans les builds en cours de debug
+# (\bin\Debug\, \source\repos\), + logiciels signes (Citrix appprotection, Autodesk,
+# NinjaRemote) et processus systeme (svchost/dllhost/WerFault/explorer). 0 cible
+# lsass observee. GARDE-FOU ABSOLU : on n'allowliste JAMAIS une injection vers lsass
+# (vol d'identifiants) -> elle continue d'alerter. L'evenement reste indexe (scoring).
+ensure_rule "omni-fp-25-sysmon-injection" <<'EOF'
+rule "omni-fp-25-sysmon-injection"
+when
+  to_string($message.alert_tag) == "sysmon_injection"
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TargetImage), "\\lsass.exe", true)
+  AND (
+       ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\devenv.exe", true)
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\msvsmon.exe", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\vsdbg", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\remote debugger\\", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_TargetImage), "\\bin\\debug\\", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_TargetImage), "\\bin\\release\\", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_TargetImage), "\\source\\repos\\", true)
+    OR starts_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "C:\\Program Files", true)
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\werfault.exe", true)
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\svchost.exe", true)
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\dllhost.exe", true)
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\wudfhost.exe", true)
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\explorer.exe", true)
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\code.exe", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_SourceImage), "antigravity", true)
+  )
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_allowlist_reason", "sysmon_injection: injecteur legitime (debugger/programme signe/systeme ; jamais lsass)");
+  remove_field("alert_tag");
+end
+EOF
+
 echo "==> [3/4] Pipeline 'OMNI - Allowlist FP' (stage 25) + connexion streams"
 # Stage 25 = APRES MITRE (20) donc risk_score/mitre_* deja poses (scoring garde),
 # AVANT la reduction ISO (30). match either : une seule des 3 regles s'applique.
@@ -167,6 +203,7 @@ stage 25 match either
 rule "omni-fp-25-service-install"
 rule "omni-fp-25-scheduled-task"
 rule "omni-fp-25-autorun"
+rule "omni-fp-25-sysmon-injection"
 end
 PIPE
 )"
