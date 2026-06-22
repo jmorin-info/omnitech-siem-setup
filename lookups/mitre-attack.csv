@@ -82,3 +82,7 @@ lsass_dump_comsvcs,T1003.001,OS Credential Dumping: LSASS Memory,Credential Acce
 ntds_ifm_dump,T1003.003,OS Credential Dumping: NTDS,Credential Access,critique,9
 installutil_proxy,T1218.004,System Binary Proxy Execution: InstallUtil,Defense Evasion,eleve,7
 office_spawn_shell,T1204.002,User Execution: Malicious File,Execution,critique,9
+certutil_download,T1105,Ingress Tool Transfer,Command and Control,eleve,7
+wevtutil_clear,T1070.001,Indicator Removal: Clear Windows Event Logs,Defense Evasion,critique,9
+fsutil_usn,T1070,Indicator Removal,Defense Evasion,eleve,8
+wmic_exec,T1047,Windows Management Instrumentation,Execution,eleve,7

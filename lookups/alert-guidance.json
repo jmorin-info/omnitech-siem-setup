@@ -59,6 +59,12 @@
     "correction": "Mettre en place une supervision automatisée des expirations (inventaire centralisé), des alertes J-30/J-7, et idéalement une émission automatisée (ACME/SCEP) pour éviter les expirations subies.",
     "remediation": "Renouveler/réémettre le certificat via l'AC, redéployer sur le service concerné et vérifier la chaîne. Aucune action de confinement sécurité requise sauf compromission de clé."
   },
+  "certutil_download": {
+    "a_verifier": "URL téléchargée, fichier de destination, hôte/utilisateur, processus parent. Le fichier est-il malveillant (hash, exécution suivante) ? Croiser avec une macro Office / PowerShell en amont (chaîne d'accès initial).",
+    "ce_que_cest": "certutil.exe (utilitaire de certificats) utilisé pour TÉLÉCHARGER un fichier depuis Internet (-urlcache/-split) — LOLBin classique (T1105) pour récupérer un 2e étage en contournant les outils surveillés. Baseline mesurée = 0 sur le parc → tout hit est un incident.",
+    "correction": "Bloquer certutil par AppLocker/WDAC pour les comptes non‑IT, filtrage web egress, EDR, surveillance des LOLBins, règles ASR.",
+    "remediation": "Isoler l'hôte, tuer le processus, récupérer + analyser le fichier téléchargé, bloquer l'URL/domaine (FortiGate/SOAR), rechercher l'exécution du 2e étage + la persistance."
+  },
   "data_exfil": {
     "a_verifier": "Identifier source, destination et protocole (FortiGate). Légitime (sauvegarde cloud, transfert métier, réplication) ou suspect (destination personnelle/inconnue, hors horaires, juste après une détection sur l'hôte) ? Croiser avec les partages M365/OneDrive externes.",
     "ce_que_cest": "Volume de données sortant anormalement élevé depuis une source interne (exfiltration potentielle), détecté par dépassement de seuil d'octets sortants (oms‑ndr).",
@@ -136,6 +142,12 @@
     "ce_que_cest": "Le module UTM FortiGate (IPS) a détecté/bloqué une tentative d'exploitation visant une application exposée (T1190). Signal d'attaque sur le périmètre, souvent en phase d'accès initial.",
     "correction": "IPS en mode bloquant sur les services exposés, signatures à jour, virtual patching, réduction de la surface d'exposition et durcissement des applications publiques.",
     "remediation": "Confirmer le blocage ; bannir l'IP source sur FortiGate. Si l'exploit a pu passer, isoler le serveur cible via NinjaOne et vérifier sa compromission (web shell, comptes)."
+  },
+  "fsutil_usn": {
+    "a_verifier": "Hôte, utilisateur, volume ciblé. Croiser avec inhibit_recovery (suppression shadow copies), chiffrement de masse ou exfiltration sur le même hôte — souvent une étape ransomware.",
+    "ce_que_cest": "Suppression du journal USN NTFS via fsutil usn deletejournal (T1070) — anti‑forensique : détruit l'historique des modifications de fichiers, FRÉQUENT dans une chaîne ransomware/exfiltration. Baseline = 0.",
+    "correction": "EDR avec rollback, sauvegardes immuables/hors‑ligne, surveillance des suppressions shadow copies + USN, segmentation, durcissement des comptes à privilèges.",
+    "remediation": "Isoler l'hôte IMMÉDIATEMENT (potentiel pré‑ransomware). Vérifier l'état des sauvegardes (shadow copies, backups), rechercher chiffrement/exfiltration en cours, préserver les preuves."
   },
   "gpo_modification": {
     "a_verifier": "En premier : compte auteur, GPO modifiée et nature du changement (5136/5137), via fenêtre de changement ou non. Distinguer une admin AD légitime d'une modif ajoutant un script de logon, des droits ou une tâche planifiée.",
@@ -491,6 +503,12 @@
     "correction": "Patcher l'application exposée, WAF en mode bloquant, droits d'écriture restreints sur la webroot, intégrité des fichiers (FIM), et blocage des process enfants du serveur web (ASR/WDAC).",
     "remediation": "Isoler le serveur via NinjaOne, bloquer l'IP attaquante sur FortiGate, capturer la mémoire et l'image disque. Supprimer le web shell, scan ESET, reset des comptes/secrets exposés sur le serveur."
   },
+  "wevtutil_clear": {
+    "a_verifier": "Quel journal (Security/System/…), par qui, depuis quel hôte. Surtout : que s'est-il passé JUSTE AVANT (les détections précédant l'effacement sont le vrai signal) ? Action de maintenance légitime très rare.",
+    "ce_que_cest": "Effacement d'un journal d'événements Windows via wevtutil cl/clear-log (T1070.001) — couverture de traces : l'attaquant efface les preuves après action (génère aussi l'EventID 1102). Baseline = 0 → effacement délibéré.",
+    "correction": "Forwarding temps réel (déjà : Winlogbeat → SIEM immuable), alerte sur 1102, restreindre les droits d'effacement de journaux, EDR.",
+    "remediation": "Isoler l'hôte. Reconstituer la timeline depuis les logs CENTRALISÉS du SIEM (non effaçables côté serveur — l'intérêt de la centralisation). Rechercher l'activité masquée avant l'effacement, désactiver le compte si compromis."
+  },
   "winsec_critique": {
     "a_verifier": "En premier : hôte, compte et action (arrêt service EventLog, auditpol /clear, modif registre). Très peu de faux positifs légitimes ; corréler avec un trou de logs et d'autres activités suspectes simultanées.",
     "ce_que_cest": "Désactivation de la journalisation d'événements Windows (T1562.002) — l'attaquant aveugle l'audit (arrêt du service EventLog, modif de la config audit) pour masquer son activité. Précurseur ou accompagnement d'une intrusion.",
@@ -502,5 +520,11 @@
     "ce_que_cest": "Exécution distante via WMI (T1047) — déplacement latéral ou exécution de code à distance (wmic process call create, Win32_Process). Technique furtive de propagation post-compromission avec identifiants valides.",
     "correction": "Restreindre WMI distant (host firewall, RPC filtering), tiering AD, surveillance de WmiPrvSE lançant des process, et moindre privilège sur les comptes d'administration.",
     "remediation": "Isoler source et cible via NinjaOne, capturer la mémoire, scan ESET. Révoquer les sessions et reset du compte utilisé. Cartographier le mouvement latéral (autres cibles WMI)."
+  },
+  "wmic_exec": {
+    "a_verifier": "Commande créée, hôte source ET cible (si distant), utilisateur. Outil d'admin/déploiement légitime ou offensif ? Croiser avec usage d'identifiants (4648), partage admin, ou recon sur le même hôte.",
+    "ce_que_cest": "Lancement d'un processus via WMI (wmic process call create, T1047) — exécution locale ou À DISTANCE détournant un mécanisme d'admin légitime ; vecteur d'exécution / mouvement latéral discret. Baseline = 0.",
+    "correction": "Restreindre WMI distant (pare‑feu/WinRM), surveiller wmic/WMI, EDR, segmentation, tiering des comptes à privilèges.",
+    "remediation": "Identifier la commande + l'hôte cible. Isoler si offensif, tuer le processus créé, désactiver le compte si compromis, rechercher le mouvement latéral + la persistance."
   }
 }

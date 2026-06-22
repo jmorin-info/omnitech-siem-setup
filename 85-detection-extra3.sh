@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # 85-detection-extra3.sh - Detecteurs ATT&CK haute-fidelite / FP mesure nul
-#   Cinq tripwires valides sur les donnees REELLES du parc (sonde OpenSearch
+#   Neuf tripwires valides sur les donnees REELLES du parc (sonde OpenSearch
 #   omni-sysmon_*). FENETRE REELLE MESUREE : ~11 j (2026-06-11 -> 2026-06-22),
 #   ~10,6 M d'EID1 Sysmon, 85 hotes (l'index Sysmon ne couvre PAS 90 j). Pour
 #   chaque signature OFFENSIVE precise : baseline observee = 0 -> alerte count>=1.
@@ -159,6 +159,70 @@ then
 end
 EOF
 
+# --- 6) Telechargement via certutil (LOLBin, T1105) --------------------------
+# certutil -urlcache -f http://... / -split : telechargement par binaire systeme.
+# Mesure 7j : 0 occurrence de certutil+urlcache/split -> tout hit = ingress tool.
+ensure_rule "omni-x3-13-certutil-download" <<'EOF'
+rule "omni-x3-13-certutil-download"
+when
+  to_string($message.event_source) == "sysmon"
+  AND to_string($message.winlogbeat_winlog_event_id) == "1"
+  AND contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "certutil", true)
+  AND ( contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "urlcache", true)
+     OR contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "-split", true)
+     OR contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "verifyctl", true) )
+then
+  set_field("alert_tag", "certutil_download");
+  set_field("event_action", "download_lolbin_certutil");
+end
+EOF
+
+# --- 7) Effacement de journal via wevtutil (T1070.001) -----------------------
+# wevtutil cl / clear-log : effacement d'un journal d'evenements (couverture de traces).
+# Mesure 7j : 0 -> tout hit = effacement delibere (incident d'evasion).
+ensure_rule "omni-x3-13-wevtutil-clear" <<'EOF'
+rule "omni-x3-13-wevtutil-clear"
+when
+  to_string($message.event_source) == "sysmon"
+  AND to_string($message.winlogbeat_winlog_event_id) == "1"
+  AND contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "wevtutil", true)
+  AND ( contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), " cl ", true)
+     OR contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "clear-log", true) )
+then
+  set_field("alert_tag", "wevtutil_clear");
+  set_field("event_action", "effacement_journal");
+end
+EOF
+
+# --- 8) Suppression du journal USN via fsutil (anti-forensique, T1070) -------
+# fsutil usn deletejournal : detruit le journal des modifications NTFS (cache les
+# operations fichier, frequent pre-ransomware). Mesure 7j : 0.
+ensure_rule "omni-x3-13-fsutil-usn" <<'EOF'
+rule "omni-x3-13-fsutil-usn"
+when
+  to_string($message.event_source) == "sysmon"
+  AND to_string($message.winlogbeat_winlog_event_id) == "1"
+  AND contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "deletejournal", true)
+then
+  set_field("alert_tag", "fsutil_usn");
+  set_field("event_action", "suppression_journal_usn");
+end
+EOF
+
+# --- 9) Execution via WMI : wmic process call create (T1047) -----------------
+# Lancement de processus a distance/local via WMI. Mesure 7j : 0 'process call create'.
+ensure_rule "omni-x3-13-wmic-exec" <<'EOF'
+rule "omni-x3-13-wmic-exec"
+when
+  to_string($message.event_source) == "sysmon"
+  AND to_string($message.winlogbeat_winlog_event_id) == "1"
+  AND contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "process call create", true)
+then
+  set_field("alert_tag", "wmic_exec");
+  set_field("event_action", "execution_wmi");
+end
+EOF
+
 echo "==> [2/4] Pipeline 'OMNI - Detections extra3' (stage 13) + connexion stream Sysmon"
 PL="$(ensure_pipeline "OMNI - Detections extra3" <<'PIPE'
 pipeline "OMNI - Detections extra3"
@@ -168,6 +232,10 @@ rule "omni-x3-13-comsvcs-lsass"
 rule "omni-x3-13-ntdsutil-ifm"
 rule "omni-x3-13-installutil-proxy"
 rule "omni-x3-13-office-shell"
+rule "omni-x3-13-certutil-download"
+rule "omni-x3-13-wevtutil-clear"
+rule "omni-x3-13-fsutil-usn"
+rule "omni-x3-13-wmic-exec"
 end
 PIPE
 )"
@@ -182,6 +250,10 @@ add_mitre lsass_dump_comsvcs T1003.001 "OS Credential Dumping: LSASS Memory"    
 add_mitre ntds_ifm_dump      T1003.003 "OS Credential Dumping: NTDS"                "Credential Access" critique 9
 add_mitre installutil_proxy  T1218.004 "System Binary Proxy Execution: InstallUtil" "Defense Evasion"   eleve    7
 add_mitre office_spawn_shell  T1204.002 "User Execution: Malicious File"             "Execution"         critique 9
+add_mitre certutil_download   T1105     "Ingress Tool Transfer"                       "Command and Control" eleve  7
+add_mitre wevtutil_clear      T1070.001 "Indicator Removal: Clear Windows Event Logs" "Defense Evasion"   critique 9
+add_mitre fsutil_usn          T1070     "Indicator Removal"                           "Defense Evasion"   eleve    8
+add_mitre wmic_exec           T1047     "Windows Management Instrumentation"          "Execution"         eleve    7
 install -m 644 "$CSV" /etc/graylog/lookup/mitre-attack.csv
 chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true
 ok "MITRE inhibit_recovery / lsass_dump_comsvcs / ntds_ifm_dump / installutil_proxy"
@@ -204,7 +276,11 @@ mk_a "OMNI - Dump LSASS via comsvcs.dll MiniDump"                    "alert_tag:
 mk_a "OMNI - Extraction NTDS.dit via ntdsutil IFM"                   "alert_tag:ntds_ifm_dump"      "$SYS"
 mk_a "OMNI - Execution proxy via InstallUtil"                        "alert_tag:installutil_proxy"  "$SYS"
 mk_a "OMNI - Application Office lance un interpreteur (macro)"        "alert_tag:office_spawn_shell" "$SYS"
+mk_a "OMNI - Telechargement via certutil (LOLBin)"                   "alert_tag:certutil_download" "$SYS"
+mk_a "OMNI - Effacement de journal d'evenements (wevtutil)"          "alert_tag:wevtutil_clear"    "$SYS"
+mk_a "OMNI - Suppression du journal USN (fsutil, anti-forensique)"   "alert_tag:fsutil_usn"        "$SYS"
+mk_a "OMNI - Execution via WMI (process call create)"               "alert_tag:wmic_exec"         "$SYS"
 echo
-echo "=== 85 termine. 5 techniques (+T1204.002 office_spawn_shell) : T1490 (inhibit_recovery), T1003.001 (lsass_dump_comsvcs),"
+echo "=== 85 termine. 9 techniques (+office_spawn_shell/certutil_download/wevtutil_clear/fsutil_usn/wmic_exec) : T1490 (inhibit_recovery), T1003.001 (lsass_dump_comsvcs),"
 echo "    T1003.003 (ntds_ifm_dump), T1218.004 (installutil_proxy). Baseline 0 mesuree sur ~11 j."
 echo "    Relancer 57 (carte ATT&CK) puis 14 (couleurs/dashboards). ==="
