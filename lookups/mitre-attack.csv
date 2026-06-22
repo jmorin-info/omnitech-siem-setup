@@ -74,3 +74,10 @@ credential_leak,T1589.001,Gather Victim Identity: Credentials,Reconnaissance,ele
 source_silent,T1562.001,Impair Defenses: Disable or Modify Tools,Defense Evasion,eleve,7
 sam_hive_dump,T1003.002,Security Account Manager,Credential Access,critique,9
 log_cleared,T1070.001,Clear Windows Event Logs,Defense Evasion,eleve,8
+defender_tamper,T1562.001,Impair Defenses: Disable or Modify Tools,Defense Evasion,critique,9
+schtask_payload,T1053.005,Scheduled Task,Execution,eleve,8
+amsi_bypass,T1562.001,Impair Defenses: Disable or Modify Tools,Defense Evasion,eleve,8
+inhibit_recovery,T1490,Inhibit System Recovery,Impact,critique,9
+lsass_dump_comsvcs,T1003.001,OS Credential Dumping: LSASS Memory,Credential Access,critique,9
+ntds_ifm_dump,T1003.003,OS Credential Dumping: NTDS,Credential Access,critique,9
+installutil_proxy,T1218.004,System Binary Proxy Execution: InstallUtil,Defense Evasion,eleve,7

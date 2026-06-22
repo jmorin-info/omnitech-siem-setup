@@ -12,11 +12,11 @@
       "techniqueID": "T1003.001",
       "score": 10,
       "enabled": true,
-      "comment": "LSASS Memory : lsass_access (score 10)",
+      "comment": "LSASS Memory : lsass_access, lsass_dump_comsvcs (score 10)",
       "metadata": [
         {
           "name": "detections",
-          "value": "lsass_access"
+          "value": "lsass_access, lsass_dump_comsvcs"
         }
       ]
     },
@@ -214,13 +214,13 @@
     },
     {
       "techniqueID": "T1490",
-      "score": 3,
+      "score": 9,
       "enabled": true,
-      "comment": "Inhibit System Recovery : veeam_job_echec (score 3)",
+      "comment": "Inhibit System Recovery : veeam_job_echec, inhibit_recovery (score 9)",
       "metadata": [
         {
           "name": "detections",
-          "value": "veeam_job_echec"
+          "value": "veeam_job_echec, inhibit_recovery"
         }
       ]
     },
@@ -262,13 +262,13 @@
     },
     {
       "techniqueID": "T1562.001",
-      "score": 7,
+      "score": 9,
       "enabled": true,
-      "comment": "Disable or Modify Tools : volume_drop, source_silent (score 7)",
+      "comment": "Disable or Modify Tools : volume_drop, source_silent, defender_tamper, amsi_bypass (score 9)",
       "metadata": [
         {
           "name": "detections",
-          "value": "volume_drop, source_silent"
+          "value": "volume_drop, source_silent, defender_tamper, amsi_bypass"
         }
       ]
     },
@@ -478,13 +478,13 @@
     },
     {
       "techniqueID": "T1053.005",
-      "score": 6,
+      "score": 8,
       "enabled": true,
-      "comment": "Scheduled Task : scheduled_task (score 6)",
+      "comment": "Scheduled Task : scheduled_task, schtask_payload (score 8)",
       "metadata": [
         {
           "name": "detections",
-          "value": "scheduled_task"
+          "value": "scheduled_task, schtask_payload"
         }
       ]
     },
@@ -576,11 +576,11 @@
       "techniqueID": "T1003.003",
       "score": 10,
       "enabled": true,
-      "comment": "NTDS : ntds_dump (score 10)",
+      "comment": "NTDS : ntds_dump, ntds_ifm_dump (score 10)",
       "metadata": [
         {
           "name": "detections",
-          "value": "ntds_dump"
+          "value": "ntds_dump, ntds_ifm_dump"
         }
       ]
     },
@@ -641,6 +641,18 @@
         {
           "name": "detections",
           "value": "log_cleared"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1218.004",
+      "score": 7,
+      "enabled": true,
+      "comment": "System Binary Proxy Execution: InstallUtil : installutil_proxy (score 7)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "installutil_proxy"
         }
       ]
     }
