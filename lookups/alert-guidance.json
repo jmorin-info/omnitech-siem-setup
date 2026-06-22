@@ -1,362 +1,422 @@
 {
-"lsass_access": {
-"ce_que_cest": "Acces a la memoire de LSASS : tentative de vol d'identifiants (dump type mimikatz).",
-"a_verifier": "",
-"remediation": "Isoler le poste, scan ESET complet, reinitialiser les comptes qui s'y sont connectes, capturer la memoire.",
-"correction": ""
-},
-"dcsync": {
-"ce_que_cest": "Replication AD demandee par un compte NON contrôleur de domaine : extraction possible de tous les hachages (DCSync).",
-"a_verifier": "",
-"remediation": "Isoler la source, reinitialiser krbtgt deux fois, auditer les droits de replication delegues.",
-"correction": ""
-},
-"kerberoasting": {
-"ce_que_cest": "Demande anormale de tickets de service en RC4 : collecte de SPN pour cassage hors-ligne.",
-"a_verifier": "",
-"remediation": "Verifier le compte demandeur, basculer les comptes de service en gMSA, surveiller l'AES anormal (0x12).",
-"correction": ""
-},
-"sysmon_injection": {
-"ce_que_cest": "Injection de code dans un processus legitime : evasion et execution furtive.",
-"a_verifier": "",
-"remediation": "Isoler le poste, identifier le processus parent, scan complet, conserver la memoire pour analyse.",
-"correction": ""
-},
-"powershell_suspect": {
-"ce_que_cest": "PowerShell obfusque ou encode (-enc, downloadstring, iex) : execution potentiellement malveillante.",
-"a_verifier": "",
-"remediation": "Examiner la ligne de commande et l'utilisateur, isoler si confirme, chercher la persistance.",
-"correction": ""
-},
-"threat_intel": {
-"ce_que_cest": "Communication avec une IP reputee malveillante (Tor / Spamhaus DROP).",
-"a_verifier": "",
-"remediation": "Bloquer l'IP via SOAR, identifier l'hote source, inspecter les flux associes.",
-"correction": ""
-},
-"fortigate_utm": {
-"ce_que_cest": "Le FortiGate a bloque une menace (IPS / antivirus / webfilter) sur un flux expose.",
-"a_verifier": "",
-"remediation": "Verifier la cible et la signature, confirmer le blocage, correler avec les autres detections de l'hote.",
-"correction": ""
-},
-"winsec_critique": {
-"ce_que_cest": "Sabotage de la journalisation Windows : effacement de journal ou desactivation de l'audit.",
-"a_verifier": "",
-"remediation": "CRITIQUE : isoler, restaurer l'audit, enqueter - signe frequent d'une compromission active.",
-"correction": ""
-},
-"vsphere_vm_destroy": {
-"ce_que_cest": "Suppression de machine virtuelle sur vSphere (hors snapshot Veeam).",
-"a_verifier": "",
-"remediation": "Verifier l'auteur et l'autorisation, restaurer depuis sauvegarde si illegitime, durcir les droits vCenter.",
-"correction": ""
-},
-"vsphere_shell_ssh": {
-"ce_que_cest": "Ouverture de shell / SSH sur un hote ESXi ou vCenter.",
-"a_verifier": "",
-"remediation": "Confirmer l'intervention planifiee, sinon couper l'acces, auditer les comptes vSphere.",
-"correction": ""
-},
-"vsphere_auth_fail": {
-"ce_que_cest": "Echecs d'authentification repetes sur vSphere.",
-"a_verifier": "",
-"remediation": "Identifier la source, verifier s'il s'agit d'un service casse ou d'une attaque, durcir / verrouiller.",
-"correction": ""
-},
-"m365_etranger": {
-"ce_que_cest": "Connexion M365 depuis un pays inhabituel.",
-"a_verifier": "",
-"remediation": "Confirmer le deplacement aupres de l'utilisateur, sinon revoquer les sessions et reinitialiser le mot de passe + MFA.",
-"correction": ""
-},
-"m365_risque": {
-"ce_que_cest": "Connexion M365 signalee a risque par Entra ID.",
-"a_verifier": "",
-"remediation": "Revoquer les sessions, exiger MFA, verifier les regles de boite et les consentements OAuth.",
-"correction": ""
-},
-"m365_mail_forward": {
-"ce_que_cest": "Regle de transfert de courrier vers un domaine externe : exfiltration de messagerie.",
-"a_verifier": "",
-"remediation": "Supprimer la regle, reinitialiser le compte, verifier l'etendue des messages transferes.",
-"correction": ""
-},
-"m365_partage_externe": {
-"ce_que_cest": "Partage externe de fichier (lien anonyme / invite).",
-"a_verifier": "",
-"remediation": "Verifier la legitimite, restreindre le partage si sensible, sensibiliser l'utilisateur.",
-"correction": ""
-},
-"m365_role": {
-"ce_que_cest": "Attribution de role privilegie M365 / Entra ID.",
-"a_verifier": "",
-"remediation": "Confirmer le changement aupres de l'administrateur, revoquer si non justifie.",
-"correction": ""
-},
-"m365_mailbox_deleg": {
-"ce_que_cest": "Delegation de boite aux lettres ajoutee.",
-"a_verifier": "",
-"remediation": "Verifier la demande, retirer la delegation si non justifiee, auditer les acces a la boite.",
-"correction": ""
+"adcs_abuse": {
+"ce_que_cest": "Vol ou forge de certificats d'authentification via une AC AD CS (ESC1-ESC8), permettant à un attaquant de s'authentifier comme n'importe quel utilisateur/DA sans connaître son mot de passe. Compromission durable et furtive du domaine, insensible aux resets de mots de passe.",
+"a_verifier": "Regarder en premier l'événement 4886/4887 sur l'AC : modèle de certificat utilisé, SAN demandé (UPN différent du demandeur = ESC1), compte demandeur et heure. Corréler avec une authentification PKINIT (4768) du compte usurpé depuis un hôte inhabituel.",
+"remediation": "Isoler l'hôte demandeur via NinjaOne et l'AC si compromise. Révoquer le certificat émis, révoquer les sessions/Kerberos du compte usurpé (reset mot de passe + krbtgt si DA). Bloquer l'accès à l'AC sur FortiGate, capturer la mémoire de l'AC.",
+"correction": "Durcir les modèles (désactiver ENROLLEE_SUPPLIES_SUBJECT, retirer Any Purpose), exiger l'approbation du gestionnaire, activer le mapping fort des certificats (KB5014754), restreindre les droits d'enrôlement et auditer les modèles vulnérables (Certify/PSPKIAudit)."
 },
 "admin_share": {
-"ce_que_cest": "Acces a des partages d'administration (ADMIN$ / C$) sur plusieurs hotes : balayage lateral.",
-"a_verifier": "",
-"remediation": "Identifier le compte, verifier la legitimite, isoler si propagation, reinitialiser le compte.",
-"correction": ""
+"ce_que_cest": "Accès à un partage administratif Windows (C$, ADMIN$, IPC$) via SMB, technique classique de déplacement latéral pour déposer des outils ou exécuter du code à distance. Indique souvent une propagation post-compromission avec des identifiants valides.",
+"a_verifier": "En premier : compte source et hôte source de la connexion (4624 type 3 + 5140 sur la cible). Distinguer admin légitime/outil de déploiement vs compte utilisateur standard accédant à C$ d'un poste tiers hors horaires. Vérifier la réputation de l'IP source interne.",
+"remediation": "Isoler les deux hôtes (source et cible) via NinjaOne si le contexte est anormal. Révoquer les sessions et reset du mot de passe du compte AD utilisé. Lancer un scan ESET à la demande sur la cible pour détecter les binaires déposés.",
+"correction": "Activer l'isolement réseau host-based (pare-feu Windows bloquant SMB inter-postes), GPO Restricted Admin / Local Account token filtering, désactiver SMBv1, segmentation VLAN postes, et tiering AD pour empêcher les comptes Tier-0 de se connecter aux postes utilisateurs."
 },
-"canary": {
-"ce_que_cest": "Un compte leurre (canari) a ete touche : aucune utilisation legitime possible.",
-"a_verifier": "",
-"remediation": "CRITIQUE : tout acces est suspect - isoler la source, enqueter immediatement, reinitialiser les comptes voisins.",
-"correction": ""
+"ad_recon": {
+"ce_que_cest": "Énumération des comptes de domaine (utilisateurs, groupes, admins) via LDAP/net/PowerShell, phase de reconnaissance préparant l'escalade ou le déplacement latéral. Précurseur fréquent de BloodHound/SharpHound.",
+"a_verifier": "En premier : hôte et compte effectuant les requêtes LDAP massives (5136/4662 ou logs DC). Un volume anormal de requêtes en rafale depuis un poste utilisateur hors IT est suspect ; un serveur d'admin/scanner légitime est attendu. Vérifier le parent process (powershell.exe, rundll32).",
+"remediation": "Isoler l'hôte source via NinjaOne, capturer la mémoire pour retrouver l'outil (SharpHound). Scan ESET. Surveiller le compte pour des actions consécutives ; reset si comportement confirmé malveillant.",
+"correction": "Déployer des honey-accounts, activer l'audit LDAP et le RPC filtering, restreindre l'énumération anonyme (RestrictAnonymous), tiering AD et durcissement des droits de lecture sur les objets sensibles (déléguer le moindre privilège)."
 },
-"veeam_job_echec": {
-"ce_que_cest": "Tache de sauvegarde Veeam en echec : risque sur la capacite de restauration.",
-"a_verifier": "",
-"remediation": "Investiguer la session VBR, corriger la cause, relancer la sauvegarde du serveur concerne.",
-"correction": ""
-},
-"defender": {
-"ce_que_cest": "Microsoft Defender a detecte ou a ete desactive sur un poste.",
-"a_verifier": "",
-"remediation": "Confirmer la remediation Defender, scan complet, verifier qu'il n'a pas ete desactive par un attaquant.",
-"correction": ""
-},
-"ransomware_indicator": {
-"ce_que_cest": "Indicateur de rancongiciel : effacement des clichés (vssadmin / wbadmin / bcdedit).",
-"a_verifier": "",
-"remediation": "CRITIQUE : isoler immediatement, couper les partages, declencher le plan de reponse rancongiciel.",
-"correction": ""
-},
-"impossible_travel": {
-"ce_que_cest": "Deux connexions geographiquement incompatibles dans un delai trop court (compte partage ou vole).",
-"a_verifier": "",
-"remediation": "Revoquer les sessions, reinitialiser le mot de passe + MFA, verifier l'origine des connexions.",
-"correction": ""
-},
-"beaconing": {
-"ce_que_cest": "Communications periodiques regulieres vers une IP externe : balise de commande et contrôle (C2).",
-"a_verifier": "",
-"remediation": "Bloquer la destination (SOAR), isoler l'hote, identifier le processus emetteur, scan complet.",
-"correction": ""
-},
-"volume_spike": {
-"ce_que_cest": "Pic anormal de volume de logs/flux pour une source : exfiltration ou incident possible.",
-"a_verifier": "",
-"remediation": "Identifier la cause, verifier s'il s'agit d'exfiltration, correler avec les autres detections.",
-"correction": ""
-},
-"volume_drop": {
-"ce_que_cest": "Chute anormale de volume : source muette (panne de collecte ou desactivation volontaire).",
-"a_verifier": "",
-"remediation": "Verifier l'agent/la source concernee, restaurer la collecte, ecarter une desactivation malveillante.",
-"correction": ""
-},
-"dns_tunneling": {
-"ce_que_cest": "Requetes DNS a forte entropie / sous-domaines multiples : tunnel DNS d'exfiltration ou C2.",
-"a_verifier": "",
-"remediation": "Bloquer le domaine, isoler l'hote, inspecter le processus, durcir le filtrage DNS.",
-"correction": ""
-},
-"gpo_modification": {
-"ce_que_cest": "Modification de strategie de groupe (GPO) : vecteur de persistance / elevation a l'echelle du domaine.",
-"a_verifier": "",
-"remediation": "Verifier l'auteur et le contenu, annuler si non autorise, auditer les liens de GPO.",
-"correction": ""
+"amsi_bypass": {
+"ce_que_cest": "Contournement d'AMSI pour exécuter du code malveillant (PowerShell/script) sans inspection antimalware, en patchant amsi.dll ou via réflexion .NET. Aveugle les défenses avant l'exécution d'une charge.",
+"a_verifier": "En premier : ligne de commande et bloc de script (4104) contenant des patterns connus (amsiInitFailed, [Ref].Assembly, VirtualProtect). Identifier l'hôte, le compte et le parent process. Un IDE/dev légitime est rare ; corréler avec une exécution PowerShell encodée.",
+"remediation": "Isoler l'hôte via NinjaOne, capturer la mémoire avant arrêt, scan ESET complet. Révoquer les sessions du compte. Rechercher la charge déposée et la persistance associée.",
+"correction": "Forcer PowerShell en Constrained Language Mode, activer Script Block Logging + transcription, WDAC/AppLocker pour bloquer les scripts non signés, et maintenir Defender/ESET à jour avec protection anti-tampering active."
 },
 "asrep_roasting": {
-"ce_que_cest": "Compte sans pre-authentification Kerberos cible (AS-REP roasting) : cassage hors-ligne possible.",
-"a_verifier": "",
-"remediation": "Activer la pre-authentification sur le compte, durcir le mot de passe, surveiller la source.",
-"correction": ""
+"ce_que_cest": "Extraction de hashes Kerberos AS-REP pour des comptes sans pré-authentification requise (DONT_REQ_PREAUTH), crackables hors ligne pour récupérer des mots de passe. Voie d'accès à des identifiants valides sans interaction.",
+"a_verifier": "En premier : 4768 avec type de chiffrement RC4 (0x17) et pré-auth absente, depuis un hôte/compte source unique demandant plusieurs comptes. Distinguer un outil de scan AD légitime d'une énumération en rafale hors horaires.",
+"remediation": "Isoler l'hôte source via NinjaOne. Identifier les comptes ciblés, reset immédiat de leurs mots de passe (longs/complexes) et révocation des sessions. Scan ESET de l'hôte attaquant.",
+"correction": "Activer la pré-authentification Kerberos sur TOUS les comptes (retirer DONT_REQ_PREAUTH), imposer des mots de passe forts, désactiver RC4 au profit d'AES, et auditer régulièrement les comptes vulnérables."
 },
-"lolbin_suspect": {
-"ce_que_cest": "Binaire systeme detourne (certutil / regsvr32 / rundll32 / mshta / bitsadmin) : execution / telechargement furtif.",
-"a_verifier": "",
-"remediation": "Examiner la ligne de commande, isoler si malveillant, chercher la charge telechargee.",
-"correction": ""
+"audit_config_change": {
+"ce_que_cest": "Modification de la configuration d'audit/journalisation du SIEM ou d'un équipement, pouvant être une opération légitime ou une tentative d'aveugler la détection. Impacte la visibilité du SOC.",
+"a_verifier": "En premier : qui (compte admin) a modifié quoi et quand, via une fenêtre de changement planifiée ou non. Un changement hors process/hors horaires par un compte inhabituel est suspect ; corréler avec un ticket de changement.",
+"remediation": "Vérifier la légitimité auprès de l'équipe concernée ; si non autorisé, restaurer la configuration d'audit, révoquer les sessions du compte et reset son mot de passe. Vérifier qu'aucune perte de logs ne masque une activité.",
+"correction": "Verrouiller les modifications d'audit derrière un workflow de changement, restreindre les droits (moindre privilège), activer une alerte immuable sur toute modif de config d'audit et envoyer les logs en temps réel hors de portée des admins locaux."
 },
-"persistence_autorun": {
-"ce_que_cest": "Cle de demarrage / Run ajoutee : mecanisme de persistance.",
-"a_verifier": "",
-"remediation": "Verifier l'entree et le binaire associe, supprimer si malveillant, scan complet.",
-"correction": ""
+"c2_ioc": {
+"ce_que_cest": "Communication réseau correspondant à un IOC de commande et contrôle (protocole applicatif) : un hôte interne dialogue avec une infrastructure C2 connue. Indique une compromission active et un canal de pilotage attaquant.",
+"a_verifier": "En premier : hôte interne source, IP/domaine de destination et sa réputation (TI), régularité du trafic (beaconing). Distinguer un faux positif d'IOC périmé/légitime d'un canal réel ; vérifier le process à l'origine du flux.",
+"remediation": "Bloquer immédiatement l'IP/domaine C2 sur FortiGate, isoler l'hôte via NinjaOne, capturer la mémoire, scan ESET. Identifier le processus et la persistance ; reset des comptes utilisés sur l'hôte.",
+"correction": "Intégrer les feeds TI au filtrage FortiGate (DNS/web), restreindre les flux sortants (egress filtering, proxy avec inspection TLS), bloquer les catégories à risque et les domaines récemment enregistrés."
 },
-"m365_oauth_consent": {
-"ce_que_cest": "Consentement OAuth accorde a une application : vol potentiel de jeton d'acces.",
-"a_verifier": "",
-"remediation": "Revoquer le consentement, auditer les permissions de l'application, restreindre le consentement utilisateur.",
-"correction": ""
+"canary": {
+"ce_que_cest": "Un compte leurre (canary/honey-account) sans usage légitime a été utilisé : toute interaction est par définition malveillante. Signal à très haute fidélité d'une compromission ou d'une reconnaissance active.",
+"a_verifier": "En premier : confirmer l'identité du compte leurre, puis l'hôte source et l'IP ayant tenté l'authentification (4625/4624). Quasi aucun faux positif ; vérifier seulement qu'il ne s'agit pas d'un scan de vulnérabilité interne autorisé.",
+"remediation": "Traiter comme incident confirmé : isoler l'hôte source via NinjaOne, bloquer l'IP sur FortiGate, capturer la mémoire. Lancer la recherche de mouvement latéral et de credential dumping autour de cet hôte.",
+"correction": "Multiplier les leurres (comptes, partages, credentials) aux endroits stratégiques, s'assurer qu'ils restent attractifs mais inertes, et automatiser l'alerte critique + l'isolement sur toute interaction."
 },
-"network_scan": {
-"ce_que_cest": "Balayage reseau interne (decouverte de services / ports) : reconnaissance.",
-"a_verifier": "",
-"remediation": "Identifier la source, verifier s'il s'agit d'un outil legitime, isoler si reconnaissance hostile.",
-"correction": ""
+"cert_expire_parc": {
+"ce_que_cest": "Certificat(s) du parc proche de l'expiration ou expiré : enjeu opérationnel et de sécurité (rupture de service TLS, validation contournée). Pas une attaque mais un risque de disponibilité et de confiance.",
+"a_verifier": "En premier : quel certificat, quel service/hôte, date d'expiration exacte. Distinguer un certificat critique exposé (VPN, web public) d'un certificat interne mineur pour prioriser.",
+"remediation": "Renouveler/réémettre le certificat via l'AC, redéployer sur le service concerné et vérifier la chaîne. Aucune action de confinement sécurité requise sauf compromission de clé.",
+"correction": "Mettre en place une supervision automatisée des expirations (inventaire centralisé), des alertes J-30/J-7, et idéalement une émission automatisée (ACME/SCEP) pour éviter les expirations subies."
 },
-"masquerading": {
-"ce_que_cest": "Binaire portant un nom legitime mais hors emplacement attendu (usurpation).",
-"a_verifier": "",
-"remediation": "Verifier le chemin et la signature, isoler si malveillant, comparer au binaire d'origine.",
-"correction": ""
+"dcsync": {
+"ce_que_cest": "Réplication malveillante de l'annuaire (DRSGetNCChanges) pour extraire les hashes de tous les comptes, dont krbtgt et les DA. Compromission totale et persistante du domaine.",
+"a_verifier": "En premier : 4662 avec GUID de réplication (DS-Replication-Get-Changes) déclenché par un compte NON-DC. Tout compte utilisateur/serveur (hors comptes DC légitimes) effectuant une réplication est un vrai positif. Identifier l'hôte source.",
+"remediation": "Incident majeur : isoler l'hôte source via NinjaOne, bloquer ses flux vers les DC sur FortiGate. Reset DEUX FOIS du krbtgt et des comptes privilégiés, révocation globale des tickets. Capturer la mémoire.",
+"correction": "Restreindre les droits de réplication aux seuls DC (auditer les ACL du domaine), tiering AD strict, surveiller en continu les droits DS-Replication, et privilégier des comptes admin protégés (Protected Users, pas de délégation)."
 },
-"explicit_cred_use": {
-"ce_que_cest": "Utilisation explicite d'identifiants (RunAs / 4648) via un service : reutilisation suspecte.",
-"a_verifier": "",
-"remediation": "Verifier le compte source et la cible, ecarter un mouvement lateral, reinitialiser si besoin.",
-"correction": ""
+"defender": {
+"ce_que_cest": "Defender/ESET a détecté un fichier malveillant lors d'une exécution (T1204.002, charge ouverte par l'utilisateur). Indique une tentative d'exécution de malware, souvent par phishing ; reflète une exposition utilisateur active.",
+"a_verifier": "En premier : verdict (bloqué vs détecté seulement), chemin/hash du fichier, hôte et utilisateur, et vecteur (pièce jointe, téléchargement). Un blocage propre = risque maîtrisé ; une détection sans quarantaine = vérifier l'exécution effective.",
+"remediation": "Confirmer la quarantaine ; sinon isoler via NinjaOne et scan ESET complet. Récupérer le hash pour bloquer sur le parc et chercher d'autres occurrences. Sensibiliser/reset si interaction de credentials suspectée.",
+"correction": "Renforcer le filtrage mail (sandbox, désarmement de pièces jointes), ASR rules (blocage Office→processus enfant, exécutables depuis mail), et formation anti-phishing ; bloquer les types de fichiers à risque en passerelle."
 },
-"exposition_internet": {
-"ce_que_cest": "Service interne expose directement sur Internet.",
-"a_verifier": "",
-"remediation": "Verifier la necessite de l'exposition, restreindre / fermer la regle, durcir le service expose.",
-"correction": ""
-},
-"data_exfil": {
-"ce_que_cest": "Volume sortant anormalement eleve vers une destination : exfiltration probable.",
-"a_verifier": "",
-"remediation": "Identifier l'hote et la destination, bloquer si confirme, evaluer les donnees concernees.",
-"correction": ""
-},
-"gpp_creds_access": {
-"ce_que_cest": "Acces aux preferences de strategie de groupe (mots de passe GPP en clair).",
-"a_verifier": "",
-"remediation": "Supprimer les GPP contenant des secrets, reinitialiser les comptes exposes, durcir SYSVOL.",
-"correction": ""
-},
-"kerberos_rc4": {
-"ce_que_cest": "Ticket Kerberos en RC4 anormal : indicateur de Kerberoasting.",
-"a_verifier": "",
-"remediation": "Verifier le compte, basculer en AES/gMSA, surveiller les pics de tickets de service.",
-"correction": ""
-},
-"local_admin_add": {
-"ce_que_cest": "Ajout dans le groupe administrateurs local : elevation / persistance.",
-"a_verifier": "",
-"remediation": "Confirmer le changement, retirer si non autorise, auditer les administrateurs locaux du parc.",
-"correction": ""
-},
-"local_account_create": {
-"ce_que_cest": "Creation d'un compte local : persistance possible.",
-"a_verifier": "",
-"remediation": "Verifier la legitimite, supprimer si non justifie, auditer les comptes locaux de l'hote.",
-"correction": ""
-},
-"new_country": {
-"ce_que_cest": "Premiere connexion depuis un nouveau pays pour ce compte.",
-"a_verifier": "",
-"remediation": "Confirmer le deplacement, sinon revoquer les sessions et reinitialiser le compte + MFA.",
-"correction": ""
-},
-"adcs_abuse": {
-"ce_que_cest": "Abus de l'autorite de certification AD (ESC1 / ESC8) : usurpation par certificat.",
-"a_verifier": "",
-"remediation": "CRITIQUE : verifier les demandes de certificat, revoquer, corriger les gabarits vulnerables.",
-"correction": ""
-},
-"wmi_lateral_exec": {
-"ce_que_cest": "Execution via WMI avec un binaire detourne : mouvement lateral.",
-"a_verifier": "",
-"remediation": "Isoler l'hote, identifier le compte, scan complet, verifier les hotes adjacents.",
-"correction": ""
-},
-"shadow_credentials": {
-"ce_que_cest": "Modification de msDS-KeyCredentialLink : persistance par identifiants fantomes.",
-"a_verifier": "",
-"remediation": "CRITIQUE : retirer la cle ajoutee, reinitialiser le compte cible, auditer les ecritures sur l'attribut.",
-"correction": ""
-},
-"ldap_recon": {
-"ce_que_cest": "Requetes LDAP anormales : reconnaissance d'annuaire (comptes / groupes).",
-"a_verifier": "",
-"remediation": "Identifier la source, verifier l'outil, isoler si reconnaissance hostile, durcir les droits de lecture.",
-"correction": ""
-},
-"lateral_movement": {
-"ce_que_cest": "Un compte ouvre une session sur plusieurs hotes en peu de temps : mouvement lateral.",
-"a_verifier": "",
-"remediation": "Verifier la legitimite, isoler la source si compromise, reinitialiser le compte, tracer le chemin.",
-"correction": ""
+"defender_tamper": {
+"ce_que_cest": "Tentative de désactivation ou modification de l'antivirus/EDR (Defender/ESET), précurseur quasi certain d'une charge malveillante imminente. Signe une intention d'aveugler la défense sur l'hôte.",
+"a_verifier": "En premier : commande/process à l'origine (modif registre Defender, Set-MpPreference, arrêt service ESET), compte et élévation. Un déploiement IT légitime est rare et tracé ; corréler avec un parent process suspect.",
+"remediation": "Isoler immédiatement l'hôte via NinjaOne, capturer la mémoire, forcer un scan ESET depuis la console (hors contrôle local). Révoquer les sessions et reset du compte. Rechercher la charge et la persistance.",
+"correction": "Activer la protection anti-tampering ESET/Defender (verrouillée par mot de passe console), retirer les droits admin locaux aux utilisateurs (LAPS), WDAC, et alerter en temps réel sur toute modification de l'état de protection."
 },
 "eset_detection": {
-"ce_que_cest": "ESET a detecte une menace sur un endpoint.",
-"a_verifier": "",
-"remediation": "Isoler le poste, scan complet ESET, confirmer la remediation, enqueter sur la source.",
-"correction": ""
+"ce_que_cest": "ESET a levé une détection sur un interpréteur de commandes/scripting (cmd, PowerShell, wscript) exécutant du code suspect. Indique une activité d'exécution potentiellement malveillante captée par l'EDR.",
+"a_verifier": "En premier : nom de la détection, ligne de commande complète, hôte/utilisateur et parent process. Distinguer un script d'admin/GPO légitime d'un one-liner offusqué/encodé lancé depuis Office ou un navigateur.",
+"remediation": "Si confirmé, isoler via NinjaOne et scan ESET complet. Capturer la mémoire, identifier la charge et la persistance. Reset du compte si credentials manipulés.",
+"correction": "Constrained Language Mode PowerShell, Script Block Logging, AppLocker/WDAC pour limiter les interpréteurs, ASR rules bloquant les processus enfants Office, et moindre privilège."
 },
-"waf_block": {
-"ce_que_cest": "Le WAF (BunkerWeb) a bloque une requete d'exploitation.",
-"a_verifier": "",
-"remediation": "Verifier le vhost et l'URL, bloquer l'IP si exploit, inspecter les journaux applicatifs.",
-"correction": ""
+"explicit_cred_use": {
+"ce_que_cest": "Utilisation explicite d'identifiants alternatifs (runas / 4648) — un compte se connecte avec d'autres credentials que sa session, courant lors de pivots latéraux. Peut indiquer un usage d'identifiants volés.",
+"a_verifier": "En premier : compte d'origine, compte cible utilisé, hôte et cible distante. Distinguer un admin/script légitime (jumphost, tâche) d'un compte utilisateur invoquant des creds privilégiés hors contexte/horaires.",
+"remediation": "Si anormal, isoler l'hôte via NinjaOne, révoquer les sessions et reset du compte cible. Corréler avec des accès SMB/WMI consécutifs pour cartographier le mouvement latéral.",
+"correction": "Tiering AD (séparer comptes admin/standard), bastions/PAW pour l'admin, restreindre l'usage interactif des comptes privilégiés (deny logon GPO), et MFA sur les accès sensibles."
 },
-"vault_auth_fail": {
-"ce_que_cest": "Echecs d'authentification sur Vaultwarden (coffre de mots de passe).",
-"a_verifier": "",
-"remediation": "Identifier la source, verrouiller si attaque, ecarter un service casse, durcir l'acces au coffre.",
-"correction": ""
-},
-"vault_admin": {
-"ce_que_cest": "Action d'administration sur Vaultwarden.",
-"a_verifier": "",
-"remediation": "Confirmer l'operation aupres de l'administrateur, revoquer si non justifiee.",
-"correction": ""
-},
-"vault_admin_abuse": {
-"ce_que_cest": "Tentatives repetees / abus sur l'administration Vaultwarden.",
-"a_verifier": "",
-"remediation": "CRITIQUE : verrouiller l'acces, enqueter, reinitialiser les secrets exposes.",
-"correction": ""
-},
-"scheduled_task": {
-"ce_que_cest": "Tache planifiee creee : mecanisme courant de persistance / elevation.",
-"a_verifier": "",
-"remediation": "Verifier la tache et son auteur, supprimer si malveillante, scan complet.",
-"correction": ""
-},
-"service_install": {
-"ce_que_cest": "Installation d'un nouveau service Windows : persistance / elevation.",
-"a_verifier": "",
-"remediation": "Verifier le binaire et le compte, supprimer si non autorise, scan complet.",
-"correction": ""
-},
-"uac_bypass": {
-"ce_que_cest": "Contournement du controle de compte utilisateur (UAC) : elevation furtive.",
-"a_verifier": "",
-"remediation": "Isoler le poste, identifier le processus, scan complet, verifier la persistance.",
-"correction": ""
-},
-"m365_brute_externe": {
-"ce_que_cest": "Tentatives de force brute M365 depuis l'externe.",
-"a_verifier": "",
-"remediation": "Verrouiller / proteger les comptes vises, exiger MFA, bloquer les IP sources.",
-"correction": ""
-},
-"remote_discovery": {
-"ce_que_cest": "Decouverte de systemes distants : reconnaissance reseau.",
-"a_verifier": "",
-"remediation": "Identifier la source, verifier l'outil, isoler si reconnaissance hostile.",
-"correction": ""
-},
-"service_stop_securite": {
-"ce_que_cest": "Arret d'un service de securite : tentative de neutralisation des defenses.",
-"a_verifier": "",
-"remediation": "Isoler le poste, relancer le service, enqueter sur l'auteur, scan complet.",
-"correction": ""
-},
-"file_sensitive_access": {
-"ce_que_cest": "Acces a des fichiers sensibles sur partage reseau.",
-"a_verifier": "",
-"remediation": "Verifier la legitimite de l'acces, restreindre les droits si necessaire, auditer le partage.",
-"correction": ""
+"exposition_internet": {
+"ce_que_cest": "Tentative d'exploitation d'une application exposée sur Internet (T1190) — vecteur d'accès initial fréquent visant un service public vulnérable. Risque de compromission directe du périmètre.",
+"a_verifier": "En premier : IP source et sa réputation, service/URL ciblé, et si l'exploit a réussi (code 2xx/réponse anormale, web shell déposé). Distinguer un scan opportuniste bloqué d'une exploitation aboutie ; vérifier les logs applicatifs/WAF.",
+"remediation": "Bloquer l'IP source sur FortiGate, vérifier l'intégrité du service exposé (web shell, comptes ajoutés). Si compromis, isoler le serveur via NinjaOne, capturer la mémoire, scan ESET.",
+"correction": "Patcher/virtualiser le correctif (virtual patching FortiGate UTM/WAF), réduire la surface exposée, WAF en mode bloquant, et durcir/segmenter la DMZ avec moindre exposition."
 },
 "file_delete_sensible": {
-"ce_que_cest": "Suppression de fichiers sensibles : destruction de donnees possible.",
-"a_verifier": "",
-"remediation": "Verifier l'auteur, restaurer depuis sauvegarde si illegitime, auditer les droits sur le partage.",
-"correction": ""
+"ce_que_cest": "Suppression de fichiers sensibles (T1485, Data Destruction) — peut traduire un sabotage, une destruction de preuves ou une phase pré-ransomware. Risque de perte de données et d'impact métier.",
+"a_verifier": "En premier : compte ayant supprimé, hôte, volume et chemins concernés (4660/4663). Distinguer un ménage/script légitime d'une suppression massive et rapide hors horaires ; corréler avec un chiffrement concomitant.",
+"remediation": "Isoler l'hôte via NinjaOne, suspendre le compte (révoquer sessions + reset). Restaurer depuis sauvegarde (Veeam), capturer la mémoire et préserver les journaux comme preuve.",
+"correction": "Sauvegardes immuables/hors-ligne testées, snapshots, audit d'accès aux partages sensibles, moindre privilège sur les données critiques et alerte sur suppressions en masse."
+},
+"file_sensitive_access": {
+"ce_que_cest": "Accès à des données sur un partage réseau sensible (T1039, Collection) — possible collecte de données avant exfiltration. Risque de fuite d'informations confidentielles.",
+"a_verifier": "En premier : compte, hôte source et fichiers/volume accédés (5145). Distinguer un usage métier normal d'un accès massif/inhabituel par un compte sans besoin légitime, hors horaires. Vérifier un staging consécutif (archive).",
+"remediation": "Si anormal, isoler l'hôte via NinjaOne, révoquer les sessions et reset du compte. Surveiller l'exfiltration (FortiGate egress) et bloquer les flux sortants suspects.",
+"correction": "DLP, classification et chiffrement des données sensibles, droits NTFS au moindre privilège (revue d'accès), audit d'accès activé et segmentation des partages critiques."
+},
+"fmg_admin_login": {
+"ce_que_cest": "Connexion administrateur réussie sur FortiManager — accès à la gestion centralisée des pare-feux, donc à des changements de politique à fort impact. Surveillé comme accès privilégié sensible.",
+"a_verifier": "En premier : compte admin, IP source et horaire. Une connexion depuis une IP/admin attendue en horaires ouvrés est légitime ; une source externe/inhabituelle ou hors horaires est suspecte. Corréler avec MFA.",
+"remediation": "Si suspect, révoquer la session FortiManager, reset du compte admin, restreindre l'accès management sur FortiGate. Vérifier les changements de config consécutifs.",
+"correction": "MFA obligatoire sur FortiManager, restriction de l'accès admin aux IP de gestion (trusted hosts), comptes nominatifs, journalisation centralisée et bastion pour l'administration."
+},
+"fmg_admin_login_fail": {
+"ce_que_cest": "Échecs d'authentification admin sur FortiManager — possible brute force/password spraying contre la console de gestion des pare-feux. Risque de prise de contrôle de l'infrastructure réseau.",
+"a_verifier": "En premier : IP source, compte visé, volume et cadence des échecs. Distinguer une faute de frappe isolée d'une rafale depuis une source unique/externe. Vérifier un éventuel succès final.",
+"remediation": "Bloquer l'IP source sur FortiGate, verrouiller/protéger le compte ciblé. Si succès suspecté, reset du compte et révocation de session. Restreindre l'accès management.",
+"correction": "Trusted hosts (restriction IP), MFA, verrouillage de compte après N échecs, comptes nominatifs et exposition zéro de l'interface de gestion sur Internet."
+},
+"fmg_config_change": {
+"ce_que_cest": "Modification de configuration sur FortiManager (T1565) — changement de politique pare-feu pouvant ouvrir des flux ou affaiblir la sécurité. Impact direct sur la posture réseau.",
+"a_verifier": "En premier : admin auteur, objet modifié (règle, route, VPN) et fenêtre de changement. Distinguer une opération planifiée/ticketée d'un changement hors process, notamment l'ouverture de flux entrants ou la désactivation de filtrage.",
+"remediation": "Vérifier la légitimité ; si non autorisé, revenir à la révision précédente (revision control FortiManager), révoquer la session et reset du compte. Vérifier l'exploitation des flux ouverts.",
+"correction": "Workflow d'approbation des changements (FortiManager workspace/ADOM lock), revue des diffs, moindre privilège admin, et alerte SIEM sur toute modif de règle sensible."
+},
+"fortigate_utm": {
+"ce_que_cest": "Le module UTM FortiGate (IPS) a détecté/bloqué une tentative d'exploitation visant une application exposée (T1190). Signal d'attaque sur le périmètre, souvent en phase d'accès initial.",
+"a_verifier": "En premier : signature IPS déclenchée, IP source et réputation, action (bloqué vs détecté), service ciblé. Un blocage IPS = risque maîtrisé ; une détection en mode monitor nécessite de vérifier l'aboutissement.",
+"remediation": "Confirmer le blocage ; bannir l'IP source sur FortiGate. Si l'exploit a pu passer, isoler le serveur cible via NinjaOne et vérifier sa compromission (web shell, comptes).",
+"correction": "IPS en mode bloquant sur les services exposés, signatures à jour, virtual patching, réduction de la surface d'exposition et durcissement des applications publiques."
+},
+"gpo_modification": {
+"ce_que_cest": "Modification d'une GPO de domaine (T1484.001) — vecteur puissant pour pousser du code, désactiver des défenses ou créer des accès sur tout le périmètre couvert. Impact potentiellement domaine-wide.",
+"a_verifier": "En premier : compte auteur, GPO modifiée et nature du changement (5136/5137), via fenêtre de changement ou non. Distinguer une admin AD légitime d'une modif ajoutant un script de logon, des droits ou une tâche planifiée.",
+"remediation": "Isoler/suspendre le compte (révoquer sessions + reset). Annuler la modification GPO, vérifier les hôtes ayant déjà appliqué la politique (scan ESET, NinjaOne). Capturer les preuves.",
+"correction": "Restreindre les droits de modification GPO (délégation au moindre privilège), tiering AD, audit/alerting sur les changements GPO sensibles, et sauvegarde/versioning des GPO (AGPM)."
+},
+"gpp_creds_access": {
+"ce_que_cest": "Accès au mot de passe en clair stocké dans les Group Policy Preferences (cPassword, T1552.006) — déchiffrable avec une clé publiquement connue, donnant des identifiants valides souvent privilégiés. Voie d'escalade classique.",
+"a_verifier": "En premier : compte et hôte accédant aux fichiers XML de SYSVOL (groups.xml…), et présence effective d'un attribut cPassword. Tout accès ciblé à ces fichiers est suspect ; corréler avec une énumération SYSVOL.",
+"remediation": "Isoler l'hôte via NinjaOne. Reset IMMÉDIAT de tout compte exposé via GPP (et révocation des sessions). Supprimer les fichiers GPP contenant cPassword de SYSVOL.",
+"correction": "Supprimer toute GPP stockant des mots de passe (patch MS14-025 empêche la création), utiliser LAPS pour les comptes admin locaux, et auditer SYSVOL régulièrement."
+},
+"inhibit_recovery": {
+"ce_que_cest": "Inhibition de la récupération système (T1490) : suppression des shadow copies, désactivation du recovery (vssadmin delete, bcdedit). Action quasi systématique juste avant le chiffrement ransomware.",
+"a_verifier": "En premier : ligne de commande exacte (vssadmin, wbadmin, bcdedit), hôte et compte. Très peu de faux positifs hors maintenance backup ; corréler avec un pic d'activité disque/chiffrement imminent. Agir en urgence.",
+"remediation": "Isoler immédiatement l'hôte via NinjaOne pour stopper le chiffrement, capturer la mémoire, scan ESET. Vérifier l'intégrité des sauvegardes Veeam (hors ligne). Reset des comptes impliqués.",
+"correction": "Sauvegardes immuables/air-gapped et testées, restreindre vssadmin/wbadmin via WDAC/AppLocker, ASR rules anti-ransomware, et alerte temps réel sur suppression de shadow copies."
+},
+"installutil_proxy": {
+"ce_que_cest": "Exécution proxy via InstallUtil.exe (T1218.004) — LOLBin Microsoft signé détournée pour exécuter du code .NET et contourner l'allowlisting. Technique d'évasion défensive.",
+"a_verifier": "En premier : ligne de commande InstallUtil (chemin du binaire cible, options /logfile=/U), hôte, compte et parent process. Un usage dev/build légitime est rare ; un appel depuis un dossier temp/utilisateur est suspect.",
+"remediation": "Isoler l'hôte via NinjaOne, capturer la mémoire, scan ESET. Identifier l'assembly exécuté et la persistance. Reset des comptes utilisés.",
+"correction": "WDAC/AppLocker avec règles bloquant les LOLBins en contexte anormal, ASR rules, surveillance des invocations de LOLBins signées, et moindre privilège."
+},
+"kerberoasting": {
+"ce_que_cest": "Demande de tickets de service Kerberos (TGS) pour des comptes de service afin de cracker leurs mots de passe hors ligne (T1558.003). Voie d'escalade vers des comptes de service souvent privilégiés.",
+"a_verifier": "En premier : 4769 en volume anormal depuis un compte/hôte unique, chiffrement RC4 (0x17) et SPN variés. Distinguer un usage applicatif normal d'une demande massive de TGS en rafale hors horaires.",
+"remediation": "Isoler l'hôte source via NinjaOne. Reset des mots de passe des comptes de service ciblés (longs/aléatoires) et révocation des tickets. Scan ESET.",
+"correction": "Mots de passe de service longs (25+ car.) ou gMSA, désactiver RC4 (forcer AES), réduire/auditer les SPN, retirer les comptes de service des groupes privilégiés et déployer des honey-SPN."
+},
+"kerberos_rc4": {
+"ce_que_cest": "Usage de chiffrement Kerberos RC4 (0x17) faible — signe possible de Kerberoasting, downgrade ou outil offensif imposant RC4 plutôt qu'AES. Affaiblit la robustesse de l'authentification.",
+"a_verifier": "En premier : compte/SPN concerné et hôte demandeur ; pic de tickets RC4 vs baseline AES. Distinguer des systèmes legacy ne supportant qu'RC4 d'une demande forcée par un attaquant (corréler avec 4769 en volume).",
+"remediation": "Si Kerberoasting suspecté, isoler l'hôte via NinjaOne, reset des comptes de service ciblés. Identifier les systèmes legacy légitimes pour les exclure des alertes.",
+"correction": "Désactiver RC4 au niveau domaine (msDS-SupportedEncryptionTypes en AES), remédier/retirer les dépendances legacy, et auditer en continu les types de chiffrement Kerberos."
+},
+"local_account_create": {
+"ce_que_cest": "Création d'un compte local (T1136.001) sur un hôte — mécanisme de persistance ou de backdoor permettant un retour furtif indépendant du domaine. Souvent post-compromission.",
+"a_verifier": "En premier : hôte, compte créateur, nom du compte créé (4720) et élévation. Distinguer un provisioning IT légitime d'une création hors process, avec nom discret/imitant un compte système, hors horaires.",
+"remediation": "Isoler l'hôte via NinjaOne, désactiver/supprimer le compte créé, capturer la mémoire, scan ESET. Reset du compte créateur si compromis ; rechercher d'autres persistances.",
+"correction": "Interdire les comptes locaux non gérés (GPO), LAPS pour l'admin local, audit centralisé des créations de comptes, moindre privilège et alerte sur tout nouveau compte local."
+},
+"local_admin_add": {
+"ce_que_cest": "Ajout d'un compte au groupe Administrateurs local (T1098) — escalade de privilèges et persistance, donnant un contrôle total de l'hôte. Étape clé d'une intrusion.",
+"a_verifier": "En premier : hôte, compte ajouté et compte auteur (4732), via process IT ou non. Distinguer une opération d'administration tracée d'un ajout d'un compte utilisateur/inconnu au groupe admin hors horaires.",
+"remediation": "Isoler l'hôte via NinjaOne, retirer le compte du groupe admin, reset/révoquer les sessions des comptes impliqués. Capturer la mémoire, scan ESET, chercher d'autres persistances.",
+"correction": "Gérer l'appartenance admin local par GPO/Restricted Groups, LAPS, tiering AD, retirer les droits admin permanents (JIT/PAM) et alerter sur tout changement du groupe Administrateurs."
+},
+"log_cleared": {
+"ce_que_cest": "Effacement des journaux d'événements Windows (T1070.001, event 1102) — destruction de preuves pour masquer une activité malveillante. Indicateur quasi certain d'une intrusion en cours.",
+"a_verifier": "En premier : hôte, compte ayant effacé (1102/wevtutil cl) et quel journal. Très peu de faux positifs ; corréler avec l'absence de logs sur la période et d'autres activités suspectes autour.",
+"remediation": "Isoler l'hôte via NinjaOne, capturer la mémoire, scan ESET. Reconstituer l'activité via les logs centralisés du SIEM (antérieurs à l'effacement). Reset des comptes impliqués.",
+"correction": "Forwarding temps réel des logs vers le SIEM (hors portée locale), retirer les droits permettant l'effacement, augmenter la taille/rétention des journaux, et alerter sur l'event 1102."
+},
+"lolbin_suspect": {
+"ce_que_cest": "Exécution suspecte d'un binaire système légitime (LOLBin, T1218) détourné pour proxy d'exécution, téléchargement ou contournement d'allowlisting. Technique d'évasion défensive courante.",
+"a_verifier": "En premier : quel LOLBin (rundll32, regsvr32, mshta…), sa ligne de commande, le parent process et l'hôte/compte. Distinguer un usage système normal d'un appel avec URL distante/chemin temp ou parent suspect (Office).",
+"remediation": "Isoler l'hôte via NinjaOne si confirmé, capturer la mémoire, scan ESET. Identifier la charge appelée et la persistance ; reset des comptes utilisés.",
+"correction": "WDAC/AppLocker et ASR rules ciblant les LOLBins, blocage des appels réseau depuis binaires système, journalisation des lignes de commande et moindre privilège."
+},
+"lsass_access": {
+"ce_que_cest": "Accès au processus LSASS (T1003.001) — lecture de la mémoire pour en extraire des identifiants (Mimikatz, comsvcs). Compromission directe de credentials, souvent privilégiés.",
+"a_verifier": "En premier : process ayant ouvert LSASS (10/4656), ses droits d'accès (PROCESS_VM_READ), hôte et compte. Distinguer un AV/EDR/outil légitime d'un process inhabituel/non signé accédant à LSASS.",
+"remediation": "Isoler immédiatement l'hôte via NinjaOne, capturer la mémoire AVANT arrêt, scan ESET. Reset de TOUS les comptes ayant ouvert une session sur cet hôte + révocation Kerberos. krbtgt si DA touché.",
+"correction": "Activer Credential Guard, LSA Protection (RunAsPPL), ASR rule de blocage du vol LSASS, Protected Users pour les comptes sensibles, et retirer les droits admin locaux (LAPS)."
+},
+"lsass_dump_comsvcs": {
+"ce_que_cest": "Dump de LSASS via comsvcs.dll MiniDump (T1003.001) — technique LOLBin (rundll32 comsvcs MiniDump) pour extraire les credentials sans outil tiers. Vol de mots de passe/hashes en cours.",
+"a_verifier": "En premier : ligne de commande rundll32 comsvcs.dll MiniDump avec le PID de LSASS, hôte et compte. Quasi aucun faux positif légitime ; corréler avec la création d'un fichier .dmp.",
+"remediation": "Isoler immédiatement l'hôte via NinjaOne, capturer la mémoire, supprimer/saisir le dump, scan ESET. Reset de tous les comptes connectés sur l'hôte + révocation Kerberos (krbtgt si DA).",
+"correction": "LSA Protection (RunAsPPL), Credential Guard, ASR anti-dump LSASS, blocage de rundll32 sur comsvcs via WDAC, et moindre privilège admin local."
+},
+"m365_brute_externe": {
+"ce_que_cest": "Brute force/password spraying contre Microsoft 365 depuis l'extérieur (T1110) — tentative d'accès aux comptes cloud. Risque de compromission de boîte mail et de pivot vers le SI.",
+"a_verifier": "En premier : compte(s) ciblé(s), IP source et géoloc, volume/cadence (logs Entra sign-in). Distinguer un échec utilisateur isolé d'un spray distribué (1 mdp sur N comptes). Vérifier tout succès final + MFA.",
+"remediation": "Bloquer l'IP/plage sur FortiGate et via Conditional Access. Si succès, reset du compte + révocation des sessions Entra, vérifier règles de transfert/OAuth ajoutées.",
+"correction": "MFA généralisée, Conditional Access (blocage géo/risque, legacy auth off), Smart Lockout, et politiques de mots de passe robustes + Password Protection Entra."
+},
+"m365_etranger": {
+"ce_que_cest": "Connexion M365 réussie depuis un pays inhabituel (T1078) — possible compromission de compte (voyage impossible) ou usage de credentials volés. Risque d'accès non autorisé aux données cloud.",
+"a_verifier": "En premier : compte, pays/IP source, et plausibilité (voyage légitime, VPN connu). Distinguer un déplacement réel d'un sign-in depuis une géo improbable, surtout avec MFA contournée ou token rejoué.",
+"remediation": "Si suspect, reset du mot de passe + révocation des sessions/tokens Entra, exiger une ré-authentification MFA. Vérifier règles de transfert mail, inscriptions MFA et consentements OAuth.",
+"correction": "Conditional Access par géo/named locations, blocage legacy auth, MFA résistante au phishing (FIDO2), et politiques de risque Identity Protection (sign-in/user risk)."
+},
+"m365_mailbox_deleg": {
+"ce_que_cest": "Ajout de permissions de délégation sur une boîte aux lettres (T1098.002) — accès persistant aux mails d'un tiers, souvent post-compromission pour la collecte ou la surveillance. Risque de fuite et de persistance.",
+"a_verifier": "En premier : qui a accordé la délégation, sur quelle boîte et à quel compte (Add-MailboxPermission, audit unifié). Distinguer une délégation métier légitime (assistant) d'un octroi vers un compte récent/suspect.",
+"remediation": "Révoquer la délégation non autorisée, reset + révocation des sessions du compte ayant accordé et du compte bénéficiaire. Auditer les accès aux mails déjà effectués.",
+"correction": "Restreindre les droits d'octroi de délégation (RBAC), alerter sur Add-MailboxPermission/FullAccess, revue périodique des délégations et MFA admin Exchange."
+},
+"m365_mail_forward": {
+"ce_que_cest": "Création d'une règle de transfert d'e-mails (T1114.003), notamment vers un domaine externe — exfiltration furtive et persistante des courriels. Signature classique de compte compromis (BEC).",
+"a_verifier": "En premier : compte, destination du transfert (externe ?), et type de règle (inbox rule, forwarding SMTP). Une règle vers un domaine externe ou avec mots-clés (facture, paiement) est hautement suspecte.",
+"remediation": "Supprimer la règle, reset du compte + révocation des sessions Entra. Vérifier les mails déjà exfiltrés et d'autres règles/délégations. Alerter en cas de fraude (BEC).",
+"correction": "Désactiver l'auto-forwarding externe (transport rule), alerter sur création de règles de transfert, MFA généralisée et durcissement anti-BEC (DMARC, bannières externes)."
+},
+"m365_oauth_consent": {
+"ce_que_cest": "Consentement OAuth accordé à une application (T1528) — un attaquant obtient un token d'accès persistant aux données (mail, fichiers) sans mot de passe ni MFA. Persistance furtive dans le cloud (illicit consent grant).",
+"a_verifier": "En premier : application consentie (éditeur, ancienneté), permissions demandées (Mail.Read, offline_access) et compte. Distinguer une app d'entreprise approuvée d'une app inconnue avec scopes étendus.",
+"remediation": "Révoquer le consentement et les tokens de l'application, reset + révocation des sessions du compte. Vérifier les données accédées via l'app et les autres comptes ayant consenti.",
+"correction": "Exiger l'admin consent (désactiver le user consent ou le limiter aux apps vérifiées), revue des Enterprise Applications, app governance Defender, et alerte sur consentements risqués."
+},
+"m365_partage_externe": {
+"ce_que_cest": "Partage de fichiers vers l'externe depuis M365/SharePoint/OneDrive (T1567) — possible exfiltration de données via un service web légitime. Risque de fuite de données confidentielles.",
+"a_verifier": "En premier : compte, fichier/volume partagé, destinataire externe et sensibilité du contenu. Distinguer une collaboration métier normale d'un partage massif/anormal de données sensibles, hors usage habituel.",
+"remediation": "Si anormal, révoquer le lien de partage, reset + révocation des sessions du compte. Évaluer la fuite et notifier si données sensibles. Bloquer le compte si compromission confirmée.",
+"correction": "Politiques de partage externe restrictives (domaines autorisés, liens expirants), DLP M365, étiquetage de sensibilité (MIP) et alerte sur partages de masse."
+},
+"m365_risque": {
+"ce_que_cest": "Entra ID Identity Protection a élevé le risque d'un compte (T1078) — sign-in/utilisateur à risque (token anormal, IP malveillante, voyage impossible). Indicateur de compromission probable de l'identité.",
+"a_verifier": "En premier : détection de risque précise (leaked credentials, anonymized IP…), compte et contexte du sign-in. Distinguer un faux positif (VPN, déplacement) d'un signal corrélé à d'autres anomalies.",
+"remediation": "Reset du mot de passe + révocation des sessions/tokens Entra, ré-inscription MFA si compromise. Vérifier règles de transfert, délégations et consentements OAuth.",
+"correction": "Conditional Access basé sur le risque (remédiation auto : MFA/blocage), MFA résistante au phishing, blocage legacy auth, et revue des politiques Identity Protection."
+},
+"m365_role": {
+"ce_que_cest": "Attribution d'un rôle d'administration Entra/M365 (T1098) — escalade de privilèges cloud (ex. Global Admin) offrant un contrôle étendu du tenant. Étape critique de persistance/escalade.",
+"a_verifier": "En premier : rôle attribué, compte bénéficiaire, compte auteur et fenêtre de changement (audit Entra). Distinguer une opération RH/IT légitime d'une élévation vers un compte récent/inhabituel hors process.",
+"remediation": "Retirer le rôle non autorisé, reset + révocation des sessions des comptes auteur et bénéficiaire. Auditer les actions admin effectuées entre-temps.",
+"correction": "PIM (rôles just-in-time avec approbation), MFA admin obligatoire, moindre privilège, séparation des comptes admin (cloud-only) et alerte sur toute attribution de rôle privilégié."
+},
+"malware_domain": {
+"ce_que_cest": "Résolution DNS vers un domaine malveillant connu (T1071.004) — possible C2 sur DNS ou contact avec une infrastructure malveillante. Indicateur de compromission active de l'hôte.",
+"a_verifier": "En premier : hôte interne résolvant le domaine, réputation/catégorie du domaine et process à l'origine. Distinguer un IOC périmé/faux positif d'une résolution répétée (beaconing) ; vérifier la connexion subséquente.",
+"remediation": "Bloquer le domaine sur FortiGate (DNS filtering), isoler l'hôte via NinjaOne si confirmé, capturer la mémoire, scan ESET. Identifier le process et la persistance.",
+"correction": "DNS filtering FortiGate avec feeds TI, blocage des domaines récents/non catégorisés, DNS interne forcé (pas de résolveur externe direct) et inspection des requêtes DNS."
+},
+"masquerading": {
+"ce_que_cest": "Masquerading par nom/emplacement légitime (T1036.005) — un binaire malveillant imite un processus système (svchost, lsass) ou se place dans un chemin légitime pour échapper à la détection. Évasion défensive.",
+"a_verifier": "En premier : chemin réel du process vs emplacement attendu, signature/hash, parent process et hôte. Un svchost.exe hors System32 ou non signé est un vrai positif clair ; comparer au baseline.",
+"remediation": "Isoler l'hôte via NinjaOne, capturer la mémoire, scan ESET. Récupérer le hash pour recherche sur le parc, identifier la persistance, reset des comptes impliqués.",
+"correction": "WDAC/AppLocker (exécution par chemin/signature), surveillance des process système hors emplacements légitimes, ASR rules et baselining des processus."
+},
+"ntds_dump": {
+"ce_que_cest": "Extraction de la base NTDS.dit (T1003.003) — vol de tous les hashes du domaine depuis un DC. Compromission totale et durable de l'annuaire Active Directory.",
+"a_verifier": "En premier : hôte (un DC ?), compte et méthode (ntdsutil, vssadmin, copie de ntds.dit). Tout accès à NTDS.dit hors sauvegarde planifiée est un vrai positif critique ; corréler avec une création de shadow copy.",
+"remediation": "Incident majeur : isoler le DC via NinjaOne, capturer la mémoire. Reset DEUX FOIS du krbtgt et de tous les comptes privilégiés, révocation globale des tickets. Plan de réponse compromission domaine.",
+"correction": "Tiering AD strict (Tier-0), restreindre les droits sur les DC, surveiller ntdsutil/vssadmin sur DC, Protected Users/Credential Guard, et sauvegardes DC sécurisées."
+},
+"ntds_ifm_dump": {
+"ce_que_cest": "Dump de NTDS via création de média IFM (ntdsutil 'create ifm', T1003.003) — exporte la base AD complète et la ruche SYSTEM, donnant tous les hashes du domaine. Compromission totale de l'AD.",
+"a_verifier": "En premier : DC concerné, compte exécutant ntdsutil avec 'ifm' et chemin de sortie. Quasi aucun usage légitime hors provisioning RODC planifié ; tout autre cas est un vrai positif critique.",
+"remediation": "Isoler le DC via NinjaOne, capturer la mémoire, saisir/supprimer le média IFM. Reset double du krbtgt + comptes privilégiés, révocation des tickets. Réponse compromission domaine.",
+"correction": "Tiering AD, restreindre l'accès admin aux DC, alerter sur ntdsutil, Protected Users/Credential Guard, et accès aux DC via PAW uniquement."
+},
+"persistence_autorun": {
+"ce_que_cest": "Persistance via clé Run du registre ou dossier Démarrage (T1547.001) — exécution automatique d'une charge au logon/démarrage. Mécanisme de maintien d'accès très courant.",
+"a_verifier": "En premier : valeur ajoutée (chemin/binaire), hôte, compte et parent process ayant écrit la clé. Distinguer un logiciel légitime installé d'un binaire en chemin temp/utilisateur, non signé ou offusqué.",
+"remediation": "Isoler l'hôte via NinjaOne si confirmé, supprimer la clé/entrée de persistance, capturer la mémoire, scan ESET. Identifier la charge et reset des comptes impliqués.",
+"correction": "Surveillance des clés Run/Startup (Sysmon), WDAC/AppLocker, retrait des droits d'écriture sur les emplacements de persistance, et moindre privilège utilisateur."
+},
+"powershell_suspect": {
+"ce_que_cest": "Exécution PowerShell suspecte (T1059.001) — commande encodée, offusquée ou téléchargement distant, souvent vecteur d'exécution de charges malveillantes. Peut être bénin (script admin) ou malveillant.",
+"a_verifier": "En premier : bloc de script (4104), présence d'-enc/-nop/IEX/DownloadString, hôte, compte et parent process (Office/navigateur = suspect). Distinguer un script d'admin signé d'un one-liner offusqué hors horaires.",
+"remediation": "Si confirmé, isoler via NinjaOne, capturer la mémoire, scan ESET. Décoder la commande pour identifier la charge/persistance, reset des comptes impliqués.",
+"correction": "Constrained Language Mode, Script Block Logging + transcription, AMSI actif, ASR (blocage process enfants Office), WDAC et restriction de PowerShell pour les utilisateurs non-IT."
+},
+"ransomware_indicator": {
+"ce_que_cest": "Indicateur de chiffrement de masse pour impact (T1486) — extensions de fichiers modifiées, notes de rançon, entropie élevée. Attaque ransomware probablement en cours ; impact métier majeur et imminent.",
+"a_verifier": "En premier : hôte(s) source du chiffrement, compte, vitesse de modification des fichiers et présence de note de rançon. Très peu de faux positifs ; agir en urgence sans attendre la confirmation complète.",
+"remediation": "Isoler immédiatement TOUS les hôtes touchés via NinjaOne, bloquer la propagation sur FortiGate, couper les partages. Capturer la mémoire, préserver les sauvegardes Veeam (hors ligne), activer le plan de crise.",
+"correction": "Sauvegardes immuables/air-gapped testées, segmentation réseau, ASR anti-ransomware, EDR en mode bloquant, moindre privilège et plan de réponse ransomware éprouvé."
+},
+"remote_discovery": {
+"ce_que_cest": "Découverte de systèmes distants (T1018) — énumération réseau (ping sweep, net view, nltest) pour cartographier l'environnement avant déplacement latéral. Phase de reconnaissance post-compromission.",
+"a_verifier": "En premier : hôte/compte source, outils utilisés et volume. Distinguer un scanner IT/inventaire légitime d'une énumération en rafale depuis un poste utilisateur, hors horaires, suivie de connexions latérales.",
+"remediation": "Si suspect, isoler l'hôte via NinjaOne, scan ESET, capturer la mémoire. Surveiller les mouvements latéraux consécutifs ; reset des comptes si compromission confirmée.",
+"correction": "Segmentation réseau limitant la visibilité inter-hôtes, host firewall, leurres réseau, et détection comportementale des séquences de découverte."
+},
+"sam_hive_dump": {
+"ce_que_cest": "Extraction de la ruche SAM (T1003.002) — vol des hashes des comptes locaux d'un hôte (reg save HKLM\\SAM, copie via shadow copy). Permet le crack/pass-the-hash des comptes locaux.",
+"a_verifier": "En premier : commande (reg save SAM/SYSTEM, esentutl), hôte et compte. Quasi aucun usage légitime ; corréler avec l'extraction simultanée de SYSTEM/SECURITY. Vrai positif si confirmé.",
+"remediation": "Isoler l'hôte via NinjaOne, capturer la mémoire, scan ESET. Reset des comptes locaux exposés (et du compte admin local partagé sur le parc le cas échéant).",
+"correction": "LAPS (mots de passe admin locaux uniques), Credential Guard, restreindre les droits de sauvegarde/lecture de la SAM, et désactiver la réutilisation du compte admin local."
+},
+"scheduled_task": {
+"ce_que_cest": "Création/modification d'une tâche planifiée (T1053.005) pour escalade ou persistance — exécution d'une charge selon un déclencheur ou dans un contexte privilégié. Mécanisme courant des attaquants.",
+"a_verifier": "En premier : nom de la tâche, action/commande exécutée, compte créateur et contexte (SYSTEM ?), via process IT ou non. Distinguer une tâche logicielle légitime d'une tâche pointant un binaire temp/script offusqué.",
+"remediation": "Si confirmé, isoler via NinjaOne, supprimer la tâche, capturer la mémoire, scan ESET. Identifier la charge et reset des comptes impliqués.",
+"correction": "Audit des créations de tâches (4698), WDAC/AppLocker, restreindre la création de tâches privilégiées, et surveillance des tâches s'exécutant en SYSTEM."
+},
+"schtask_payload": {
+"ce_que_cest": "Tâche planifiée exécutant une charge malveillante (T1053.005, Execution) — la tâche lance directement un binaire/script suspect. Exécution de code potentiellement malveillant, persistance probable.",
+"a_verifier": "En premier : commande exécutée par la tâche, chemin du binaire, hôte/compte et parent ayant créé la tâche. Un appel à powershell encodé/binaire en temp est un vrai positif ; comparer aux tâches légitimes.",
+"remediation": "Isoler l'hôte via NinjaOne, supprimer la tâche, capturer la mémoire, scan ESET. Décoder/identifier la charge, rechercher d'autres persistances, reset des comptes.",
+"correction": "AppLocker/WDAC, audit/alerting sur création de tâches, ASR rules, blocage des interpréteurs depuis des chemins utilisateur, et moindre privilège."
+},
+"service_install": {
+"ce_que_cest": "Installation d'un nouveau service Windows (T1543.003) — persistance et exécution en SYSTEM, souvent utilisée pour exécution distante (PsExec) ou maintien d'accès privilégié. Étape sensible d'intrusion.",
+"a_verifier": "En premier : nom et binaire du service (7045), hôte, compte installateur et contexte. Distinguer une installation logicielle/déploiement IT légitime d'un service au nom aléatoire pointant un binaire temp (PsExec-like).",
+"remediation": "Si confirmé, isoler via NinjaOne, arrêter/supprimer le service, capturer la mémoire, scan ESET. Identifier le binaire, reset des comptes ; corréler avec un mouvement latéral (admin$).",
+"correction": "Audit des installations de services (7045), WDAC/AppLocker, restreindre les droits d'installation de services, host firewall anti-PsExec et moindre privilège."
+},
+"service_stop_securite": {
+"ce_que_cest": "Arrêt d'un service de sécurité (T1489, EDR/AV/journalisation) — désactivation de défense, précurseur fréquent d'une charge malveillante ou d'un ransomware. Réduit la visibilité/protection de l'hôte.",
+"a_verifier": "En premier : service arrêté, commande/process à l'origine, hôte et compte. Distinguer une maintenance IT tracée d'un arrêt non planifié de l'AV/EDR, souvent suivi d'autres actions malveillantes.",
+"remediation": "Isoler l'hôte via NinjaOne, relancer/forcer le service depuis la console centrale, scan ESET, capturer la mémoire. Reset des comptes impliqués, chercher la charge suivante.",
+"correction": "Protection anti-tampering des services de sécurité (verrouillée), retrait des droits admin locaux (LAPS), alerte temps réel sur arrêt de service critique et démarrage automatique forcé."
+},
+"shadow_credentials": {
+"ce_que_cest": "Ajout de Shadow Credentials (T1556.005) — écriture de l'attribut msDS-KeyCredentialLink d'un compte pour s'authentifier via un certificat attaquant (PKINIT). Prise de contrôle furtive et persistante d'un compte/DA.",
+"a_verifier": "En premier : objet modifié (compte/DA cible), compte auteur de la modif de msDS-KeyCredentialLink (5136) et hôte source. Toute écriture de cet attribut hors Windows Hello/scénario connu est suspecte.",
+"remediation": "Isoler l'hôte source via NinjaOne. Supprimer la KeyCredential malveillante, reset + révocation des sessions du compte ciblé (krbtgt si DA). Capturer la mémoire.",
+"correction": "Restreindre les droits d'écriture sur msDS-KeyCredentialLink, mapping fort des certificats, tiering AD, audit de l'attribut et surveillance ADCS/PKINIT."
+},
+"sysmon_injection": {
+"ce_que_cest": "Injection de code dans un processus (T1055) détectée par Sysmon — exécution de code dans l'espace d'un process légitime pour évasion et accès à ses privilèges. Technique d'évasion avancée, fréquente avec les C2.",
+"a_verifier": "En premier : process source et cible de l'injection (CreateRemoteThread, accès mémoire — Sysmon 8/10), hôte et compte. Distinguer un AV/EDR/debugger légitime d'une injection vers lsass/explorer/svchost.",
+"remediation": "Isoler l'hôte via NinjaOne, capturer la mémoire AVANT arrêt (clé pour l'analyse), scan ESET. Identifier le process source et la persistance, reset des comptes impliqués.",
+"correction": "ASR rules anti-injection, Credential Guard, EDR comportemental en mode bloquant, durcissement des processus sensibles (protection LSASS) et moindre privilège."
+},
+"threat_intel": {
+"ce_que_cest": "Correspondance avec un indicateur de Threat Intelligence (T1071) — un flux/protocole applicatif correspond à un IOC connu (C2, infrastructure malveillante). Signal d'une compromission ou d'un contact malveillant.",
+"a_verifier": "En premier : hôte interne concerné, type d'IOC et sa fraîcheur/réputation, process à l'origine. Distinguer un IOC périmé/faux positif d'un match corrélé à un comportement réseau anormal (beaconing).",
+"remediation": "Bloquer l'indicateur sur FortiGate, isoler l'hôte via NinjaOne si confirmé, capturer la mémoire, scan ESET. Identifier le process et la persistance.",
+"correction": "Intégration TI au filtrage FortiGate et au SIEM (corrélation oms-xdr), egress filtering, hygiène des feeds (réduire les faux positifs) et enrichissement automatique des alertes."
+},
+"uac_bypass": {
+"ce_que_cest": "Contournement du contrôle de compte utilisateur (T1548.002) — élévation silencieuse vers les droits admin sans invite UAC (fodhelper, eventvwr, hijack registre). Escalade de privilèges locale.",
+"a_verifier": "En premier : technique (process auto-élevé comme fodhelper/eventvwr lançant un enfant anormal), hôte, compte et clés de registre modifiées. Distinguer un usage système normal d'un détournement avec parent suspect.",
+"remediation": "Isoler l'hôte via NinjaOne, capturer la mémoire, scan ESET. Identifier la charge élevée et la persistance, reset des comptes impliqués.",
+"correction": "UAC au niveau maximal (always notify), retrait des droits admin locaux (LAPS), surveillance des process auto-élevés, ASR rules et WDAC."
+},
+"vault_admin": {
+"ce_que_cest": "Accès/action administrateur sur le coffre Vaultwarden (T1078) — un compte privilégié agit sur le coffre de mots de passe, ressource à très haute valeur. Risque de compromission massive de secrets.",
+"a_verifier": "En premier : compte admin, IP source et horaire, action effectuée. Distinguer une administration légitime en horaires ouvrés d'un accès depuis une source/IP inhabituelle, hors horaires, sans MFA.",
+"remediation": "Si suspect, révoquer la session, reset du compte admin Vaultwarden + révocation. Restreindre l'accès à l'interface admin sur FortiGate. Auditer les secrets consultés/exportés.",
+"correction": "MFA obligatoire, restriction de l'accès admin par IP/réseau, comptes nominatifs, journalisation des accès aux secrets et rotation des secrets en cas de doute."
+},
+"vault_admin_abuse": {
+"ce_que_cest": "Brute force contre le compte admin Vaultwarden (T1110) — tentative d'accès au coffre de mots de passe par essais répétés. Compromission potentielle de l'ensemble des secrets de l'organisation.",
+"a_verifier": "En premier : IP source, volume/cadence des échecs et éventuel succès. Distinguer une erreur isolée d'une rafale depuis une source unique/externe. Vérifier l'exposition de l'interface sur Internet.",
+"remediation": "Bloquer l'IP source sur FortiGate, verrouiller le compte. Si succès suspecté, reset admin + révocation et rotation des secrets critiques. Restreindre l'accès à l'interface.",
+"correction": "MFA, restriction d'accès par IP/VPN (interface non exposée publiquement), fail2ban/rate limiting, mot de passe maître fort et alerte sur échecs répétés."
+},
+"vault_auth_fail": {
+"ce_que_cest": "Échecs d'authentification sur Vaultwarden (gestionnaire de mots de passe, T1555.005) — tentatives d'accès au coffre, possible ciblage des secrets stockés. Risque de compromission de credentials centralisés.",
+"a_verifier": "En premier : compte ciblé, IP source, volume et cadence. Distinguer un utilisateur ayant oublié son mot de passe d'un pattern de brute force/spraying depuis une source unique. Vérifier tout succès consécutif.",
+"remediation": "Bloquer l'IP source sur FortiGate si abusive, vérifier le compte ciblé. Si compromission suspectée, reset + révocation et rotation des secrets concernés.",
+"correction": "MFA, rate limiting/verrouillage, restriction d'accès réseau à l'interface, mots de passe maîtres robustes et supervision des échecs d'authentification."
+},
+"veeam_job_echec": {
+"ce_que_cest": "Échec d'un job de sauvegarde Veeam (T1490) — peut être un incident technique, mais aussi une inhibition délibérée de la récupération préparant un ransomware. Risque sur la capacité de restauration.",
+"a_verifier": "En premier : job concerné, message d'erreur et récurrence. Distinguer une cause technique (stockage plein, réseau) d'une altération suspecte (suppression de points de restauration, modif de config, compte inhabituel).",
+"remediation": "Diagnostiquer la cause ; si malveillant, isoler le serveur Veeam via NinjaOne, vérifier l'intégrité des sauvegardes (copies hors ligne) et reset des comptes Veeam. Relancer la sauvegarde.",
+"correction": "Sauvegardes immuables/air-gapped, comptes Veeam dédiés et protégés (MFA, hors AD), supervision des échecs et tests de restauration réguliers."
+},
+"veeam_job_warn": {
+"ce_que_cest": "Avertissement sur un job Veeam — anomalie non bloquante (point de restauration manqué, ralentissement, fichiers ignorés). Risque modéré sur la complétude/fiabilité de la sauvegarde.",
+"a_verifier": "En premier : nature de l'avertissement, job et tendance (ponctuel vs récurrent). Distinguer un aléa transitoire d'un signe précurseur (dégradation stockage, fichiers verrouillés par chiffrement).",
+"remediation": "Analyser le détail du warning, corriger la cause (espace, exclusions, droits) et vérifier l'intégrité du dernier point de restauration valide. Escalader si récurrent.",
+"correction": "Supervision proactive des jobs, alerting sur warnings répétés, capacité de stockage suivie, et tests de restauration périodiques pour garantir la fiabilité."
+},
+"vsphere_auth_fail": {
+"ce_que_cest": "Échecs d'authentification sur vSphere/vCenter (T1110) — possible brute force contre l'hyperviseur, ressource critique hébergeant l'ensemble des VM. Risque de compromission de toute la virtualisation.",
+"a_verifier": "En premier : compte ciblé, IP source et volume/cadence. Distinguer une erreur d'un service/admin d'une rafale depuis une source unique/inhabituelle. Vérifier l'exposition de l'interface et tout succès final.",
+"remediation": "Bloquer l'IP source sur FortiGate, verrouiller le compte. Si succès suspecté, reset (AD/SSO) + révocation des sessions vCenter. Restreindre l'accès au plan de gestion.",
+"correction": "MFA/SSO durci, restriction de l'accès management par réseau dédié (jamais exposé), comptes nominatifs, verrouillage de compte et segmentation du réseau d'administration vSphere."
+},
+"vsphere_shell_ssh": {
+"ce_que_cest": "Activation/usage du shell ou SSH sur un hôte ESXi/vCenter (T1059) — accès en ligne de commande à l'hyperviseur, normalement désactivé. Risque de manipulation des VM, persistance ou destruction.",
+"a_verifier": "En premier : hôte ESXi, compte, IP source et commandes exécutées. Distinguer une intervention de support planifiée d'une activation SSH inattendue hors horaires depuis une source inhabituelle.",
+"remediation": "Si non autorisé, désactiver SSH/shell ESXi, isoler le plan de gestion via FortiGate, reset des comptes (SSO/root ESXi) et révocation. Auditer les commandes et l'état des VM.",
+"correction": "Maintenir SSH/shell ESXi désactivés (alerte sur activation), Lockdown Mode, accès management restreint à un réseau dédié, MFA et journalisation centralisée des hôtes ESXi."
+},
+"vsphere_vm_destroy": {
+"ce_que_cest": "Destruction de VM dans vSphere (T1485) — suppression de machines virtuelles, sabotage potentiel ou destruction de données/preuves. Impact majeur sur la disponibilité des services.",
+"a_verifier": "En premier : compte auteur, VM supprimées, IP source et fenêtre de changement. Distinguer un décommissionnement planifié d'une suppression massive/inattendue, surtout hors horaires ou par un compte inhabituel.",
+"remediation": "Si non autorisé, isoler le plan de gestion via FortiGate, suspendre/reset le compte (révocation des sessions vCenter). Restaurer les VM depuis sauvegarde (Veeam), préserver les logs.",
+"correction": "Moindre privilège vSphere (rôles restreints), MFA admin, sauvegardes immuables des VM, alerte sur suppression de VM et séparation des comptes d'administration."
+},
+"waf_block": {
+"ce_que_cest": "Le WAF a bloqué une requête malveillante visant une application publique (T1190) — tentative d'exploitation (injection, RCE) sur un service exposé. Signal d'attaque sur le périmètre, généralement maîtrisé par le blocage.",
+"a_verifier": "En premier : signature/règle WAF déclenchée, IP source et réputation, URL/payload et caractère ciblé ou opportuniste. Un blocage propre = risque contenu ; surveiller la persistance des tentatives et tout contournement.",
+"remediation": "Confirmer le blocage, bannir l'IP/plage source sur FortiGate. Si tentative ciblée répétée, surveiller le service et vérifier l'absence de compromission (web shell).",
+"correction": "WAF en mode bloquant avec règles à jour, virtual patching, durcissement applicatif (validation des entrées), et réduction de la surface exposée."
+},
+"web_shell": {
+"ce_que_cest": "Présence/usage d'un web shell (T1505.003) — script malveillant déposé sur un serveur web exposé, offrant exécution de commandes à distance et persistance. Compromission confirmée d'un serveur public, souvent tête de pont.",
+"a_verifier": "En premier : fichier suspect dans la webroot (créé récemment, nom aléatoire), serveur, et requêtes POST inhabituelles vers ce fichier. Le process serveur web (w3wp/httpd) lançant cmd/powershell est un vrai positif clair.",
+"remediation": "Isoler le serveur via NinjaOne, bloquer l'IP attaquante sur FortiGate, capturer la mémoire et l'image disque. Supprimer le web shell, scan ESET, reset des comptes/secrets exposés sur le serveur.",
+"correction": "Patcher l'application exposée, WAF en mode bloquant, droits d'écriture restreints sur la webroot, intégrité des fichiers (FIM), et blocage des process enfants du serveur web (ASR/WDAC)."
+},
+"winsec_critique": {
+"ce_que_cest": "Désactivation de la journalisation d'événements Windows (T1562.002) — l'attaquant aveugle l'audit (arrêt du service EventLog, modif de la config audit) pour masquer son activité. Précurseur ou accompagnement d'une intrusion.",
+"a_verifier": "En premier : hôte, compte et action (arrêt service EventLog, auditpol /clear, modif registre). Très peu de faux positifs légitimes ; corréler avec un trou de logs et d'autres activités suspectes simultanées.",
+"remediation": "Isoler l'hôte via NinjaOne, réactiver/forcer la journalisation, capturer la mémoire, scan ESET. Reconstituer l'activité via les logs SIEM centralisés, reset des comptes impliqués.",
+"correction": "Forwarding temps réel des logs vers le SIEM (hors portée locale), retrait des droits admin locaux (LAPS), alerte sur arrêt du service EventLog/auditpol, et configuration d'audit verrouillée par GPO."
+},
+"wmi_lateral_exec": {
+"ce_que_cest": "Exécution distante via WMI (T1047) — déplacement latéral ou exécution de code à distance (wmic process call create, Win32_Process). Technique furtive de propagation post-compromission avec identifiants valides.",
+"a_verifier": "En premier : hôte source et cible, compte utilisé et commande exécutée à distance (parent WmiPrvSE lançant un process anormal). Distinguer un outil d'admin/SCCM légitime d'un wmic spawnant powershell/cmd hors horaires.",
+"remediation": "Isoler source et cible via NinjaOne, capturer la mémoire, scan ESET. Révoquer les sessions et reset du compte utilisé. Cartographier le mouvement latéral (autres cibles WMI).",
+"correction": "Restreindre WMI distant (host firewall, RPC filtering), tiering AD, surveillance de WmiPrvSE lançant des process, et moindre privilège sur les comptes d'administration."
 }
 }
