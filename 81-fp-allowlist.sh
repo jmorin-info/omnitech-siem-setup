@@ -50,9 +50,15 @@ require_api
 LOOKUP_DIR="/etc/graylog/lookup"
 
 echo "==> [1/4] Deploiement du CSV d'allowlist + table de lookup"
-install -m 644 lookups/fp-allowlist.csv "${LOOKUP_DIR}/"
+# IMPORTANT : le CSVFileDataAdapter de Graylog REJETTE TOUT le fichier si une seule
+# ligne n'a pas 2 colonnes (IllegalStateException "invalid lines"). Les lignes de
+# commentaire '#' (NF=1) cassaient donc la table -> lookup VIDE (allowlist morte).
+# On livre une version FILTREE (en-tete 'match_key,reason' + lignes de donnees) ;
+# les commentaires restent dans la source versionnee lookups/fp-allowlist.csv.
+grep -vE '^[[:space:]]*(#|$)' lookups/fp-allowlist.csv > "${LOOKUP_DIR}/fp-allowlist.csv"
+chmod 644 "${LOOKUP_DIR}/fp-allowlist.csv"
 chown root:graylog "${LOOKUP_DIR}/fp-allowlist.csv" 2>/dev/null || true
-ok "fp-allowlist.csv deploye dans ${LOOKUP_DIR}/"
+ok "fp-allowlist.csv (filtre, sans commentaires) deploye dans ${LOOKUP_DIR}/"
 # Table cle->raison. Cle EXACTE (case_insensitive_lookup=true via ensure_lookup).
 # On indexe sur 'match_key' (motif benin normalise) et on recupere 'reason'.
 ensure_lookup "fp-allowlist" "OMNI Allowlist FP (motif benin -> raison)" \
