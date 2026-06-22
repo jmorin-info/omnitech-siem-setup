@@ -42,7 +42,7 @@
 
 | | |
 |:---:|:---:|
-| [![Recherche d'entités](docs/captures/02-entites.png)](docs/captures/02-entites.png)<br>**Recherche d'entités** · tout compte/machine → dossier 360°<br><sub>*Entity search — any account or machine*</sub> | [![Dossier 360°](docs/captures/10-dossier360.png)](docs/captures/10-dossier360.png)<br>**Dossier 360°** · identité unifiée (comptes liés), provenance & cartographie d'auth<br><sub>*Unified identity, auth provenance & mapping*</sub> |
+| [![Recherche d'entités](docs/captures/02-entites.png)](docs/captures/02-entites.png)<br>**Entités** · classées par **risque fusionné** + watchlist<br><sub>*Entities ranked by fused risk + watchlist*</sub> | [![Dossier 360°](docs/captures/10-dossier360.png)](docs/captures/10-dossier360.png)<br>**Dossier 360°** · **jauge de risque fusionné**, identité unifiée, provenance & cartographie<br><sub>*Fused-risk gauge, unified identity, provenance*</sub> |
 | [![Chronologie unifiée](docs/captures/10b-timeline.png)](docs/captures/10b-timeline.png)<br>**Chronologie unifiée** · détections + authentifications, par date<br><sub>*Unified timeline — detections + auth*</sub> | [![Détections](docs/captures/04-detections.png)](docs/captures/04-detections.png)<br>**Détections** · liste 24 h + **guide d'action** intégré<br><sub>*Detections + inline action guide*</sub> |
 | [![Playbooks](docs/captures/05-playbooks.png)](docs/captures/05-playbooks.png)<br>**Playbooks** · ce que c'est / vérifier / remédier / corriger<br><sub>*4‑part response playbooks*</sub> | [![Matrice ATT&CK](docs/captures/06-attack.png)](docs/captures/06-attack.png)<br>**Matrice MITRE ATT&CK** · couverture × activité<br><sub>*ATT&CK coverage matrix*</sub> |
 | [![Graphe d'attaque](docs/captures/07-graphe.png)](docs/captures/07-graphe.png)<br>**Graphe d'attaque** · entités ↔ techniques<br><sub>*Attack graph*</sub> | [![Incidents](docs/captures/03-incidents.png)](docs/captures/03-incidents.png)<br>**Incidents** · cas corrélés (oms‑xdr)<br><sub>*Correlated incidents*</sub> |
@@ -80,7 +80,7 @@ Plateforme **SIEM + XDR + console SOC** complète et reproductible, déployée s
 |---|---|
 | 🛡️ **Detection engineering** | **177 règles** de pipeline sur 7 streams (AD/Sysmon, FortiGate, FortiManager, M365, vSphere…) → événements tagués (`alert_tag`) + **114 définitions d'alerte** (mail + Teams), fenêtres glissantes |
 | 🎯 **MITRE ATT&CK** | `alert_tag` → techniques / tactiques, score de risque 0–10, couche ATT&CK Navigator + **matrice de couverture interactive** |
-| 🔎 **Recherche d'entités & dossier 360°** | Page dédiée : **tout compte ou machine** → identité unifiée, authentifications, logons, détections, **chronologie**, guides — pour tout le parc |
+| 🔎 **Recherche d'entités & dossier 360°** | Page dédiée : **tout compte ou machine** → identité unifiée, authentifications, logons, détections, **chronologie**, guides ; **score de risque FUSIONNÉ** (ML+UEBA+sévérité), entités **classées par risque**, **watchlist** de suivi |
 | 🧬 **Corrélation d'identité** | `SECURITY\rdupont`, `adm-rdupont`, `rdupont@dom` reconnus comme **une seule personne** (comptes liés agrégés) ; machines jamais fusionnées |
 | 🕑 **Chronologie unifiée** | Le **récit** d'une entité : détections + échecs d'auth Windows + sign‑ins M365 fusionnés et triés par date, sur tous les comptes liés |
 | 🧠 **XDR & LLM local** | `oms-xdr` : corrélation kill‑chain multi‑sources, scoring d'incident, triage/narration par LLM **local** (Ollama, CPU), réponse en **dry‑run** (double verrou) |
@@ -172,7 +172,7 @@ A complete, reproducible **SIEM + XDR + SOC console** deployed on a single harde
 |---|---|
 | 🛡️ **Detection engineering** | **177 pipeline rules** across 7 streams (AD/Sysmon, FortiGate, FortiManager, M365, vSphere…) → tagged events + **114 alert definitions** (mail + Teams), tumbling windows |
 | 🎯 **MITRE ATT&CK** | `alert_tag` → techniques / tactics, 0–10 risk score, ATT&CK Navigator layer + **interactive coverage matrix** |
-| 🔎 **Entity search & 360° dossier** | Dedicated page: **any account or machine** → unified identity, authentications, logons, detections, **timeline**, guides — across the whole estate |
+| 🔎 **Entity search & 360° dossier** | Dedicated page: **any account or machine** → unified identity, authentications, logons, detections, **timeline**, guides; **FUSED risk score** (ML+UEBA+severity), entities **ranked by risk**, follow-up **watchlist** |
 | 🧬 **Identity correlation** | `SECURITY\jdoe`, `adm-jdoe`, `jdoe@dom` recognised as **one person** (linked accounts aggregated); machines never merged |
 | 🕑 **Unified timeline** | An entity's **story**: detections + Windows auth failures + M365 sign‑ins merged and time‑sorted, across all linked accounts |
 | 🧠 **XDR & local LLM** | `oms-xdr`: cross‑source kill‑chain correlation, incident scoring, **local** LLM triage/narration (Ollama, CPU), **dry‑run** response (double‑lock) |
