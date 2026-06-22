@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # run-tests.sh — suite de tests hors-ligne (aucun OpenSearch / Graylog requis).
 #
-#   1. py_compile  : les sources Python compilent (oms-ml + backend mobile) ;
+#   1. py_compile  : les sources Python compilent (oms-ml + oms-xdr + backend) ;
 #   2. pytest      : rédaction du backend mobile (tests/) ;
-#   3. pytest      : oms-ml anomalie + réduction de FP (oms-ml/tests/).
+#   3. pytest      : oms-ml anomalie + réduction de FP (oms-ml/tests/) ;
+#   4. pytest      : oms-xdr corrélation + robustesse (oms-xdr/tests/).
 #
 # Interpréteur : on privilégie le venv oms-ml (numpy/sklearn/joblib présents),
 # car les tests ML en ont besoin ; le backend mobile s'importe en stdlib seule.
@@ -56,6 +57,10 @@ if [ -d "$ROOT/oms-ml/oms_ml" ]; then
   while IFS= read -r f; do COMPILE_FILES+=("$f"); done \
     < <(find "$ROOT/oms-ml/oms_ml" -name '*.py' -not -path '*/__pycache__/*' | sort)
 fi
+if [ -d "$ROOT/oms-xdr/oms_xdr" ]; then
+  while IFS= read -r f; do COMPILE_FILES+=("$f"); done \
+    < <(find "$ROOT/oms-xdr/oms_xdr" -name '*.py' -not -path '*/__pycache__/*' | sort)
+fi
 # backend mobile : nom de fichier à tiret -> chemin explicite (un seul fichier .py)
 [ -f "$ROOT/mobile/omni-mobile-api.py" ] && COMPILE_FILES+=("$ROOT/mobile/omni-mobile-api.py")
 if [ "${#COMPILE_FILES[@]}" -gt 0 ]; then
@@ -84,6 +89,19 @@ if [ -d "$ROOT/oms-ml/tests" ]; then
   ( cd "$ROOT/oms-ml" && "$PY" -m pytest tests -q ) || rc=1
 else
   echo "   (dossier oms-ml/tests/ absent — ignoré)"
+fi
+
+# --- 4) tests oms-xdr (corrélation + robustesse) ---------------------------
+# Lancés depuis oms-xdr/ pour que le package oms_xdr s'importe (PyYAML requis,
+# présent dans le venv ML). Aucun appel réseau : GraylogClient est simulé.
+echo
+echo "== pytest : oms-xdr (oms-xdr/tests/)"
+if [ -d "$ROOT/oms-xdr/tests" ] && "$PY" -c "import yaml" >/dev/null 2>&1; then
+  ( cd "$ROOT/oms-xdr" && "$PY" -m pytest tests -q ) || rc=1
+elif [ -d "$ROOT/oms-xdr/tests" ]; then
+  echo "   (PyYAML absent de l'interpréteur — oms-xdr ignoré)"
+else
+  echo "   (dossier oms-xdr/tests/ absent — ignoré)"
 fi
 
 echo

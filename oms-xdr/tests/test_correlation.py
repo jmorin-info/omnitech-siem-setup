@@ -83,3 +83,35 @@ def test_ransomware_critical(rules_path, graylog_factory):
     data = {(Q_RANSOM, "", "host"): {"SRV-01": 1}}
     inc = _corr(rules_path, graylog_factory, data).evaluate()
     assert any(i.rule_id == "CR_RANSOMWARE" and i.severity == "critical" for i in inc)
+
+
+def test_signal_en_echec_emet_xdr_health(rules_path, graylog_factory):
+    """Robustesse (audit P2) : un signal qui lève (OpenSearch down, mapping cassé)
+    ne doit PAS casser le cycle, ET doit émettre un événement de santé `xdr_health`
+    — sinon la panne supprime SILENCIEUSEMENT les règles qui dépendent du signal."""
+    class FaillibleGraylog(graylog_factory):
+        def aggregate(self, query, stream, group_by, minutes):
+            if query == Q_RANSOM:                      # ce signal échoue
+                raise RuntimeError("OpenSearch timeout simulé")
+            return super().aggregate(query, stream, group_by, minutes)
+
+    gl = FaillibleGraylog({(Q_LSASS, "", "host"): {"WS-042": 1}})
+    inc = Correlator(rules_path, gl, 15).evaluate()    # ne doit PAS lever
+    # les autres règles fonctionnent toujours malgré le signal en échec
+    assert any(i.rule_id == "CR_LSASS_THEFT" for i in inc)
+    # un xdr_health a été émis et liste au moins un signal en échec
+    health = [p for p in gl.sent if p.get("_event_source") == "xdr_health"]
+    assert health, "aucun xdr_health émis alors qu'un signal a échoué"
+    assert health[0]["_signals_failed_count"] >= 1
+    assert health[0]["_signals_failed"], "liste des signaux en échec vide"
+
+
+def test_severite_inconnue_sans_keyerror(rules_path, graylog_factory):
+    """Robustesse (audit P2) : une sévérité hors barème (coquille YAML) ne doit
+    lever NI au tri (`_SEV_ORDER`) NI à la sérialisation GELF (`level`)."""
+    from oms_xdr.correlation import Incident, _SEV_ORDER
+    inc = Incident(rule_id="X", title="t", severity="bogus",
+                   entities=["e1"], signals=["s1"], mitre=[], tactic=[])
+    g = inc.to_gelf()                       # ne doit pas lever
+    assert g["level"] == 5                  # niveau par défaut sûr
+    assert _SEV_ORDER.get(inc.severity, -1) == -1
