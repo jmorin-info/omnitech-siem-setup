@@ -222,6 +222,49 @@ then
 end
 EOF
 
+# --- powershell_suspect : -EncodedCommand wrappe par Claude Code -----------------
+# Mesure (audit FP) : 1222/1241 (98,5%) ont ParentImage=claude.exe (Claude Code sur
+# postes dev : npm/pkg/winget). 200 payloads -enc decodes = 100% automation benigne ;
+# 0/1222 indicateur malveillant sur 30j. GARDE-FOU (decision RSSI, go Julien) : on
+# n'allowliste QUE si parent=claude.exe ET enfant=powershell.exe ET le motif est -enc,
+# JAMAIS un indicateur de telechargement/credential (meme en clair). Les enfants pwsh/
+# bash et les parents node.exe restent alertes. Masquerade = meme risque que sysmon_injection.
+ensure_rule "omni-fp-25-ps-claude" <<'EOF'
+rule "omni-fp-25-ps-claude"
+when
+  to_string($message.alert_tag) == "powershell_suspect"
+  AND ends_with(to_string($message.winlogbeat_winlog_event_data_ParentImage), "\\claude.exe", true)
+  AND ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\powershell.exe", true)
+  // Couvre les 2 motifs benins de Claude Code : -EncodedCommand (wrapper npm/pkg/winget)
+  // ET -ExecutionPolicy Bypass -Command "$env:Path = ...GetEnvironmentVariable" (setup PATH).
+  // GARDE-FOU : denylist EXHAUSTIVE d'indicateurs malveillants EN CLAIR (download/exec/cred/
+  // obfusc/furtivite). En -enc le payload est encode -> la surete repose sur parent=claude.exe
+  // (200 payloads decodes par l'audit = 100% benins, 0/1222 malveillant sur 30j). Enfants
+  // pwsh/bash et parents node.exe NON couverts (restent alertes).
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "downloadstring", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "downloadfile", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "downloaddata", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "invoke-webrequest", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "webclient", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "bitstransfer", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "bitsadmin", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "certutil", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "frombase64string", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "invoke-expression", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "iex(", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "mimikatz", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "sekurlsa", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "comsvcs", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "reflection.assembly", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "-windowstyle hidden", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), " -w hidden", true)
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_allowlist_reason", "powershell_suspect: Claude Code (env-setup/-EncodedCommand benin ; aucun indicateur download/exec/cred)");
+  remove_field("alert_tag");
+end
+EOF
+
 echo "==> [3/4] Pipeline 'OMNI - Allowlist FP' (stage 25) + connexion streams"
 # Stage 25 = APRES MITRE (20) donc risk_score/mitre_* deja poses (scoring garde),
 # AVANT la reduction ISO (30). match either : une seule des 3 regles s'applique.
@@ -233,6 +276,7 @@ rule "omni-fp-25-scheduled-task"
 rule "omni-fp-25-autorun"
 rule "omni-fp-25-sysmon-injection"
 rule "omni-fp-25-adminshare-loopback"
+rule "omni-fp-25-ps-claude"
 end
 PIPE
 )"
