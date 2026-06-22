@@ -963,7 +963,11 @@ def get_health():
         return h[0].get("_source", {}) if h else {}
 
     robots = _latest([{"term": {"event_source": "siem_health"}}, {"term": {"health_type": "summary"}}],
-                     ["health_ok", "health_fail", "health_total"])
+                     ["health_ok", "health_fail", "health_total", "health_maint"])
+    # rappel de maintenance (reboot sécurité) — distinct d'une panne de robot
+    maint = _latest([{"term": {"event_source": "siem_health"}}, {"term": {"health_type": "reboot_required"}},
+                     {"range": {"timestamp": {"gte": "now-12h"}}}],
+                    ["message", "short_message", "health_reason"])
     sla = _latest([{"term": {"event_source": "collecte_sla"}}, {"term": {"sla_type": "summary"}}],
                   ["sla_coverage_pct", "sla_active_24h", "sla_go_dark", "sla_expected"])
     dres = os_search("omni-*", {"size": 0,
@@ -976,7 +980,8 @@ def get_health():
     dark.sort(key=lambda d: -d["hours"])
     return {"cluster": ch.get("status", "?"), "nodes": ch.get("number_of_nodes"),
             "shards": ch.get("active_shards"), "events_24h": ag.get("tot", {}).get("value", 0),
-            "sources": sources, "robots": robots, "sla": sla, "dark_hosts": dark}
+            "sources": sources, "robots": robots, "sla": sla, "dark_hosts": dark,
+            "maintenance": maint}
 
 
 def get_leaks():

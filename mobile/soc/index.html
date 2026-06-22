@@ -264,6 +264,10 @@
   .tlt{flex:0 0 86px;color:var(--mut);font-size:10.5px;padding-top:1px}
   .tli{color:var(--tlc,#7c8aa6)}.tli .svi{width:14px;height:14px}
   .tlx{flex:1;color:#cdd9e8;line-height:1.4}.tlx .src{color:var(--mut);font-size:10px;margin-left:6px}
+  /* --- Bandeau maintenance (reboot sécurité) --- */
+  .mbanner{display:flex;align-items:flex-start;gap:11px;background:#2a1e08;border:1px solid #6b4e16;border-left:3px solid var(--amb);border-radius:10px;padding:12px 14px;margin-bottom:14px}
+  .mbanner .svi{width:18px;height:18px;color:var(--amb);flex:0 0 18px;margin-top:1px}
+  .mbanner b{color:#f5d28a}.mbanner .msub{color:#d8c8a0;font-size:12px;margin-top:2px;line-height:1.45}
   .report{background:#fff;color:#111827;border-radius:10px;padding:32px;max-width:920px}
   .report h1{font-size:20px;color:#0b1322;margin:0}.report h2{font-size:14px;margin:20px 0 8px;color:#0b1322;border-bottom:1px solid #e2e8f0;padding-bottom:5px}
   .report .muted{color:#64748b}
@@ -599,6 +603,7 @@
       <div class="feed" id="leakFeed" style="display:none"></div>
     </section>
     <section class="page" id="p-health">
+      <div id="hmaint"></div>
       <div class="grid kpis" id="hkpis"></div>
       <div class="grid cols" style="margin-top:16px">
         <div class="card"><h3><svg class="svi"><use href="#i-antenna"></use></svg> <span data-i18n="card_collect">Sources de collecte (24 h)</span><span class="tag" data-i18n="tag_collect">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
@@ -656,7 +661,7 @@ const TACCOL={"Initial Access":"#fb3b53","Execution":"#f97316","Persistence":"#f
 let LANG=localStorage.getItem("soc_lang")||"fr";
 const I18N={
  fr:{
-  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",
+  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",maint_title:"Maintenance requise",
   cluster_ok:"Cluster opérationnel",dens_comfort:"Confort",dens_compact:"Compact",
   al_search:"Recherche et navigation (Ctrl ou Cmd + K)",al_refresh:"Rafraîchir les données",al_density:"Basculer la densité d'affichage",al_help:"Ouvrir l'aide et les raccourcis clavier",al_logout:"Se déconnecter",al_lang:"Changer la langue (FR/EN)",
   t_search:"Recherche (Ctrl/Cmd+K)",t_refresh:"Rafraîchir maintenant",t_help:"Aide et raccourcis (touche ?)",t_logout:"Se déconnecter",t_lang:"Langue : Français — cliquer pour English",
@@ -676,7 +681,7 @@ const I18N={
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
  en:{
-  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",
+  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",maint_title:"Maintenance required",
   cluster_ok:"Cluster operational",dens_comfort:"Comfort",dens_compact:"Compact",
   al_search:"Search and navigation (Ctrl or Cmd + K)",al_refresh:"Refresh data",al_density:"Toggle display density",al_help:"Open help and keyboard shortcuts",al_logout:"Sign out",al_lang:"Change language (FR/EN)",
   t_search:"Search (Ctrl/Cmd+K)",t_refresh:"Refresh now",t_help:"Help and shortcuts (press ?)",t_logout:"Sign out",t_lang:"Language: English — click for Français",
@@ -1350,7 +1355,9 @@ function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocale
    <h2>${t("rep_recinc")}</h2><table><thead><tr><th>${t("rep_h_sev")}</th><th>${t("rep_h_title")}</th><th>${t("rep_h_ent")}</th><th>ATT&CK</th></tr></thead><tbody>${inc}</tbody></table>
    <h2>${t("rep_collsrc")}</h2><table><thead><tr><th>${t("rep_h_src")}</th><th class="num">${t("rep_h_vol")}</th></tr></thead><tbody>${src}</tbody></table>
    <div class="muted" style="margin-top:20px">${t("rep_foot")}</div>`;}
-function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{};
+function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{},mt=d.maintenance||{};
+  const mmsg=mt.message||mt.short_message||mt.health_reason;
+  if($("#hmaint"))$("#hmaint").innerHTML=mmsg?`<div class="mbanner">${ic("warning")}<div><b>${t("maint_title")}</b><div class="msub">${esc(mmsg)}${mt.health_reason&&mt.health_reason!==mmsg?" — "+esc(mt.health_reason):""}</div></div></div>`:"";
   $("#hkpis").innerHTML=[
     ["cy","Cluster",esc(d.cluster||'?'),"OpenSearch"],
     ["cy","Événements (24 h)",(d.events_24h||0).toLocaleString("fr"),"toutes sources"],

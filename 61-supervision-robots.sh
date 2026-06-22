@@ -83,7 +83,7 @@ def show(unit):
 
 def main():
     up = uptime()
-    ok_n, bad = 0, []
+    ok_n, bad, maint = 0, [], []   # bad = PANNES réelles (robots/infra) ; maint = rappels maintenance (reboot)
     for unit, maxage in JOBS.items():
         d = show(unit)
         load = d.get("LoadState", "")
@@ -149,17 +149,26 @@ def main():
         except Exception:
             pass
     if reboot_req:
-        bad.append(("maj-securite", "reboot requis (MAJ securite)", 0))
+        # Reboot = RAPPEL DE MAINTENANCE, PAS une panne de robot (sinon faux "1 en panne").
+        maint.append("reboot requis (MAJ securite)")
         gelf({"event_source": "siem_health", "health_type": "reboot_required",
-              "alert_tag": "siem_job_fail", "health_job": "maj-securite",
+              "alert_tag": "siem_maintenance", "health_job": "maj-securite",
               "health_reason": "reboot requis apres MAJ securite - planifier en fenetre + valider TPM",
               "short_message": "MAJ SECURITE : reboot du SIEM requis (fenetre + valider le TPM)"})
         print("  [PATCH] reboot requis (MAJ securite)")
 
+    # Synthese : on distingue les PANNES (robots/infra = action immediate) des
+    # RAPPELS de maintenance (reboot planifie) -> plus de faux "robot en panne".
+    note = ""
+    if bad:
+        note += f", {len(bad)} en panne"
+    if maint:
+        note += f" · {len(maint)} maintenance (reboot securite)"
     gelf({"event_source": "siem_health", "health_type": "summary",
           "health_ok": ok_n, "health_fail": len(bad), "health_total": len(JOBS),
-          "short_message": f"Auto-supervision SIEM : {ok_n}/{len(JOBS)} robots OK, {len(bad)} en panne"})
-    print(f"[self-health] {ok_n}/{len(JOBS)} robots OK, {len(bad)} en panne")
+          "health_maint": len(maint),
+          "short_message": f"Auto-supervision SIEM : {ok_n}/{len(JOBS)} robots OK{note}"})
+    print(f"[self-health] {ok_n}/{len(JOBS)} robots OK{note}")
 
 if __name__ == "__main__":
     try:
