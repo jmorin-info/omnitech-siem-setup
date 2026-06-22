@@ -611,6 +611,7 @@ const I18N={
   empty_waiting:"En attente d'événements…",empty_ml:"Aucune anomalie ML récente",empty_ueba:"Aucun score UEBA récent",empty_geo:"Aucune donnée géo",empty_event:"Aucun événement",
   ent_tactics:"Tactiques",ent_techniques:"Techniques ATT&CK",ent_events:"Événements récents",ent_detn:"détections (7 j)",load_more:"Charger plus",events_shown:"événements affichés",
   inv_title:"Investigation — provenance & cartographie",inv_authmap:"Cartographie des sources d'authentification",inv_timeline:"Chronologie — réussis / échecs",inv_ips:"IP sources",inv_ips_hint:"— une réussite depuis l'étranger = à investiguer",inv_codes:"Codes de statut",inv_prov:"Provenance des détections",inv_presence:"Présence par source",inv_analyzing:"Analyse en cours…",inv_none:"Aucune donnée d'investigation pour cette entité",inv_winauth:"Authentification Windows (logons 4624/4625)",inv_logontypes:"Types de logon",inv_failreasons:"Motifs d'échec",k_logons:"logons",pal_evts:"évts",
+  rep_title:"OMNITECH SECURITY — Rapport de posture SOC",rep_gen:"Généré le",rep_plat:"plateforme SIEM/XDR (Graylog + oms-xdr)",rep_k_inc:"Incidents critiques (7 j)",rep_k_det:"Détections (24 h)",rep_k_tech:"Techniques ATT&CK",rep_k_evt:"Événements (24 h)",rep_cov:"Couverture MITRE ATT&CK",rep_cov1:"techniques sur",rep_cov2:"tactiques couvertes. État du cluster de collecte :",rep_posture:"Posture opérationnelle",rep_robots:"Auto-supervision des robots d'analyse :",rep_oper:"opérationnels",rep_down:"en panne",rep_collect:"Couverture de collecte :",rep_sil1:"hôte(s) silencieux sur",rep_sil2:"attendus",rep_silh:"Hôtes muets :",rep_risk:"Entités à risque — scoring ML & UEBA",rep_mlanom:"Anomalies ML (IsolationForest)",rep_uebar:"Risque comportemental UEBA",rep_h_ent:"Entité",rep_h_score:"Score",rep_h_reason:"Motif principal",rep_h_factor:"Facteur",rep_topdet:"Top détections (7 jours)",rep_h_det:"Détection",rep_h_vol:"Volume",rep_recinc:"Incidents corrélés récents",rep_h_sev:"Sévérité",rep_h_title:"Titre",rep_noinc:"Aucun incident corrélé",rep_collsrc:"Sources de collecte (24 h)",rep_h_src:"Source",rep_foot:"Document généré automatiquement — démarche d'amélioration continue (ISO/IEC 27001:2022, clause 10). Preuve datée et reproductible.",leak_none:"Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)",esc_ml:"Score ML",esc_ueba:"Score UEBA",
   k_attempts:"tentatives",k_success:"réussies",k_fail:"échecs",k_countries:"pays",k_ips:"IP sources",ch_ok:"Réussis",ch_ko:"Échecs",succ_suffix:"réussis",none_suffix:"0 réussi",
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
@@ -630,6 +631,7 @@ const I18N={
   empty_waiting:"Waiting for events…",empty_ml:"No recent ML anomaly",empty_ueba:"No recent UEBA score",empty_geo:"No geo data",empty_event:"No event",
   ent_tactics:"Tactics",ent_techniques:"ATT&CK techniques",ent_events:"Recent events",ent_detn:"detections (7d)",load_more:"Load more",events_shown:"events shown",
   inv_title:"Investigation — provenance & map",inv_authmap:"Authentication source map",inv_timeline:"Timeline — success / failure",inv_ips:"Source IPs",inv_ips_hint:"— a success from abroad = investigate",inv_codes:"Status codes",inv_prov:"Detection provenance",inv_presence:"Presence by source",inv_analyzing:"Analyzing…",inv_none:"No investigation data for this entity",inv_winauth:"Windows authentication (4624/4625 logons)",inv_logontypes:"Logon types",inv_failreasons:"Failure reasons",k_logons:"logons",pal_evts:"events",
+  rep_title:"OMNITECH SECURITY — SOC Posture Report",rep_gen:"Generated on",rep_plat:"SIEM/XDR platform (Graylog + oms-xdr)",rep_k_inc:"Critical incidents (7d)",rep_k_det:"Detections (24h)",rep_k_tech:"ATT&CK techniques",rep_k_evt:"Events (24h)",rep_cov:"MITRE ATT&CK coverage",rep_cov1:"techniques across",rep_cov2:"tactics covered. Collection cluster state:",rep_posture:"Operational posture",rep_robots:"Analysis-robot self-monitoring:",rep_oper:"operational",rep_down:"down",rep_collect:"Collection coverage:",rep_sil1:"silent host(s) of",rep_sil2:"expected",rep_silh:"Silent hosts:",rep_risk:"At-risk entities — ML & UEBA scoring",rep_mlanom:"ML anomalies (IsolationForest)",rep_uebar:"UEBA behavioral risk",rep_h_ent:"Entity",rep_h_score:"Score",rep_h_reason:"Main reason",rep_h_factor:"Factor",rep_topdet:"Top detections (7 days)",rep_h_det:"Detection",rep_h_vol:"Volume",rep_recinc:"Recent correlated incidents",rep_h_sev:"Severity",rep_h_title:"Title",rep_noinc:"No correlated incidents",rep_collsrc:"Collection sources (24h)",rep_h_src:"Source",rep_foot:"Automatically generated document — continual improvement (ISO/IEC 27001:2022, clause 10). Dated, reproducible evidence.",leak_none:"No active source (RansomLook running; HIBP/Dehashed awaiting keys)",esc_ml:"ML score",esc_ueba:"UEBA score",
   k_attempts:"attempts",k_success:"successful",k_fail:"failures",k_countries:"countries",k_ips:"source IPs",ch_ok:"Successful",ch_ko:"Failures",succ_suffix:"successful",none_suffix:"0 successful",
   case_status:"Case status updated.",case_disp:"Disposition saved — the false-positive reduction model will adjust.",case_assign:"Case assigned.",case_note:"Investigation note added.",case_def:"Case updated."
  }
@@ -1041,11 +1043,11 @@ function entScoreBanner(d){
   var cards="";
   if(ml&&ml.score!==null&&ml.score!==undefined){
     var mc=ml.score>=80?"red":ml.score>=50?"amb":"cy";
-    cards+='<div class="escore '+mc+'"><div class="escK">Score ML</div><div class="escV">'+esc((""+ml.score))+'</div>'+(ml.reason?'<div class="escR">'+esc((ml.reason+"").slice(0,80))+'</div>':'')+'</div>';
+    cards+='<div class="escore '+mc+'"><div class="escK">'+t("esc_ml")+'</div><div class="escV">'+esc((""+ml.score))+'</div>'+(ml.reason?'<div class="escR">'+esc((ml.reason+"").slice(0,80))+'</div>':'')+'</div>';
   }
   if(ue&&ue.score!==null&&ue.score!==undefined){
     var uc=ue.score>=80?"red":ue.score>=60?"amb":"vio";
-    cards+='<div class="escore '+uc+'"><div class="escK">Score UEBA</div><div class="escV">'+esc((""+ue.score))+'</div>'+(ue.factor?'<div class="escR">'+esc((ue.factor+"").slice(0,80))+'</div>':'')+'</div>';
+    cards+='<div class="escore '+uc+'"><div class="escK">'+t("esc_ueba")+'</div><div class="escV">'+esc((""+ue.score))+'</div>'+(ue.factor?'<div class="escR">'+esc((ue.factor+"").slice(0,80))+'</div>':'')+'</div>';
   }
   return cards?'<div class="escRow">'+cards+'</div>':'';
 }
@@ -1203,29 +1205,29 @@ function buildHelp(){
 }
 function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocaleString("fr");
   const top=(d.top_detections||[]).map(t=>`<tr><td>${nice(t.k)}</td><td class="num">${(t.n||0).toLocaleString("fr")}</td></tr>`).join("");
-  const inc=(d.incidents||[]).map(i=>`<tr><td>${esc((i.severity||'?').toUpperCase())}</td><td>${esc(i.title)}</td><td>${esc((i.entities||'').toString())}</td><td>${esc((i.mitre||'').toString())}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">Aucun incident corrélé</td></tr>';
+  const inc=(d.incidents||[]).map(i=>`<tr><td>${esc((i.severity||'?').toUpperCase())}</td><td>${esc(i.title)}</td><td>${esc((i.entities||'').toString())}</td><td>${esc((i.mitre||'').toString())}</td></tr>`).join("")||`<tr><td colspan="4" class="muted">${t("rep_noinc")}</td></tr>`;
   const src=(d.sources||[]).slice(0,12).map(s=>`<tr><td>${esc(s.k)}</td><td class="num">${(s.n||0).toLocaleString("fr")}</td></tr>`).join("");
   const cov=d.coverage||{};const sla=d.sla||{},rob=d.robots||{};
   const mlr=(d.ml_top||[]).map(m=>`<tr><td>${esc(m.entity)}</td><td class="num">${m.score}</td><td>${esc((m.reason||"").slice(0,80))}</td></tr>`).join("")||'<tr><td colspan="3" class="muted">—</td></tr>';
   const ubr=(d.ueba_top||[]).map(u=>`<tr><td>${esc(u.entity)}</td><td class="num">${u.score}</td><td>${esc(u.factor||"")}</td></tr>`).join("")||'<tr><td colspan="3" class="muted">—</td></tr>';
   const dark=(d.dark_hosts||[]).map(h=>esc(h.host)+" ("+h.hours+"h)").join(", ");
   $("#reportBody").innerHTML=`
-   <div class="rhead"><div><h1>OMNITECH SECURITY — Rapport de posture SOC</h1><div class="muted">Généré le ${dt} · plateforme SIEM/XDR (Graylog + oms-xdr)</div></div><div class="rlogo">⬢</div></div>
-   <div class="rkpi"><div><b>${k.incidents_critiques_7j??0}</b><span>Incidents critiques (7 j)</span></div>
-     <div><b>${(k.alertes_24h??0).toLocaleString("fr")}</b><span>Détections (24 h)</span></div>
-     <div><b>${cov.techniques??'?'}</b><span>Techniques ATT&CK</span></div>
-     <div><b>${(d.events_24h??0).toLocaleString("fr")}</b><span>Événements (24 h)</span></div></div>
-   <h2>Couverture MITRE ATT&CK</h2><p>${cov.techniques??'?'} techniques sur ${cov.tactics??'?'} tactiques couvertes. État du cluster de collecte : <b>${esc(d.cluster||'?')}</b>.</p>
-   <h2>Posture opérationnelle</h2><p>Auto‑supervision des robots d'analyse : <b>${rob.health_ok??'?'}/${rob.health_total??'?'}</b> opérationnels${rob.health_fail?` — <b style="color:#b91c1c">${rob.health_fail} en panne</b>`:''}. Couverture de collecte : <b>${sla.sla_coverage_pct??'?'} %</b> (${sla.sla_go_dark??0} hôte(s) silencieux sur ${sla.sla_expected??0} attendus).${dark?`<br><span class="muted">Hôtes muets : ${dark}.</span>`:''}</p>
-   <h2>Entités à risque — scoring ML & UEBA</h2>
+   <div class="rhead"><div><h1>${t("rep_title")}</h1><div class="muted">${t("rep_gen")} ${dt} · ${t("rep_plat")}</div></div><div class="rlogo">⬢</div></div>
+   <div class="rkpi"><div><b>${k.incidents_critiques_7j??0}</b><span>${t("rep_k_inc")}</span></div>
+     <div><b>${(k.alertes_24h??0).toLocaleString("fr")}</b><span>${t("rep_k_det")}</span></div>
+     <div><b>${cov.techniques??'?'}</b><span>${t("rep_k_tech")}</span></div>
+     <div><b>${(d.events_24h??0).toLocaleString("fr")}</b><span>${t("rep_k_evt")}</span></div></div>
+   <h2>${t("rep_cov")}</h2><p>${cov.techniques??'?'} ${t("rep_cov1")} ${cov.tactics??'?'} ${t("rep_cov2")} <b>${esc(d.cluster||'?')}</b>.</p>
+   <h2>${t("rep_posture")}</h2><p>${t("rep_robots")} <b>${rob.health_ok??'?'}/${rob.health_total??'?'}</b> ${t("rep_oper")}${rob.health_fail?` — <b style="color:#b91c1c">${rob.health_fail} ${t("rep_down")}</b>`:''}. ${t("rep_collect")} <b>${sla.sla_coverage_pct??'?'} %</b> (${sla.sla_go_dark??0} ${t("rep_sil1")} ${sla.sla_expected??0} ${t("rep_sil2")}).${dark?`<br><span class="muted">${t("rep_silh")} ${dark}.</span>`:''}</p>
+   <h2>${t("rep_risk")}</h2>
    <div style="display:flex;gap:22px;flex-wrap:wrap">
-     <div style="flex:1;min-width:300px"><h3 style="font-size:13px;margin:0 0 6px">Anomalies ML (IsolationForest)</h3><table><thead><tr><th>Entité</th><th class="num">Score</th><th>Motif principal</th></tr></thead><tbody>${mlr}</tbody></table></div>
-     <div style="flex:1;min-width:300px"><h3 style="font-size:13px;margin:0 0 6px">Risque comportemental UEBA</h3><table><thead><tr><th>Entité</th><th class="num">Score</th><th>Facteur</th></tr></thead><tbody>${ubr}</tbody></table></div>
+     <div style="flex:1;min-width:300px"><h3 style="font-size:13px;margin:0 0 6px">${t("rep_mlanom")}</h3><table><thead><tr><th>${t("rep_h_ent")}</th><th class="num">${t("rep_h_score")}</th><th>${t("rep_h_reason")}</th></tr></thead><tbody>${mlr}</tbody></table></div>
+     <div style="flex:1;min-width:300px"><h3 style="font-size:13px;margin:0 0 6px">${t("rep_uebar")}</h3><table><thead><tr><th>${t("rep_h_ent")}</th><th class="num">${t("rep_h_score")}</th><th>${t("rep_h_factor")}</th></tr></thead><tbody>${ubr}</tbody></table></div>
    </div>
-   <h2>Top détections (7 jours)</h2><table><thead><tr><th>Détection</th><th class="num">Volume</th></tr></thead><tbody>${top}</tbody></table>
-   <h2>Incidents corrélés récents</h2><table><thead><tr><th>Sévérité</th><th>Titre</th><th>Entité</th><th>ATT&CK</th></tr></thead><tbody>${inc}</tbody></table>
-   <h2>Sources de collecte (24 h)</h2><table><thead><tr><th>Source</th><th class="num">Volume</th></tr></thead><tbody>${src}</tbody></table>
-   <div class="muted" style="margin-top:20px">Document généré automatiquement — démarche d'amélioration continue (ISO/IEC 27001:2022, clause 10). Preuve datée et reproductible.</div>`;}
+   <h2>${t("rep_topdet")}</h2><table><thead><tr><th>${t("rep_h_det")}</th><th class="num">${t("rep_h_vol")}</th></tr></thead><tbody>${top}</tbody></table>
+   <h2>${t("rep_recinc")}</h2><table><thead><tr><th>${t("rep_h_sev")}</th><th>${t("rep_h_title")}</th><th>${t("rep_h_ent")}</th><th>ATT&CK</th></tr></thead><tbody>${inc}</tbody></table>
+   <h2>${t("rep_collsrc")}</h2><table><thead><tr><th>${t("rep_h_src")}</th><th class="num">${t("rep_h_vol")}</th></tr></thead><tbody>${src}</tbody></table>
+   <div class="muted" style="margin-top:20px">${t("rep_foot")}</div>`;}
 function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{};
   $("#hkpis").innerHTML=[
     ["cy","Cluster",esc(d.cluster||'?'),"OpenSearch"],
@@ -1299,7 +1301,7 @@ function renderLeaks(d){d=d||{};
   }
   if($("#leakSrc"))$("#leakSrc").innerHTML=srcs.length
     ?srcs.map(function(s){return '<span class="pchip">'+esc((s.k||"?").toUpperCase())+' · '+s.n+'</span>';}).join(" ")
-    :'<span class="muted">Aucune source active (RansomLook tourne ; HIBP/Dehashed en attente de clés)</span>';
+    :'<span class="muted">'+t("leak_none")+'</span>';
   var wrap=$("#leakCats");if(!wrap)return;
   if(!items.length){
     wrap.innerHTML='<div class="card"><div class="empty" style="padding:42px 20px">'
