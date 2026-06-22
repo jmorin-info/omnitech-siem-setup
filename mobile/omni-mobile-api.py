@@ -1054,10 +1054,33 @@ def get_risk():
     res = os_search("omni-*", {"size": 0,
         "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}, {"exists": {"field": "user"}}],
                            "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}},
-        "aggs": {"u": {"terms": {"field": "user", "size": 8},
-                       "aggs": {"t": {"cardinality": {"field": "mitre_technique"}}}}}})
-    ents = [{"k": _rd(b["key"]), "n": b["doc_count"], "tech": (b.get("t", {}) or {}).get("value", 0)}
-            for b in res.get("aggregations", {}).get("u", {}).get("buckets", [])]
+        "aggs": {"u": {"terms": {"field": "user", "size": 18},
+                       "aggs": {"t": {"cardinality": {"field": "mitre_technique"}},
+                                "sev": {"terms": {"field": "risk_severity", "size": 6}}}}}})
+    # Classement par RISQUE FUSIONNÉ (ML+UEBA+sévérité), pas par simple volume de détections.
+    def _bare(s):
+        return str(s or "").split("\\")[-1].split("@")[0].strip().lower()
+
+    def _smap(src, sf, kf):
+        r = os_search("omni-*", {"size": 0,
+            "query": {"bool": {"filter": [{"term": {"event_source": src}}, {"range": {"timestamp": {"gte": "now-7d"}}}]}},
+            "aggs": {"e": {"terms": {"field": kf, "size": 80}, "aggs": {"s": {"max": {"field": sf}}}}}})
+        m = {}
+        for b in r.get("aggregations", {}).get("e", {}).get("buckets", []):
+            kk, vv = _bare(b.get("key")), (b.get("s", {}) or {}).get("value")
+            if kk and vv is not None:
+                m[kk] = max(m.get(kk, 0), vv)
+        return m
+    _mlm, _uem = _smap("ml_anomaly", "ml_score", "entity"), _smap("ueba_score", "ueba_score", "ueba_entity")
+    ents = []
+    for b in res.get("aggregations", {}).get("u", {}).get("buckets", []):
+        bare = _bare(b.get("key"))
+        sev = {x["key"]: x["doc_count"] for x in (b.get("sev", {}) or {}).get("buckets", [])}
+        fr = _fused_risk({"ml": {"score": _mlm.get(bare)}, "ueba": {"score": _uem.get(bare)}}, sev, b["doc_count"])
+        ents.append({"k": _rd(b["key"]), "n": b["doc_count"], "tech": (b.get("t", {}) or {}).get("value", 0),
+                     "risk": {"score": fr["score"], "label": fr["label"]}})
+    ents.sort(key=lambda e: -e["risk"]["score"])
+    ents = ents[:8]
     ml_top = _top_ml()
     ueba_top = _top_ueba()
     crit = k.get("incidents_critiques_7j", 0)

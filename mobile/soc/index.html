@@ -697,7 +697,7 @@ const I18N={
   login_account:"Compte AD",login_password:"Mot de passe",login_signin:"Se connecter",
   card_det24:"Détections (24 h)",tag_perhour:"par heure",card_tactics:"Tactiques ATT&CK",tag_7d:"7 j",card_topdet:"Top détections",card_sources:"Sources",
   card_mlanom:"Anomalies ML",tag_mlanom:"oms-ml · IsolationForest · cliquer pour la fiche",card_uebarisk:"Risque UEBA",tag_uebarisk:"score comportemental · 24 h",
-  card_topent:"Top entités à risque",tag_topent:"7 j · cliquer pour la fiche",card_live:"Flux temps réel",card_geo:"Origines géographiques des sources externes",tag_geo:"7 j · FortiGate GeoIP",
+  card_topent:"Top entités à risque",tag_topent:"7 j · risque fusionné · cliquer",card_live:"Flux temps réel",card_geo:"Origines géographiques des sources externes",tag_geo:"7 j · FortiGate GeoIP",
   card_incidents:"Incidents corrélés (oms-xdr)",card_matrix:"Matrice MITRE ATT&CK",tag_matrix:"couverture × activité (7 j)",card_graph:"Graphe d'attaque",tag_graph:"entités ↔ techniques ATT&CK (7 j)",
   card_leaksrc:"Sources de fuite surveillées",tag_leaksrc:"30 j · RansomLook / HIBP / Dehashed / GitHub",card_collect:"Sources de collecte (24 h)",tag_collect:"volume · dernier événement",card_dark:"Hôtes silencieux (go‑dark)",tag_dark:"muets > 26 h · à vérifier",card_posture:"Rapport de posture",
   ph_detsearch:"🔎 Rechercher (tag, entité, technique, message…)",btn_reset:"Réinitialiser",btn_csv:"⤓ CSV",ph_gsearch:"🔎 Centrer une entité…",btn_print:"Imprimer / PDF",ph_palette:"Rechercher / naviguer…  (pages, entités)",
@@ -717,7 +717,7 @@ const I18N={
   login_account:"AD account",login_password:"Password",login_signin:"Sign in",
   card_det24:"Detections (24h)",tag_perhour:"per hour",card_tactics:"ATT&CK tactics",tag_7d:"7d",card_topdet:"Top detections",card_sources:"Sources",
   card_mlanom:"ML anomalies",tag_mlanom:"oms-ml · IsolationForest · click for details",card_uebarisk:"UEBA risk",tag_uebarisk:"behavioral score · 24h",
-  card_topent:"Top risk entities",tag_topent:"7d · click for details",card_live:"Live feed",card_geo:"External source geography",tag_geo:"7d · FortiGate GeoIP",
+  card_topent:"Top risk entities",tag_topent:"7d · fused risk · click",card_live:"Live feed",card_geo:"External source geography",tag_geo:"7d · FortiGate GeoIP",
   card_incidents:"Correlated incidents (oms-xdr)",card_matrix:"MITRE ATT&CK matrix",tag_matrix:"coverage × activity (7d)",card_graph:"Attack graph",tag_graph:"entities ↔ ATT&CK techniques (7d)",
   card_leaksrc:"Monitored leak sources",tag_leaksrc:"30d · RansomLook / HIBP / Dehashed / GitHub",card_collect:"Collection sources (24h)",tag_collect:"volume · last event",card_dark:"Silent hosts (go‑dark)",tag_dark:"silent > 26h · to check",card_posture:"Posture report",
   ph_detsearch:"🔎 Search (tag, entity, technique, message…)",btn_reset:"Reset",btn_csv:"⤓ CSV",ph_gsearch:"🔎 Focus an entity…",btn_print:"Print / PDF",ph_palette:"Search / navigate…  (pages, entities)",
@@ -892,8 +892,8 @@ function renderRisk(d){d=d||{};
     $("#tstats").innerHTML=`<div><b>${d.critical_incidents||0}</b><span>incidents critiques</span></div><div><b>${d.ueba||0}</b><span>hôtes à risque</span></div><div><b>${d.kev||0}</b><span>CVE KEV</span></div>`;}
   TOPE=d.top_entities||[];
   $("#topEnt").innerHTML=TOPE.length?TOPE.map((e,i)=>{const who=((e.k||"")+"").split("\\").pop();
-    return `<div class="inc" onclick="openTopE(${i})"><div class="top"><span class="ttl">👤 ${esc(who)}</span>
-      <span class="mono" style="color:var(--amb);margin-left:auto">${(e.n||0).toLocaleString("fr")}</span><span class="ts">${e.tech||0} tech.</span></div></div>`;}).join(""):'<div class="empty">—</div>';
+    return `<div class="inc" onclick="openTopE(${i})"><div class="top">${rkChip(e.risk)}<span class="ttl">👤 ${esc(who)}</span>
+      <span class="ts" style="margin-left:auto">${(e.n||0).toLocaleString("fr")} dét. · ${e.tech||0} tech.</span></div></div>`;}).join(""):'<div class="empty">—</div>';
   const sevc=s=>s>=85?'var(--red)':s>=70?'var(--amb)':s>=40?'var(--blu)':'var(--grn)';
   MLT=d.ml_top||[];
   $("#mlTop").innerHTML=MLT.length?MLT.map((m,i)=>{const ic=m.type==='host'?'🖥️':'👤';
