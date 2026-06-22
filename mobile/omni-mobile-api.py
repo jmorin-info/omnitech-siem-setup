@@ -464,19 +464,33 @@ def get_entity(name, size=20, frm=0):
 
 
 def get_entity_search(q, size=8):
-    """Recherche d'entités (compte) par sous-chaîne, insensible à la casse — pour la palette."""
+    """Recherche d'entités par sous-chaîne (insensible à la casse) — pour la palette.
+
+    Cherche À LA FOIS les comptes (`user`) ET les hôtes (`source`) afin que le pivot
+    d'investigation soit atteignable pour un « pc » comme pour un compte M365.
+    """
     q = (q or "").strip()
     if len(q) < 2:
         return []
+    wc_u = {"wildcard": {"user": {"value": f"*{q}*", "case_insensitive": True}}}
+    wc_h = {"wildcard": {"source": {"value": f"*{q}*", "case_insensitive": True}}}
     res = os_search("omni-*", {"size": 0,
         "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": "now-7d"}}}],
-                           "must": [{"wildcard": {"user": {"value": f"*{q}*", "case_insensitive": True}}}]}},
-        "aggs": {"e": {"terms": {"field": "user", "size": size}}}})
-    out = []
-    for b in res.get("aggregations", {}).get("e", {}).get("buckets", []):
-        if b.get("key"):
-            out.append({"entity": _rd(b["key"]), "n": b["doc_count"]})
-    return out
+                           "minimum_should_match": 1, "should": [wc_u, wc_h]}},
+        "aggs": {"u": {"filter": wc_u, "aggs": {"t": {"terms": {"field": "user", "size": size}}}},
+                 "h": {"filter": wc_h, "aggs": {"t": {"terms": {"field": "source", "size": size}}}}}})
+    ag = res.get("aggregations", {})
+    out, seen = [], set()
+    for b in ag.get("u", {}).get("t", {}).get("buckets", []):
+        k = b.get("key")
+        if k:
+            out.append({"entity": _rd(k), "n": b["doc_count"], "kind": "user"})
+            seen.add(_rd(k))
+    for b in ag.get("h", {}).get("t", {}).get("buckets", []):
+        k = b.get("key")
+        if k and _rd(k) not in seen:
+            out.append({"entity": _rd(k), "n": b["doc_count"], "kind": "host"})
+    return out[: size * 2]
 
 
 def get_investigation(name, days=14):

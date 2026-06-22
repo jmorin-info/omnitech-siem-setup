@@ -610,7 +610,7 @@ const I18N={
   help_title:"Aide & raccourcis",help_sub:"Console SOC — OMNITECH SECURITY",
   empty_waiting:"En attente d'événements…",empty_ml:"Aucune anomalie ML récente",empty_ueba:"Aucun score UEBA récent",empty_geo:"Aucune donnée géo",empty_event:"Aucun événement",
   ent_tactics:"Tactiques",ent_techniques:"Techniques ATT&CK",ent_events:"Événements récents",ent_detn:"détections (7 j)",load_more:"Charger plus",events_shown:"événements affichés",
-  inv_title:"Investigation — provenance & cartographie",inv_authmap:"Cartographie des sources d'authentification",inv_timeline:"Chronologie — réussis / échecs",inv_ips:"IP sources",inv_ips_hint:"— une réussite depuis l'étranger = à investiguer",inv_codes:"Codes de statut",inv_prov:"Provenance des détections",inv_presence:"Présence par source",inv_analyzing:"Analyse en cours…",inv_none:"Aucune donnée d'investigation pour cette entité",inv_winauth:"Authentification Windows (logons 4624/4625)",inv_logontypes:"Types de logon",inv_failreasons:"Motifs d'échec",k_logons:"logons",
+  inv_title:"Investigation — provenance & cartographie",inv_authmap:"Cartographie des sources d'authentification",inv_timeline:"Chronologie — réussis / échecs",inv_ips:"IP sources",inv_ips_hint:"— une réussite depuis l'étranger = à investiguer",inv_codes:"Codes de statut",inv_prov:"Provenance des détections",inv_presence:"Présence par source",inv_analyzing:"Analyse en cours…",inv_none:"Aucune donnée d'investigation pour cette entité",inv_winauth:"Authentification Windows (logons 4624/4625)",inv_logontypes:"Types de logon",inv_failreasons:"Motifs d'échec",k_logons:"logons",pal_evts:"évts",
   k_attempts:"tentatives",k_success:"réussies",k_fail:"échecs",k_countries:"pays",k_ips:"IP sources",ch_ok:"Réussis",ch_ko:"Échecs",succ_suffix:"réussis",none_suffix:"0 réussi",
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
@@ -629,7 +629,7 @@ const I18N={
   help_title:"Help & shortcuts",help_sub:"SOC console — OMNITECH SECURITY",
   empty_waiting:"Waiting for events…",empty_ml:"No recent ML anomaly",empty_ueba:"No recent UEBA score",empty_geo:"No geo data",empty_event:"No event",
   ent_tactics:"Tactics",ent_techniques:"ATT&CK techniques",ent_events:"Recent events",ent_detn:"detections (7d)",load_more:"Load more",events_shown:"events shown",
-  inv_title:"Investigation — provenance & map",inv_authmap:"Authentication source map",inv_timeline:"Timeline — success / failure",inv_ips:"Source IPs",inv_ips_hint:"— a success from abroad = investigate",inv_codes:"Status codes",inv_prov:"Detection provenance",inv_presence:"Presence by source",inv_analyzing:"Analyzing…",inv_none:"No investigation data for this entity",inv_winauth:"Windows authentication (4624/4625 logons)",inv_logontypes:"Logon types",inv_failreasons:"Failure reasons",k_logons:"logons",
+  inv_title:"Investigation — provenance & map",inv_authmap:"Authentication source map",inv_timeline:"Timeline — success / failure",inv_ips:"Source IPs",inv_ips_hint:"— a success from abroad = investigate",inv_codes:"Status codes",inv_prov:"Detection provenance",inv_presence:"Presence by source",inv_analyzing:"Analyzing…",inv_none:"No investigation data for this entity",inv_winauth:"Windows authentication (4624/4625 logons)",inv_logontypes:"Logon types",inv_failreasons:"Failure reasons",k_logons:"logons",pal_evts:"events",
   k_attempts:"attempts",k_success:"successful",k_fail:"failures",k_countries:"countries",k_ips:"source IPs",ch_ok:"Successful",ch_ko:"Failures",succ_suffix:"successful",none_suffix:"0 successful",
   case_status:"Case status updated.",case_disp:"Disposition saved — the false-positive reduction model will adjust.",case_assign:"Case assigned.",case_note:"Investigation note added.",case_def:"Case updated."
  }
@@ -892,7 +892,7 @@ function renderPal(q){q=(q||"").trim();const ql=q.toLowerCase();
   $("#palList").innerHTML=cmdHtml||'<div class="muted" style="padding:12px">Tapez ≥ 2 caractères pour chercher une entité…</div>';
   if(q.length>=2){const tok=++PALTOK;
     j("/entity-search?q="+encodeURIComponent(q)).then(r=>{if(tok!==PALTOK)return;PALENT=r.results||[];
-      const ents=PALENT.map((e,i)=>`<div class="pi" onclick="openPalEnt(${i})">👤 ${esc(e.entity)} <span class="muted" style="font-size:11px">· ${(e.n||0).toLocaleString('fr')} évts</span></div>`).join("");
+      const ents=PALENT.map((e,i)=>`<div class="pi" onclick="openPalEnt(${i})">${e.kind==="host"?ic("cpu"):"👤"} ${esc(e.entity)} <span class="muted" style="font-size:11px">· ${(e.n||0).toLocaleString('fr')} ${t("pal_evts")}</span></div>`).join("");
       $("#palList").innerHTML=cmdHtml+(ents?'<div class="muted" style="padding:8px 12px 4px;font-size:10px;letter-spacing:1px">ENTITÉS</div>'+ents:'');
     }).catch(()=>{});}}
 function openPalEnt(i){const e=PALENT[i];if(!e)return;closePal();openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
