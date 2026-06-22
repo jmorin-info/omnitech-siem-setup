@@ -446,9 +446,9 @@
   <form class="lcard" onsubmit="login(event)">
     <h1>⬢ OMNI <span style="color:var(--cy)">SOC</span></h1>
     <p>Centre des opérations de sécurité — accès RSSI (VPN)</p>
-    <input id="u" placeholder="Compte AD" autocomplete="username" autocapitalize="none">
-    <input id="p" type="password" placeholder="Mot de passe" autocomplete="current-password">
-    <button class="btn">Se connecter</button>
+    <input id="u" placeholder="Compte AD" data-i18n-ph="login_account" autocomplete="username" autocapitalize="none">
+    <input id="p" type="password" placeholder="Mot de passe" data-i18n-ph="login_password" autocomplete="current-password">
+    <button class="btn" data-i18n="login_signin">Se connecter</button>
     <div class="err" id="lerr"></div>
   </form>
 </div>
@@ -457,14 +457,14 @@
   <aside>
     <div class="brand"><div class="logo">⬢</div><div><b>OMNI SOC</b><span>OMNITECH SECURITY</span></div></div>
     <nav id="nav">
-      <a class="on" data-p="overview"><span class="ic"><svg class="svi"><use href="#i-grid"></use></svg></span>Vue d'ensemble</a>
-      <a data-p="incidents"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span>Incidents</a>
-      <a data-p="detections"><span class="ic"><svg class="svi"><use href="#i-target"></use></svg></span>Détections</a>
-      <a data-p="attack"><span class="ic"><svg class="svi"><use href="#i-matrix"></use></svg></span>ATT&CK</a>
-      <a data-p="graph"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span>Graphe d'attaque</a>
-      <a data-p="leaks"><span class="ic"><svg class="svi"><use href="#i-unlock"></use></svg></span>Fuites & Dark Web</a>
-      <a data-p="health"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span>Santé & Collecte</a>
-      <a data-p="report"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span>Rapport</a>
+      <a class="on" data-p="overview"><span class="ic"><svg class="svi"><use href="#i-grid"></use></svg></span><span data-i18n="nav_overview">Vue d'ensemble</span></a>
+      <a data-p="incidents"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span><span data-i18n="nav_incidents">Incidents</span></a>
+      <a data-p="detections"><span class="ic"><svg class="svi"><use href="#i-target"></use></svg></span><span data-i18n="nav_detections">Détections</span></a>
+      <a data-p="attack"><span class="ic"><svg class="svi"><use href="#i-matrix"></use></svg></span><span data-i18n="nav_attack">ATT&CK</span></a>
+      <a data-p="graph"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span><span data-i18n="nav_graph">Graphe d'attaque</span></a>
+      <a data-p="leaks"><span class="ic"><svg class="svi"><use href="#i-unlock"></use></svg></span><span data-i18n="nav_leaks">Fuites & Dark Web</span></a>
+      <a data-p="health"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span><span data-i18n="nav_health">Santé & Collecte</span></a>
+      <a data-p="report"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span><span data-i18n="nav_report">Rapport</span></a>
     </nav>
     <div class="side-foot">v1 · données temps réel<br>OpenSearch + oms-xdr</div>
   </aside>
@@ -472,7 +472,7 @@
   <header>
     <h2 id="ptitle">Vue d'ensemble</h2>
     <span class="spacer"></span>
-    <span class="pill"><span class="dot"></span> Cluster opérationnel</span>
+    <span class="pill"><span class="dot"></span> <span data-i18n="cluster_ok">Cluster opérationnel</span></span>
     <span class="pill mono" id="clock">--:--:--</span>
     <span class="pill upd" id="updPill" title="Fraîcheur des données"><span class="updtxt">Mis à jour…</span></span>
     <select class="cadsel" id="cadSel" title="Cadence du rafraîchissement automatique" onchange="setCadence(this.value)" aria-label="Cadence de rafraîchissement">
@@ -480,11 +480,12 @@
       <option value="60000">Auto · 60 s</option>
       <option value="0">⏸ En pause</option>
     </select>
-    <button class="iconbtn" onclick="openPal()" title="Recherche (Ctrl/Cmd+K)" aria-label="Recherche et navigation (Ctrl ou Cmd + K)">⌘K</button>
-    <button class="iconbtn" id="refBtn" onclick="refreshNow()" title="Rafraîchir maintenant" aria-busy="false" aria-label="Rafraîchir les données"><svg class="svi"><use href="#i-refresh"></use></svg></button>
-    <button class="iconbtn" id="densBtn" onclick="toggleDensity()" aria-pressed="false" title="Densité confortable — cliquer pour compact" aria-label="Basculer la densité d'affichage"><svg class="svi"><use href="#i-rows"></use></svg> <span class="densLab">Confort</span></button>
-    <button class="iconbtn" id="helpBtn" onclick="openHelp()" aria-haspopup="dialog" aria-expanded="false" title="Aide et raccourcis (touche ?)" aria-label="Ouvrir l'aide et les raccourcis clavier"><svg class="svi"><use href="#i-help"></use></svg></button>
-    <button class="iconbtn" onclick="logout()" title="Se déconnecter" aria-label="Se déconnecter"><svg class="svi"><use href="#i-logout"></use></svg></button>
+    <button class="iconbtn" id="langBtn" onclick="setLang(LANG==='fr'?'en':'fr')" data-i18n-t="t_lang" data-i18n-al="al_lang" title="Langue (FR/EN)" aria-label="Changer la langue"><span id="langLab" style="font-weight:700;font-size:12px">EN</span></button>
+    <button class="iconbtn" onclick="openPal()" data-i18n-t="t_search" data-i18n-al="al_search" title="Recherche (Ctrl/Cmd+K)" aria-label="Recherche et navigation (Ctrl ou Cmd + K)">⌘K</button>
+    <button class="iconbtn" id="refBtn" onclick="refreshNow()" data-i18n-t="t_refresh" data-i18n-al="al_refresh" title="Rafraîchir maintenant" aria-busy="false" aria-label="Rafraîchir les données"><svg class="svi"><use href="#i-refresh"></use></svg></button>
+    <button class="iconbtn" id="densBtn" onclick="toggleDensity()" aria-pressed="false" data-i18n-al="al_density" title="Densité confortable — cliquer pour compact" aria-label="Basculer la densité d'affichage"><svg class="svi"><use href="#i-rows"></use></svg> <span class="densLab" data-i18n="dens_comfort">Confort</span></button>
+    <button class="iconbtn" id="helpBtn" onclick="openHelp()" aria-haspopup="dialog" aria-expanded="false" data-i18n-t="t_help" data-i18n-al="al_help" title="Aide et raccourcis (touche ?)" aria-label="Ouvrir l'aide et les raccourcis clavier"><svg class="svi"><use href="#i-help"></use></svg></button>
+    <button class="iconbtn" onclick="logout()" data-i18n-t="t_logout" data-i18n-al="al_logout" title="Se déconnecter" aria-label="Se déconnecter"><svg class="svi"><use href="#i-logout"></use></svg></button>
   </header>
 
   <main>
@@ -496,59 +497,59 @@
       </div>
       <div class="grid kpis" id="kpis"></div>
       <div class="grid cols" style="margin-bottom:16px">
-        <div class="card"><h3><svg class="svi"><use href="#i-chart"></use></svg> Détections (24 h)<span class="tag">par heure</span></h3><div class="chartbox"><canvas id="cTs"></canvas></div></div>
-        <div class="card"><h3><svg class="svi"><use href="#i-target"></use></svg> Tactiques ATT&CK<span class="tag">7 j</span></h3><div class="chartbox"><canvas id="cTac"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-chart"></use></svg> <span data-i18n="card_det24">Détections (24 h)</span><span class="tag" data-i18n="tag_perhour">par heure</span></h3><div class="chartbox"><canvas id="cTs"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-target"></use></svg> <span data-i18n="card_tactics">Tactiques ATT&CK</span><span class="tag" data-i18n="tag_7d">7 j</span></h3><div class="chartbox"><canvas id="cTac"></canvas></div></div>
       </div>
       <div class="grid cols">
-        <div class="card"><h3><svg class="svi"><use href="#i-flame"></use></svg> Top détections<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cDet"></canvas></div></div>
-        <div class="card"><h3><svg class="svi"><use href="#i-antenna"></use></svg> Sources<span class="tag">7 j</span></h3><div class="chartbox sm"><canvas id="cSrc"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-flame"></use></svg> <span data-i18n="card_topdet">Top détections</span><span class="tag" data-i18n="tag_7d">7 j</span></h3><div class="chartbox sm"><canvas id="cDet"></canvas></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-antenna"></use></svg> <span data-i18n="card_sources">Sources</span><span class="tag" data-i18n="tag_7d">7 j</span></h3><div class="chartbox sm"><canvas id="cSrc"></canvas></div></div>
       </div>
       <div class="grid cols" style="margin-top:18px">
-        <div class="card"><h3><svg class="svi"><use href="#i-cpu"></use></svg> Anomalies ML<span class="tag">oms-ml · IsolationForest · cliquer pour la fiche</span></h3><div class="feed" id="mlTop"></div></div>
-        <div class="card"><h3><svg class="svi"><use href="#i-bars"></use></svg> Risque UEBA<span class="tag">score comportemental · 24 h</span></h3><div class="feed" id="uebaTop"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-cpu"></use></svg> <span data-i18n="card_mlanom">Anomalies ML</span><span class="tag" data-i18n="tag_mlanom">oms-ml · IsolationForest · cliquer pour la fiche</span></h3><div class="feed" id="mlTop"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-bars"></use></svg> <span data-i18n="card_uebarisk">Risque UEBA</span><span class="tag" data-i18n="tag_uebarisk">score comportemental · 24 h</span></h3><div class="feed" id="uebaTop"></div></div>
       </div>
       <div class="grid cols" style="margin-top:18px">
-        <div class="card"><h3><svg class="svi"><use href="#i-warning"></use></svg> Top entités à risque<span class="tag">7 j · cliquer pour la fiche</span></h3><div class="feed" id="topEnt"></div></div>
-        <div class="card"><h3><span class="livedot"></span> Flux temps réel<span class="tag" id="liveCount">live</span></h3><div class="live" id="liveFeed"><div class="muted">En attente d'événements…</div></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-warning"></use></svg> <span data-i18n="card_topent">Top entités à risque</span><span class="tag" data-i18n="tag_topent">7 j · cliquer pour la fiche</span></h3><div class="feed" id="topEnt"></div></div>
+        <div class="card"><h3><span class="livedot"></span> <span data-i18n="card_live">Flux temps réel</span><span class="tag" id="liveCount">live</span></h3><div class="live" id="liveFeed"><div class="muted" data-i18n="empty_waiting">En attente d'événements…</div></div></div>
       </div>
-      <div class="card" style="margin-top:18px"><h3><svg class="svi"><use href="#i-globe"></use></svg> Origines géographiques des sources externes<span class="tag">7 j · FortiGate GeoIP</span></h3><div id="geoFeed" class="geo"></div></div>
+      <div class="card" style="margin-top:18px"><h3><svg class="svi"><use href="#i-globe"></use></svg> <span data-i18n="card_geo">Origines géographiques des sources externes</span><span class="tag" data-i18n="tag_geo">7 j · FortiGate GeoIP</span></h3><div id="geoFeed" class="geo"></div></div>
     </section>
 
-    <section class="page" id="p-incidents"><div class="card"><h3><svg class="svi"><use href="#i-alert"></use></svg> Incidents corrélés (oms-xdr)</h3><div class="feed" id="incFeed"></div></div></section>
-    <section class="page" id="p-detections"><div class="card"><h3><svg class="svi"><use href="#i-target"></use></svg> Détections (24 h)
+    <section class="page" id="p-incidents"><div class="card"><h3><svg class="svi"><use href="#i-alert"></use></svg> <span data-i18n="card_incidents">Incidents corrélés (oms-xdr)</span></h3><div class="feed" id="incFeed"></div></div></section>
+    <section class="page" id="p-detections"><div class="card"><h3><svg class="svi"><use href="#i-target"></use></svg> <span data-i18n="card_det24">Détections (24 h)</span>
         <span class="tag" id="detCount"></span></h3>
       <div class="dfilter">
-        <input id="detSearch" oninput="applyDetSearch()" placeholder="🔎 Rechercher (tag, entité, technique, message…)" autocomplete="off"
+        <input id="detSearch" oninput="applyDetSearch()" placeholder="🔎 Rechercher (tag, entité, technique, message…)" data-i18n-ph="ph_detsearch" autocomplete="off"
           style="background:#0c1525;border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:8px 12px;font-size:13px;flex:1;min-width:200px;margin:0">
         <select id="fTactic" onchange="onFilter()"><option value="">Toutes tactiques</option></select>
         <select id="fSource" onchange="onFilter()"><option value="">Toutes sources</option></select>
-        <button class="stb" onclick="clearFilter()">Réinitialiser</button>
-        <button class="stb" onclick="exportDetections()" title="Exporter en CSV">⤓ CSV</button>
+        <button class="stb" onclick="clearFilter()" data-i18n="btn_reset">Réinitialiser</button>
+        <button class="stb" onclick="exportDetections()" data-i18n="btn_csv" title="Exporter en CSV">⤓ CSV</button>
       </div>
       <div class="feed" id="detFeed"></div></div></section>
     <section class="page" id="p-attack">
-      <div class="card"><h3><svg class="svi"><use href="#i-matrix"></use></svg> Matrice MITRE ATT&CK<span class="tag">couverture × activité (7 j)</span></h3>
+      <div class="card"><h3><svg class="svi"><use href="#i-matrix"></use></svg> <span data-i18n="card_matrix">Matrice MITRE ATT&CK</span><span class="tag" data-i18n="tag_matrix">couverture × activité (7 j)</span></h3>
         <div class="matrix" id="atkMatrix"></div>
         <div class="mlegend"><span><i style="background:#0c1424;opacity:.5"></i>Aucune activité</span><span><i style="background:#10233a;border-color:#2563eb66"></i>Faible</span><span><i style="background:#2a1f10;border-color:#f5a62366"></i>Modérée</span><span><i style="background:#2e1116;border-color:#fb3b5366"></i>Forte</span><span class="muted">— cellule = technique couverte · couleur = volume d'événements (7 j)</span></div></div>
     </section>
     <section class="page" id="p-graph">
-      <div class="card"><h3><svg class="svi"><use href="#i-network"></use></svg> Graphe d'attaque<span class="tag" id="gCount">entités ↔ techniques ATT&CK (7 j)</span></h3>
+      <div class="card"><h3><svg class="svi"><use href="#i-network"></use></svg> <span data-i18n="card_graph">Graphe d'attaque</span><span class="tag" id="gCount">entités ↔ techniques ATT&CK (7 j)</span></h3>
         <div class="dfilter" style="margin-top:4px">
           <select id="gTactic" onchange="applyGraphFilter()"><option value="">Toutes tactiques</option></select>
           <label class="muted" style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;font-size:12px">Volume min.
             <input id="gMinVol" type="range" min="0" max="1" value="0" step="1" oninput="gMinLbl()" onchange="applyGraphFilter()" style="flex:1;accent-color:var(--cy)">
             <span id="gMinVal" class="mono" style="color:var(--cy);min-width:42px">≥ 0</span></label>
-          <input id="gSearch" list="gEntList" oninput="gFocusEntity((this.value||'').trim().toLowerCase())" placeholder="🔎 Centrer une entité…" autocomplete="off"
+          <input id="gSearch" list="gEntList" oninput="gFocusEntity((this.value||'').trim().toLowerCase())" placeholder="🔎 Centrer une entité…" data-i18n-ph="ph_gsearch" autocomplete="off"
             style="background:#0c1525;border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:8px 12px;font-size:13px;min-width:200px;margin:0">
           <datalist id="gEntList"></datalist>
-          <button class="stb" onclick="gClear()">Réinitialiser</button>
+          <button class="stb" onclick="gClear()" data-i18n="btn_reset">Réinitialiser</button>
         </div>
         <div id="cy"></div>
         <div class="leg"><span class="d e"></span> Entité (utilisateur) &nbsp; <span class="d t"></span> Technique ATT&CK &nbsp; <span class="muted">— épaisseur = volume</span></div></div>
     </section>
     <section class="page" id="p-leaks">
       <div class="grid kpis" id="leakSummary"></div>
-      <div class="card"><h3><svg class="svi"><use href="#i-unlock"></use></svg> Sources de fuite surveillées<span class="tag">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
+      <div class="card"><h3><svg class="svi"><use href="#i-unlock"></use></svg> <span data-i18n="card_leaksrc">Sources de fuite surveillées</span><span class="tag" data-i18n="tag_leaksrc">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
         <div class="lsrc" id="leakSrc"></div></div>
       <div id="leakCats" style="display:flex;flex-direction:column;gap:16px;margin-top:16px"></div>
       <div class="feed" id="leakFeed" style="display:none"></div>
@@ -556,22 +557,22 @@
     <section class="page" id="p-health">
       <div class="grid kpis" id="hkpis"></div>
       <div class="grid cols" style="margin-top:16px">
-        <div class="card"><h3><svg class="svi"><use href="#i-antenna"></use></svg> Sources de collecte (24 h)<span class="tag">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
-        <div class="card"><h3><svg class="svi"><use href="#i-eyeoff"></use></svg> Hôtes silencieux (go‑dark)<span class="tag">muets &gt; 26 h · à vérifier</span></h3><div class="feed" id="hdark"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-antenna"></use></svg> <span data-i18n="card_collect">Sources de collecte (24 h)</span><span class="tag" data-i18n="tag_collect">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-eyeoff"></use></svg> <span data-i18n="card_dark">Hôtes silencieux (go‑dark)</span><span class="tag" data-i18n="tag_dark">muets &gt; 26 h · à vérifier</span></h3><div class="feed" id="hdark"></div></div>
       </div>
     </section>
     <section class="page" id="p-report">
-      <div style="display:flex;align-items:center;margin-bottom:14px"><h3 class="sec" style="margin:0">Rapport de posture</h3>
-        <button class="iconbtn" style="margin-left:auto" onclick="window.print()"><svg class="svi"><use href="#i-print"></use></svg> Imprimer / PDF</button></div>
+      <div style="display:flex;align-items:center;margin-bottom:14px"><h3 class="sec" style="margin:0" data-i18n="card_posture">Rapport de posture</h3>
+        <button class="iconbtn" style="margin-left:auto" onclick="window.print()"><svg class="svi"><use href="#i-print"></use></svg> <span data-i18n="btn_print">Imprimer / PDF</span></button></div>
       <div id="reportBody" class="report"></div>
     </section>
   </main>
   <div id="emodal"><div class="scrim2" onclick="closeEnt()"></div><div class="emc" id="emc"></div></div>
-  <div id="pal"><div class="scrim2" onclick="closePal()"></div><div class="palbox"><input id="palIn" placeholder="Rechercher / naviguer…  (pages, entités)" oninput="renderPal(this.value)"><div id="palList"></div></div></div>
+  <div id="pal"><div class="scrim2" onclick="closePal()"></div><div class="palbox"><input id="palIn" placeholder="Rechercher / naviguer…  (pages, entités)" data-i18n-ph="ph_palette" oninput="renderPal(this.value)"><div id="palList"></div></div></div>
   <div id="help" aria-hidden="true"><div class="scrim2" onclick="closeHelp()"></div>
     <div class="helpbox" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
       <div class="helphd">
-        <div><h2 id="helpTitle">Aide &amp; raccourcis</h2><div class="muted" style="font-size:12px">Console SOC — OMNITECH SECURITY</div></div>
+        <div><h2 id="helpTitle" data-i18n="help_title">Aide &amp; raccourcis</h2><div class="muted" style="font-size:12px" data-i18n="help_sub">Console SOC — OMNITECH SECURITY</div></div>
         <button class="iconbtn helpClose" onclick="closeHelp()" title="Fermer (Échap)" aria-label="Fermer l'aide">✕</button>
       </div>
       <div id="helpBody" class="helpbody"></div>
@@ -587,22 +588,83 @@ const j=(u,o)=>fetch(API+u,{credentials:"same-origin",...o}).then(r=>{if(r.statu
 const esc=s=>(s==null?"":""+s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 const nice=s=>esc((s||"").toString().replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()));
 const ago=t=>{if(!t)return"";let d=(Date.now()-new Date((""+t).replace(" ","T").replace(/(Z|[+-]\d\d:?\d\d)?$/,"Z")).getTime())/1000;
-  return d<60?"à l'instant":d<3600?(d/60|0)+" min":d<86400?(d/3600|0)+" h":(d/86400|0)+" j"};
+  return d<60?(LANG==="en"?"just now":"à l'instant"):d<3600?(d/60|0)+" min":d<86400?(d/3600|0)+" h":(d/86400|0)+(LANG==="en"?" d":" j")};
 const PAL=["#22d3ee","#a78bfa","#fb3b53","#f5a623","#34d399","#3b82f6","#e879f9","#2dd4bf"];
 const TACCOL={"Initial Access":"#fb3b53","Execution":"#f97316","Persistence":"#f5a623","Privilege Escalation":"#eab308","Defense Evasion":"#a78bfa","Credential Access":"#ec4899","Discovery":"#22d3ee","Lateral Movement":"#3b82f6","Collection":"#14b8a6","Command and Control":"#8b5cf6","Exfiltration":"#f43f5e","Impact":"#ef4444"};
+
+// --- i18n (FR/EN) ---------------------------------------------------------
+let LANG=localStorage.getItem("soc_lang")||"fr";
+const I18N={
+ fr:{
+  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",
+  cluster_ok:"Cluster opérationnel",dens_comfort:"Confort",dens_compact:"Compact",
+  al_search:"Recherche et navigation (Ctrl ou Cmd + K)",al_refresh:"Rafraîchir les données",al_density:"Basculer la densité d'affichage",al_help:"Ouvrir l'aide et les raccourcis clavier",al_logout:"Se déconnecter",al_lang:"Changer la langue (FR/EN)",
+  t_search:"Recherche (Ctrl/Cmd+K)",t_refresh:"Rafraîchir maintenant",t_help:"Aide et raccourcis (touche ?)",t_logout:"Se déconnecter",t_lang:"Langue : Français — cliquer pour English",
+  login_account:"Compte AD",login_password:"Mot de passe",login_signin:"Se connecter",
+  card_det24:"Détections (24 h)",tag_perhour:"par heure",card_tactics:"Tactiques ATT&CK",tag_7d:"7 j",card_topdet:"Top détections",card_sources:"Sources",
+  card_mlanom:"Anomalies ML",tag_mlanom:"oms-ml · IsolationForest · cliquer pour la fiche",card_uebarisk:"Risque UEBA",tag_uebarisk:"score comportemental · 24 h",
+  card_topent:"Top entités à risque",tag_topent:"7 j · cliquer pour la fiche",card_live:"Flux temps réel",card_geo:"Origines géographiques des sources externes",tag_geo:"7 j · FortiGate GeoIP",
+  card_incidents:"Incidents corrélés (oms-xdr)",card_matrix:"Matrice MITRE ATT&CK",tag_matrix:"couverture × activité (7 j)",card_graph:"Graphe d'attaque",tag_graph:"entités ↔ techniques ATT&CK (7 j)",
+  card_leaksrc:"Sources de fuite surveillées",tag_leaksrc:"30 j · RansomLook / HIBP / Dehashed / GitHub",card_collect:"Sources de collecte (24 h)",tag_collect:"volume · dernier événement",card_dark:"Hôtes silencieux (go‑dark)",tag_dark:"muets > 26 h · à vérifier",card_posture:"Rapport de posture",
+  ph_detsearch:"🔎 Rechercher (tag, entité, technique, message…)",btn_reset:"Réinitialiser",btn_csv:"⤓ CSV",ph_gsearch:"🔎 Centrer une entité…",btn_print:"Imprimer / PDF",ph_palette:"Rechercher / naviguer…  (pages, entités)",
+  help_title:"Aide & raccourcis",help_sub:"Console SOC — OMNITECH SECURITY",
+  empty_waiting:"En attente d'événements…",empty_ml:"Aucune anomalie ML récente",empty_ueba:"Aucun score UEBA récent",empty_geo:"Aucune donnée géo",empty_event:"Aucun événement",
+  ent_tactics:"Tactiques",ent_techniques:"Techniques ATT&CK",ent_events:"Événements récents",ent_detn:"détections (7 j)",load_more:"Charger plus",events_shown:"événements affichés",
+  inv_title:"Investigation — provenance & cartographie",inv_authmap:"Cartographie des sources d'authentification",inv_timeline:"Chronologie — réussis / échecs",inv_ips:"IP sources",inv_ips_hint:"— une réussite depuis l'étranger = à investiguer",inv_codes:"Codes de statut",inv_prov:"Provenance des détections",inv_presence:"Présence par source",inv_analyzing:"Analyse en cours…",inv_none:"Aucune donnée d'investigation pour cette entité",inv_winauth:"Authentification Windows (logons 4624/4625)",inv_logontypes:"Types de logon",inv_failreasons:"Motifs d'échec",k_logons:"logons",
+  k_attempts:"tentatives",k_success:"réussies",k_fail:"échecs",k_countries:"pays",k_ips:"IP sources",ch_ok:"Réussis",ch_ko:"Échecs",succ_suffix:"réussis",none_suffix:"0 réussi",
+  case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
+ },
+ en:{
+  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",
+  cluster_ok:"Cluster operational",dens_comfort:"Comfort",dens_compact:"Compact",
+  al_search:"Search and navigation (Ctrl or Cmd + K)",al_refresh:"Refresh data",al_density:"Toggle display density",al_help:"Open help and keyboard shortcuts",al_logout:"Sign out",al_lang:"Change language (FR/EN)",
+  t_search:"Search (Ctrl/Cmd+K)",t_refresh:"Refresh now",t_help:"Help and shortcuts (press ?)",t_logout:"Sign out",t_lang:"Language: English — click for Français",
+  login_account:"AD account",login_password:"Password",login_signin:"Sign in",
+  card_det24:"Detections (24h)",tag_perhour:"per hour",card_tactics:"ATT&CK tactics",tag_7d:"7d",card_topdet:"Top detections",card_sources:"Sources",
+  card_mlanom:"ML anomalies",tag_mlanom:"oms-ml · IsolationForest · click for details",card_uebarisk:"UEBA risk",tag_uebarisk:"behavioral score · 24h",
+  card_topent:"Top risk entities",tag_topent:"7d · click for details",card_live:"Live feed",card_geo:"External source geography",tag_geo:"7d · FortiGate GeoIP",
+  card_incidents:"Correlated incidents (oms-xdr)",card_matrix:"MITRE ATT&CK matrix",tag_matrix:"coverage × activity (7d)",card_graph:"Attack graph",tag_graph:"entities ↔ ATT&CK techniques (7d)",
+  card_leaksrc:"Monitored leak sources",tag_leaksrc:"30d · RansomLook / HIBP / Dehashed / GitHub",card_collect:"Collection sources (24h)",tag_collect:"volume · last event",card_dark:"Silent hosts (go‑dark)",tag_dark:"silent > 26h · to check",card_posture:"Posture report",
+  ph_detsearch:"🔎 Search (tag, entity, technique, message…)",btn_reset:"Reset",btn_csv:"⤓ CSV",ph_gsearch:"🔎 Focus an entity…",btn_print:"Print / PDF",ph_palette:"Search / navigate…  (pages, entities)",
+  help_title:"Help & shortcuts",help_sub:"SOC console — OMNITECH SECURITY",
+  empty_waiting:"Waiting for events…",empty_ml:"No recent ML anomaly",empty_ueba:"No recent UEBA score",empty_geo:"No geo data",empty_event:"No event",
+  ent_tactics:"Tactics",ent_techniques:"ATT&CK techniques",ent_events:"Recent events",ent_detn:"detections (7d)",load_more:"Load more",events_shown:"events shown",
+  inv_title:"Investigation — provenance & map",inv_authmap:"Authentication source map",inv_timeline:"Timeline — success / failure",inv_ips:"Source IPs",inv_ips_hint:"— a success from abroad = investigate",inv_codes:"Status codes",inv_prov:"Detection provenance",inv_presence:"Presence by source",inv_analyzing:"Analyzing…",inv_none:"No investigation data for this entity",inv_winauth:"Windows authentication (4624/4625 logons)",inv_logontypes:"Logon types",inv_failreasons:"Failure reasons",k_logons:"logons",
+  k_attempts:"attempts",k_success:"successful",k_fail:"failures",k_countries:"countries",k_ips:"source IPs",ch_ok:"Successful",ch_ko:"Failures",succ_suffix:"successful",none_suffix:"0 successful",
+  case_status:"Case status updated.",case_disp:"Disposition saved — the false-positive reduction model will adjust.",case_assign:"Case assigned.",case_note:"Investigation note added.",case_def:"Case updated."
+ }
+};
+function t(k){const v=(I18N[LANG]||{})[k];return v!==undefined?v:((I18N.fr||{})[k]!==undefined?I18N.fr[k]:k);}
+function applyI18n(){
+  document.querySelectorAll("[data-i18n]").forEach(e=>e.textContent=t(e.getAttribute("data-i18n")));
+  document.querySelectorAll("[data-i18n-ph]").forEach(e=>e.setAttribute("placeholder",t(e.getAttribute("data-i18n-ph"))));
+  document.querySelectorAll("[data-i18n-al]").forEach(e=>e.setAttribute("aria-label",t(e.getAttribute("data-i18n-al"))));
+  document.querySelectorAll("[data-i18n-t]").forEach(e=>e.setAttribute("title",t(e.getAttribute("data-i18n-t"))));
+}
+function updateLangBtn(){const b=$("#langLab");if(b)b.textContent=(LANG==="fr"?"EN":"FR");const g=$("#langBtn");if(g)g.setAttribute("title",t("t_lang"));}
+function setLang(l){LANG=l;localStorage.setItem("soc_lang",l);document.documentElement.lang=l;applyI18n();
+  const cur=((document.querySelector("#nav a.on")||{}).dataset||{}).p||"overview";
+  const tt=$("#ptitle");if(tt)tt.textContent=(titles[LANG]||titles.fr)[cur];setDesc(cur);
+  const hb=$("#helpBody");if(hb){hb.dataset.built="";hb.innerHTML="";if(typeof buildHelp==="function"&&$("#help")&&$("#help").classList.contains("on"))buildHelp();}
+  if(typeof loadAll==="function")loadAll();updateLangBtn();}
 
 // auth
 function login(e){e.preventDefault();
   fetch(API+"/login",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({username:u.value,password:p.value})})
-   .then(r=>r.ok?start():$("#lerr").textContent="Identifiants invalides").catch(()=>$("#lerr").textContent="Erreur réseau");}
+   .then(r=>r.ok?start():$("#lerr").textContent=(LANG==="en"?"Invalid credentials":"Identifiants invalides")).catch(()=>$("#lerr").textContent=(LANG==="en"?"Network error":"Erreur réseau"));}
 function logout(){fetch(API+"/logout",{method:"POST",credentials:"same-origin"}).then(()=>location.reload());}
-function start(){$("#login").style.display="none";$("#app").style.display="grid";setDesc("overview");
+function start(){$("#login").style.display="none";$("#app").style.display="grid";
+  document.documentElement.lang=LANG;applyI18n();updateLangBtn();
+  const tt=$("#ptitle");if(tt)tt.textContent=(titles[LANG]||titles.fr).overview;setDesc("overview");
   document.body.classList.add("firstload");loadAll();startLive();startRefresh();}
 
 // nav
-const titles={overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport"};
+const titles={
+  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport"},
+  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",attack:"MITRE ATT&CK",graph:"Attack graph",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report"}};
 const PDESC={
+ fr:{
   overview:"<b>Posture en un coup d'œil</b> — indicateurs clés, activité des dernières 24 h, tactiques ATT&CK et flux d'événements en temps réel. Chaque indicateur est cliquable.",
   incidents:"<b>File de cas corrélés (oms-xdr)</b> — chaque incident regroupe plusieurs détections en kill-chain. Cliquez pour le traiter : statut, assignation, notes d'investigation.",
   detections:"<b>Toutes les détections taguées (24 h)</b> — filtrez par tactique ATT&CK ou par source ; cliquez une ligne pour la fiche complète de l'entité concernée.",
@@ -611,12 +673,23 @@ const PDESC={
   leaks:"<b>Fuites & Dark Web</b> — surveille les sites d'extorsion ransomware (RansomLook), les comptes exposés (HIBP/Dehashed) et le code public (GitHub).",
   health:"<b>Santé de la collecte</b> — volume et fraîcheur de chaque source. Une source qui décroche = angle mort, alerté automatiquement (preuve ISO A.8.15).",
   report:"<b>Rapport de posture</b> — synthèse exécutive imprimable (PDF) pour la direction et l'audit ISO. Bouton « Imprimer / PDF » en haut à droite."
+ },
+ en:{
+  overview:"<b>Posture at a glance</b> — key indicators, last-24h activity, ATT&CK tactics and a real-time event feed. Every indicator is clickable.",
+  incidents:"<b>Correlated case queue (oms-xdr)</b> — each incident groups several detections into a kill-chain. Click to handle it: status, assignment, investigation notes.",
+  detections:"<b>All tagged detections (24h)</b> — filter by ATT&CK tactic or by source; click a row for the full entity profile.",
+  attack:"<b>MITRE ATT&CK matrix</b> — each cell is a technique you detect, colored by real activity volume. Red flags high activity to investigate.",
+  graph:"<b>Attack graph</b> — links users to the techniques they triggered. Node size = volume, color = tactic. Click a blue node for the entity profile.",
+  leaks:"<b>Leaks & Dark Web</b> — monitors ransomware extortion sites (RansomLook), exposed accounts (HIBP/Dehashed) and public code (GitHub).",
+  health:"<b>Collection health</b> — volume and freshness of each source. A source going dark = blind spot, alerted automatically (ISO A.8.15 evidence).",
+  report:"<b>Posture report</b> — printable executive summary (PDF) for management and ISO audit. “Print / PDF” button at top right."
+ }
 };
-function setDesc(pg){if($("#pdesc"))$("#pdesc").innerHTML=PDESC[pg]||"";}
+function setDesc(pg){if($("#pdesc"))$("#pdesc").innerHTML=(PDESC[LANG]||PDESC.fr)[pg]||"";}
 document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
   const pg=a.dataset.p; document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+pg));
-  $("#ptitle").textContent=titles[pg];setDesc(pg);
+  $("#ptitle").textContent=(titles[LANG]||titles.fr)[pg];setDesc(pg);
   if(pg==="graph"){j("/graph").then(g=>{renderGraph(g);gPopulate();setTimeout(applyGraphFilter,80);}).catch(()=>{});}
   if(pg==="report"){j("/report").then(r=>renderReport(r)).catch(()=>{});}});
 
@@ -658,17 +731,17 @@ function renderRisk(d){d=d||{};
   $("#mlTop").innerHTML=MLT.length?MLT.map((m,i)=>{const ic=m.type==='host'?'🖥️':'👤';
     return `<div class="inc" onclick="openMl(${i})"><div class="top"><span class="ttl">${ic} ${esc(m.entity)}</span>
       <span class="mono" style="color:${sevc(m.score)};margin-left:auto;font-weight:700">${m.score}</span></div>
-      <div class="ts" style="opacity:.72;white-space:normal">${esc(m.reason||"")}</div></div>`;}).join(""):'<div class="empty">Aucune anomalie ML récente</div>';
+      <div class="ts" style="opacity:.72;white-space:normal">${esc(m.reason||"")}</div></div>`;}).join(""):'<div class="empty">'+t("empty_ml")+'</div>';
   const UB=d.ueba_top||[];
   $("#uebaTop").innerHTML=UB.length?UB.map(u=>`<div class="inc"><div class="top"><span class="ttl">📍 ${esc(u.entity)}</span>
-      <span class="mono" style="color:${sevc(u.score)};margin-left:auto;font-weight:700">${u.score}</span><span class="ts">${esc(u.factor||"")}</span></div></div>`).join(""):'<div class="empty">Aucun score UEBA récent</div>';}
+      <span class="mono" style="color:${sevc(u.score)};margin-left:auto;font-weight:700">${u.score}</span><span class="ts">${esc(u.factor||"")}</span></div></div>`).join(""):'<div class="empty">'+t("empty_ueba")+'</div>';}
 function openTopE(i){const e=TOPE[i];if(e&&e.k)openEntity(e.k,((e.k||"")+"").split("\\").pop());}
 function openMl(i){const m=MLT[i];if(m&&m.entity)openEntity(m.entity,((m.entity||"")+"").split("\\").pop());}
 function flagOf(cc){return (cc&&cc.length===2)?cc.toUpperCase().replace(/./g,ch=>String.fromCodePoint(127397+ch.charCodeAt(0))):"🏳️";}
 function renderGeo(d){d=d||{};const cs=d.countries||[];const max=cs.length?cs[0].n:1;
   $("#geoFeed").innerHTML=cs.length?cs.map(c=>`<div class="georow"><span class="gflag">${flagOf(c.k)}</span><span class="gcc">${esc(c.k)}</span>
     <div class="gbar"><div style="width:${Math.max(3,Math.round(c.n/max*100))}%"></div></div>
-    <span class="gn mono">${(c.n||0).toLocaleString("fr")}</span></div>`).join(""):'<div class="empty">Aucune donnée géo</div>';}
+    <span class="gn mono">${(c.n||0).toLocaleString("fr")}</span></div>`).join(""):'<div class="empty">'+t("empty_geo")+'</div>';}
 function renderKpis(k){k=k||{};
   $("#kpis").innerHTML=[
     ["red",ic("warning"),"Incidents critiques (7 j)",k.incidents_critiques_7j,"corrélés oms-xdr","incidents"],
@@ -716,55 +789,79 @@ function openEntity(full,label,size){
   fetch(API+"/entity?u="+encodeURIComponent(full||label)+"&size="+size,{credentials:"same-origin"}).then(r=>r.json()).then(d=>{
     const techs=(d.techniques||[]).map(t=>`<span class="pchip">${esc(t.k)} · ${t.n}</span>`).join(" ")||'<span class="muted">—</span>';
     const tacs=(d.tactics||[]).map(t=>`<span class="pchip tac">${esc(t.k)}</span>`).join(" ");
-    const evs=(d.events||[]).map(e=>`<div class="erow"><span class="ts">${ago(e.ts)}</span> <b>${nice(e.tag)}</b> <em>${esc(e.tech||"")}</em><div class="emsg">${esc((e.msg||"").slice(0,150))}</div></div>`).join("")||'<div class="muted">Aucun événement</div>';
+    const evs=(d.events||[]).map(e=>`<div class="erow"><span class="ts">${ago(e.ts)}</span> <b>${nice(e.tag)}</b> <em>${esc(e.tech||"")}</em><div class="emsg">${esc((e.msg||"").slice(0,150))}</div></div>`).join("")||'<div class="muted">'+t("empty_event")+'</div>';
     const loaded=(d.events||[]).length;
-    const more=d.has_more?`<button class="entMore" onclick="entMore()">Charger plus (${loaded} / ${(d.total||0).toLocaleString("fr")})</button>`:(loaded>20?`<div class="muted" style="text-align:center;margin-top:8px;font-size:11px">${loaded} événements affichés</div>`:'');
+    const more=d.has_more?`<button class="entMore" onclick="entMore()">${t("load_more")} (${loaded} / ${(d.total||0).toLocaleString("fr")})</button>`:(loaded>20?`<div class="muted" style="text-align:center;margin-top:8px;font-size:11px">${loaded} ${t("events_shown")}</div>`:'');
     $("#emc").innerHTML=`<div class="grip"></div><h2>👤 ${esc(label)}</h2>
-      <div class="muted" style="margin-bottom:4px">${esc(full||"")} · <b style="color:var(--cy)">${(d.total||0).toLocaleString("fr")}</b> détections (7 j)</div>
+      <div class="muted" style="margin-bottom:4px">${esc(full||"")} · <b style="color:var(--cy)">${(d.total||0).toLocaleString("fr")}</b> ${t("ent_detn")}</div>
       ${entScoreBanner(d)}
       <div id="invWrap"></div>
-      <div class="blk"><div class="lbl">Tactiques</div><div>${tacs}</div></div>
-      <div class="blk"><div class="lbl">Techniques ATT&CK</div><div>${techs}</div></div>
-      <div class="blk"><div class="lbl">Événements récents</div>${evs}${more}</div>`;
+      <div class="blk"><div class="lbl">${t("ent_tactics")}</div><div>${tacs}</div></div>
+      <div class="blk"><div class="lbl">${t("ent_techniques")}</div><div>${techs}</div></div>
+      <div class="blk"><div class="lbl">${t("ent_events")}</div>${evs}${more}</div>`;
     $("#emodal").classList.add("on");
     loadInvestigation(full||label);
   }).catch(()=>{});
 }
-const M365CODE={"0":"Succès","50053":"Compte verrouillé (lockout)","50055":"Mot de passe expiré","50057":"Compte désactivé","50074":"MFA requise","50076":"MFA requise (CA)","50079":"MFA à enregistrer","50126":"Identifiants invalides","50158":"Conditional Access","53003":"Bloqué (Conditional Access)","500121":"MFA refusée / timeout"};
-function codeLabel(c){return M365CODE[String(c)]||("code "+esc(String(c)));}
+const M365CODE={
+ fr:{"0":"Succès","50053":"Compte verrouillé (lockout)","50055":"Mot de passe expiré","50057":"Compte désactivé","50074":"MFA requise","50076":"MFA requise (CA)","50079":"MFA à enregistrer","50126":"Identifiants invalides","50158":"Conditional Access","53003":"Bloqué (Conditional Access)","500121":"MFA refusée / timeout"},
+ en:{"0":"Success","50053":"Account locked (lockout)","50055":"Password expired","50057":"Account disabled","50074":"MFA required","50076":"MFA required (CA)","50079":"MFA registration required","50126":"Invalid credentials","50158":"Conditional Access","53003":"Blocked (Conditional Access)","500121":"MFA denied / timeout"}};
+function codeLabel(c){return (M365CODE[LANG]||M365CODE.fr)[String(c)]||("code "+esc(String(c)));}
 function loadInvestigation(who){const w=$("#invWrap");if(!w)return;
-  w.innerHTML=`<div class="blk inv"><div class="lbl">${ic("globe")} Investigation — provenance &amp; cartographie</div><div class="muted">Analyse en cours…</div></div>`;
+  w.innerHTML=`<div class="blk inv"><div class="lbl">${ic("globe")} ${t("inv_title")}</div><div class="muted">${t("inv_analyzing")}</div></div>`;
   fetch(API+"/investigate?u="+encodeURIComponent(who)+"&days=14",{credentials:"same-origin"})
     .then(r=>r.json()).then(renderInvestigation).catch(()=>{});}
+const LTYPE={"2":"Interactive","3":"Network","4":"Batch","5":"Service","7":"Unlock","8":"NetworkCleartext","9":"NewCredentials","10":"RDP","11":"CachedInteractive"};
+function ltype(k){return (LTYPE[String(k)]||"type")+" ("+esc(String(k))+")";}
+function niceReason(s){return esc(String(s||"").replace(/_/g," "));}
 function renderInvestigation(d){const w=$("#invWrap");if(!w||!d)return;
-  const a=d.auth||{},det=d.detections||[],src=d.sources||[];let h='';
+  const a=d.auth||{},wn=d.winauth||{},det=d.detections||[],src=d.sources||[];const daySuffix=(LANG==="en"?"d":"j");let h='';
   if(a.total){const cs=a.countries||[],cmax=cs.length?cs[0].n:1;
     h+=`<div class="invk">
-      <div class="ik"><div class="ikv mono">${(a.total||0).toLocaleString("fr")}</div><div class="iks">tentatives</div></div>
-      <div class="ik ok"><div class="ikv mono">${(a.success||0).toLocaleString("fr")}</div><div class="iks">réussies</div></div>
-      <div class="ik ko"><div class="ikv mono">${(a.fail||0).toLocaleString("fr")}</div><div class="iks">échecs</div></div>
-      <div class="ik"><div class="ikv mono">${cs.length}</div><div class="iks">pays</div></div>
-      <div class="ik"><div class="ikv mono">${(a.ips||[]).length}</div><div class="iks">IP sources</div></div></div>`;
-    h+=`<div class="lbl2">Cartographie des sources d'authentification</div>`+
+      <div class="ik"><div class="ikv mono">${(a.total||0).toLocaleString("fr")}</div><div class="iks">${t("k_attempts")}</div></div>
+      <div class="ik ok"><div class="ikv mono">${(a.success||0).toLocaleString("fr")}</div><div class="iks">${t("k_success")}</div></div>
+      <div class="ik ko"><div class="ikv mono">${(a.fail||0).toLocaleString("fr")}</div><div class="iks">${t("k_fail")}</div></div>
+      <div class="ik"><div class="ikv mono">${cs.length}</div><div class="iks">${t("k_countries")}</div></div>
+      <div class="ik"><div class="ikv mono">${(a.ips||[]).length}</div><div class="iks">${t("k_ips")}</div></div></div>`;
+    h+=`<div class="lbl2">${t("inv_authmap")}</div>`+
       cs.slice(0,10).map(c=>`<div class="georow"><span class="gflag">${flagOf(c.k)}</span><span class="gcc">${esc(c.k)}</span>
         <div class="gbar"><div style="width:${Math.max(4,Math.round(c.n/cmax*100))}%"></div></div>
         <span class="gn mono">${(c.n||0).toLocaleString("fr")}</span></div>`).join("");
-    h+=`<div class="lbl2">Chronologie — réussis / échecs</div><div class="invtl"><canvas id="invTl"></canvas></div>`;
-    h+=`<div class="lbl2">IP sources <span class="muted" style="font-weight:400">— une réussite depuis l'étranger = à investiguer</span></div>`+
+    h+=`<div class="lbl2">${t("inv_timeline")}</div><div class="invtl"><canvas id="invTl"></canvas></div>`;
+    h+=`<div class="lbl2">${t("inv_ips")} <span class="muted" style="font-weight:400">${t("inv_ips_hint")}</span></div>`+
       (a.ips||[]).map(i=>`<div class="iprow"><span class="gflag">${flagOf(i.cc)}</span>
         <span class="ipa mono">${esc(i.ip)}</span><span class="ipc">${esc(i.cc||"")}</span>
-        <span class="ipn mono">${i.n}</span><span class="ipb ${i.ok>0?'bok':'bko'}">${i.ok>0?i.ok+" réussis":"0 réussi"}</span></div>`).join("");
-    h+=`<div class="lbl2">Codes de statut</div><div>`+
+        <span class="ipn mono">${i.n}</span><span class="ipb ${i.ok>0?'bok':'bko'}">${i.ok>0?i.ok+" "+t("succ_suffix"):t("none_suffix")}</span></div>`).join("");
+    h+=`<div class="lbl2">${t("inv_codes")}</div><div>`+
       (a.codes||[]).map(c=>`<span class="pchip">${codeLabel(c.k)} · ${c.n}</span>`).join(" ")+`</div>`;}
-  if(det.length){h+=`<div class="lbl2">Provenance des détections</div>`+
+  if(wn.total){
+    h+=`<div class="lbl2">${t("inv_winauth")}</div><div class="invk">
+      <div class="ik"><div class="ikv mono">${(wn.total||0).toLocaleString("fr")}</div><div class="iks">${t("k_logons")}</div></div>
+      <div class="ik ok"><div class="ikv mono">${(wn.success||0).toLocaleString("fr")}</div><div class="iks">${t("k_success")}</div></div>
+      <div class="ik ko"><div class="ikv mono">${(wn.fail||0).toLocaleString("fr")}</div><div class="iks">${t("k_fail")}</div></div></div>`;
+    h+=`<div class="lbl2">${t("inv_logontypes")}</div><div>`+
+      (wn.logon_types||[]).map(x=>`<span class="pchip">${ltype(x.k)} · ${x.n}</span>`).join(" ")+`</div>`;
+    if((wn.reasons||[]).length)h+=`<div class="lbl2">${t("inv_failreasons")}</div><div>`+
+      (wn.reasons||[]).map(x=>`<span class="pchip">${niceReason(x.k)} · ${x.n}</span>`).join(" ")+`</div>`;
+    h+=`<div class="lbl2">${t("inv_timeline")}</div><div class="invtl"><canvas id="invTlW"></canvas></div>`;
+    h+=`<div class="lbl2">${t("inv_ips")}</div>`+
+      (wn.ips||[]).map(i=>`<div class="iprow"><span class="ipa mono">${esc(i.ip)}</span>
+        <span class="ipn mono">${i.n}</span><span class="ipb ${i.ok>0?'bok':'bko'}">${i.ok>0?i.ok+" "+t("succ_suffix"):t("none_suffix")}</span></div>`).join("");}
+  if(det.length){h+=`<div class="lbl2">${t("inv_prov")}</div>`+
     det.map(x=>`<div class="erow"><b>${nice(x.tag)}</b> <span class="srcb">${esc(x.source||"")}</span> <span class="mono">${x.n}</span> <span class="ts">${ago(x.last)}</span></div>`).join("");}
-  if(src.length){h+=`<div class="lbl2">Présence par source (${d.days} j)</div><div>`+
+  if(src.length){h+=`<div class="lbl2">${t("inv_presence")} (${d.days} ${daySuffix})</div><div>`+
     src.map(s=>`<span class="pchip">${esc(s.k)} · ${(s.n||0).toLocaleString("fr")}</span>`).join(" ")+`</div>`;}
-  w.innerHTML=`<div class="blk inv"><div class="lbl">${ic("globe")} Investigation — provenance &amp; cartographie</div>${h||'<div class="muted">Aucune donnée d\'investigation pour cette entité</div>'}</div>`;
+  w.innerHTML=`<div class="blk inv"><div class="lbl">${ic("globe")} ${t("inv_title")}</div>${h||'<div class="muted">'+t("inv_none")+'</div>'}</div>`;
   if(a.total&&(a.timeline||[]).length){const tl=a.timeline;
     mk("invTl",{type:"bar",data:{labels:tl.map(x=>(x.t||"").slice(5)),datasets:[
-      {label:"Réussis",data:tl.map(x=>x.ok),backgroundColor:"#34d399",stack:"s"},
-      {label:"Échecs",data:tl.map(x=>x.ko),backgroundColor:"#f87171",stack:"s"}]},
+      {label:t("ch_ok"),data:tl.map(x=>x.ok),backgroundColor:"#34d399",stack:"s"},
+      {label:t("ch_ko"),data:tl.map(x=>x.ko),backgroundColor:"#f87171",stack:"s"}]},
+      options:{maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},
+        scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true}}}});}
+  if(wn.total&&(wn.timeline||[]).length){const tl=wn.timeline;
+    mk("invTlW",{type:"bar",data:{labels:tl.map(x=>(x.t||"").slice(5)),datasets:[
+      {label:t("ch_ok"),data:tl.map(x=>x.ok),backgroundColor:"#34d399",stack:"s"},
+      {label:t("ch_ko"),data:tl.map(x=>x.ko),backgroundColor:"#f87171",stack:"s"}]},
       options:{maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:10,font:{size:10}}}},
         scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true}}}});}}
 function closeEnt(){$("#emodal").classList.remove("on");}
@@ -783,13 +880,14 @@ function addLive(ev){const el=$("#liveFeed");if(!el)return;if(liveN===0)el.inner
   const b=$("#liveCount");if(b)b.textContent=liveN+" évén.";}
 
 // --- Command palette (Cmd/Ctrl+K) ---
-const CMDS=[{k:"Vue d'ensemble",p:"overview"},{k:"Incidents",p:"incidents"},{k:"Détections",p:"detections"},{k:"Matrice ATT&CK",p:"attack"},{k:"Graphe d'attaque",p:"graph"}];
+const CMDPAGES=["overview","incidents","detections","attack","graph"];
+function CMDLIST(){return CMDPAGES.map(p=>({k:(titles[LANG]||titles.fr)[p],p:p}));}
 function goNav(p){const a=document.querySelector('#nav a[data-p="'+p+'"]');if(a)a.click();}
 function openPal(){$("#pal").classList.add("on");const i=$("#palIn");i.value="";renderPal("");setTimeout(()=>i.focus(),30);}
 function closePal(){$("#pal").classList.remove("on");}
 let PALTOK=0,PALENT=[];
 function renderPal(q){q=(q||"").trim();const ql=q.toLowerCase();
-  const cmds=CMDS.filter(c=>c.k.toLowerCase().includes(ql));
+  const cmds=CMDLIST().filter(c=>c.k.toLowerCase().includes(ql));
   const cmdHtml=cmds.map((c,i)=>`<div class="pi${i===0?" sel":""}" onclick="goNav('${c.p}');closePal();">▸ ${c.k}</div>`).join("");
   $("#palList").innerHTML=cmdHtml||'<div class="muted" style="padding:12px">Tapez ≥ 2 caractères pour chercher une entité…</div>';
   if(q.length>=2){const tok=++PALTOK;
@@ -1033,7 +1131,7 @@ function applyDensity(mode){
   if(btn){
     btn.setAttribute("aria-pressed",compact?"true":"false");
     btn.title=compact?"Densité compacte — cliquer pour confortable":"Densité confortable — cliquer pour compact";
-    var lab=btn.querySelector(".densLab");if(lab)lab.textContent=compact?"Compact":"Confort";
+    var lab=btn.querySelector(".densLab");if(lab)lab.textContent=compact?t("dens_compact"):t("dens_comfort");
   }
   var hb=$("#helpDensState");if(hb)hb.textContent=compact?"compacte":"confortable";
 }
@@ -1041,14 +1139,30 @@ function toggleDensity(){applyDensity(_densRead()==="compact"?"comfortable":"com
 applyDensity(_densRead());
 function buildHelp(){
   var box=$("#helpBody");if(!box||box.dataset.built)return;box.dataset.built="1";
-  var KEYS=[
+  var EN=LANG==="en";
+  var KEYS=EN?[
+    ["Ctrl / Cmd + K","Open the palette — search a page or entity"],
+    ["?","Open / close this help panel"],
+    ["Esc","Close the palette, a profile or help"],
+    ["Enter / Space","Activate the target element (rows, cells, KPIs)"],
+    ["Tab","Keyboard navigation — focus trapped in modals"]
+  ]:[
     ["Ctrl / Cmd + K","Ouvrir la palette — chercher une page ou une entite"],
     ["?","Ouvrir / fermer ce panneau d'aide"],
     ["Échap","Fermer la palette, une fiche ou l'aide"],
     ["Entrée / Espace","Activer l'élément cible (lignes, cellules, KPI)"],
     ["Tab","Naviguer au clavier — focus confine dans les modales"]
   ];
-  var PAGES=[
+  var PAGES=EN?[
+    [ic("grid"),"Overview","Posture at a glance: KPIs, 24h activity, ATT&CK tactics and live feed. Everything is clickable."],
+    [ic("alert"),"Incidents","Correlated case queue (oms-xdr): status, assignment, investigation notes."],
+    [ic("target"),"Detections","Tagged detections from the last 24h, filterable by tactic and source; CSV export."],
+    [ic("matrix"),"MITRE ATT&CK","Coverage matrix: each detected cell, colored by real activity volume."],
+    [ic("network"),"Attack graph","Links users and triggered techniques: size = volume, color = tactic."],
+    [ic("unlock"),"Leaks & Dark Web","Extortion sites (RansomLook), exposed accounts (HIBP/Dehashed), public code (GitHub)."],
+    [ic("pulse"),"Health & Collection","Volume and freshness of each source; going dark = alerted blind spot (ISO A.8.15)."],
+    [ic("doc"),"Report","Printable executive summary (PDF) for management and ISO audit."]
+  ]:[
     [ic("grid"),"Vue d'ensemble","Posture en un coup d'œil : KPI, activité 24 h, tactiques ATT&CK et flux temps réel. Tout est cliquable."],
     [ic("alert"),"Incidents","File des cas corrélés (oms-xdr) : statut, assignation, notes d'investigation."],
     [ic("target"),"Détections","Détections taguées des dernières 24 h, filtrables par tactique et par source ; export CSV."],
@@ -1058,7 +1172,14 @@ function buildHelp(){
     [ic("pulse"),"Santé & Collecte","Volume et fraîcheur de chaque source ; décrochage = angle mort alerte (ISO A.8.15)."],
     [ic("doc"),"Rapport","Synthèse exécutive imprimable (PDF) pour la direction et l'audit ISO."]
   ];
-  var GLOSS=[
+  var GLOSS=EN?[
+    ["ML score","Anomaly assigned by the unsupervised oms-ml model (IsolationForest). The higher the score, the further the behavior deviates from the learned norm."],
+    ["UEBA","User &amp; Entity Behavior Analytics — behavioral risk score aggregated per entity over 24h (volume, technique diversity, severity)."],
+    ["Severity","Detection severity: critical (red), high (amber), medium, low. Drives alert routing and handling priority."],
+    ["Go-dark","Silent host: no data received for &gt; 26h. Signals a loss of visibility (agent failure, isolation, bypass) to check."],
+    ["KEV","Known Exploited Vulnerabilities (CISA) — actively exploited flaws; their exposure is tracked as a priority."],
+    ["Kill-chain","Sequence of attack stages (initial access → execution → … → impact) reconstructed by incident correlation."]
+  ]:[
     ["Score ML","Anomalie attribuee par le modèle non supervisé oms-ml (IsolationForest). Plus le score est élevé, plus le comportement s'ecarte de la normale apprise."],
     ["UEBA","User &amp; Entity Behavior Analytics — score de risque comportemental agrégé par entite sur 24 h (volume, diversité de techniques, sévérité)."],
     ["Sévérité","Gravité d'une détection : critique (rouge), élevée (ambre), moyenne, faible. Pilote le routage des alertes et la priorité de traitement."],
@@ -1067,18 +1188,18 @@ function buildHelp(){
     ["Kill-chain","Enchainement des étapes d'une attaque (accès initial → exécution → … → impact) reconstitué par la corrélation d'incidents."]
   ];
   var h="";
-  h+='<div class="hsec"><div class="hsk">Raccourcis clavier</div><div class="hkeys">';
+  h+='<div class="hsec"><div class="hsk">'+(EN?"Keyboard shortcuts":"Raccourcis clavier")+'</div><div class="hkeys">';
   for(var i=0;i<KEYS.length;i++)h+='<div class="hkey"><kbd>'+esc(KEYS[i][0])+'</kbd><span>'+esc(KEYS[i][1])+'</span></div>';
   h+='</div></div>';
-  h+='<div class="hsec"><div class="hsk">Les pages</div><div class="hpages">';
+  h+='<div class="hsec"><div class="hsk">'+(EN?"Pages":"Les pages")+'</div><div class="hpages">';
   for(var p=0;p<PAGES.length;p++)h+='<div class="hpg"><span class="hic">'+PAGES[p][0]+'</span><div><b>'+esc(PAGES[p][1])+'</b><em>'+esc(PAGES[p][2])+'</em></div></div>';
   h+='</div></div>';
-  h+='<div class="hsec"><div class="hsk">Glossaire des signaux</div><div class="hgloss">';
+  h+='<div class="hsec"><div class="hsk">'+(EN?"Signal glossary":"Glossaire des signaux")+'</div><div class="hgloss">';
   for(var g=0;g<GLOSS.length;g++)h+='<div class="hgl"><b>'+esc(GLOSS[g][0])+'</b><span>'+GLOSS[g][1]+'</span></div>';
   h+='</div></div>';
   box.innerHTML=h;
   var bf=$("#helpBuild");if(bf)bf.textContent=SOC_BUILD;
-  var hb=$("#helpDensState");if(hb)hb.textContent=_densRead()==="compact"?"compacte":"confortable";
+  var hb=$("#helpDensState");if(hb)hb.textContent=EN?(_densRead()==="compact"?"compact":"comfortable"):(_densRead()==="compact"?"compacte":"confortable");
 }
 function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocaleString("fr");
   const top=(d.top_detections||[]).map(t=>`<tr><td>${nice(t.k)}</td><td class="num">${(t.n||0).toLocaleString("fr")}</td></tr>`).join("");
@@ -1231,11 +1352,11 @@ function openCase(i){const x=CASES[i];if(!x)return;
       <button class="stb" onclick="caseAct('${x.id}','note',document.getElementById('caseNote').value)">Ajouter la note</button></div>`;
   $("#emodal").classList.add("on");}
 function caseAct(id,action,value){
-  var CASE_MSG={status:"Statut du cas mis à jour.",disposition:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",assign:"Cas assigné.",note:"Note d'investigation ajoutée."};
+  var CASE_MSG={status:t("case_status"),disposition:t("case_disp"),assign:t("case_assign"),note:t("case_note")};
   fetch(API+"/case",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({id:id,action:action,value:value})})
    .then(r=>{if(r.status===401)throw"auth";if(!r.ok)throw"http";return r.json();})
-   .then(()=>{toastOk(CASE_MSG[action]||"Cas mis à jour.");closeEnt();loadAll();})
+   .then(()=>{toastOk(CASE_MSG[action]||t("case_def"));closeEnt();loadAll();})
    .catch(e=>{if(e==="auth"){toastWarn("Session expirée — reconnexion…",{title:"Session"});setTimeout(()=>location.reload(),1100);}
      else toastErr("Échec de la mise à jour du cas. Réessayez.");});}
 function renderAlerts(list){list=list||[];$("#alFeed").innerHTML=list.length?list.map(a=>{const c=a.priority==3?"critical":a.priority==2?"high":"medium";
@@ -1244,6 +1365,7 @@ function renderAlerts(list){list=list||[];$("#alFeed").innerHTML=list.length?lis
     ${a.entity?`<div class="meta">${esc(a.entity)}</div>`:""}</div>`;}).join(""):'<div class="empty">RAS</div>';}
 
 setInterval(()=>{$("#clock")&&($("#clock").textContent=new Date().toLocaleTimeString("fr"))},1000);
+document.documentElement.lang=LANG;applyI18n();updateLangBtn();
 j("/me").then(d=>{if(d.user)start();}).catch(()=>{});
 /* ===================== ACCESSIBILITE & CLAVIER (P3) ===================== */
 (function(){

@@ -494,7 +494,8 @@ def get_investigation(name, days=14):
     days = max(1, min(int(days), 90))
     gte = f"now-{days}d"
     ent = {"bool": {"minimum_should_match": 1, "should": [
-        {"term": {"user": name}}, {"match_phrase": {"upn": name}}, {"term": {"identity": name}}]}}
+        {"term": {"user": name}}, {"match_phrase": {"upn": name}},
+        {"term": {"identity": name}}, {"term": {"source": name}}]}}   # source -> entité hôte
 
     # --- A. Authentification M365 (sign-in) : géo, codes, IP, chronologie -------
     auth = {}
@@ -529,6 +530,41 @@ def get_investigation(name, days=14):
                           "ko": b["doc_count"] - b.get("ok", {}).get("doc_count", 0)}
                          for b in aa.get("tl", {}).get("buckets", [])]}
 
+    # --- A2. Authentification Windows (logons 4624/4625) — pour les HÔTES --------
+    # Profil d'auth d'un poste/serveur : succès/échec, IP sources (part de réussite),
+    # types de logon (3=réseau, 10=RDP…), motifs d'échec, chronologie. Symétrique du
+    # profil M365 mais côté Windows -> le pivot d'investigation marche aussi sur « pc ».
+    winauth = {}
+    w = os_search("omni-*", {"size": 0, "track_total_hits": True,
+        "query": {"bool": {"must": [{"term": {"event_source": "windows_security"}},
+                                    {"terms": {"event_id": ["4624", "4625"]}},
+                                    {"term": {"source": name}}],
+                           "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
+        "aggs": {
+            "ok": {"filter": {"term": {"event_id": "4624"}}},
+            "ips": {"terms": {"field": "src_ip", "size": 12},
+                    "aggs": {"ok": {"filter": {"term": {"event_id": "4624"}}}}},
+            "ltype": {"terms": {"field": "winlogbeat_winlog_event_data_LogonType", "size": 8}},
+            "reason": {"filter": {"term": {"event_id": "4625"}},
+                       "aggs": {"r": {"terms": {"field": "failure_reason", "size": 8}}}},
+            "tl": {"date_histogram": {"field": "timestamp", "calendar_interval": "day", "min_doc_count": 0},
+                   "aggs": {"ok": {"filter": {"term": {"event_id": "4624"}}}}}}})
+    wa = w.get("aggregations", {})
+    wt = w.get("hits", {}).get("total", {})
+    wt = wt.get("value", 0) if isinstance(wt, dict) else (wt or 0)
+    if wt:
+        wok = wa.get("ok", {}).get("doc_count", 0)
+        winauth = {
+            "total": wt, "success": wok, "fail": wt - wok,
+            "logon_types": [{"k": b["key"], "n": b["doc_count"]} for b in wa.get("ltype", {}).get("buckets", [])],
+            "reasons": [{"k": b["key"], "n": b["doc_count"]} for b in wa.get("reason", {}).get("r", {}).get("buckets", [])],
+            "ips": [{"ip": _rd(b["key"]), "n": b["doc_count"], "ok": b.get("ok", {}).get("doc_count", 0)}
+                    for b in wa.get("ips", {}).get("buckets", [])],
+            "timeline": [{"t": (b.get("key_as_string") or "")[:10],
+                          "ok": b.get("ok", {}).get("doc_count", 0),
+                          "ko": b["doc_count"] - b.get("ok", {}).get("doc_count", 0)}
+                         for b in wa.get("tl", {}).get("buckets", [])]}
+
     # --- B. Provenance des détections + présence multi-sources ------------------
     bq = os_search("omni-*", {"size": 0,
         "query": {"bool": {"must": [ent], "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
@@ -546,7 +582,8 @@ def get_investigation(name, days=14):
              "last": (t.get("last", {}).get("value_as_string") or "")[:19]}
             for t in bb.get("prov", {}).get("tags", {}).get("buckets", [])]
     sources = [{"k": b["key"], "n": b["doc_count"]} for b in bb.get("sources", {}).get("buckets", [])]
-    return {"entity": _rd(name), "days": days, "auth": auth, "detections": dets, "sources": sources}
+    return {"entity": _rd(name), "days": days, "auth": auth, "winauth": winauth,
+            "detections": dets, "sources": sources}
 
 
 def get_detections(tactic="", source="", tag="", technique=""):
