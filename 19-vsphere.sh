@@ -207,6 +207,16 @@ when
   // Expiration normale de jeton SAML (cycle de vie vCenter, sans user/IP) = bruit, pas une attaque
   AND NOT contains(to_string($message.message), "token expired", true)
   AND NOT contains(to_string($message.message), "ValidatorFutureImpl", true)
+  // Bruit de TELEMETRIE vpxd/ESXi (blobs multi-lignes de stats) qui matchent "authentication"
+  // via des noms de classe (AuthenticationManagerMo) ET "fail" via FailoverClusterManagerMo --
+  // PAS des echecs d'auth. + "SOAP ... HTTP failure" (connectivite/licences) et "ssoAdminServer"
+  // (INFO gestion de domaine SSO). Mesure 7j : 6852/7556 = ce bruit ; 0 recouvrement avec les
+  // 29 vrais echecs (Cannot/Invalid login, Failed password, Authentication failed). -> ~91% FP retire.
+  AND NOT contains(to_string($message.message), "PropJournalStats", false)
+  AND NOT contains(to_string($message.message), "InventoryStats", false)
+  AND NOT contains(to_string($message.message), "ProcessStats", false)
+  AND NOT contains(to_string($message.message), "SOAP request returned HTTP failure", true)
+  AND NOT contains(to_string($message.message), "ssoAdminServer", true)
   // Exclure les comptes de service vCenter/ESXi (auth interne permanente = PAS du brute-force)
   // et localhost. Sinon vpxuser/dcui generent des centaines de faux positifs/jour.
   AND lowercase(to_string($message.user)) != "vpxuser"
