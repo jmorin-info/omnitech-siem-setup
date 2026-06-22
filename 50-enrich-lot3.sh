@@ -133,6 +133,185 @@ if __name__ == "__main__":
         print("omni-ndr-exfil KO:", e, file=sys.stderr); sys.exit(1)
 NDREOF
 chmod 755 /usr/local/sbin/omni-ndr-exfil
+echo "==> Detecteur omni-ueba-geo-newcountry (VERSIONNE ici, AS-IS)"
+cat > /usr/local/sbin/omni-ueba-geo-newcountry <<'NDREOF'
+#!/usr/bin/env python3
+# =============================================================================
+# omni-ueba-geo-newcountry - Detection "NOUVEAU PAYS par compte" (first-seen
+#   country / impossible_travel complementaire).
+#   Pour chaque compte (M365 signin reussi + SSL VPN tunnel-up), compare les
+#   pays vus dans la fenetre RECENTE (dernieres 24h) a une BASELINE historique
+#   (7-30j, hors fenetre recente). Tout pays present en recent mais ABSENT de la
+#   baseline = premiere apparition pour ce compte -> signal de prise de controle
+#   (T1078.004 Valid Accounts: Cloud Accounts).
+#   Complementaire d'impossible_travel (qui exige 2 lieux distants quasi
+#   simultanes) : ici on leve meme une SEULE connexion depuis un pays jamais vu,
+#   sans contrainte de velocite.
+#   Emet GELF event_source=ueba_geo, alert_tag=new_country (entite=user).
+#   Le routage event_source=ueba_geo -> stream "OMNI - Interne SIEM" existe deja
+#   (pose par 40-ueba-ndr.sh) : RIEN a re-router.
+# Lance par timer. Config (00-vars.env) :
+#   UEBA_NEWGEO_RECENT_H  (24)  fenetre "recent" a evaluer
+#   UEBA_NEWGEO_BASELINE_D (30) profondeur de la baseline
+#   UEBA_NEWGEO_MIN_BASELINE (3) min de connexions de baseline pour qu'un compte
+#                                soit "connu" (sinon trop jeune -> on s'abstient,
+#                                anti-faux-positif sur les comptes neufs).
+# Champs verifies en live : m365 src_country/src_city/src_ip (m365_type:signin,
+#   event_action:connexion_reussie) ; fortigate remip_country_code/remip
+#   (subtype:vpn, tunneltype ssl*, user reel, exclut remip_country_code=N/A).
+# =============================================================================
+import json, os, re, sys, urllib.request
+from datetime import datetime, timezone
+
+OS_URL   = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM     = "bx-it-graylog-vm"
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+ENV = load_env()
+RECENT_H     = int(ENV.get("UEBA_NEWGEO_RECENT_H", "24"))
+BASELINE_D   = int(ENV.get("UEBA_NEWGEO_BASELINE_D", "30"))
+MIN_BASELINE = int(ENV.get("UEBA_NEWGEO_MIN_BASELINE", "3"))
+
+def es(path, body):
+    req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=90) as r:
+        return json.load(r)
+
+def gelf(fields):
+    if os.environ.get("UEBA_DRY"):
+        return
+    base = {"version": "1.1", "host": SIEM,
+            "short_message": fields.get("short_message", "ueba_geo new_country")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+# ---- Sources : (index, query de base, champ pays, champ ville, champ ip, label)
+# M365 : signins REUSSIS avec un pays (src_country pose par GeoIP, valeurs FR/US/CN...).
+M365_Q = {"bool": {"must": [
+    {"term": {"m365_type": "signin"}},
+    {"term": {"event_action": "connexion_reussie"}},
+    {"exists": {"field": "user"}},
+    {"exists": {"field": "src_country"}}]}}
+# VPN : SSL VPN (tunnel-up) avec un compte reel et un pays distant connu.
+#   On exclut tunneltype ipsec (sites a sites = pas un humain) et le sentinel "N/A".
+#   user reel : on jette les pseudo-users = noms d'interface WAN (xx-WANn).
+VPN_Q = {"bool": {"must": [
+    {"term": {"subtype": "vpn"}},
+    {"terms": {"tunneltype": ["ssl", "ssl-web", "ssl-tunnel"]}},
+    {"exists": {"field": "user"}},
+    {"exists": {"field": "remip_country_code"}}],
+    "must_not": [{"term": {"remip_country_code": "N/A"}}]}}
+
+WAN_USER = re.compile(r"^[A-Za-z]{2,3}-WAN\d+$")  # interfaces VPN site-a-site
+
+def country_map(base_query, gte, lt, country_f, city_f, ip_f, source_label):
+    """Renvoie {user: {pays: {'count':n, 'city':..., 'ip':...}}} sur [gte, lt)."""
+    q = {"bool": {"must": [base_query,
+            {"range": {"timestamp": {"gte": gte, "lt": lt}}}]}}
+    body = {"size": 10000, "query": q,
+            "_source": ["user", country_f, city_f, ip_f, "timestamp"]}
+    out = {}
+    for h in es("/omni-*/_search", body)["hits"]["hits"]:
+        s = h["_source"]
+        user = s.get("user")
+        ctry = s.get(country_f)
+        if not user or not ctry or ctry == "N/A":
+            continue
+        if WAN_USER.match(str(user)):       # nom d'interface, pas un compte
+            continue
+        d = out.setdefault(user, {}).setdefault(ctry,
+            {"count": 0, "city": s.get(city_f), "ip": s.get(ip_f), "source": source_label})
+        d["count"] += 1
+        if not d["city"] and s.get(city_f):
+            d["city"] = s.get(city_f)
+        if not d["ip"] and s.get(ip_f):
+            d["ip"] = s.get(ip_f)
+    return out
+
+def merge(dst, src):
+    for user, ctrys in src.items():
+        du = dst.setdefault(user, {})
+        for c, info in ctrys.items():
+            if c in du:
+                du[c]["count"] += info["count"]
+                du[c].setdefault("city", info.get("city"))
+                du[c].setdefault("ip", info.get("ip"))
+            else:
+                du[c] = dict(info)
+
+def main():
+    recent_gte   = f"now-{RECENT_H}h"
+    baseline_gte = f"now-{BASELINE_D}d"
+    baseline_lt  = recent_gte   # baseline = [now-30d, now-24h)
+
+    # --- BASELINE : pays connus par compte (hors fenetre recente)
+    baseline = {}
+    merge(baseline, country_map(M365_Q, baseline_gte, baseline_lt,
+                                "src_country", "src_city", "src_ip", "M365"))
+    merge(baseline, country_map(VPN_Q, baseline_gte, baseline_lt,
+                                "remip_country_code", "remip_city_name", "remip", "VPN"))
+
+    # --- RECENT : pays vus dans les dernieres RECENT_H heures
+    recent = {}
+    merge(recent, country_map(M365_Q, recent_gte, "now",
+                              "src_country", "src_city", "src_ip", "M365"))
+    merge(recent, country_map(VPN_Q, recent_gte, "now",
+                              "remip_country_code", "remip_city_name", "remip", "VPN"))
+
+    found = 0
+    for user, rctrys in recent.items():
+        known = baseline.get(user, {})
+        base_total = sum(i["count"] for i in known.values())
+        # Compte trop jeune (baseline insuffisante) -> on s'abstient (anti-FP).
+        if base_total < MIN_BASELINE:
+            continue
+        new_countries = [c for c in rctrys if c not in known]
+        if not new_countries:
+            continue
+        for c in sorted(new_countries):
+            info = rctrys[c]
+            found += 1
+            gelf({"event_source": "ueba_geo", "alert_tag": "new_country",
+                  "user": user,
+                  "geo_new_country": c,
+                  "geo_new_city": info.get("city") or "?",
+                  "geo_new_ip": info.get("ip") or "?",
+                  "geo_new_source": info.get("source"),
+                  "geo_new_hits": info["count"],
+                  "geo_known_countries": ",".join(sorted(known.keys())),
+                  "geo_baseline_days": BASELINE_D,
+                  "geo_baseline_hits": base_total,
+                  "short_message": (f"NOUVEAU PAYS {user}: {c} "
+                                    f"({info.get('city') or '?'}, {info.get('source')}, "
+                                    f"{info['count']} conn) - jamais vu sur {BASELINE_D}j "
+                                    f"(connus: {','.join(sorted(known.keys())) or '-'})")})
+            print(f"  [new_country] {user}: {c} ({info.get('source')}, {info['count']}x) "
+                  f"connus={sorted(known.keys())}")
+    print(f"[ueba-geo-newcountry] comptes_recents={len(recent)} "
+          f"comptes_avec_baseline={sum(1 for u in recent if sum(i['count'] for i in baseline.get(u,{}).values())>=MIN_BASELINE)} "
+          f"new_country={found}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-ueba-geo-newcountry KO:", e, file=sys.stderr); sys.exit(1)
+NDREOF
+chmod 755 /usr/local/sbin/omni-ueba-geo-newcountry
 WD="winlogbeat_winlog_event_data"
 CSV="lookups/mitre-attack.csv"
 add_mitre() { grep -q "^$1," "${CSV}" || { echo "$1,$2,$3,$4,$5,$6" >> "${CSV}"; ok "MITRE +$1"; }; }

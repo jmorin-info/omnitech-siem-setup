@@ -162,6 +162,402 @@ if __name__ == "__main__":
         print("omni-ndr-beacon KO:", e, file=sys.stderr); sys.exit(1)
 NDREOF
 chmod 755 /usr/local/sbin/omni-ndr-beacon
+echo "==> Detecteur omni-ueba-volume (VERSIONNE ici, AS-IS)"
+cat > /usr/local/sbin/omni-ueba-volume <<'NDREOF'
+#!/usr/bin/env python3
+# =============================================================================
+# omni-ueba-volume - Detection d'anomalie de VOLUME par source (z-score).
+#   Au-dela de Graylog : compare le volume de la DERNIERE HEURE COMPLETE de chaque
+#   source a sa baseline statistique MEME-HEURE-DU-JOUR sur N jours (moyenne +
+#   ecart-type) -> z-score. Capte pics (exfil, scan, boucle) ET chutes (audit
+#   coupe, agent tue) que l'agregation Graylog ne sait pas reperer.
+#   Emet GELF event_source=ueba_volume, alert_tag=volume_spike|volume_drop.
+# Lance par timer horaire. Config : UEBA_VOL_Z (defaut 4), UEBA_VOL_MIN (20).
+# =============================================================================
+import json, os, re, sys, statistics, urllib.request
+from datetime import datetime, timezone
+
+OS_URL   = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM     = "bx-it-graylog-vm"
+IDX      = "omni-*"
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+ENV = load_env()
+Z_HIGH   = float(ENV.get("UEBA_VOL_Z", "4"))       # sigmas pour un pic
+Z_DROP   = float(ENV.get("UEBA_VOL_ZDROP", "3"))   # sigmas pour une chute
+MIN_MEAN = float(ENV.get("UEBA_VOL_MIN", "20"))    # ignore les sources peu actives
+# Baseline MEME-HEURE-DU-JOUR : il faut N jours d'historique (1 echantillon/jour).
+# Abaisse a 3 car la retention actuelle est courte (~1-5 j selon la source). Le
+# detecteur ne couvre que les sources ayant >= MIN_SAMP jours et s'ETEND tout seul
+# quand la retention grandit. A remonter (7-14) des que l'historique le permet.
+MIN_SAMP = int(ENV.get("UEBA_VOL_MINSAMP", "3"))   # min d'echantillons (jours)
+HIST_DAYS = int(ENV.get("UEBA_VOL_HISTDAYS", "21"))
+
+def es(path, body):
+    req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+def gelf(fields):
+    if os.environ.get("UEBA_DRY"):
+        return                      # test a blanc : pas d'emission GELF
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "ueba_volume")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def main():
+    # sources actives sur la fenetre d historique
+    srcs = [b["key"] for b in es(f"/{IDX}/_search", {"size": 0,
+        "query": {"range": {"timestamp": {"gte": f"now-{HIST_DAYS}d"}}},
+        "aggs": {"s": {"terms": {"field": "event_source", "size": 50}}}})["aggregations"]["s"]["buckets"]]
+
+    now = datetime.now(timezone.utc)
+    # heure complete a analyser = [debut_heure_courante - 1h ; debut_heure_courante)
+    cur_floor = now.replace(minute=0, second=0, microsecond=0)
+    obs_start = cur_floor.timestamp() - 3600
+    obs_hod   = datetime.fromtimestamp(obs_start, tz=timezone.utc).hour
+
+    anomalies = 0
+    for src in srcs:
+        h = es(f"/{IDX}/_search", {"size": 0,
+            "query": {"bool": {"must": [{"term": {"event_source": src}},
+                                        {"range": {"timestamp": {"gte": f"now-{HIST_DAYS}d"}}}]}},
+            "aggs": {"t": {"date_histogram": {"field": "timestamp", "fixed_interval": "1h",
+                                              "min_doc_count": 0}}}})["aggregations"]["t"]["buckets"]
+        observed = None
+        baseline = []
+        for b in h:
+            ksec = b["key"] / 1000.0
+            hod = datetime.fromtimestamp(ksec, tz=timezone.utc).hour
+            if abs(ksec - obs_start) < 1:
+                observed = b["doc_count"]
+            elif hod == obs_hod and ksec < obs_start:
+                baseline.append(b["doc_count"])
+        if observed is None or len(baseline) < MIN_SAMP:
+            continue
+        mean = statistics.mean(baseline)
+        std  = statistics.pstdev(baseline)
+        if mean < MIN_MEAN or std < 1:
+            continue
+        z = (observed - mean) / std
+        tag = None
+        if z >= Z_HIGH:
+            tag = "volume_spike"
+        elif z <= -Z_DROP and mean >= 50:
+            tag = "volume_drop"
+        if tag:
+            anomalies += 1
+            gelf({"event_source": "ueba_volume", "alert_tag": tag,
+                  "anomaly_entity": src, "anomaly_kind": "source",
+                  "vol_observed": observed, "vol_mean": round(mean, 1),
+                  "vol_std": round(std, 1), "vol_zscore": round(z, 2),
+                  "short_message": f"{tag} {src}: {observed} vs baseline {round(mean)}+-{round(std)} (z={round(z,1)})"})
+            print(f"  [{tag}] {src}: obs={observed} mean={round(mean)} std={round(std)} z={round(z,1)}")
+    print(f"[ueba-volume] sources={len(srcs)} heure_analysee={obs_hod}h UTC anomalies={anomalies}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-ueba-volume KO:", e, file=sys.stderr); sys.exit(1)
+NDREOF
+chmod 755 /usr/local/sbin/omni-ueba-volume
+echo "==> Detecteur omni-ueba-geo (VERSIONNE ici, AS-IS)"
+cat > /usr/local/sbin/omni-ueba-geo <<'NDREOF'
+#!/usr/bin/env python3
+# =============================================================================
+# omni-ueba-geo - Detection "impossible travel" (geo-velocite).
+#   Au-dela de Graylog : correle les connexions REUSSIES d'un meme compte (M365
+#   + VPN SSL) et calcule, entre deux connexions consecutives, la distance
+#   haversine et la vitesse requise. Si vitesse > seuil (avion) ET distance
+#   significative -> deplacement physiquement impossible = compte compromis.
+#   Graylog ne calcule ni distance ni vitesse : c'est un vrai cran au-dessus.
+#   Emet GELF event_source=ueba_geo, alert_tag=impossible_travel (entite=user).
+#   NB : geoloc = centroide pays -> conservateur (intra-pays = distance ~0, pas
+#   de faux positif ; ne leve que sur des pays reellement distants).
+# Lance par timer (toutes les 30 min). Config : UEBA_GEO_SPEED (900 km/h),
+#   UEBA_GEO_MINKM (500), UEBA_GEO_WINDOW_H (24).
+# =============================================================================
+import json, math, os, re, sys, urllib.request
+from datetime import datetime, timezone
+
+OS_URL   = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM     = "bx-it-graylog-vm"
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+ENV = load_env()
+SPEED_KMH = float(ENV.get("UEBA_GEO_SPEED", "900"))    # > vitesse d'un avion de ligne
+MIN_KM    = float(ENV.get("UEBA_GEO_MINKM", "500"))    # ignore les petits ecarts (bruit centroide)
+WINDOW_H  = int(ENV.get("UEBA_GEO_WINDOW_H", "24"))
+
+def es(path, body):
+    req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+def gelf(fields):
+    if os.environ.get("UEBA_DRY"):
+        return
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "ueba_geo")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def haversine(a, b):
+    R = 6371.0
+    lat1, lon1, lat2, lon2 = map(math.radians, [a[0], a[1], b[0], b[1]])
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    h = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
+    return 2 * R * math.asin(math.sqrt(h))
+
+def parse_geo(v):
+    try:
+        lat, lon = v.split(",")
+        return (float(lat), float(lon))
+    except Exception:
+        return None
+
+def collect(query, geo_field, country_field, city_field, ip_field, source_label):
+    """Renvoie [(ts_ms, (lat,lon), country, city, ip, source)]"""
+    out = []
+    body = {"size": 10000, "query": query,
+            "sort": [{"timestamp": "asc"}],
+            "_source": ["timestamp", "user", geo_field, country_field, city_field, ip_field]}
+    for hgt in es("/omni-*/_search", body)["hits"]["hits"]:
+        s = hgt["_source"]
+        geo = parse_geo(s.get(geo_field, "")) if s.get(geo_field) else None
+        if not geo:
+            continue
+        out.append((s.get("user"), s.get("timestamp"), geo,
+                    s.get(country_field), s.get(city_field), s.get(ip_field), source_label))
+    return out
+
+def to_ms(iso):
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000
+
+def main():
+    rng = {"range": {"timestamp": {"gte": f"now-{WINDOW_H}h"}}}
+    rows = []
+    # M365 : connexions REUSSIES
+    rows += collect({"bool": {"must": [{"term": {"m365_type": "signin"}}, rng,
+                                       {"exists": {"field": "user"}}],
+                              "must_not": [{"term": {"event_action": "echec_connexion"}}]}},
+                    "src_ip_geolocation", "src_country", "src_city", "src_ip", "M365")
+    # VPN SSL : connexions avec compte
+    rows += collect({"bool": {"must": [{"term": {"subtype": "vpn"}}, rng,
+                                       {"exists": {"field": "user"}},
+                                       {"exists": {"field": "remip_geolocation"}}]}},
+                    "remip_geolocation", "remip_country_code", "remip_city_name", "remip", "VPN")
+
+    # regroupe par compte
+    by_user = {}
+    for user, ts, geo, country, city, ip, srcl in rows:
+        if not user or not ts:
+            continue
+        by_user.setdefault(user, []).append((to_ms(ts), geo, country, city, ip, srcl))
+
+    found = 0
+    for user, evs in by_user.items():
+        evs.sort()
+        for (t1, g1, c1, city1, ip1, s1), (t2, g2, c2, city2, ip2, s2) in zip(evs, evs[1:]):
+            if ip1 == ip2:
+                continue
+            km = haversine(g1, g2)
+            if km < MIN_KM:
+                continue
+            hours = max((t2 - t1) / 3600000.0, 0.001)
+            speed = km / hours
+            if speed < SPEED_KMH:
+                continue
+            found += 1
+            gelf({"event_source": "ueba_geo", "alert_tag": "impossible_travel",
+                  "user": user, "geo_km": round(km), "geo_hours": round(hours, 2),
+                  "geo_speed_kmh": round(speed),
+                  "geo_from": f"{city1 or '?'}/{c1 or '?'} ({s1})", "geo_from_ip": ip1,
+                  "geo_to": f"{city2 or '?'}/{c2 or '?'} ({s2})", "geo_to_ip": ip2,
+                  "short_message": f"IMPOSSIBLE TRAVEL {user}: {c1}->{c2} {round(km)}km en {round(hours,1)}h ({round(speed)}km/h)"})
+            print(f"  [impossible_travel] {user}: {c1}->{c2} {round(km)}km / {round(hours,1)}h = {round(speed)}km/h")
+    print(f"[ueba-geo] comptes={len(by_user)} connexions={len(rows)} impossible_travel={found}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-ueba-geo KO:", e, file=sys.stderr); sys.exit(1)
+NDREOF
+chmod 755 /usr/local/sbin/omni-ueba-geo
+echo "==> Detecteur omni-ueba-score (VERSIONNE ici, AS-IS)"
+cat > /usr/local/sbin/omni-ueba-score <<'NDREOF'
+#!/usr/bin/env python3
+# =============================================================================
+# omni-ueba-score - Score de risque d'ENTITE (UEBA), hote ET compte.
+#   Au-dela de Graylog : FUSIONNE plusieurs signaux heterogenes par entite et les
+#   NORMALISE en un score 0-100 interpretable (saturation douce), avec le detail
+#   des facteurs contributifs. Graylog sait sommer risk_score ; il ne sait pas
+#   combiner detections + auth + geo + go-dark en un score borne et explicable,
+#   ni emettre un EVENEMENT de score par entite (alertable, suivable dans le temps).
+#   Emet GELF event_source=ueba_score (entity_type=host|user, ueba_score 0-100).
+# Lance par timer (toutes les 30 min). Fenetre 7j. Poids configurables.
+# =============================================================================
+import json, math, os, re, sys, urllib.request
+
+OS_URL   = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM     = "bx-it-graylog-vm"
+IDX      = "/omni-*,graylog_*/_search"   # inclut l'index par defaut (vuln/incidents INT)
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+ENV = load_env()
+WINDOW   = ENV.get("UEBA_SCORE_WINDOW", "7d")
+K        = float(ENV.get("UEBA_SCORE_K", "20"))     # echelle de saturation (raw->0-100)
+MIN_EMIT = int(ENV.get("UEBA_SCORE_MIN", "1"))      # score mini pour emettre
+W_GEO    = float(ENV.get("UEBA_W_GEO", "25"))       # poids d'un impossible travel
+W_GODARK = float(ENV.get("UEBA_W_GODARK", "15"))    # poids d'un hote go-dark
+W_BEACON = float(ENV.get("UEBA_W_BEACON", "12"))    # poids d'une balise C2
+
+def es(body):
+    req = urllib.request.Request(OS_URL + IDX, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+def gelf(fields):
+    if os.environ.get("UEBA_DRY"):
+        return
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "ueba_score")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def terms_metric(field, query, metric=None, size=500):
+    """terms(field) -> {cle: valeur}. metric=None => doc_count ; sinon sum(metric)."""
+    aggs = {"t": {"terms": {"field": field, "size": size}}}
+    if metric:
+        aggs["t"]["aggs"] = {"m": {"sum": {"field": metric}}}
+    r = es({"size": 0, "query": query, "aggs": aggs})["aggregations"]["t"]["buckets"]
+    if metric:
+        return {b["key"]: b["m"]["value"] or 0 for b in r}
+    return {b["key"]: b["doc_count"] for b in r}
+
+def distinct_severity(entity_field, size=500):
+    """Somme du max(risk_score) PAR alert_tag DISTINCT par entite.
+    Recompense la diversite + severite des menaces (pas le volume d'evenements)."""
+    body = {"size": 0, "query": rng([{"exists": {"field": "risk_score"}},
+                                     {"exists": {"field": entity_field}}, {"exists": {"field": "alert_tag"}}]),
+            "aggs": {"e": {"terms": {"field": entity_field, "size": size},
+                "aggs": {"tags": {"terms": {"field": "alert_tag", "size": 40},
+                    "aggs": {"sev": {"max": {"field": "risk_score"}}}}}}}}
+    out = {}
+    for b in es(body)["aggregations"]["e"]["buckets"]:
+        out[b["key"]] = sum((t["sev"]["value"] or 0) for t in b["tags"]["buckets"])
+    return out
+
+def rng(extra):
+    return {"bool": {"must": [{"range": {"timestamp": {"gte": f"now-{WINDOW}"}}}] + extra}}
+
+def saturate(raw):
+    return round(100 * (1 - math.exp(-raw / K))) if raw > 0 else 0
+
+def emit(entity_type, name, raw, factors):
+    score = saturate(raw)
+    if score < MIN_EMIT or not name:
+        return 0
+    top = max(factors.items(), key=lambda x: x[1])[0] if factors else "?"
+    gelf({"event_source": "ueba_score", "entity_type": entity_type, "ueba_entity": name,
+          "ueba_score": score, "ueba_raw": round(raw, 1), "ueba_top_factor": top,
+          "factor_detections": round(factors.get("detections", 0), 1),
+          "factor_authfail":   round(factors.get("authfail", 0), 1),
+          "factor_geo":        round(factors.get("geo", 0), 1),
+          "factor_godark":     round(factors.get("godark", 0), 1),
+          "factor_beacon":     round(factors.get("beacon", 0), 1),
+          "short_message": f"UEBA {entity_type} {name}: score {score}/100 (facteur dominant: {top})"})
+    return 1
+
+def main():
+    # --- HOTES ---------------------------------------------------------------
+    host_risk = distinct_severity("host")
+    godark = set(terms_metric("dark_host", {"bool": {"must": [
+        {"range": {"timestamp": {"gte": "now-3h"}}},
+        {"term": {"event_source": "collecte_sla"}}, {"term": {"sla_type": "go_dark"}}]}}).keys())
+    beacon_src = terms_metric("src_ip", rng([{"term": {"event_source": "ndr_beacon"}}]))
+
+    # beacon_src est keye par IP source interne (pas un hostname) : on AJOUTE ces
+    # IP comme entites a part entiere pour que le facteur beaconing compte vraiment
+    # (sinon .get(hostname) renvoyait toujours 0). Une entite-IP qui beacon ressort
+    # ainsi dans le classement, a defaut de resolution IP->hostname.
+    hosts = set(host_risk) | godark | set(beacon_src)
+    n_host = 0
+    for h in hosts:
+        f = {"detections": host_risk.get(h, 0),
+             "godark": W_GODARK if h in godark else 0,
+             "beacon": W_BEACON * beacon_src.get(h, 0)}
+        n_host += emit("host", h, sum(f.values()), f)
+
+    # --- COMPTES -------------------------------------------------------------
+    user_risk = distinct_severity("user")
+    authfail  = terms_metric("user", rng([{"term": {"event_id": "4625"}}]))
+    geo       = terms_metric("user", rng([{"term": {"event_source": "ueba_geo"}}]))
+
+    users = set(user_risk) | set(geo)
+    n_user = 0
+    for u in users:
+        if not u or u.endswith("$"):           # ignore comptes machine
+            continue
+        # NB : impossible_travel est mappe dans le CSV MITRE -> il alimente DEJA
+        # 'detections' via le champ user (risk_score). Pas de poids geo separe
+        # (sinon double comptage). 'geo' n'est garde que pour l'info/affichage.
+        f = {"detections": user_risk.get(u, 0),
+             "authfail": min(20, authfail.get(u, 0) / 5.0)}
+        n_user += emit("user", u, sum(f.values()), f)
+
+    print(f"[ueba-score] hotes_scores={n_host} comptes_scores={n_user} "
+          f"(go-dark={len(godark)}, beacons_src={len(beacon_src)}, impossible_travel={sum(geo.values())})")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-ueba-score KO:", e, file=sys.stderr); sys.exit(1)
+NDREOF
+chmod 755 /usr/local/sbin/omni-ueba-score
 
 SOURCES=(ueba_volume ueba_geo ndr_beacon ueba_score)
 for b in omni-ueba-volume omni-ueba-geo omni-ndr-beacon omni-ueba-score; do
