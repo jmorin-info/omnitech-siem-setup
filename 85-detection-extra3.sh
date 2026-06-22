@@ -159,17 +159,18 @@ then
 end
 EOF
 
-# --- 6) Telechargement via certutil (LOLBin, T1105) --------------------------
-# certutil -urlcache -f http://... / -split : telechargement par binaire systeme.
-# Mesure 7j : 0 occurrence de certutil+urlcache/split -> tout hit = ingress tool.
+# --- 6) Telechargement via certutil : variantes -split / -verifyctl (T1105) ---
+# COMPLEMENT de lolbin_suspect (47) qui couvre deja certutil + urlcache/-decode/-encode.
+# Ici on cible les methodes de telechargement que 47 NE couvre PAS : -split (recombinaison
+# de fichier) et -verifyctl (recuperation de CTL via URL). Pas d'urlcache (anti-doublon).
+# Mesure 7j : 0.
 ensure_rule "omni-x3-13-certutil-download" <<'EOF'
 rule "omni-x3-13-certutil-download"
 when
   to_string($message.event_source) == "sysmon"
   AND to_string($message.winlogbeat_winlog_event_id) == "1"
   AND contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "certutil", true)
-  AND ( contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "urlcache", true)
-     OR contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "-split", true)
+  AND ( contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "-split", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "verifyctl", true) )
 then
   set_field("alert_tag", "certutil_download");
