@@ -1,0 +1,42 @@
+# =============================================================================
+# deception-decoys.csv - Registre des LEURRES (honeytokens) OMNI Sentinel.
+#   key  = la valeur EXACTE telle qu'elle apparait dans la telemetrie (compte,
+#          compte machine avec $, ou FQDN canari) -- en minuscules (le lookup
+#          Graylog est case_insensitive, les comptes machine MAJUSCULES matchent).
+#   type = identity | canary
+#     identity -> compte/compte-machine leurre : toute auth Windows (4624/4625/4768),
+#                 tout TGS (4769 = kerberoast) ou tout sign-in M365 le concernant FIRE.
+#     canary   -> FQDN d'un token canari embarque dans un fichier appat : toute
+#                 requete DNS (Sysmon EID22 / FortiGate) vers ce FQDN FIRE.
+#
+#   PROPRIETE 0-FP : ces cles N'ONT AUCUN USAGE LEGITIME. Collision verifiee = 0 sur
+#   30 j (TargetUserName/ServiceName/QueryName). La regle s'arme et ne tire qu'au
+#   CONTACT d'un leurre. Pour AJOUTER un leurre : 1 ligne ici -> actif en <60 s
+#   (re-lecture CSV), sans toucher au code. Le commentaire '#' est retire au deploiement
+#   (CSVFileDataAdapter rejette tout le fichier si une ligne n'a pas 2 colonnes).
+#
+#   DISCIPLINE DE PROVISIONNING (sinon FP) : un compte leurre doit rester DORMANT --
+#   jamais cable a un sync (MSOL/ADSync), un RMM (ninjaone), un outil de sauvegarde,
+#   un scanner authentifie. Aucun usage = aucun evenement = aucun FP. Cf docs/DECEPTION-PLAN.md.
+# =============================================================================
+key,type
+svc_veeam,identity
+svc_sql,identity
+svc_backup,identity
+svc_scan,identity
+svc_sap,identity
+svc-fortiweb,identity
+svc_sqlrpt,identity
+adm-sql,identity
+adm-backup,identity
+bx-sql-it-vm$,identity
+bx-backup2-it-vm$,identity
+bx-pki2025-it-vm$,identity
+bx-fs02-it-vm$,identity
+bx-esxi-05-it$,identity
+bx-ad03-it-vm$,identity
+kdbx-restore.bkp-omnitech-vault.net,canary
+gw-remote.vpn-omnitech-secure.net,canary
+git-deploy.repo-omnitech-ci.net,canary
+assets.dr-omnitech-plan.net,canary
+fs-archive.share-omnitech-fin.net,canary

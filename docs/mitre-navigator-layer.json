@@ -34,13 +34,13 @@
     },
     {
       "techniqueID": "T1558.003",
-      "score": 8,
+      "score": 9,
       "enabled": true,
-      "comment": "Kerberoasting : kerberoasting, kerberos_rc4 (score 8)",
+      "comment": "Kerberoasting : kerberoasting, kerberos_rc4, decoy_kerberoast (score 9)",
       "metadata": [
         {
           "name": "detections",
-          "value": "kerberoasting, kerberos_rc4"
+          "value": "kerberoasting, kerberos_rc4, decoy_kerberoast"
         }
       ]
     },
@@ -144,11 +144,11 @@
       "techniqueID": "T1078",
       "score": 10,
       "enabled": true,
-      "comment": "Valid Accounts : m365_etranger, m365_risque, canary, impossible_travel, explicit_cred_use, vault_admin, fmg_admin_login (score 10)",
+      "comment": "Valid Accounts : m365_etranger, m365_risque, canary, impossible_travel, explicit_cred_use, vault_admin, fmg_admin_login, decoy_identity (score 10)",
       "metadata": [
         {
           "name": "detections",
-          "value": "m365_etranger, m365_risque, canary, impossible_travel, explicit_cred_use, vault_admin, fmg_admin_login"
+          "value": "m365_etranger, m365_risque, canary, impossible_travel, explicit_cred_use, vault_admin, fmg_admin_login, decoy_identity"
         }
       ]
     },
@@ -713,6 +713,18 @@
         {
           "name": "detections",
           "value": "winrm_lateral"
+        }
+      ]
+    },
+    {
+      "techniqueID": "T1005",
+      "score": 9,
+      "enabled": true,
+      "comment": "Data from Local System (canari) : canary_token (score 9)",
+      "metadata": [
+        {
+          "name": "detections",
+          "value": "canary_token"
         }
       ]
     }

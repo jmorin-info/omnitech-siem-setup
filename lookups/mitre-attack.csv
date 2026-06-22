@@ -89,3 +89,6 @@ wmic_exec,T1047,Windows Management Instrumentation,Execution,eleve,7
 ifeo_debugger,T1574.012,Hijack Execution Flow: IFEO Injection,Privilege Escalation,critique,8
 service_host_shell,T1068,Exploitation for Privilege Escalation,Privilege Escalation,critique,9
 winrm_lateral,T1021.006,Remote Services: Windows Remote Management,Lateral Movement,eleve,7
+decoy_identity,T1078,Valid Accounts (honeytoken),Credential Access,critique,9
+decoy_kerberoast,T1558.003,Kerberoasting (SPN leurre),Credential Access,critique,9
+canary_token,T1005,Data from Local System (canari),Collection,critique,9
