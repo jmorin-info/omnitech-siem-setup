@@ -504,19 +504,12 @@ def _entity_scores(name):
 _SEVMAP = {"critical": 92, "critique": 92, "high": 72, "eleve": 72, "élevé": 72, "eleve ": 72,
            "medium": 48, "moyen": 48, "low": 22, "faible": 22, "info": 12, "informational": 12}
 
-def _fused_risk(scores, sev_counts, total_det):
-    """Score de risque FUSIONNÉ d'une entité : combine 3 signaux INDÉPENDANTS — anomalie ML
-    (oms-ml), comportement UEBA, et sévérité des détections déterministes. Le signal dominant
-    fixe le plancher (une détection critique = critique, même sans ML/UEBA), et la
-    CORROBORATION (plusieurs signaux élevés = plus de confiance) ajoute un bonus borné.
-    But : une seule jauge de priorisation d'entité, avec la décomposition pour l'analyste."""
-    ml = round((scores.get("ml") or {}).get("score") or 0)
-    ueba = round((scores.get("ueba") or {}).get("score") or 0)
-    # Détections : une CRITIQUE pose un plancher élevé (rare + grave) ; les "hautes" comptent
-    # par CONCENTRATION — une règle qui tire est courante, une RAFALE de hautes est un signal.
-    # (Sinon le max-de-sévérité sur 7 j rendrait toute entité active « critique ».)
+def _det_score(sc):
+    """Sévérité des détections en score : une CRITIQUE pose un plancher haut (rare + grave) ;
+    les 'hautes' comptent par CONCENTRATION (une règle qui tire est courante, une RAFALE est
+    un signal) — sinon le max-de-sévérité rendrait toute entité active « critique »."""
     crit = high = med = 0
-    for sev, n in (sev_counts or {}).items():
+    for sev, n in (sc or {}).items():
         v = _SEVMAP.get(str(sev).strip().lower(), 30)
         if v >= 90:
             crit += n
@@ -524,8 +517,20 @@ def _fused_risk(scores, sev_counts, total_det):
             high += n
         elif v >= 40:
             med += n
-    det = (min(96, 86 + min(10, crit)) if crit else
-           66 if high >= 10 else 52 if high >= 3 else 40 if high >= 1 else 28 if med else 12)
+    return (min(96, 86 + min(10, crit)) if crit else
+            66 if high >= 10 else 52 if high >= 3 else 40 if high >= 1 else 28 if med else 12)
+
+
+def _fused_risk(scores, sev_all, total_det, sev_recent=None):
+    """Score de risque FUSIONNÉ d'une entité : combine 3 signaux INDÉPENDANTS — anomalie ML
+    (oms-ml), comportement UEBA, et sévérité des détections. Le signal dominant fixe le
+    plancher ; la CORROBORATION (≥2 signaux élevés) ajoute un bonus borné. **RÉCENCE** : si
+    la sévérité RÉCENTE (72 h) est fournie, elle DOMINE le composant détection (l'historique
+    7 j ne pèse qu'à 55 %) → le score reflète le risque ACTUEL, pas un pic ancien/purgé."""
+    ml = round((scores.get("ml") or {}).get("score") or 0)
+    ueba = round((scores.get("ueba") or {}).get("score") or 0)
+    det = (_det_score(sev_all) if sev_recent is None
+           else max(_det_score(sev_recent), round(0.55 * _det_score(sev_all))))
     comps = {"ml": ml, "ueba": ueba, "detection": det}
     base = max(comps.values())
     elevated = sum(1 for v in comps.values() if v >= 50)
@@ -598,6 +603,8 @@ def get_entity(name, size=20, frm=0):
         "aggs": {"tech": {"terms": {"field": "mitre_technique", "size": 8}},
                  "tac": {"terms": {"field": "mitre_tactic", "size": 8}},
                  "sev": {"terms": {"field": "risk_severity", "size": 6}},
+                 "sev_recent": {"filter": {"range": {"timestamp": {"gte": "now-72h"}}},
+                                "aggs": {"s": {"terms": {"field": "risk_severity", "size": 6}}}},
                  "tot": {"value_count": {"field": "alert_tag"}}}})
     ag = res.get("aggregations", {})
     ev = []
@@ -609,9 +616,10 @@ def get_entity(name, size=20, frm=0):
     th = th.get("value", 0) if isinstance(th, dict) else (th or 0)
     scores = _entity_scores(name)
     sev_counts = {b["key"]: b["doc_count"] for b in ag.get("sev", {}).get("buckets", [])}
+    sev_recent = {b["key"]: b["doc_count"] for b in ag.get("sev_recent", {}).get("s", {}).get("buckets", [])}
     return {"name": _rd(name), "total": ag.get("tot", {}).get("value", 0),
             "from": frm, "size": size, "loaded": frm + len(ev), "has_more": (frm + len(ev)) < th,
-            "scores": scores, "risk": _fused_risk(scores, sev_counts, th), "watched": is_watched(name),
+            "scores": scores, "risk": _fused_risk(scores, sev_counts, th, sev_recent), "watched": is_watched(name),
             "linked": [_rd(u) for u in linked] if len(linked) > 1 else [],
             "techniques": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tech", {}).get("buckets", [])],
             "tactics": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tac", {}).get("buckets", [])],
@@ -834,16 +842,19 @@ def get_entities_browse(days=7):
             "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}, {"exists": {"field": field}}],
                                "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
             "aggs": {"e": {"terms": {"field": field, "size": 18},
-                           "aggs": {"sev": {"terms": {"field": "risk_severity", "size": 6}}}}}})
+                           "aggs": {"sev": {"terms": {"field": "risk_severity", "size": 6}},
+                                    "sev_recent": {"filter": {"range": {"timestamp": {"gte": "now-72h"}}},
+                                                   "aggs": {"s": {"terms": {"field": "risk_severity", "size": 6}}}}}}}})
         out = []
         for b in r.get("aggregations", {}).get("e", {}).get("buckets", []):
             if not b.get("key"):
                 continue
             sev = {x["key"]: x["doc_count"] for x in (b.get("sev", {}) or {}).get("buckets", [])}
+            sevr = {x["key"]: x["doc_count"] for x in (b.get("sev_recent", {}) or {}).get("s", {}).get("buckets", [])}
             bare = _bare(b["key"])
             sc = {"ml": {"score": ml_map.get(bare) if is_user else None},
                   "ueba": {"score": ue_map.get(bare) if is_user else None}}
-            fr = _fused_risk(sc, sev, b["doc_count"])
+            fr = _fused_risk(sc, sev, b["doc_count"], sevr)
             out.append({"entity": _rd(b["key"]), "n": b["doc_count"],
                         "risk": {"score": fr["score"], "label": fr["label"]},
                         "watched": _watch_key(b["key"]) in wk})
@@ -1064,7 +1075,9 @@ def get_risk():
                            "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}},
         "aggs": {"u": {"terms": {"field": "user", "size": 18},
                        "aggs": {"t": {"cardinality": {"field": "mitre_technique"}},
-                                "sev": {"terms": {"field": "risk_severity", "size": 6}}}}}})
+                                "sev": {"terms": {"field": "risk_severity", "size": 6}},
+                                "sev_recent": {"filter": {"range": {"timestamp": {"gte": "now-72h"}}},
+                                               "aggs": {"s": {"terms": {"field": "risk_severity", "size": 6}}}}}}}})
     # Classement par RISQUE FUSIONNÉ (ML+UEBA+sévérité), pas par simple volume de détections.
     def _bare(s):
         return str(s or "").split("\\")[-1].split("@")[0].strip().lower()
@@ -1085,7 +1098,8 @@ def get_risk():
     for b in res.get("aggregations", {}).get("u", {}).get("buckets", []):
         bare = _bare(b.get("key"))
         sev = {x["key"]: x["doc_count"] for x in (b.get("sev", {}) or {}).get("buckets", [])}
-        fr = _fused_risk({"ml": {"score": _mlm.get(bare)}, "ueba": {"score": _uem.get(bare)}}, sev, b["doc_count"])
+        sevr = {x["key"]: x["doc_count"] for x in (b.get("sev_recent", {}) or {}).get("s", {}).get("buckets", [])}
+        fr = _fused_risk({"ml": {"score": _mlm.get(bare)}, "ueba": {"score": _uem.get(bare)}}, sev, b["doc_count"], sevr)
         ents.append({"k": _rd(b["key"]), "n": b["doc_count"], "tech": (b.get("t", {}) or {}).get("value", 0),
                      "risk": {"score": fr["score"], "label": fr["label"]}, "watched": _watch_key(b.get("key")) in _wk})
     ents.sort(key=lambda e: -e["risk"]["score"])
