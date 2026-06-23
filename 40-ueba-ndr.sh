@@ -502,6 +502,7 @@ def emit(entity_type, name, raw, factors):
         return 0
     top = max(factors.items(), key=lambda x: x[1])[0] if factors else "?"
     gelf({"event_source": "ueba_score", "entity_type": entity_type, "ueba_entity": name,
+          **({"user": name} if entity_type == "user" else {"host": name}),
           "ueba_score": score, "ueba_raw": round(raw, 1), "ueba_top_factor": top,
           "factor_detections": round(factors.get("detections", 0), 1),
           "factor_authfail":   round(factors.get("authfail", 0), 1),
