@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 98-index-templates.sh - Bride l'explosion du mapping des index a fort volume
-#   (audit rank8). Le parsing KV FortiGate cree un keyword indexe A VIE pour CHAQUE
-#   nouvelle cle -> omni-fortigate = 406 champs, cluster-state qui grossit
-#   (anti-scalable sur OpenSearch mono-noeud).
+# 98-index-templates.sh - Bride l'explosion du mapping des index a fort volume.
+#
+#   /!\ MESURE 2026-06 (avant d'appliquer) : sur omni-fortigate, le nombre de champs
+#   OSCILLE entre 359 et 409 sur 10 generations (_0.._9) -> il est BORNE, PAS croissant.
+#   C'est le vocabulaire KV complet de FortiGate (~370 cles stables + 36 champs GeoIP),
+#   pas une fuite. La premisse de l'audit (rank8 : "chaque nouvelle cle = champ permanent
+#   qui fait grossir le cluster-state") ne se verifie donc PAS ici. Appliquer dynamic:false
+#   casserait des dashboards (370 champs KV a allowlister exhaustivement) pour ~0 benefice.
+#   => NON APPLIQUE sur omni-fortigate (PREFIXES vide par defaut ci-dessous).
+#
+#   Garder ce script comme OUTIL pour un prefixe REELLEMENT en fuite (champ-count qui croit
+#   d'index en index, ex. parsing JSON imbrique non maitrise) : ajouter le prefixe a PREFIXES,
+#   completer l'allowlist (GEO incluse !), appliquer en maintenance, verifier a la rotation.
 #
 #   APPROCHE SURE (legacy, ordre superieur, FUSIONNE avec le template Graylog) :
 #     - `dynamic: false` -> les NOUVELLES cles non listees sont stockees dans _source
@@ -39,7 +48,10 @@ PROPS="$(
 )"
 PROPS="${PROPS%,}"   # retire la virgule finale
 
-for P in omni-fortigate; do                # cible le pire offender ; etendre apres validation
+PREFIXES=()                                # VIDE par defaut (cf mesure en-tete : fortigate borne)
+# Exemple si un prefixe fuit reellement : PREFIXES=(omni-monprefixe)
+for P in "${PREFIXES[@]:-}"; do
+  [[ -z "$P" ]] && { echo "    [i] aucun prefixe cible (champ-count borne) — rien a appliquer."; break; }
   TPL="zz-omni-cap-${P#omni-}"
   body="{\"order\":100,\"index_patterns\":[\"${P}_*\"],\"mappings\":{\"dynamic\":false,\"properties\":{${PROPS}}}}"
   code="$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OS}/_template/${TPL}" -H 'Content-Type: application/json' -d "${body}")"
