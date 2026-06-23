@@ -1479,12 +1479,27 @@ let PALTOK=0,PALENT=[];
 function renderPal(q){q=(q||"").trim();const ql=q.toLowerCase();
   const cmds=CMDLIST().filter(c=>c.k.toLowerCase().includes(ql));
   const cmdHtml=cmds.map((c,i)=>`<div class="pi${i===0?" sel":""}" onclick="goNav('${c.p}');closePal();">▸ ${c.k}</div>`).join("");
-  $("#palList").innerHTML=cmdHtml||'<div class="muted" style="padding:12px">Tapez ≥ 2 caractères pour chercher une entité…</div>';
+  const logItem=q.length>=2?'<div class="pi" onclick="palSearchLogs('+JSON.stringify(q).replace(/"/g,'&quot;')+')">'+ic("search")+' '+(LANG==="en"?"Search":"Rechercher")+' « '+esc(q)+' » '+(LANG==="en"?"in logs":"dans les logs")+'</div>':'';
+  $("#palList").innerHTML=cmdHtml+logItem||'<div class="muted" style="padding:12px">'+(LANG==="en"?"Type ≥ 2 chars…":"Tapez ≥ 2 caractères…")+'</div>';
   if(q.length>=2){const tok=++PALTOK;
     j("/entity-search?q="+encodeURIComponent(q)).then(r=>{if(tok!==PALTOK)return;PALENT=r.results||[];
-      const ents=PALENT.map((e,i)=>`<div class="pi" onclick="openPalEnt(${i})">${e.kind==="host"?ic("cpu"):"👤"} ${esc(e.entity)} <span class="muted" style="font-size:11px">· ${(e.n||0).toLocaleString('fr')} ${t("pal_evts")}</span></div>`).join("");
-      $("#palList").innerHTML=cmdHtml+(ents?'<div class="muted" style="padding:8px 12px 4px;font-size:10px;letter-spacing:1px">ENTITÉS</div>'+ents:'');
+      const ents=PALENT.map((e,i)=>`<div class="pi" onclick="openPalEnt(${i})">${e.kind==="host"?ic("cpu"):(e.kind==="ip"?ic("globe"):"👤")} ${esc(e.entity)} <span class="muted" style="font-size:11px">· ${(e.n||0).toLocaleString('fr')} ${t("pal_evts")}</span></div>`).join("");
+      $("#palList").innerHTML=cmdHtml+logItem+(ents?'<div class="muted" style="padding:8px 12px 4px;font-size:10px;letter-spacing:1px">ENTITÉS</div>'+ents:'');
     }).catch(()=>{});}}
+function palSearchLogs(q){const tok=++PALTOK;
+  $("#palList").innerHTML='<div class="muted" style="padding:12px">'+(LANG==="en"?"Searching logs…":"Recherche dans les logs…")+'</div>';
+  j("/search?q="+encodeURIComponent(q)+"&size=30").then(r=>{if(tok!==PALTOK)return;
+    if(r&&r.error){$("#palList").innerHTML='<div class="muted" style="padding:12px">'+(LANG==="en"?"Invalid query.":"Requête invalide.")+'</div>';return;}
+    const rs=(r&&r.results)||[];
+    const head='<div class="muted" style="padding:8px 12px 4px;font-size:10px;letter-spacing:1px">LOGS · '+((r&&r.total)||0).toLocaleString('fr')+(LANG==="en"?" hits (2d)":" résultats (2j)")+'</div>';
+    const rows=rs.map(e=>{const ent=e.ip||e.host||e.user;
+      return '<div class="pi" style="display:block"'+(ent?' onclick="closePal();openEntity(\''+_jsq(ent)+'\',\''+_jsq(ent)+'\')"':'')+'>'
+        +'<div style="display:flex;gap:7px;align-items:center;font-size:11px;flex-wrap:wrap"><span class="mono" style="color:var(--dim)">'+(e.ts?esc(e.ts.slice(5,19)):'')+'</span>'
+        +(e.src?'<span class="chip">'+esc(e.src)+'</span>':'')+(e.tag?'<b style="color:var(--cy)">'+nice(e.tag)+'</b>':'')
+        +(e.ip?'<span class="mono">'+esc(e.ip)+'</span>':'')+(e.seg?'<span style="color:var(--cy)">'+esc(e.seg)+'</span>':'')+(e.host?'<span>'+esc(e.host)+'</span>':'')+'</div>'
+        +'<div class="muted mono" style="font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc((e.msg||'').slice(0,150))+'</div></div>';}).join('');
+    $("#palList").innerHTML=head+(rows||'<div class="muted" style="padding:12px">'+(LANG==="en"?"No result.":"Aucun résultat.")+'</div>');
+  }).catch(()=>{$("#palList").innerHTML='<div class="muted" style="padding:12px">'+(LANG==="en"?"Search error.":"Erreur de recherche.")+'</div>';});}
 function openPalEnt(i){const e=PALENT[i];if(!e)return;closePal();openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
 document.addEventListener("keydown",e=>{
   if((e.metaKey||e.ctrlKey)&&(e.key==="k"||e.key==="K")){e.preventDefault();openPal();return;}
