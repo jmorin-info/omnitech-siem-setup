@@ -409,9 +409,11 @@ if [[ -n "${ST_INT}" ]]; then
     'event_source:ueba_volume' "[\"${ST_INT}\"]" \
     '["anomaly_entity"]' "${COUNT_SERIES}" "$(count_ge 1)" 90 60
   # Score UEBA tres eleve : entite a traiter en priorite -> P2 (seuil 80/100).
+  # Grace 1440min (24h) : une entité qui RESTE a risque ne re-alerte pas a chaque
+  # cycle de scoring (30min) -> 1 alerte/entite/jour au lieu de ~48 (firehose 14 487/7j).
   ensure_event "OMNI - Entité à risque UEBA élevé (>=80)" 2 \
     'event_source:ueba_score' "[\"${ST_INT}\"]" \
-    '["ueba_entity"]' "$(max_series ueba_score)" "$(max_ge ueba_score 80)" 60 30
+    '["ueba_entity"]' "$(max_series ueba_score)" "$(max_ge ueba_score 80)" 60 30 1440
   # Exfiltration / tunneling DNS : domaine a haute entropie -> P2 (a trier).
   ensure_event "OMNI - Tunneling DNS suspect (exfiltration)" 2 \
     'event_source:ndr_dns AND alert_tag:dns_tunneling' "[\"${ST_INT}\"]" \
@@ -419,7 +421,7 @@ if [[ -n "${ST_INT}" ]]; then
   # Scan reseau interne : balayage horizontal/vertical depuis une source interne -> P2.
   ensure_event "OMNI - Scan réseau interne (reconnaissance / latéral)" 2 \
     'event_source:ndr_scan AND alert_tag:network_scan' "[\"${ST_INT}\"]" \
-    '["entity_host"]' "${COUNT_SERIES}" "$(count_ge 1)" 90 30
+    '["entity_host"]' "${COUNT_SERIES}" "$(count_ge 1)" 90 30 720
   # Incident CRITIQUE : kill-chain multi-tactiques sur une entite -> P3.
   ensure_event "OMNI - Incident critique (kill-chain corrélée)" 3 \
     'event_source:incident AND incident_severity:critique' "[\"${ST_INT}\"]" \
@@ -456,7 +458,7 @@ RISK_STREAMS="$(jq -n --arg a "$ST_WINSEC" --arg b "$ST_SYSMON" --arg c "$ST_WIN
   '[$a,$b,$c,$d,$e] | map(select(. != "" and . != null))')"
 ensure_event "OMNI - Hôte à risque élevé (score MITRE cumulé / 1h)" 2 \
   '_exists_:risk_score AND NOT event_source:fortigate' "${RISK_STREAMS}" \
-  '["host"]' "${RISK_SERIES}" "$(sum_ge risk_score 30)" 60 5
+  '["host"]' "${RISK_SERIES}" "$(sum_ge risk_score 30)" 60 5 720
 
 # Correlation on-prem <-> cloud : echecs AD + connexion M365 hors France pour
 # le MEME compte (user = partie locale de l'UPN cote M365, sAMAccountName cote AD)
@@ -506,7 +508,7 @@ ensure_event "OMNI - Injection de processus (Sysmon 8/25)" 2 \
 
 ensure_event "OMNI - PowerShell suspect" 2 \
   'alert_tag:powershell_suspect' "[\"${ST_SYSMON}\",\"${ST_WINOTH}\"]" \
-  '[]' '[]' "${NOCOND}" 5 1
+  '["host"]' "${COUNT_SERIES}" "$(count_ge 1)" 15 5 240
 
 # Agrege par hote+compte (au lieu d'1 event par tache) : coupe le filet Teams
 # (~117/j de creations legitimes) sans perdre le signal. Utilise le tag
