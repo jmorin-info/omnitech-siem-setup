@@ -541,6 +541,7 @@
       <a data-p="twin"><span class="ic"><svg class="svi"><use href="#i-target"></use></svg></span><span data-i18n="nav_twin">Jumeau d'attaque</span></a>
       <a data-p="ems"><span class="ic"><svg class="svi"><use href="#i-cpu"></use></svg></span><span data-i18n="nav_ems">Endpoint (EMS)</span></a>
       <a data-p="network"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span><span data-i18n="nav_network">Réseau & Infra</span></a>
+      <a data-p="deploy"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span><span data-i18n="nav_deploy">Déploiement</span></a>
       <a data-p="leaks"><span class="ic"><svg class="svi"><use href="#i-unlock"></use></svg></span><span data-i18n="nav_leaks">Fuites & Dark Web</span></a>
       <a data-p="health"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span><span data-i18n="nav_health">Santé & Collecte</span></a>
       <a data-p="report"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span><span data-i18n="nav_report">Rapport</span></a>
@@ -640,6 +641,9 @@
     <section class="page" id="p-network">
       <div id="netWrap"><div class="card"><p class="muted" data-i18n="net_loading">Chargement de l'activité réseau & infra…</p></div></div>
     </section>
+    <section class="page" id="p-deploy">
+      <div id="depWrap"><div class="card"><p class="muted" data-i18n="dep_loading">Chargement du centre de déploiement…</p></div></div>
+    </section>
     <section class="page" id="p-leaks">
       <div class="grid kpis" id="leakSummary"></div>
       <div class="card"><h3><svg class="svi"><use href="#i-unlock"></use></svg> <span data-i18n="card_leaksrc">Sources de fuite surveillées</span><span class="tag" data-i18n="tag_leaksrc">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
@@ -711,7 +715,7 @@ const TACCOL={"Initial Access":"#fb3b53","Execution":"#f97316","Persistence":"#f
 let LANG=localStorage.getItem("soc_lang")||"fr";
 const I18N={
  fr:{
-  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_twin:"Jumeau d'attaque",twin_loading:"Chargement du jumeau d'attaque…",nav_ems:"Endpoint (EMS)",ems_loading:"Chargement de la télémétrie endpoint…",nav_network:"Réseau & Infra",net_loading:"Chargement de l'activité réseau & infra…",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",maint_title:"Maintenance requise",watch_on:"Surveillée",watch_off:"Surveiller",watch_hint:"Ajouter/retirer de la liste de surveillance",watch_added:"Ajoutée à la surveillance",watch_removed:"Retirée de la surveillance",watch_section:"Sous surveillance",
+  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_twin:"Jumeau d'attaque",twin_loading:"Chargement du jumeau d'attaque…",nav_ems:"Endpoint (EMS)",ems_loading:"Chargement de la télémétrie endpoint…",nav_network:"Réseau & Infra",net_loading:"Chargement de l'activité réseau & infra…",nav_deploy:"Déploiement",dep_loading:"Chargement du centre de déploiement…",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",maint_title:"Maintenance requise",watch_on:"Surveillée",watch_off:"Surveiller",watch_hint:"Ajouter/retirer de la liste de surveillance",watch_added:"Ajoutée à la surveillance",watch_removed:"Retirée de la surveillance",watch_section:"Sous surveillance",
   cluster_ok:"Cluster opérationnel",dens_comfort:"Confort",dens_compact:"Compact",
   al_search:"Recherche et navigation (Ctrl ou Cmd + K)",al_refresh:"Rafraîchir les données",al_density:"Basculer la densité d'affichage",al_help:"Ouvrir l'aide et les raccourcis clavier",al_logout:"Se déconnecter",al_lang:"Changer la langue (FR/EN)",
   t_search:"Recherche (Ctrl/Cmd+K)",t_refresh:"Rafraîchir maintenant",t_help:"Aide et raccourcis (touche ?)",t_logout:"Se déconnecter",t_lang:"Langue : Français — cliquer pour English",
@@ -732,7 +736,7 @@ const I18N={
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
  en:{
-  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_twin:"Attack twin",twin_loading:"Loading the attack twin…",nav_ems:"Endpoint (EMS)",ems_loading:"Loading endpoint telemetry…",nav_network:"Network & Infra",net_loading:"Loading network & infra activity…",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",maint_title:"Maintenance required",watch_on:"Watched",watch_off:"Watch",watch_hint:"Add/remove from watchlist",watch_added:"Added to watchlist",watch_removed:"Removed from watchlist",watch_section:"Watchlist",
+  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_twin:"Attack twin",twin_loading:"Loading the attack twin…",nav_ems:"Endpoint (EMS)",ems_loading:"Loading endpoint telemetry…",nav_network:"Network & Infra",net_loading:"Loading network & infra activity…",nav_deploy:"Deployment",dep_loading:"Loading the deployment center…",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",maint_title:"Maintenance required",watch_on:"Watched",watch_off:"Watch",watch_hint:"Add/remove from watchlist",watch_added:"Added to watchlist",watch_removed:"Removed from watchlist",watch_section:"Watchlist",
   cluster_ok:"Cluster operational",dens_comfort:"Comfort",dens_compact:"Compact",
   al_search:"Search and navigation (Ctrl or Cmd + K)",al_refresh:"Refresh data",al_density:"Toggle display density",al_help:"Open help and keyboard shortcuts",al_logout:"Sign out",al_lang:"Change language (FR/EN)",
   t_search:"Search (Ctrl/Cmd+K)",t_refresh:"Refresh now",t_help:"Help and shortcuts (press ?)",t_logout:"Sign out",t_lang:"Language: English — click for Français",
@@ -781,8 +785,8 @@ function start(){$("#login").style.display="none";$("#app").style.display="grid"
 
 // nav
 const titles={
-  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",entities:"Recherche d'entités",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",twin:"Jumeau d'attaque — Exposition",ems:"Endpoint — FortiClient EMS",network:"Réseau & Infra — Aruba / Linux / DNS",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
-  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",entities:"Entity search",attack:"MITRE ATT&CK",graph:"Attack graph",twin:"Attack twin — Exposure",ems:"Endpoint — FortiClient EMS",network:"Network & Infra — Aruba / Linux / DNS",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
+  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",entities:"Recherche d'entités",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",twin:"Jumeau d'attaque — Exposition",ems:"Endpoint — FortiClient EMS",network:"Réseau & Infra — Aruba / Linux / DNS",deploy:"Déploiement / Agents",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
+  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",entities:"Entity search",attack:"MITRE ATT&CK",graph:"Attack graph",twin:"Attack twin — Exposure",ems:"Endpoint — FortiClient EMS",network:"Network & Infra — Aruba / Linux / DNS",deploy:"Deployment / Agents",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
 const PDESC={
  fr:{
   overview:"<b>Posture en un coup d'œil</b> — indicateurs clés, activité des dernières 24 h, tactiques ATT&CK et flux d'événements en temps réel. Chaque indicateur est cliquable.",
@@ -793,6 +797,7 @@ const PDESC={
   twin:"<b>Jumeau d'attaque (oms-graph)</b> — reconstruit passivement les chemins d'exposition vers les joyaux (DC, SIEM, Veeam, PKI…). Montre où durcir en priorité (<b>chokepoints</b>), le <b>rayon de souffle</b> d'un compromis, les <b>points uniques</b>, et où <b>pré-positionner les leurres</b>. Défensif, lecture passive.",
   ems:"<b>Endpoint — FortiClient EMS</b> — télémétrie des postes via FortiClient EMS (syslog TLS) : <b>malware</b> détecté par l'AV, <b>vulnérabilités</b> critiques, <b>protection désactivée</b>, et l'activité par type/poste. Les événements apparaissent au fur et à mesure que les postes remontent.",
   network:"<b>Réseau & Infra</b> — sources on-prem ajoutées au SIEM : <b>switches Aruba</b> (échecs d'auth admin, changements de config, port-security, sessions — avec l'IP cliente), <b>serveurs Linux</b> (SSH/sudo/compte/fichiers sensibles) et <b>DNS</b> (modifs manuelles d'enregistrement sur le DC). L'activité bénigne (ports up/down, STP) est affichée pour le contexte ; les détections de sécurité ressortent.",
+  deploy:"<b>Déploiement / Agents</b> — enrôlez n'importe quel hôte en une commande : un <b>one-liner</b> à copier (Windows <code>irm … | iex</code>, Linux <code>curl … | sudo bash</code>) qui vérifie les prérequis et converge (idempotent), ou le <b>téléchargement direct</b> des fichiers. Chaque bloc indique les prérequis et si le SIEM voit déjà l'hôte. Intégrité par CA TOFU + SHA256.",
   leaks:"<b>Fuites & Dark Web</b> — surveille les sites d'extorsion ransomware (RansomLook), les comptes exposés (HIBP/Dehashed) et le code public (GitHub).",
   health:"<b>Santé de la collecte</b> — volume et fraîcheur de chaque source. Une source qui décroche = angle mort, alerté automatiquement (preuve ISO A.8.15).",
   report:"<b>Rapport de posture</b> — synthèse exécutive imprimable (PDF) pour la direction et l'audit ISO. Bouton « Imprimer / PDF » en haut à droite.",
@@ -808,6 +813,7 @@ const PDESC={
   twin:"<b>Attack twin (oms-graph)</b> — passively reconstructs exposure paths to the crown jewels (DC, SIEM, Veeam, PKI…). Shows where to harden first (<b>chokepoints</b>), the <b>blast radius</b> of a compromise, <b>single points of failure</b>, and where to <b>pre-position decoys</b>. Defensive, passive read.",
   ems:"<b>Endpoint — FortiClient EMS</b> — endpoint telemetry via FortiClient EMS (syslog TLS): <b>malware</b> caught by the AV, critical <b>vulnerabilities</b>, <b>protection disabled</b>, and activity by type/host. Events appear as endpoints report in.",
   network:"<b>Network & Infra</b> — on-prem sources added to the SIEM: <b>Aruba switches</b> (admin auth failures, config changes, port-security, sessions — with the client IP), <b>Linux servers</b> (SSH/sudo/account/file tampering) and <b>DNS</b> (manual record changes on the DC). Benign activity (port up/down, STP) is shown for context; security detections stand out.",
+  deploy:"<b>Deployment / Agents</b> — enroll any host with one command: a copy-paste <b>one-liner</b> (Windows <code>irm … | iex</code>, Linux <code>curl … | sudo bash</code>) that checks prerequisites and converges (idempotent), or <b>direct download</b> of the files. Each block lists prerequisites and whether the SIEM already sees the host. Integrity via CA TOFU + SHA256.",
   leaks:"<b>Leaks & Dark Web</b> — monitors ransomware extortion sites (RansomLook), exposed accounts (HIBP/Dehashed) and public code (GitHub).",
   health:"<b>Collection health</b> — volume and freshness of each source. A source going dark = blind spot, alerted automatically (ISO A.8.15 evidence).",
   report:"<b>Posture report</b> — printable executive summary (PDF) for management and ISO audit. “Print / PDF” button at top right.",
@@ -826,7 +832,8 @@ document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   if(pg==="entities"){loadEntities();}
   if(pg==="twin"){j("/attack-graph").then(d=>renderTwin(d)).catch(()=>{});}
   if(pg==="ems"){j("/fortiems").then(d=>renderEms(d)).catch(()=>{});}
-  if(pg==="network"){j("/network").then(d=>renderNetwork(d)).catch(()=>{});}});
+  if(pg==="network"){j("/network").then(d=>renderNetwork(d)).catch(()=>{});}
+  if(pg==="deploy"){j("/deploy").then(d=>renderDeploy(d)).catch(()=>{});}});
 document.querySelectorAll("#nav a").forEach((a,i)=>{if(i<9)a.title=(LANG==="en"?"Shortcut ":"Raccourci ")+(i+1);});
 function renderEms(d){const w=$("#emsWrap");if(!w)return;d=d||{};const EN=LANG==="en";
   const sc=s=>s==="critique"?"#fb3b53":s==="eleve"?"#f5a623":"#38bdf8";
@@ -885,6 +892,47 @@ function renderNetwork(d){const w=$("#netWrap");if(!w)return;d=d||{};const EN=LA
       +'<div class="muted" style="font-size:12px;margin-top:2px">'+esc((e.msg||'').slice(0,150))+'</div></div>').join('')+'</div></div>';
   }
   if(!A.total&&!L.total&&!N.total)H='<div class="card"><p class="muted">'+(EN?"No network/infra event yet.":"Aucun événement réseau/infra pour l'instant.")+'</p></div>';
+  w.innerHTML=H;}
+function copyTxt(btn,txt){try{navigator.clipboard.writeText(txt).then(function(){var o=btn.getAttribute("data-l")||btn.textContent;btn.setAttribute("data-l",o);btn.textContent=(LANG==="en"?"Copied ✓":"Copié ✓");setTimeout(function(){btn.textContent=o;},1400);});}catch(e){}}
+function _kb(n){n=n||0;return n>=1048576?(n/1048576).toFixed(1)+" Mo":n>=1024?(n/1024).toFixed(0)+" Ko":n+" o";}
+function renderDeploy(d){const w=$("#depWrap");if(!w)return;d=d||{};const EN=LANG==="en";
+  const S=d.siem||{},P=(S.ports||{}),E=d.enrolled||{},AR=d.artifacts||[];
+  const BTN='display:inline-block;padding:4px 9px;margin:2px 4px 2px 0;border:1px solid var(--bd);border-radius:6px;background:#0c1525;color:var(--cy);font-size:12px;cursor:pointer;text-decoration:none';
+  const K=(v,l)=>'<div class="kpi cy"><div class="lab">'+l+'</div><div class="val mono">'+(typeof v==="number"?v.toLocaleString("fr"):esc(v))+'</div></div>';
+  const winN=(E.windows||[]).length,linN=(E.linux||[]).length,aruN=(E.aruba||[]).length;
+  let H='<div class="card"><h3><svg class="svi"><use href="#i-doc"></use></svg> '+(EN?"Host enrollment center":"Centre d'enrôlement des hôtes")+'<span class="tag">'+esc(S.fqdn||"")+'</span></h3>'
+    +'<div class="grid kpis">'+K(AR.length,(EN?"artifacts":"artefacts"))+K(winN,(EN?"Windows seen":"Windows vus"))+K(linN,(EN?"Linux seen":"Linux vus"))+K(aruN,(EN?"Aruba seen":"Aruba vus"))+'</div>'
+    +'<div class="muted" style="font-size:12px;margin-top:8px">SIEM '+esc(S.ip||"")+' · Windows '+(P.windows||5044)+' (Beats TLS) · Linux '+(P.linux||1519)+' (syslog) · Aruba '+(P.aruba||1520)+' · console '+(P.console||443)+'</div></div>';
+  const block=(title,icon,oneliner,files,prereq,hosts,note)=>{
+    const dls=(files||[]).map(f=>'<a style="'+BTN+'" href="/kit/'+encodeURIComponent(f)+'" download>'+esc(f)+'</a>').join('');
+    const seen=(hosts||[]).length;
+    const seenTag=note?('<span class="tag">'+esc(note)+'</span>')
+      :('<span class="tag" style="border-color:'+(seen?'#2dd4a7':'#39507a')+';color:'+(seen?'#2dd4a7':'#9fb2cf')+'">'+(seen?seen+(EN?' enrolled':' enrôlés'):(EN?'none yet':'aucun'))+'</span>');
+    let h='<div class="card"><h3>'+(icon?'<svg class="svi"><use href="#'+icon+'"></use></svg> ':'')+esc(title)+seenTag+'</h3>';
+    if(oneliner)h+='<div style="display:flex;gap:8px;align-items:center;background:#0b1220;border:1px solid var(--bd);padding:8px;border-radius:6px;margin:4px 0"><code style="flex:1;overflow:auto;white-space:nowrap;color:#cbd5e1;font-size:12px">'+esc(oneliner)+'</code><button style="'+BTN+'" onclick="copyTxt(this,'+JSON.stringify(oneliner).replace(/"/g,'&quot;')+')">'+(EN?"Copy":"Copier")+'</button></div>';
+    if(dls)h+='<div style="margin:8px 0 4px">'+dls+'</div>';
+    if(prereq)h+='<div class="muted" style="font-size:12px">'+(EN?"Prerequisites":"Prérequis")+' : '+esc(prereq)+'</div>';
+    if(seen){const last=hosts[0].last?(' · '+(EN?"last":"dern.")+' '+esc(hosts[0].last.slice(0,16))):'';
+      h+='<div class="muted" style="font-size:11px;margin-top:4px">'+esc(hosts.slice(0,6).map(x=>x.host).join(', '))+(hosts.length>6?'…':'')+last+'</div>';}
+    return h+'</div>';};
+  const win='irm https://'+(S.fqdn||"")+'/kit/install.ps1 | iex';
+  const lin='curl -fsSL https://'+(S.fqdn||"")+'/kit/install.sh | sudo bash -s -- '+(S.ip||"");
+  H+='<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(330px,1fr))">';
+  H+=block("Windows (Winlogbeat + Sysmon + audit)","i-cpu",win,
+        ["install.ps1","Install-OmniSiem-NinjaOne.ps1","winlogbeat.yml","sysmonconfig-omnitech.xml","audit-baseline.csv","omnitech-rootca.pem"],
+        "Admin, PowerShell 5.1+, 64-bit, TCP 5044+443",E.windows);
+  H+=block("Linux — Debian / Ubuntu","i-network",lin,["install.sh","omnitech-rootca.pem"],
+        "root/sudo, rsyslog, TCP 1519",E.linux);
+  H+=block("Linux — RHEL / Rocky / SUSE","i-network",lin,["install.sh"],
+        "root/sudo, dnf/zypper, rsyslog, TCP 1519",E.linux);
+  H+=block("Switch Aruba (AOS-S)","i-network",null,null,
+        "syslog → "+(S.ip||"")+" UDP/TCP 1520 : logging "+(S.ip||""),E.aruba,(EN?"reference":"référence"));
+  H+='</div>';
+  if(AR.length){
+    H+='<div class="card"><h3>'+(EN?"Artifacts & integrity (SHA-256)":"Artefacts & intégrité (SHA-256)")+'<span class="tag">/kit/SHA256SUMS</span></h3><div class="feed">'
+      +AR.map(a=>'<div class="frow" style="display:flex;gap:10px;align-items:center;font-size:12px"><a style="'+BTN+'" href="/kit/'+encodeURIComponent(a.name)+'" download>'+esc(a.name)+'</a><span class="muted mono">'+_kb(a.size)+'</span><span class="mono" style="color:var(--dim);overflow:hidden;text-overflow:ellipsis;flex:1" title="'+esc(a.sha256)+'">'+esc((a.sha256||'').slice(0,24))+'…</span></div>').join('')
+      +'</div></div>';
+  }
   w.innerHTML=H;}
 function renderPlaybooks(q){const body=$("#pbBody");if(!body)return;
   if(!Object.keys(GUIDANCE).length){j("/guidance").then(r=>{GUIDANCE=r.guidance||{};renderPlaybooks(q);}).catch(()=>{});return;}
@@ -1284,7 +1332,7 @@ function addLive(ev){const el=$("#liveFeed");if(!el)return;if(liveN===0)el.inner
   const b=$("#liveCount");if(b)b.textContent=liveN+" évén.";}
 
 // --- Command palette (Cmd/Ctrl+K) ---
-const CMDPAGES=["overview","incidents","detections","entities","attack","graph","twin","ems","network","leaks","health","report","playbooks"];
+const CMDPAGES=["overview","incidents","detections","entities","attack","graph","twin","ems","network","deploy","leaks","health","report","playbooks"];
 function CMDLIST(){return CMDPAGES.map(p=>({k:(titles[LANG]||titles.fr)[p],p:p}));}
 function goNav(p){const a=document.querySelector('#nav a[data-p="'+p+'"]');if(a)a.click();}
 function openPal(){$("#pal").classList.add("on");const i=$("#palIn");i.value="";renderPal("");setTimeout(()=>i.focus(),30);}

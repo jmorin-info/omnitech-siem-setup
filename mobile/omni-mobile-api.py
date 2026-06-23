@@ -1346,6 +1346,49 @@ def get_network(days=7):
             "dns": _summary({"term": {"event_category": "dns"}})}
 
 
+KIT_DIR = "/var/www/siem-kit"
+
+
+def get_deploy():
+    """Centre de déploiement : artefacts servis sous /kit/ (nom + taille + sha256
+    depuis SHA256SUMS, genere par 95-kit-deploy.sh), hotes deja enroles par OS
+    (Windows/Linux/Aruba via leur derniere activite), coordonnees du SIEM.
+    Lecture seule ; alimente la page /soc « Deploiement »."""
+    import os
+    siem = {"fqdn": "bx-it-graylog-vm.omnitech.security", "ip": "10.33.220.10",
+            "ports": {"windows": 5044, "linux": 1519, "aruba": 1520, "console": 443}}
+    # artefacts + checksums (lus depuis SHA256SUMS)
+    sums = {}
+    try:
+        with open(os.path.join(KIT_DIR, "SHA256SUMS"), encoding="utf-8") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) == 2:
+                    sums[parts[1]] = parts[0]
+    except OSError:
+        pass
+    artifacts = []
+    for name, h in sorted(sums.items()):
+        try:
+            sz = os.path.getsize(os.path.join(KIT_DIR, name))
+        except OSError:
+            sz = 0
+        artifacts.append({"name": name, "sha256": h, "size": sz})
+
+    def _hosts(index, filt):
+        r = os_search(index, {"size": 0, "query": {"bool": {"filter": filt}},
+            "aggs": {"h": {"terms": {"field": "source", "size": 60},
+                           "aggs": {"last": {"max": {"field": "timestamp"}}}}}})
+        return [{"host": _rd(b["key"]), "n": b["doc_count"],
+                 "last": b.get("last", {}).get("value_as_string")}
+                for b in r.get("aggregations", {}).get("h", {}).get("buckets", [])]
+    since = {"range": {"timestamp": {"gte": "now-30d"}}}
+    return {"siem": siem, "artifacts": artifacts, "enrolled": {
+        "windows": _hosts("omni-*", [{"terms": {"event_source": ["windows_security", "sysmon"]}}, since]),
+        "linux": _hosts("omni-linux*", [since]),
+        "aruba": _hosts("omni-aruba*", [since])}}
+
+
 OMS_GRAPH_DIR = "/root/omnitech-siem-setup/oms-graph"
 OMS_GRAPH_PY = OMS_GRAPH_DIR + "/.venv/bin/python"
 OMS_GRAPH_CFG = "/etc/oms-graph/config.yaml"
@@ -1463,6 +1506,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_fortiems())
         if p == "/m/api/network":
             return self._json(get_network())
+        if p == "/m/api/deploy":
+            return self._json(get_deploy())
         if p == "/m/api/sentinel-sim":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}

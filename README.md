@@ -141,6 +141,21 @@ cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env && $EDITOR 00-vars.e
 
 Console : `https://bx-it-graylog-vm.omnitech.security/soc/` (VPN). Volet Windows/AD : `windows/README-WINDOWS.md`.
 
+### Enrôlement des hôtes (Centre de déploiement)
+
+Tout hôte s'enrôle en **une commande**, depuis la page **Déploiement** de la console SOC (one-liner à copier + téléchargements + état « déjà vu »). Les installeurs **vérifient les prérequis** et **convergent** (idempotents, relançables). Artefacts servis sous `/kit/` (TLS), publiés par `95-kit-deploy.sh` (génère `SHA256SUMS`).
+
+| OS | One-liner | Téléchargement | Transport |
+|---|---|---|---|
+| **Windows** | `irm https://<siem>/kit/install.ps1 \| iex` | `install.ps1` + conf | Winlogbeat **TLS 5044** |
+| **Linux** Debian/Ubuntu | `curl -fsSL https://<siem>/kit/install.sh \| sudo bash -s -- 10.33.220.10` | `install.sh` | Syslog **TCP 1519** |
+| **Linux** RHEL/Rocky/SUSE | *(idem ; détection `dnf`/`yum`/`zypper`)* | `install.sh` | Syslog **TCP 1519** |
+| **Switch Aruba** AOS-S | `logging 10.33.220.10` (sur le switch) | — | Syslog **UDP/TCP 1520** |
+
+- **Windows** (`install.ps1`) : prérequis (admin, PowerShell 5.1+, 64-bit, TCP 5044+443), **auto-élévation** UAC, puis délègue au cœur idempotent `Install-OmniSiem-NinjaOne.ps1` (CA TOFU → audit → Sysmon → Winlogbeat → santé → inventaire).
+- **Linux** (`install.sh`) : prérequis + paquets (`rsyslog`/`auditd`/`logger`) multi-distro, forward auth/sudo/sshd/auditd → SIEM:1519, règles auditd `omni_*`, test d'émission, résumé `[OK]/[KO]`.
+- **Intégrité (TOFU)** : le 1ᵉʳ appel HTTPS récupère `omnitech-rootca.pem` (le CA n'est pas encore épinglé), qui est ensuite installé (`LocalMachine\Root` sous Windows) / utilisé par Beats — après quoi tout est validé. Fenêtre MITM **au premier contact uniquement**, sur réseau interne VPN-only. Vérification : `curl https://<siem>/kit/SHA256SUMS` (comparé automatiquement par `install.ps1`).
+
 ### Sécurité & secrets
 
 - **Aucun secret n'est versionné.** `.gitignore` exclut `00-vars.env`, `SECRETS.md`, tous les `*.key`/`*.pem`/`*.cred`/certificats. Utiliser les gabarits `*.example`.
