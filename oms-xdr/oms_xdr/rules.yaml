@@ -229,11 +229,52 @@ signals:
     type: presence
     entity_field: host
 
+  # --- Corrélation cross-source par src_ip / user (chasse du 23/06) ---
+  S_AUTHFAIL_WIN_IP:
+    description: "Échecs d'auth Windows par IP source (4625/4771, hors comptes machine/service)"
+    stream: windows
+    query: 'event_id:(4625 OR 4771) AND NOT account_class:machine AND NOT account_class:service'
+    type: count_by
+    entity_field: src_ip
+    threshold: 5
+
+  S_AUTHFAIL_VAULT_IP:
+    description: "Échecs d'authentification Vaultwarden par IP source"
+    stream: vaultwarden
+    query: 'alert_tag:vault_auth_fail'
+    type: count_by
+    entity_field: src_ip
+    threshold: 3
+
+  S_M365_FOREIGN_SIGNIN:
+    description: "Sign-in M365 depuis un pays hors zone bénigne (egress O365 FR/CA/US/SE/NL/IE/DE/GB exclus)"
+    stream: m365
+    query: 'event_source:m365 AND _exists_:src_ip_country_code AND NOT src_ip_country_code:(FR OR CA OR US OR SE OR NL OR IE OR DE OR GB) AND NOT user:no\-reply'
+    type: count_by
+    entity_field: user
+    threshold: 1
+
 # ---- RÈGLES DE CORRÉLATION ----------------------------------------
 # require_all : tous les signaux présents pour la MÊME entité dans la fenêtre
 # any_of      : au moins un des signaux listés
 # join_entity : true => corrélation par entité commune ; false => corrélation globale
 rules:
+
+  CR_IP_SPRAY_MULTISOURCE:
+    title: "Spray d'identifiants multi-système (même IP échoue sur AD + Vaultwarden)"
+    severity: high
+    join_entity: true
+    require_all: [S_AUTHFAIL_WIN_IP, S_AUTHFAIL_VAULT_IP]
+    mitre: ["T1110", "T1110.003"]
+    tactic: ["Credential Access"]
+
+  CR_IMPOSSIBLE_TRAVEL_PIVOT:
+    title: "Voyage impossible : sign-in M365 étranger + logon on-prem (même utilisateur)"
+    severity: critical
+    join_entity: true
+    require_all: [S_M365_FOREIGN_SIGNIN, S_LOGON_SUCCESS]
+    mitre: ["T1078", "T1078.004"]
+    tactic: ["Initial Access", "Defense Evasion"]
 
   CR_RECON_TO_ACCESS:
     title: "Reconnaissance suivie d'attaque par force brute"

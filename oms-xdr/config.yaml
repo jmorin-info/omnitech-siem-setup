@@ -17,6 +17,9 @@ graylog:
     sysmon:    "6a2ab23665bc77613c834135"   # OMNI - Sysmon
     internal:  "6a2bd9ec65bc77613c898706"   # OMNI - Interne SIEM (réinjection)
     netscan:   ""                            # input dédié oms-netscan (si scan actif activé)
+    m365:      "6a2ac4a165bc77613c83b22a"   # OMNI - M365
+    vaultwarden: "6a2e61e9b61861c0c218d9c9" # OMNI - Vaultwarden
+    bunkerweb: "6a2da8d2b61861c0c21300a4"   # OMNI - BunkerWeb
   # Réinjection des incidents : réutilise le bus GELF existant du SIEM (pas de 12222).
   output_gelf:
     host: "127.0.0.1"           # local sur la VM SIEM
