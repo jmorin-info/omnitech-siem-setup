@@ -149,14 +149,23 @@ EOF
 ensure_rule "omni-aruba-10-adminlogin" <<'EOF'
 rule "omni-aruba-10-adminlogin"
 when to_string($message.event_source)=="aruba"
-  AND ( contains(to_string($message.message),"SSL/TLS session started",true)
-     OR contains(to_string($message.message),"New SSH session",true)
+  AND ( contains(to_string($message.message),"New SSH session",true)
      OR contains(to_string($message.message),"SSH session for",true)
      OR contains(to_string($message.message),"Console session",true)
      OR contains(to_string($message.message),"session for user",true)
      OR contains(to_string($message.message),"logged in",true)
      OR contains(to_string($message.message),"authentication accepted",true) )
 then set_field("alert_tag","aruba_admin_login"); set_field("event_action","login_admin_switch"); end
+EOF
+# STP / boucle reseau (Blocked by STP, loop protect) = boucle ou rogue device.
+ensure_rule "omni-aruba-10-stploop" <<'EOF'
+rule "omni-aruba-10-stploop"
+when to_string($message.event_source)=="aruba"
+  AND ( contains(to_string($message.message),"Blocked by STP",true)
+     OR contains(to_string($message.message),"loop protect",true)
+     OR contains(to_string($message.message),"Loop detected",true)
+     OR contains(to_string($message.message),"loop-protect",true) )
+then set_field("alert_tag","aruba_stp_loop"); set_field("event_action","boucle_stp_switch"); end
 EOF
 PL="$(ensure_pipeline "OMNI - Aruba" <<'PIPE'
 pipeline "OMNI - Aruba"
@@ -170,6 +179,7 @@ rule "omni-aruba-10-authfail"
 rule "omni-aruba-10-config"
 rule "omni-aruba-10-portsec"
 rule "omni-aruba-10-adminlogin"
+rule "omni-aruba-10-stploop"
 end
 PIPE
 )"
@@ -182,6 +192,8 @@ add_mitre aruba_auth_fail     T1110     "Brute Force (admin switch)"            
 add_mitre aruba_config_change T1601.001 "Modify System Image / config reseau"    "Defense Evasion"   eleve   7
 add_mitre aruba_port_security T1200     "Hardware Additions / port-security"     "Initial Access"    eleve   7
 add_mitre aruba_admin_login   T1078     "Valid Accounts (admin switch)"          "Defense Evasion"   moyen   4
+add_mitre aruba_stp_loop      T1498     "Network DoS (boucle / STP)"             "Impact"            moyen   5
+add_mitre aruba_port_flap     T1200     "Hardware Additions (port flap)"         "Initial Access"    moyen   4
 install -m 644 "$CSV" /etc/graylog/lookup/mitre-attack.csv; chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true
 ok "MITRE aruba_*"
 NMAIL="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Mail equipe IT")|.id')"
@@ -194,6 +206,32 @@ if [[ -n "$ST" ]] && ! api_get "/events/definitions?per_page=300" | jq -e '.even
     field_spec:{},key_spec:[],notification_settings:{grace_period_ms:600000,backlog_size:20},notifications:$n}' \
     | post_entity "/events/definitions?schedule=true" | jqr '.id' >/dev/null && ok "alerte brute-force admin switch (>5/IP)"
 else skip "alerte brute-force admin switch existe"; fi
+
+# Alertes simples (count>=1) sur tag : changement config, port-security, boucle STP.
+mk_tag_alert() {  # TITRE  TAG  PRIORITE
+  local T="$1" TAG="$2" PR="${3:-2}"
+  [[ -z "$ST" ]] && return
+  api_get "/events/definitions?per_page=300" | jq -e --arg t "$T" '.event_definitions[]|select(.title==$t)' >/dev/null && { skip "alerte $T existe"; return; }
+  jq -n --arg st "$ST" --arg t "$T" --arg q "alert_tag:$TAG" --argjson n "$NF" --argjson pr "$PR" \
+    '{title:$t,description:"93-aruba.sh",priority:$pr,alert:true,
+      config:{type:"aggregation-v1",query:$q,query_parameters:[],streams:[$st],group_by:["source"],series:[{id:"count()",type:"count"}],
+        conditions:{expression:{expr:">=",left:{expr:"number-ref",ref:"count()"},right:{expr:"number",value:1}}},
+        search_within_ms:300000,execute_every_ms:300000,use_cron_scheduling:false,event_limit:50},
+      field_spec:{},key_spec:[],notification_settings:{grace_period_ms:600000,backlog_size:20},notifications:$n}' \
+    | post_entity "/events/definitions?schedule=true" | jqr '.id' >/dev/null && ok "alerte $T"
+}
+mk_tag_alert "OMNI - Changement config switch (Aruba)" "aruba_config_change" 2
+mk_tag_alert "OMNI - Violation port-security (Aruba)"  "aruba_port_security" 2
+mk_tag_alert "OMNI - Boucle reseau / STP (Aruba)"      "aruba_stp_loop"      2
+# Port-flap agrege (pas de tag : requete sur le contenu) : >5 'off-line' / port / 10 min.
+if [[ -n "$ST" ]] && ! api_get "/events/definitions?per_page=300" | jq -e '.event_definitions[]|select(.title=="OMNI - Port-flap switch (Aruba)")' >/dev/null; then
+  jq -n --arg st "$ST" --argjson n "$NF" '{title:"OMNI - Port-flap switch (Aruba)",description:"93-aruba.sh : lien instable / boucle",priority:1,alert:true,
+    config:{type:"aggregation-v1",query:"event_source:aruba AND message:\"is now off-line\"",query_parameters:[],streams:[$st],group_by:["source","aruba_port"],series:[{id:"count()",type:"count"}],
+      conditions:{expression:{expr:">",left:{expr:"number-ref",ref:"count()"},right:{expr:"number",value:5}}},
+      search_within_ms:600000,execute_every_ms:300000,use_cron_scheduling:false,event_limit:50},
+    field_spec:{},key_spec:[],notification_settings:{grace_period_ms:1800000,backlog_size:20},notifications:$n}' \
+    | post_entity "/events/definitions?schedule=true" | jqr '.id' >/dev/null && ok "alerte port-flap (>5/port/10min)"
+else skip "alerte port-flap existe"; fi
 
 echo
 echo "==> [5/5] Termine."
