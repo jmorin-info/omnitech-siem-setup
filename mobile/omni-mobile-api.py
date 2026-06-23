@@ -1222,6 +1222,31 @@ def get_attack_graph():
                 "hint": "lancer 89-attack-graph.sh puis le timer oms-graph (analyse quotidienne)"}
 
 
+OMS_GRAPH_DIR = "/root/omnitech-siem-setup/oms-graph"
+OMS_GRAPH_PY = OMS_GRAPH_DIR + "/.venv/bin/python"
+OMS_GRAPH_CFG = "/etc/oms-graph/config.yaml"
+
+
+def get_sentinel_sim(entity):
+    """Aperçu de réponse graduée (Pilier 3) pour une entité : délègue à
+    `oms-graph respond --simulate --json` (SOURCE UNIQUE de la logique de grade/plan).
+    Lecture seule, AUCUNE exécution (pas de --execute)."""
+    import re
+    import subprocess
+    entity = (entity or "").strip()[:80]
+    if not entity or not re.match(r"^[\w.\-$@\\ ]+$", entity):
+        return {"error": "entité invalide"}
+    try:
+        r = subprocess.run(
+            [OMS_GRAPH_PY, "-m", "oms_graph.run", "respond", "--simulate", entity,
+             "--json", "--config", OMS_GRAPH_CFG],
+            cwd=OMS_GRAPH_DIR, capture_output=True, text=True, timeout=25)
+        plans = json.loads((r.stdout or "[]").strip() or "[]")
+        return plans[0] if plans else {"error": "aucun plan", "entity": entity}
+    except (subprocess.SubprocessError, ValueError, OSError) as exc:
+        return {"error": "simulation indisponible", "detail": str(exc)[:120]}
+
+
 # ------------------------------------------------------------------------- handler
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silencieux
@@ -1286,6 +1311,10 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_risk())
         if p == "/m/api/attack-graph":
             return self._json(get_attack_graph())
+        if p == "/m/api/sentinel-sim":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return self._json(get_sentinel_sim(qs.get("entity", [""])[0]))
         if p == "/m/api/geo":
             return self._json(get_geo_threats())
         if p == "/m/api/report":

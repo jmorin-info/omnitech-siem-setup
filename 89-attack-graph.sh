@@ -49,20 +49,22 @@ systemctl daemon-reload
 systemctl enable --now oms-graph.timer oms-graph-respond.timer >/dev/null 2>&1 \
   && echo "    [+] timers actifs (analyse + reponse audit-seul)" || echo "    [!] activation timers KO"
 
-echo "==> [4/5] Routage event_source=attack_path -> 'OMNI - Interne SIEM' (+ exclusion M365)"
+echo "==> [4/5] Routage event_source attack_path + sentinel_response -> 'OMNI - Interne SIEM' (+ exclusion M365)"
 if declare -f require_api >/dev/null 2>&1 && require_api 2>/dev/null; then
   ST="$(get_stream_id 'OMNI - Interne SIEM' 2>/dev/null)"
+  M365="$(get_stream_id 'OMNI - M365' 2>/dev/null)"
   if [[ -n "${ST:-}" ]]; then
-    CUR="$(api_get "/streams/${ST}" | jq -r '.rules[]? | select(.field=="event_source") | .value')"
-    echo "$CUR" | grep -qx "attack_path" && echo "    [=] routage deja present" || {
-      jq -n '{field:"event_source",type:1,value:"attack_path",inverted:false,description:"oms-graph: exposition"}' \
-        | api_post "/streams/${ST}/rules" >/dev/null && echo "    [+] attack_path -> interne"; }
-    M365="$(get_stream_id 'OMNI - M365' 2>/dev/null)"
-    if [[ -n "${M365:-}" ]]; then
-      MEX="$(api_get "/streams/${M365}" | jq -r '.rules[]? | select(.field=="event_source" and .inverted==true) | .value')"
-      echo "$MEX" | grep -qx "attack_path" || jq -n '{field:"event_source",type:1,value:"attack_path",inverted:true,description:"exclusion oms-graph (anti-dup)"}' \
-        | api_post "/streams/${M365}/rules" >/dev/null && echo "    [+] M365 exclut attack_path"
-    fi
+    for ES in attack_path sentinel_response; do
+      CUR="$(api_get "/streams/${ST}" | jq -r '.rules[]? | select(.field=="event_source") | .value')"
+      echo "$CUR" | grep -qx "$ES" && echo "    [=] $ES deja route" || {
+        jq -n --arg v "$ES" '{field:"event_source",type:1,value:$v,inverted:false,description:"oms-graph/sentinel"}' \
+          | api_post "/streams/${ST}/rules" >/dev/null && echo "    [+] $ES -> interne"; }
+      if [[ -n "${M365:-}" ]]; then
+        MEX="$(api_get "/streams/${M365}" | jq -r '.rules[]? | select(.field=="event_source" and .inverted==true) | .value')"
+        echo "$MEX" | grep -qx "$ES" || jq -n --arg v "$ES" '{field:"event_source",type:1,value:$v,inverted:true,description:"exclusion (anti-dup)"}' \
+          | api_post "/streams/${M365}/rules" >/dev/null && echo "    [+] M365 exclut $ES"
+      fi
+    done
   else echo "    [!] stream 'OMNI - Interne SIEM' introuvable (lancer 21) — routage saute"; fi
 else echo "    [!] API Graylog indisponible — routage a relancer"; fi
 

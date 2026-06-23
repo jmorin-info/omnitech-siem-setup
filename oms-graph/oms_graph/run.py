@@ -173,11 +173,12 @@ def cmd_respond(cfg: dict, args) -> int:
             print("    Tabletop : oms-graph respond --simulate <hôte|compte> --config <cfg>")
             return 0
 
-    print(f"\n=== Réponse graduée Sentinel ({'SIMULATION' if args.simulate else 'leurres réels'}) ===")
     armed = (not resp.dry) and resp.armed_env
-    print(f"    Mode : {'ARMÉ (infra OMNITECH)' if armed else 'DRY-RUN (recommandation)'} · "
-          f"approbation={'OUI' if args.execute else 'non'}")
-    rc = 0
+    if not args.json:
+        print(f"\n=== Réponse graduée Sentinel ({'SIMULATION' if args.simulate else 'leurres réels'}) ===")
+        print(f"    Mode : {'ARMÉ (infra OMNITECH)' if armed else 'DRY-RUN (recommandation)'} · "
+              f"approbation={'OUI' if args.execute else 'non'}")
+    plans = []
     for t in triggers:
         host = t.get("source_host")
         entity = host or t.get("account") or t.get("decoy") or "?"
@@ -186,10 +187,16 @@ def cmd_respond(cfg: dict, args) -> int:
         g = response.grade(context, is_decoy=t["tag"] != "simulation")
         plan = response.build_plan(entity, host, t.get("source_ip"), t.get("account"), g, context)
         out = resp.execute(plan, approve=args.execute)
-        _print_plan(t, out)
+        out["mode"] = "armed" if armed else "dry_run"
+        out["trigger"] = t.get("tag")
+        plans.append(out)
+        if not args.json:
+            _print_plan(t, out)
         if gelf:
             gelf.push_response(out)
-    return rc
+    if args.json:
+        print(json.dumps(plans, ensure_ascii=False))
+    return 0
 
 
 def _print_plan(trig: dict, out: dict) -> None:
@@ -220,6 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--execute", action="store_true",
                    help="approuver l'exécution (n'agit que si ARMÉ : config + OMNI_SENTINEL_ARM=1)")
     r.add_argument("--push", action="store_true", help="auditer les plans en GELF (sentinel_response)")
+    r.add_argument("--json", action="store_true", help="sortie JSON (consommée par la console)")
 
     args = ap.parse_args(argv)
     cfg_path = args.config if Path(args.config).exists() else str(

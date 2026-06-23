@@ -667,6 +667,10 @@
     </section>
   </main>
   <div id="emodal"><div class="scrim2" onclick="closeEnt()"></div><div class="emc" id="emc"></div></div>
+  <div id="simModal" style="display:none;position:fixed;inset:0;z-index:60">
+    <div onclick="closeSim()" style="position:absolute;inset:0;background:rgba(4,8,16,.7);backdrop-filter:blur(3px)"></div>
+    <div id="simBody" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(620px,92vw);max-height:86vh;overflow:auto;background:#0c1525;border:1px solid var(--bd);border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5)"></div>
+  </div>
   <div id="pal"><div class="scrim2" onclick="closePal()"></div><div class="palbox"><input id="palIn" placeholder="Rechercher / naviguer…  (pages, entités)" data-i18n-ph="ph_palette" oninput="renderPal(this.value)"><div id="palList"></div></div></div>
   <div id="help" aria-hidden="true"><div class="scrim2" onclick="closeHelp()"></div>
     <div class="helpbox" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
@@ -988,13 +992,13 @@ function renderTwin(d){
   // Chokepoints + Blast radius (deux colonnes)
   H+='<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">';
   const cp=d.chokepoints||[];const cmax=cp.length?cp[0].on_paths:1;
-  H+='<div class="card"><h3>'+T.cp+'</h3><div class="feed">'+cp.map(c=>
-    '<div class="frow" style="display:flex;align-items:center;gap:10px"><span class="mono" style="color:'+kl(c.klass)+';min-width:34px;text-align:right">'+c.on_paths+'</span>'+
+  H+='<div class="card"><h3>'+T.cp+'<span class="tag">'+(EN?"click → graded response":"clic → réponse graduée")+'</span></h3><div class="feed">'+cp.map(c=>
+    '<div class="frow" onclick="simResponse(\''+_jsq(c.entity)+'\')" title="'+(EN?"Simulate response":"Simuler la réponse")+'" style="cursor:pointer;display:flex;align-items:center;gap:10px"><span class="mono" style="color:'+kl(c.klass)+';min-width:34px;text-align:right">'+c.on_paths+'</span>'+
     '<span style="flex:1"><span class="bar" style="display:inline-block;height:7px;border-radius:4px;background:'+kl(c.klass)+';width:'+Math.max(8,Math.round(100*c.on_paths/cmax))+'%"></span> '+esc(c.entity)+'</span>'+
     '<span class="tag" style="font-size:10px">'+esc(c.klass)+'</span></div>').join('')+'</div></div>';
   const bl=d.blast_radius||[];const bmax=bl.length?bl[0].hosts_reached:1;
-  H+='<div class="card"><h3>'+T.blast+'</h3><div class="feed">'+bl.map(b=>
-    '<div class="frow" style="display:flex;align-items:center;gap:10px"><span class="mono" style="color:'+kl(b.klass)+';min-width:34px;text-align:right">'+b.hosts_reached+'</span>'+
+  H+='<div class="card"><h3>'+T.blast+'<span class="tag">'+(EN?"click → graded response":"clic → réponse graduée")+'</span></h3><div class="feed">'+bl.map(b=>
+    '<div class="frow" onclick="simResponse(\''+_jsq(b.entity)+'\')" title="'+(EN?"Simulate response":"Simuler la réponse")+'" style="cursor:pointer;display:flex;align-items:center;gap:10px"><span class="mono" style="color:'+kl(b.klass)+';min-width:34px;text-align:right">'+b.hosts_reached+'</span>'+
     '<span style="flex:1"><span class="bar" style="display:inline-block;height:7px;border-radius:4px;background:'+kl(b.klass)+';width:'+Math.max(8,Math.round(100*b.hosts_reached/bmax))+'%"></span> '+esc(b.entity)+
     (b.jewels_reached&&b.jewels_reached.length?' <span class="tag" style="font-size:10px;color:#fb3b53">'+b.jewels_reached.length+' '+T.jewels+'</span>':'')+'</span></div>').join('')+'</div></div>';
   H+='</div>';
@@ -1016,6 +1020,23 @@ function renderTwin(d){
     (p.path||[]).map((n,i)=>'<span style="color:'+(p.path_kinds&&p.path_kinds[i]==="host"?"#38bdf8":"#9aa7bd")+'">'+esc(n)+'</span>').join(' <span class="muted">→</span> ')+'</div>').join('')+'</div></div>';}
   w.innerHTML=H;
 }
+function _jsq(s){return (s==null?"":""+s).replace(/[\\']/g,"\\$&");}
+function simClose(EN){return '<div style="text-align:right;margin-top:14px"><button class="stb" onclick="closeSim()">'+(EN?"Close":"Fermer")+'</button></div>';}
+function closeSim(){var m=$("#simModal");if(m)m.style.display="none";}
+function simResponse(ent){if(!ent)return;const EN=LANG==="en";const M=$("#simBody");if(!M)return;
+  $("#simModal").style.display="block";
+  M.innerHTML='<p class="muted">'+(EN?"Computing graded response…":"Calcul de la réponse graduée…")+'</p>';
+  j("/sentinel-sim?entity="+encodeURIComponent(ent)).then(d=>{
+    if(!d||d.error){M.innerHTML='<h3>'+esc(ent)+'</h3><p class="muted">'+esc((d&&d.error)||"?")+'</p>'+simClose(EN);return;}
+    const gc={critique:"#fb3b53",eleve:"#f5a623",modere:"#9aa7bd"}[d.grade]||"#9aa7bd";
+    const gl=EN?{critique:"CRITICAL",eleve:"HIGH",modere:"MODERATE"}:{critique:"CRITIQUE",eleve:"ÉLEVÉ",modere:"MODÉRÉ"};
+    const jr=d.jewels_at_risk||[];
+    let h='<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span class="pill" style="background:'+gc+'22;border-color:'+gc+'66;color:'+gc+';font-weight:700">'+(gl[d.grade]||d.grade)+'</span><h3 style="margin:0">'+esc(ent)+'</h3></div>';
+    h+='<div class="muted" style="font-size:12px;margin-bottom:8px">'+(EN?"Hypothetical compromise (tabletop)":"Compromission hypothétique (tabletop)")+' · '+(d.hosts_reachable||0)+' '+(EN?"hosts reachable":"hôtes atteignables")+(jr.length?' · '+(EN?"jewels at risk":"joyaux menacés")+': '+jr.map(esc).join(", "):"")+'</div>';
+    h+='<div class="muted" style="font-size:11px;margin-bottom:10px;padding:6px 9px;background:#0a1322;border-radius:8px">Mode: <b style="color:'+(d.mode==="armed"?"#fb3b53":"#38bdf8")+'">'+(d.mode==="armed"?(EN?"ARMED":"ARMÉ"):"DRY-RUN")+'</b> — '+(EN?"recommendations until you arm + approve on the host":"recommandations tant que non armé + approuvé sur l'hôte")+'</div>';
+    h+=(d.steps||[]).map(s=>'<div style="display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--bd)"><span class="mono" style="color:'+gc+';min-width:140px">'+esc(s.action)+'</span><span style="flex:1;font-size:13px">'+esc(s.text)+'</span></div>').join("");
+    h+=simClose(EN);M.innerHTML=h;
+  }).catch(()=>{M.innerHTML='<p class="muted">'+(EN?"Unavailable":"Indisponible")+'</p>'+simClose(EN);});}
 function buildGraph(){buildGraphView(GRAPH);}
 function buildGraphView(view){
   if(!window.cytoscape||!$("#cy")||!view)return;
