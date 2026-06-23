@@ -76,7 +76,7 @@ when has_field("source")
 then
   set_field("event_source", "aruba");
   set_field("host", to_string($message.source));
-  let n = lookup_value("aruba-switch", to_string($message.source));
+  let n = lookup_value("omni-aruba-switch", to_string($message.source));
   set_field("aruba_switch_name", n);
 end
 EOF
@@ -85,17 +85,18 @@ ensure_rule "omni-aruba-01-parse" <<'EOF'
 rule "omni-aruba-01-parse"
 when has_field("source") AND has_field("message")
 then
-  let m = grok(pattern: "%{DATA}%{INT:aruba_event_id}%{SPACE}%{WORD:aruba_subsystem}:%{SPACE}%{GREEDYDATA:aruba_text}", value: to_string($message.message));
-  set_fields(m);
+  // grok TOLERANT (3e arg=true) : ne pose que les captures qui matchent, jamais de champ vide.
+  // %{NOTSPACE} (et non %{WORD}) pour capter les subsystems a tiret : port-access, port-security.
+  set_fields(grok("%{DATA}%{INT:aruba_event_id}%{SPACE}%{NOTSPACE:aruba_subsystem}:%{SPACE}%{GREEDYDATA:aruba_text}", to_string($message.message), true));
 end
 EOF
-# IP cliente (origine d'un login / echec / session)
+# IP cliente (origine d'un login / echec / session) -> aruba_client_ip + src_ip (cle de correlation)
 ensure_rule "omni-aruba-02-clientip" <<'EOF'
 rule "omni-aruba-02-clientip"
 when has_field("source") AND contains(to_string($message.message), " from ", true)
 then
-  let c = grok(pattern: "from %{IP:aruba_client_ip}", value: to_string($message.message));
-  set_fields(c);
+  set_fields(grok("from %{IP:aruba_client_ip}", to_string($message.message), true));
+  set_fields(grok("from %{IP:src_ip}", to_string($message.message), true));
 end
 EOF
 # Numero de port (events 'ports:')
@@ -103,8 +104,7 @@ ensure_rule "omni-aruba-03-port" <<'EOF'
 rule "omni-aruba-03-port"
 when has_field("source") AND contains(to_string($message.message), "ports:", true)
 then
-  let p = grok(pattern: "port %{INT:aruba_port}", value: to_string($message.message));
-  set_fields(p);
+  set_fields(grok("port %{INT:aruba_port}", to_string($message.message), true));
 end
 EOF
 # --- STAGE 10 : detections (chaines AOS-S REELLES) --------------------------------

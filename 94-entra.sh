@@ -25,8 +25,10 @@ rule "omni-entra-10-appcred"
 when
   to_string($message.event_source)=="m365" AND to_string($message.m365_type)=="audit"
   AND ( contains(to_string($message.event_action),"credential",true)
-     OR contains(to_string($message.event_action),"Add service principal",true)
-     OR contains(to_string($message.event_action),"key credential",true) )
+     OR contains(to_string($message.event_action),"service principal",true)
+     OR contains(to_string($message.event_action),"key credential",true)
+     OR contains(to_string($message.event_action),"password credential",true)
+     OR contains(to_string($message.event_action),"Certificates and secrets management",true) )
 then set_field("alert_tag","m365_app_credential_add"); end
 EOF
 ensure_rule "omni-entra-10-ca" <<'EOF'

@@ -129,6 +129,9 @@ when
 then
   set_field("alert_tag","forticlient_malware");
   set_field("event_action","malware_endpoint");
+  set_field("mitre_technique","T1204");
+  set_field("mitre_tactic","Execution");
+  set_field("risk_severity","critique");
 end
 EOF
 # Vulnerabilite critique/haute detectee sur un poste.
@@ -142,6 +145,9 @@ when
 then
   set_field("alert_tag","forticlient_vuln");
   set_field("event_action","vulnerabilite_critique_endpoint");
+  set_field("mitre_technique","T1190");
+  set_field("mitre_tactic","Initial Access");
+  set_field("risk_severity","eleve");
 end
 EOF
 # Protection temps-reel / AV desactive(e) ou FortiClient altere (defense evasion).
@@ -155,6 +161,9 @@ when
 then
   set_field("alert_tag","forticlient_av_off");
   set_field("event_action","protection_desactivee");
+  set_field("mitre_technique","T1562.001");
+  set_field("mitre_tactic","Defense Evasion");
+  set_field("risk_severity","critique");
 end
 EOF
 PL="$(ensure_pipeline "OMNI - FortiClient EMS" <<'PIPE'

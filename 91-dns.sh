@@ -28,8 +28,13 @@ when
   to_string(\$message.winlogbeat_winlog_channel) == "${CH}"
 then
   set_field("event_category", "dns");
+  // event_source=dns : rend la source surveillable par le watchdog (qui agrege par event_source)
+  set_field("event_source", "dns");
   set_field("dns_name", to_string(\$message.winlogbeat_winlog_event_data_NAME));
   set_field("dns_zone", to_string(\$message.winlogbeat_winlog_event_data_Zone));
+  // Normalisation type/rdata (champs winlogbeat bruts) pour des detections stables
+  set_field("dns_query_type", to_string(\$message.winlogbeat_winlog_event_data_Type));
+  set_field("dns_rdata", to_string(\$message.winlogbeat_winlog_event_data_RDATA));
 end
 EOF
 # --- Changement d'enregistrement MANUEL (admin) : 515/516, hors bruit dynamique ---
