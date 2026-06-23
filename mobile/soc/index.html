@@ -1019,6 +1019,14 @@ function renderTwin(d){
   if(pp.length){H+='<div class="card"><h3>'+T.paths+'</h3><div class="feed">'+pp.map(p=>
     '<div class="frow mono" style="font-size:12px"><span class="pill" style="background:'+hc(p.hops)+'22;border-color:'+hc(p.hops)+'66;color:'+hc(p.hops)+'">'+p.hops+' '+T.hops+'</span> '+
     (p.path||[]).map((n,i)=>'<span style="color:'+(p.path_kinds&&p.path_kinds[i]==="host"?"#38bdf8":"#9aa7bd")+'">'+esc(n)+'</span>').join(' <span class="muted">→</span> ')+'</div>').join('')+'</div></div>';}
+  // Exposition de données (Kerberos) : qui peut ATTEINDRE chaque joyau (≠ contrôle).
+  const de=d.data_exposure||[];
+  if(de.length){H+='<div class="card"><h3>'+(EN?"Data exposure (Kerberos → jewels)":"Exposition de données (Kerberos → joyaux)")+'<span class="tag">'+(EN?"who can access — least privilege":"qui accède — moindre privilège")+'</span></h3><div class="feed">';
+    de.forEach(x=>{const routine=x.count>30;
+      H+='<div class="frow" style="padding:8px 0"><div style="display:flex;align-items:center;gap:10px"><span class="pill mono" style="min-width:34px;text-align:center;'+(routine?'background:#10233a;color:#9aa7bd':'background:#2a1f10;border-color:#f5a62366;color:#f5a623')+'">'+x.count+'</span><b style="flex:1">'+esc(x.label)+'</b>'+(routine?'<span class="muted" style="font-size:11px">'+(EN?"routine (all auth here)":"routine (tous y authentifient)")+'</span>':'')+'</div>';
+      if(!routine){H+='<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px">'+(x.accounts||[]).map(a=>'<span class="pchip" onclick="openEntity(\''+_jsq(a)+'\',\''+_jsq(a)+'\')" title="'+(EN?"Open dossier":"Ouvrir le dossier")+'" style="cursor:pointer">'+esc(a)+'</span>').join('')+(x.truncated?' <span class="muted">…</span>':'')+'</div>';}
+      H+='</div>';});
+    H+='</div></div>';}
   w.innerHTML=H;
 }
 function _jsq(s){return (s==null?"":""+s).replace(/[\\']/g,"\\$&");}

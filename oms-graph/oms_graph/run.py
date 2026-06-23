@@ -71,6 +71,9 @@ def cmd_analyze(cfg: dict, args) -> int:
     existing = _existing_decoys(cfg["output"]["decoy_registry"])
     recos = graph.recommend_decoys(g, analysis, existing)
     analysis["decoy_recommendations"] = recos
+    # Lentille d'exposition de données (Kerberos 4769) — distincte du graphe de contrôle.
+    analysis["data_exposure"] = opensearch.jewel_data_exposure(
+        os_cfg["url"], os_cfg["index"], window, cfg.get("crown_jewels", []))
     analysis["generated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     analysis["window"] = window
 
@@ -126,6 +129,11 @@ def _print(a: dict) -> None:
             cov = "déjà couvert" if r["already_covered"] else "À POSER"
             loc = r.get("place_on_host") or r.get("near_jewel")
             print(f"  [{cov}] {r['type']} '{r['suggested_key']}' @ {loc}")
+
+    if a.get("data_exposure"):
+        print("\n-- Exposition de données (Kerberos → joyaux ; qui accède) --")
+        for de in a["data_exposure"]:
+            print(f"  {de['count']:>3} comptes · {de['label'][:46]}")
 
 
 def _ctx_index(art: dict) -> dict:

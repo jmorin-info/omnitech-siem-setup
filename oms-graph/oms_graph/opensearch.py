@@ -78,6 +78,45 @@ def has_session_edges(os_url: str, index: str, window: str, logon_types: list[st
     return _terms_edges(os_url, index, body, acct)
 
 
+def _is_machine_acct(name: str) -> bool:
+    n = (name or "")
+    return n.endswith("$") or "$@" in n
+
+
+def jewel_data_exposure(os_url: str, index: str, window: str,
+                        jewels: list[dict], max_accounts: int = 40) -> list[dict]:
+    """Lentille d'EXPOSITION DE DONNÉES (distincte du graphe de contrôle) : pour chaque
+    joyau, les comptes HUMAINS qui le rejoignent via Kerberos (4769 TGS = accès au
+    service de l'hôte). Audit de moindre privilège : qui peut toucher la donnée du joyau ?
+    NB : les DC sont rejoints par ~tous (routine) ; l'intérêt est sur les joyaux de
+    données (fichiers/Veeam/PKI), où la liste est sélective et auditable."""
+    out: list[dict] = []
+    for j in jewels:
+        m = j.get("match", "")
+        body = {
+            "size": 0,
+            "query": {"bool": {"filter": [
+                {"term": {"winlogbeat_winlog_event_id": 4769}},
+                {"range": {"timestamp": {"gte": f"now-{window}"}}},
+                {"wildcard": {f"{ED}_ServiceName": {"value": f"*{m}*", "case_insensitive": True}}}]}},
+            "aggs": {"a": {"terms": {"field": f"{ED}_TargetUserName", "size": 400}}},
+        }
+        try:
+            r = requests.post(f"{os_url.rstrip('/')}/{index}/_search", json=body, timeout=60)
+            r.raise_for_status()
+            buckets = r.json().get("aggregations", {}).get("a", {}).get("buckets", [])
+        except requests.RequestException:
+            continue
+        accts = [b["key"].split("@")[0] for b in buckets if not _is_machine_acct(b["key"])]
+        if accts:
+            out.append({"jewel": m, "label": j.get("label", m),
+                        "count": len(accts), "accounts": accts[:max_accounts],
+                        "truncated": len(accts) > max_accounts})
+    # Les plus SÉLECTIFS d'abord (liste courte = auditable ; DC routiniers en bas).
+    out.sort(key=lambda d: d["count"])
+    return out
+
+
 def recent_triggers(os_url: str, index: str, tags: list[str], window: str
                     ) -> list[dict]:
     """Leurres déclenchés récemment (Pilier 1) = déclencheurs de réponse (Pilier 3).

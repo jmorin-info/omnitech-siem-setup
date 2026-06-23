@@ -1,5 +1,13 @@
 """Tests de la logique du jumeau d'attaque (données synthétiques, pas d'OpenSearch)."""
-from oms_graph import graph
+from oms_graph import graph, opensearch
+
+
+def test_is_machine_acct():
+    # Exclut les comptes machine (bare $ ET suffixe $@DOMAINE) ; garde les humains.
+    assert opensearch._is_machine_acct("BX-AD-01-IT-VM$") is True
+    assert opensearch._is_machine_acct("BX-DEV-JTH-LT$@OMNITECH.SECURITY") is True
+    assert opensearch._is_machine_acct("adm-jmorin@OMNITECH.SECURITY") is False
+    assert opensearch._is_machine_acct("hlarney") is False
 
 CFG = {
     "graph": {"session_logon_types": ["2"], "ubiquitous_admin_hosts": 3, "max_path_hops": 6},
