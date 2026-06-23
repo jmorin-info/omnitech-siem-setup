@@ -47,6 +47,7 @@ when
 then
   set_field("alert_tag", "dns_admin_change");
   set_field("event_action", "modif_enregistrement_dns_manuelle");
+  set_field("user", to_string(\$message.winlogbeat_winlog_user_name));
 end
 EOF
 # --- Vidage du cache DNS (EID 536) : effacement / recuperation post-empoisonnement ---
@@ -58,6 +59,7 @@ when
 then
   set_field("alert_tag", "dns_cache_flush");
   set_field("event_action", "vidage_cache_dns");
+  set_field("user", to_string(\$message.winlogbeat_winlog_user_name));
 end
 EOF
 # --- ESCALADE : changement manuel d'un nom SENSIBLE = hijack potentiel (override) ---
@@ -77,6 +79,7 @@ when
 then
   set_field("alert_tag", "dns_sensitive_change");
   set_field("event_action", "modif_dns_nom_sensible");
+  set_field("user", to_string(\$message.winlogbeat_winlog_user_name));
 end
 EOF
 
