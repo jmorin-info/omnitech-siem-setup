@@ -202,6 +202,10 @@
       <h3 class="sec" data-i18n="sec_ueba">Risque UEBA (24 h)</h3><div class="risk" id="uebaList"></div>
       <h3 class="sec" data-i18n="sec_topdet">Top détections (24 h)</h3><div class="feed" id="detMini"></div>
     </section>
+    <section class="page" id="p-twin">
+      <h3 class="sec" data-i18n="sec_twin">Jumeau d'attaque — Exposition</h3>
+      <div id="twinBody"><p class="muted" data-i18n="twin_load">Chargement…</p></div>
+    </section>
     <section class="page" id="p-guides">
       <h3 class="sec" data-i18n="sec_guides">Playbooks de réponse</h3>
       <input id="gSearch" data-i18n-ph="ph_guides" placeholder="Rechercher une détection, technique…" oninput="renderGuides(this.value)" autocomplete="off" autocapitalize="none">
@@ -214,6 +218,7 @@
     <a data-p="alerts"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span><span data-i18n="nav_alerts">Alertes</span></a>
     <a data-p="inc"><span class="ic"><svg class="svi"><use href="#i-inc"></use></svg></span><span data-i18n="nav_inc">Incidents</span></a>
     <a data-p="threat"><span class="ic"><svg class="svi"><use href="#i-threat"></use></svg></span><span data-i18n="nav_threat">Menace</span></a>
+    <a data-p="twin"><span class="ic"><svg class="svi"><use href="#i-target"></use></svg></span><span data-i18n="nav_twin">Exposition</span></a>
     <a data-p="guides"><span class="ic"><svg class="svi"><use href="#i-book"></use></svg></span><span data-i18n="nav_guides">Guides</span></a>
   </nav>
 </div>
@@ -241,7 +246,7 @@ const I18N={
  fr:{login_sub:"Centre des opérations · accès RSSI (VPN)",ph_account:"Compte AD",ph_password:"Mot de passe",btn_signin:"Se connecter",err_creds:"Identifiants invalides",err_net:"Erreur réseau",
   status_op:"opérationnel",push_al:"Activer les notifications",lang_al:"Changer la langue",
   sec_activity:"Activité (24 h)",card_detperhour:"Détections par heure",tag_live:"temps réel",sec_tactics:"Tactiques ATT&CK (7 j)",sec_alerts:"Alertes récentes (24 h)",sec_inc:"Incidents corrélés",sec_ml:"Anomalies ML (3 h)",sec_ueba:"Risque UEBA (24 h)",sec_topdet:"Top détections (24 h)",
-  nav_home:"Synthèse",nav_alerts:"Alertes",nav_inc:"Incidents",nav_threat:"Menace",nav_guides:"Guides",sec_guides:"Playbooks de réponse",ph_guides:"Rechercher une détection, technique…",guides_none:"Aucune détection ne correspond.",
+  nav_home:"Synthèse",nav_alerts:"Alertes",nav_inc:"Incidents",nav_threat:"Menace",nav_twin:"Exposition",sec_twin:"Jumeau d'attaque — Exposition",twin_load:"Chargement…",nav_guides:"Guides",sec_guides:"Playbooks de réponse",ph_guides:"Rechercher une détection, technique…",guides_none:"Aucune détection ne correspond.",
   kpi_critinc:"Incidents critiques",kpi_7d:"7 jours",kpi_riskhosts:"Hôtes à risque",kpi_uebage:"UEBA ≥ 80",kpi_det:"Détections",kpi_24h:"24 h",kpi_kev:"CVE KEV exposées",kpi_cisa:"CISA",
   empty_inc:"Aucun incident corrélé",empty_ras:"RAS",
   k_entities:"Entités",k_attack:"ATT&CK",k_rule:"Règle",blk_analysis:"Analyse",blk_remediation:"Remédiation",k_entity:"Entité",blk_detail:"Détail",lab_priority:"Priorité",g_title:"Guide d'action",g_what:"Ce que c'est",g_check:"À vérifier",g_remed:"Remédiation",g_correct:"Correction durable",
@@ -252,7 +257,7 @@ const I18N={
  en:{login_sub:"Operations center · CISO access (VPN)",ph_account:"AD account",ph_password:"Password",btn_signin:"Sign in",err_creds:"Invalid credentials",err_net:"Network error",
   status_op:"operational",push_al:"Enable notifications",lang_al:"Change language",
   sec_activity:"Activity (24h)",card_detperhour:"Detections per hour",tag_live:"live",sec_tactics:"ATT&CK tactics (7d)",sec_alerts:"Recent alerts (24h)",sec_inc:"Correlated incidents",sec_ml:"ML anomalies (3h)",sec_ueba:"UEBA risk (24h)",sec_topdet:"Top detections (24h)",
-  nav_home:"Overview",nav_alerts:"Alerts",nav_inc:"Incidents",nav_threat:"Threat",nav_guides:"Guides",sec_guides:"Response playbooks",ph_guides:"Search a detection, technique…",guides_none:"No matching detection.",
+  nav_home:"Overview",nav_alerts:"Alerts",nav_inc:"Incidents",nav_threat:"Threat",nav_twin:"Exposure",sec_twin:"Attack twin — Exposure",twin_load:"Loading…",nav_guides:"Guides",sec_guides:"Response playbooks",ph_guides:"Search a detection, technique…",guides_none:"No matching detection.",
   kpi_critinc:"Critical incidents",kpi_7d:"7 days",kpi_riskhosts:"At-risk hosts",kpi_uebage:"UEBA ≥ 80",kpi_det:"Detections",kpi_24h:"24h",kpi_kev:"Exposed KEV CVEs",kpi_cisa:"CISA",
   empty_inc:"No correlated incidents",empty_ras:"All clear",
   k_entities:"Entities",k_attack:"ATT&CK",k_rule:"Rule",blk_analysis:"Analysis",blk_remediation:"Remediation",k_entity:"Entity",blk_detail:"Detail",lab_priority:"Priority",g_title:"Action guide",g_what:"What it is",g_check:"To check",g_remed:"Remediation",g_correct:"Lasting fix",
@@ -282,7 +287,33 @@ function start(){$("#login").classList.add("hide");$("#app").classList.remove("h
 document.querySelectorAll("#nav a").forEach(a=>a.onclick=e=>{e.preventDefault();
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
   const p=a.dataset.p;document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+p));
-  if(p==="guides")renderGuides(($("#gSearch")||{}).value||"");});
+  if(p==="guides")renderGuides(($("#gSearch")||{}).value||"");
+  if(p==="twin")j("/attack-graph").then(renderPwaTwin).catch(()=>{});});
+function renderPwaTwin(d){const el=$("#twinBody");if(!el)return;d=d||{};const EN=(LANG==="en");
+  if(d.error){el.innerHTML='<p class="muted">'+esc(EN?"Attack twin unavailable — run the oms-graph timer.":"Jumeau indisponible — lancer le timer oms-graph.")+'</p>';return;}
+  const s=d.stats||{};const hc=h=>h<=2?"#fb3b53":h<=4?"#f5a623":"#2563eb";
+  const kl=k=>k==="privileged"?"#fb3b53":k==="management"?"#f5a623":k==="host"?"#38bdf8":"#9aa7bd";
+  let h='<div class="kpi cy" style="margin-bottom:8px"><div class="v mono" style="font-size:16px">'+(s.hosts||0)+' '+(EN?"hosts":"hôtes")+' · '+(s.accounts||0)+' '+(EN?"accts":"comptes")+' · '+(s.jewels||0)+' '+(EN?"jewels":"joyaux")+'</div></div>';
+  h+='<h3 class="sec">'+(EN?"Crown-jewel exposure":"Exposition des joyaux")+'</h3><div class="feed">';
+  (d.jewel_exposure||[]).forEach(j=>{h+='<div class="erow" style="display:flex;align-items:center;gap:8px"><span class="mono" style="color:'+hc(j.min_hops)+';font-weight:700;min-width:42px">≤'+j.min_hops+'</span><b style="flex:1;font-size:13px">'+esc(j.label||j.jewel)+'</b><span class="muted" style="font-size:11px">'+(j.reachable_from||0)+' '+(EN?"foot.":"pied.")+'</span></div>';});
+  if(!(d.jewel_exposure||[]).length)h+='<p class="muted">'+(EN?"No jewel reachable — good.":"Aucun joyau atteignable — bon.")+'</p>';
+  h+='</div>';
+  h+='<h3 class="sec">'+(EN?"Chokepoints (tap → response)":"Chokepoints (taper → réponse)")+'</h3><div class="feed">';
+  (d.chokepoints||[]).slice(0,6).forEach(c=>{h+='<div class="erow" onclick="pwaSim(\''+(c.entity||"").replace(/[\\\\\']/g,"\\$&")+'\')" style="cursor:pointer;display:flex;align-items:center;gap:8px"><span class="mono" style="color:'+kl(c.klass)+';min-width:26px">'+c.on_paths+'</span><span style="flex:1;font-size:13px">'+esc(c.entity)+'</span><span class="muted" style="font-size:10px">'+esc(c.klass)+'</span></div>';});
+  h+='</div>';
+  if((d.single_points_of_failure||[]).length){h+='<h3 class="sec" style="color:#fb3b53">'+(EN?"Single points of failure":"Points uniques")+'</h3><div class="feed">';
+    d.single_points_of_failure.forEach(p=>{h+='<div class="erow" style="display:flex;gap:8px"><span class="mono" style="color:#fb3b53;min-width:42px">'+p.admin_on_hosts+'</span><b style="flex:1;font-size:13px">'+esc(p.account)+'</b><span class="muted" style="font-size:10px">PAM</span></div>';});h+='</div>';}
+  const rc=(d.decoy_recommendations||[]).filter(r=>!r.already_covered);
+  if(rc.length){h+='<h3 class="sec">'+(EN?"Decoy placement":"Placement de leurres")+'</h3><div class="feed">';
+    rc.forEach(r=>{h+='<div class="erow" style="font-size:12px"><span class="mono" style="color:#f5a623">'+esc(r.suggested_key)+'</span> <span class="muted">'+esc(r.place_on_host||r.near_jewel||"")+'</span></div>';});h+='</div>';}
+  el.innerHTML=h;}
+function pwaSim(ent){if(!ent)return;const EN=(LANG==="en");
+  j("/sentinel-sim?entity="+encodeURIComponent(ent)).then(d=>{if(!d||d.error){alert((d&&d.error)||"?");return;}
+    const gl=EN?{critique:"CRITICAL",eleve:"HIGH",modere:"MODERATE"}:{critique:"CRITIQUE",eleve:"ÉLEVÉ",modere:"MODÉRÉ"};
+    const jr=(d.jewels_at_risk||[]).join(", ");
+    const steps=(d.steps||[]).map(s=>"• "+s.action+" → "+s.target).join("\n");
+    alert((gl[d.grade]||d.grade)+" — "+ent+"\n"+(d.hosts_reachable||0)+(EN?" hosts reachable":" hôtes atteignables")+(jr?"\n"+(EN?"Jewels: ":"Joyaux: ")+jr:"")+"\n\n"+(EN?"Mode ":"Mode ")+(d.mode==="armed"?"ARMÉ":"DRY-RUN")+" (reco)\n"+steps);
+  }).catch(()=>{});}
 
 if(window.Chart){Chart.defaults.color="#7c8aa6";Chart.defaults.font.family="Segoe UI";Chart.defaults.borderColor="rgba(255,255,255,.05)";}
 const charts={};const mk=(id,cfg)=>{if(!window.Chart)return;if(charts[id])charts[id].destroy();charts[id]=new Chart($("#"+id),cfg);};
