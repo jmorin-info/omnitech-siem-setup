@@ -73,6 +73,12 @@ class Correlator:
         query = sig["query"]
         ef = sig["entity_field"]
         window = int(sig.get("window", self.window))
+        if sig["type"] == "distinct_by":
+            # {entite: nb de valeurs DISTINCTES de distinct_field} >= threshold
+            # (discriminant spray : 1 IP -> N comptes distincts, vs rotation = 1 compte)
+            agg = self.gl.distinct_aggregate(query, stream, ef, sig["distinct_field"], window)
+            thr = int(sig.get("threshold", 1))
+            return {k: v for k, v in agg.items() if v >= thr}
         agg = self.gl.aggregate(query, stream, ef, window)
         if sig["type"] == "count_by":
             thr = int(sig.get("threshold", 1))

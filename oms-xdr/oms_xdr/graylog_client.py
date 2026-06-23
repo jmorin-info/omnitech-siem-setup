@@ -57,6 +57,20 @@ class GraylogClient:
         return {str(b["key"]): int(b["doc_count"]) for b in buckets
                 if b.get("key") not in (None, "", "null")}
 
+    def distinct_aggregate(self, query: str, stream_key: str, group_by: str,
+                           distinct_field: str, minutes: int) -> dict[str, int]:
+        """Retourne {valeur_entite: nb de valeurs DISTINCTES de distinct_field}.
+
+        Sert le discriminant 'spray' (une IP échouant sur N COMPTES distincts) au
+        lieu d'un simple volume d'échecs (qui confond la rotation de mot de passe
+        d'un seul compte avec une vraie attaque horizontale)."""
+        body = {"size": 0, "query": self._filters(query, stream_key, minutes),
+                "aggs": {"e": {"terms": {"field": group_by, "size": 2000},
+                               "aggs": {"d": {"cardinality": {"field": distinct_field}}}}}}
+        buckets = self._os_search(body).get("aggregations", {}).get("e", {}).get("buckets", [])
+        return {str(b["key"]): int(b.get("d", {}).get("value", 0)) for b in buckets
+                if b.get("key") not in (None, "", "null")}
+
     # ------------------------------------------------------------------
     #  Écriture (GELF — HTTP par défaut ; TCP \0 si proto=tcp)
     # ------------------------------------------------------------------

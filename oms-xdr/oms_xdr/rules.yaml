@@ -230,21 +230,18 @@ signals:
     entity_field: host
 
   # --- Corrélation cross-source par src_ip / user (chasse du 23/06) ---
-  S_AUTHFAIL_WIN_IP:
-    description: "Échecs d'auth Windows par IP source (4625/4771, hors comptes machine/service)"
+  # Spray = 1 IP -> N COMPTES DISTINCTS en échec (distinct_by). Discriminant validé
+  # sur données réelles : la rotation de mot de passe d'un user (adaguerre/xavier.labarbe/
+  # gbertiner depuis leur poste) échoue sur 1 SEUL compte -> exclue. Un vrai spray cible
+  # plusieurs comptes -> seuil >=5 comptes distincts.
+  S_SPRAY_WIN:
+    description: "Spray AD : une IP source échoue sur >=5 comptes DISTINCTS (4625/4771, hors machine/service)"
     stream: windows
     query: 'event_id:(4625 OR 4771) AND NOT account_class:machine AND NOT account_class:service'
-    type: count_by
+    type: distinct_by
     entity_field: src_ip
+    distinct_field: user
     threshold: 5
-
-  S_AUTHFAIL_VAULT_IP:
-    description: "Échecs d'authentification Vaultwarden par IP source"
-    stream: vaultwarden
-    query: 'alert_tag:vault_auth_fail'
-    type: count_by
-    entity_field: src_ip
-    threshold: 3
 
   S_M365_FOREIGN_SIGNIN:
     description: "Sign-in M365 depuis un pays hors zone bénigne (egress O365 FR/CA/US/SE/NL/IE/DE/GB exclus)"
@@ -274,11 +271,11 @@ signals:
 # join_entity : true => corrélation par entité commune ; false => corrélation globale
 rules:
 
-  CR_IP_SPRAY_MULTISOURCE:
-    title: "Spray d'identifiants multi-système (même IP échoue sur AD + Vaultwarden)"
+  CR_PASSWORD_SPRAY_INTERNAL:
+    title: "Password spray interne : une IP échoue sur >=5 comptes AD distincts"
     severity: high
     join_entity: true
-    require_all: [S_AUTHFAIL_WIN_IP, S_AUTHFAIL_VAULT_IP]
+    require_all: [S_SPRAY_WIN]
     mitre: ["T1110", "T1110.003"]
     tactic: ["Credential Access"]
 
