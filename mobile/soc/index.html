@@ -45,13 +45,13 @@
     padding:18px 14px;display:flex;flex-direction:column;gap:4px}
   .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 18px}
   .brand .logo{width:34px;height:34px;border-radius:9px;background:radial-gradient(circle at 30% 30%,var(--cy),var(--blu));
-    display:grid;place-items:center;font-size:18px;box-shadow:0 0 20px rgba(34,211,238,.5)}
+    display:grid;place-items:center;font-size:18px;box-shadow:0 0 14px rgba(45,212,227,.28)}
   .brand b{font-size:15px;letter-spacing:1px}.brand span{color:var(--dim);font-size:10px;letter-spacing:2px;display:block}
   nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;color:var(--mut);
     text-decoration:none;font-weight:600;font-size:13px;cursor:pointer;transition:.15s}
   nav a .ic{width:18px;text-align:center;opacity:.9}
-  nav a:hover{background:#101a30;color:var(--fg)}
-  nav a.on{background:linear-gradient(90deg,rgba(34,211,238,.16),transparent);color:#fff;
+  nav a:hover{background:rgba(140,170,210,.055);color:var(--fg)}
+  nav a.on{background:linear-gradient(90deg,rgba(45,212,227,.10),transparent 72%);color:#fff;
     box-shadow:inset 2px 0 0 var(--cy)}
   .side-foot{margin-top:auto;color:var(--dim);font-size:11px;padding:8px}
 
@@ -72,13 +72,14 @@
 
   .grid{display:grid;gap:16px}
   .kpis{grid-template-columns:repeat(4,1fr);margin-bottom:16px}
-  .kpi{background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--bd);border-radius:14px;
-    padding:16px 18px;position:relative;overflow:hidden}
-  .kpi::after{content:"";position:absolute;right:-20px;top:-20px;width:80px;height:80px;border-radius:50%;
-    background:var(--accent,var(--cy));opacity:.10;filter:blur(8px)}
-  .kpi .lab{color:var(--mut);font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px}
-  .kpi .val{font-size:34px;font-weight:800;margin-top:6px;color:var(--accent,#fff);letter-spacing:-1px}
-  .kpi .sub{color:var(--dim);font-size:11px;margin-top:2px}
+  .kpi{background:var(--card);border:1px solid var(--bd);border-radius:12px;
+    padding:14px 16px 13px;position:relative;overflow:hidden;transition:border-color .15s}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent,var(--cy));opacity:.6}
+  .kpi:hover{border-color:var(--bd2)}
+  .kpi .lab{color:var(--mut);font-size:10.5px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;display:flex;align-items:center;gap:7px}
+  .kpi .val{font-size:29px;font-weight:700;margin-top:8px;color:var(--accent,var(--fg));letter-spacing:-.5px;
+    font-family:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;line-height:1.05}
+  .kpi .sub{color:var(--dim);font-size:11px;margin-top:3px}
   .kpi.red{--accent:var(--red)}.kpi.amb{--accent:var(--amb)}.kpi.cy{--accent:var(--cy)}.kpi.vio{--accent:var(--vio)}
 
   .cols{grid-template-columns:1.6fr 1fr}
@@ -101,6 +102,10 @@
     background:rgba(7,11,19,.82);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;z-index:3;display:none;
     box-shadow:0 10px 30px rgba(0,0,0,.4)}
   .globe-hover b{color:var(--cy)}
+  .globe-ctrl{position:absolute;top:14px;right:14px;z-index:3;display:flex;gap:8px}
+  .gctrl-btn{background:rgba(7,11,19,.7);border:1px solid var(--bd);color:var(--mut);border-radius:8px;
+    padding:6px 11px;font-size:12px;cursor:pointer;backdrop-filter:blur(6px);transition:.15s}
+  .gctrl-btn:hover{color:var(--fg);border-color:var(--cy)}
   .globe-rail{display:flex;flex-direction:column;gap:14px;min-height:0;overflow:auto}
   .gflag{font-size:13px;font-variant-emoji:emoji}
 
@@ -672,6 +677,10 @@
             <span><i style="background:#22d3ee;box-shadow:0 0 6px #22d3ee"></i> OMNITECH</span>
           </div>
           <div id="globeHover" class="globe-hover"></div>
+          <div class="globe-ctrl">
+            <button id="globeDayBtn" class="gctrl-btn" onclick="globeToggleDay()">☀ Jour</button>
+            <button class="gctrl-btn" onclick="globeReset()" title="Recentrer sur OMNITECH">⌖</button>
+          </div>
         </div>
         <div class="globe-rail">
           <div class="grid" id="globeKpis" style="grid-template-columns:1fr 1fr;gap:10px"></div>
@@ -993,15 +1002,22 @@ function renderGlobe(d){d=d||{};const el=$("#globeCanvas");if(!el||!window.Globe
       .arcDashAnimateTime(1400).arcStroke(a=>a._k==="menace"?0.55:0.28).arcAltitudeAutoScale(.45)
       .pointColor('color').pointAltitude(p=>p._oms?0.04:0.008).pointRadius('size').pointResolution(6)
       .ringColor(()=>t=>'rgba(34,211,238,'+(1-t)+')').ringMaxRadius(5).ringPropagationSpeed(2.2).ringRepeatPeriod(1100)
-      .onArcHover(a=>globeHover(a,EN));
+      .onArcHover(a=>globeHover(a,EN))
+      .onPointClick(p=>{if(p&&GLOBE)GLOBE.pointOfView({lat:p.lat,lng:p.lng,altitude:p._oms?2.2:1.35},900);});
     const _fit=()=>{const s=el.parentElement;if(s&&GLOBE){GLOBE.width(s.clientWidth).height(s.clientHeight);}};
     _fit();setTimeout(_fit,200);setTimeout(_fit,700);
     GLOBE.pointOfView({lat:OMS.lat,lng:OMS.lng,altitude:2.4},0);   // centre sur OMNITECH (Europe)
     if(GLOBE.controls){const c=GLOBE.controls();c.autoRotate=true;c.autoRotateSpeed=.36;c.enableDamping=true;c.minDistance=200;c.maxDistance=600;}
     window.addEventListener("resize",_fit);
   }
+  GLOBE._oms=OMS;
   GLOBE.ringsData([{lat:OMS.lat,lng:OMS.lng}]).pointsData(pts).arcsData(arcs);
   globeRail(d,EN);}
+let GLOBE_DAY=false;
+function globeToggleDay(){if(!GLOBE)return;GLOBE_DAY=!GLOBE_DAY;
+  GLOBE.globeImageUrl(GLOBE_DAY?'/soc/earth-blue-marble.jpg':'/soc/earth-night.jpg');
+  const b=document.getElementById('globeDayBtn');if(b)b.textContent=GLOBE_DAY?'☾ Nuit':'☀ Jour';}
+function globeReset(){if(GLOBE&&GLOBE._oms)GLOBE.pointOfView({lat:GLOBE._oms.lat,lng:GLOBE._oms.lng,altitude:2.4},900);}
 function globeHover(a,EN){const h=$("#globeHover");if(!h)return;if(!a){h.style.display="none";return;}
   h.style.display="block";
   h.innerHTML='<b>'+_ccflag(a._cc)+' '+esc(a._cc||'?')+'</b> &rarr; OMNITECH<br><span class="mono">'+(a._n||0).toLocaleString("fr")+'</span> '+(EN?"flows":"flux")
