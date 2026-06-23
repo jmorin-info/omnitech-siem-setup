@@ -53,6 +53,9 @@ gl_set "allow_leading_wildcard_searches" "true"
 gl_set "mongodb_uri" "mongodb://graylog:${MONGO_GRAYLOG_PASS}@127.0.0.1:27017/graylog?replicaSet=rs0\&authSource=graylog"
 gl_set "message_journal_enabled" "true"
 gl_set "message_journal_max_size" "${JOURNAL_SIZE}"
+# Debit OpenSearch : lots d'indexation plus gros (audit rank6). Processors laisses aux
+# defauts (5/3/2) car OpenSearch cohabite sur les 8 vCPU -> pas de sur-souscription.
+gl_set "output_batch_size" "1000"
 # Journal sur le grand disque (sinon il remplit /var, qui ne fait que ~21 Go)
 GL_JOURNAL="/var/lib/graylog-server/journal"
 [[ -n "${DATA_MOUNT:-}" ]] && GL_JOURNAL="${DATA_MOUNT}/graylog-journal"
