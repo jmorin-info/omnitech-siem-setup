@@ -33,9 +33,13 @@ echo "==> [1/4] Pipeline d'enrichissement reseau PARTAGE (net_segment sur src_ip
 # (Graylog ordonne les stages globalement) -> src_ip deja pose.
 ensure_rule "omni-corr-30-netseg" <<'EOF'
 rule "omni-corr-30-netseg"
-when has_field("src_ip") AND starts_with(to_string($message.src_ip), "10.33.", true)
+when has_field("src_ip") OR has_field("winlogbeat_winlog_event_data_IpAddress") OR has_field("winlogbeat_winlog_event_data_SourceIp")
 then
-  set_fields(grok("%{INT}.%{INT}.%{INT:net_octet}.%{INT}", to_string($message.src_ip), true));
+  // COALESCENCE de l'IP source selon la source : src_ip (aruba/linux/m365/forti),
+  // IpAddress (logon Windows winsec), SourceIp (sysmon EID3). Premier non vide.
+  let ip = to_string($message.src_ip, to_string($message.winlogbeat_winlog_event_data_IpAddress, to_string($message.winlogbeat_winlog_event_data_SourceIp, "")));
+  // derive le segment (le grok ne matche que les IPv4 ; "-"/"" ignores) puis lookup VLAN
+  set_fields(grok("%{INT}.%{INT}.%{INT:net_octet}.%{INT}", ip, true));
   let seg = lookup_value("omni-net-segment", to_string($message.net_octet));
   set_field("net_segment", seg);
 end
@@ -47,7 +51,10 @@ rule "omni-corr-30-netseg"
 end
 PIPE
 )"
-for S in 'OMNI - Windows Security' 'OMNI - M365' 'OMNI - BunkerWeb' 'OMNI - Vaultwarden' 'OMNI - FortiGate'; do
+# Connecte a TOUTES les sources internes (pas seulement 5) -> net_segment cross-source.
+for S in 'OMNI - Windows Security' 'OMNI - Windows autres' 'OMNI - Sysmon' 'OMNI - M365' \
+         'OMNI - BunkerWeb' 'OMNI - Vaultwarden' 'OMNI - FortiGate' \
+         'OMNI - Linux' 'OMNI - Aruba' 'OMNI - FortiClient EMS'; do
   SID="$(get_stream_id "$S")"
   [[ -n "$SID" ]] && connect_pipeline "$SID" "$PL" || warn "stream absent: $S"
 done
