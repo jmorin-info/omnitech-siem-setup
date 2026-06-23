@@ -244,12 +244,22 @@ signals:
     threshold: 5
 
   S_M365_FOREIGN_SIGNIN:
-    description: "Sign-in M365 depuis un pays hors zone bénigne (egress O365 FR/CA/US/SE/NL/IE/DE/GB exclus)"
+    description: "Sign-in M365 RÉUSSI (status_code:0) depuis un pays hors egress O365 (FR/CA/US/SE/NL/IE/DE/GB exclus). status_code:0 OBLIGATOIRE : les signins étrangers échoués (~tous) sont du credential-stuffing botnet, pas un voyage impossible."
     stream: m365
-    query: 'event_source:m365 AND _exists_:src_ip_country_code AND NOT src_ip_country_code:(FR OR CA OR US OR SE OR NL OR IE OR DE OR GB) AND NOT user:no\-reply'
+    query: 'event_source:m365 AND status_code:0 AND _exists_:src_ip_country_code AND NOT src_ip_country_code:(FR OR CA OR US OR SE OR NL OR IE OR DE OR GB) AND NOT user:no\-reply'
     type: count_by
     entity_field: user
     threshold: 1
+
+  S_M365_DISTRIBUTED_ATTACK:
+    description: "Compte M365 ciblé par credential-stuffing distribué : échecs depuis >=3 PAYS distincts (botnet). Failing mais permet de prioriser MFA/reset sur les comptes ciblés."
+    stream: m365
+    query: 'event_source:m365 AND event_action:echec_connexion AND _exists_:src_ip_country_code AND NOT src_ip_country_code:(FR OR CA OR US OR SE OR NL OR IE OR DE OR GB)'
+    type: distinct_by
+    entity_field: user
+    distinct_field: src_ip_country_code
+    threshold: 3
+    window: 1440
 
   S_UEBA_HIGH_USER:
     description: "Utilisateur à risque UEBA élevé (score >= 80) — entité user (fix user-keyed 23/06)"
@@ -286,6 +296,14 @@ rules:
     require_all: [S_M365_FOREIGN_SIGNIN, S_LOGON_SUCCESS]
     mitre: ["T1078", "T1078.004"]
     tactic: ["Initial Access", "Defense Evasion"]
+
+  CR_M365_ACCOUNT_TARGETED:
+    title: "Compte M365 sous attaque distribuée (credential-stuffing >=3 pays) — prioriser MFA/reset"
+    severity: medium
+    join_entity: false
+    any_of: [S_M365_DISTRIBUTED_ATTACK]
+    mitre: ["T1110.004", "T1110.003"]
+    tactic: ["Credential Access"]
 
   CR_RISKY_USER_PRIV_ACTION:
     title: "Utilisateur à risque UEBA réalisant une action privilégiée (débloqué par le fix user-keyed)"
