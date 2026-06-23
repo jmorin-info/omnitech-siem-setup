@@ -1058,6 +1058,8 @@ def get_kpi_trend() -> dict:
 def get_report():
     cov = get_attack_matrix()
     src = get_health()
+    net = get_network()
+    ems = get_fortiems()
     return {"kpis": get_kpis(),
             "coverage": {"techniques": sum(len(c["techniques"]) for c in cov), "tactics": len(cov)},
             "top_detections": get_terms("alert_tag", "now-7d", 10),
@@ -1066,7 +1068,14 @@ def get_report():
             "sla": src.get("sla", {}), "robots": src.get("robots", {}),
             "dark_hosts": src.get("dark_hosts", [])[:8],
             "sources": src.get("sources", []), "cluster": src.get("cluster"),
-            "events_24h": src.get("events_24h")}
+            "events_24h": src.get("events_24h"),
+            "integrations": src.get("integrations", []),
+            "network": {"switches": net.get("aruba", {}).get("switches_seen", 0),
+                        "aruba": net.get("aruba", {}).get("total", 0),
+                        "linux": net.get("linux", {}).get("total", 0),
+                        "dns": net.get("dns", {}).get("total", 0)},
+            "endpoint_ems": {"malware": ems.get("malware", 0), "vuln": ems.get("vuln", 0),
+                             "av_off": ems.get("av_off", 0), "total": ems.get("total", 0)}}
 
 
 def get_geo_threats():

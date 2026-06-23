@@ -1693,6 +1693,11 @@ function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocale
   const mlr=(d.ml_top||[]).map(m=>`<tr><td>${esc(m.entity)}</td><td class="num">${m.score}</td><td>${esc((m.reason||"").slice(0,80))}</td></tr>`).join("")||'<tr><td colspan="3" class="muted">—</td></tr>';
   const ubr=(d.ueba_top||[]).map(u=>`<tr><td>${esc(u.entity)}</td><td class="num">${u.score}</td><td>${esc(u.factor||"")}</td></tr>`).join("")||'<tr><td colspan="3" class="muted">—</td></tr>';
   const dark=(d.dark_hosts||[]).map(h=>esc(h.host)+" ("+h.hours+"h)").join(", ");
+  const REN=LANG==="en";const N=d.network||{},EM=d.endpoint_ems||{},integ=d.integrations||[];
+  const integTxt=integ.map(i=>esc(i.k)+" : "+i.status).join(" · ");
+  const onprem=`<h2>${REN?"On-prem sources & endpoint":"Sources on-prem & endpoint"}</h2>
+   <p>${REN?"Aruba switches":"Switches Aruba"} : <b>${N.switches||0}</b> (${(N.aruba||0).toLocaleString("fr")} ev) · Linux : <b>${(N.linux||0).toLocaleString("fr")}</b> · DNS : <b>${(N.dns||0).toLocaleString("fr")}</b> · Endpoint EMS : <b>${EM.malware||0}</b> malware / <b>${EM.vuln||0}</b> vuln / <b>${EM.av_off||0}</b> ${REN?"protection off":"protection off"}.</p>
+   ${integ.length?`<p class="muted">${REN?"Expected integrations":"Intégrations attendues"} — ${integTxt}.</p>`:''}`;
   $("#reportBody").innerHTML=`
    <div class="rhead"><div><h1>${t("rep_title")}</h1><div class="muted">${t("rep_gen")} ${dt} · ${t("rep_plat")}</div></div><div class="rlogo">⬢</div></div>
    <div class="rkpi"><div><b>${k.incidents_critiques_7j??0}</b><span>${t("rep_k_inc")}</span></div>
@@ -1708,6 +1713,7 @@ function renderReport(d){d=d||{};const k=d.kpis||{};const dt=new Date().toLocale
    </div>
    <h2>${t("rep_topdet")}</h2><table><thead><tr><th>${t("rep_h_det")}</th><th class="num">${t("rep_h_vol")}</th></tr></thead><tbody>${top}</tbody></table>
    <h2>${t("rep_recinc")}</h2><table><thead><tr><th>${t("rep_h_sev")}</th><th>${t("rep_h_title")}</th><th>${t("rep_h_ent")}</th><th>ATT&CK</th></tr></thead><tbody>${inc}</tbody></table>
+   ${onprem}
    <h2>${t("rep_collsrc")}</h2><table><thead><tr><th>${t("rep_h_src")}</th><th class="num">${t("rep_h_vol")}</th></tr></thead><tbody>${src}</tbody></table>
    <div class="muted" style="margin-top:20px">${t("rep_foot")}</div>`;}
 function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{},mt=d.maintenance||{};
