@@ -92,3 +92,6 @@ winrm_lateral,T1021.006,Remote Services: Windows Remote Management,Lateral Movem
 decoy_identity,T1078,Valid Accounts (honeytoken),Credential Access,critique,9
 decoy_kerberoast,T1558.003,Kerberoasting (SPN leurre),Credential Access,critique,9
 canary_token,T1005,Data from Local System (canari),Collection,critique,9
+forticlient_malware,T1204,Malware sur endpoint (FortiClient AV),Execution,critique,9
+forticlient_vuln,T1190,Vulnerabilite exploitable (endpoint),Initial Access,eleve,7
+forticlient_av_off,T1562.001,Impair Defenses: Disable/Modify Tools,Defense Evasion,critique,8

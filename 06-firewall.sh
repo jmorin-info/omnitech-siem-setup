@@ -51,6 +51,8 @@ table inet filter {
         udp dport 1516 ip saddr ${VSPHERE_NET} accept comment "Syslog UDP vSphere"
         tcp dport ${ESET_PORT} ip saddr ${IP_ESET} accept comment "Syslog TCP ESET (514 redirige -> ${ESET_PORT})"
         tcp dport 514 ip saddr ${IP_ESET} accept comment "ESET 514 (avant redirect)"
+        tcp dport ${EMS_PORT} ip saddr ${IP_EMS} accept comment "Syslog TLS FortiClient EMS (514 redirige -> ${EMS_PORT})"
+        tcp dport 514 ip saddr ${IP_EMS} accept comment "FortiClient EMS 514 (avant redirect)"
         tcp dport 1517 ip saddr 10.33.80.252 accept comment "Syslog TCP FortiManager"
         udp dport 1517 ip saddr 10.33.80.252 accept comment "Syslog UDP FortiManager"
         # NPS (${IP_NPS}) et BunkerWeb (${IP_BUNKERWEB}) passent par Beats 5044 (deja ouvert au ${NET_BEATS})
@@ -74,6 +76,7 @@ table inet nat {
     chain prerouting {
         type nat hook prerouting priority dstnat; policy accept;
         tcp dport 514 ip saddr ${IP_ESET} redirect to :${ESET_PORT} comment "ESET 514 -> ${ESET_PORT}"
+        tcp dport 514 ip saddr ${IP_EMS} redirect to :${EMS_PORT} comment "FortiClient EMS 514 -> ${EMS_PORT}"
         tcp dport 514 ip saddr 10.33.80.252 redirect to :1517 comment "FortiManager 514 -> 1517"
         udp dport 514 ip saddr 10.33.80.252 redirect to :1517 comment "FortiManager 514 -> 1517"
     }
