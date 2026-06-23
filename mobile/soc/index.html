@@ -6,8 +6,11 @@
 <title>OMNI SOC — Console</title>
 <link rel="icon" href="/m/icon-192.png">
 <script src="/soc/chart.min.js"></script>
-<script src="/soc/cytoscape.min.js"></script>
-<script src="/soc/globe.gl.min.js"></script>
+<!-- cytoscape (graphe) + globe.gl (1,8 Mo, carte) : charges A LA DEMANDE (lazy) -> ne bloquent plus le rendu initial -->
+<script>
+function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])return loadScript._c[src];
+  return loadScript._c[src]=new Promise(function(res,rej){var s=document.createElement("script");s.src=src;s.async=true;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+</script>
 <style>
   :root{
     --bg:#070a11; --bg2:#0a0f18; --card:#0d131e; --card2:#111824; --bd:#1b2433; --bd2:#28354a;
@@ -882,7 +885,7 @@ document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   document.querySelectorAll("#nav a").forEach(x=>x.classList.toggle("on",x===a));
   const pg=a.dataset.p; document.querySelectorAll(".page").forEach(s=>s.classList.toggle("on",s.id==="p-"+pg));
   $("#ptitle").textContent=(titles[LANG]||titles.fr)[pg];setDesc(pg);
-  if(pg==="graph"){j("/graph").then(g=>{renderGraph(g);gPopulate();setTimeout(applyGraphFilter,80);}).catch(()=>{});}
+  if(pg==="graph"){loadScript("/soc/cytoscape.min.js").then(()=>j("/graph")).then(g=>{renderGraph(g);gPopulate();setTimeout(applyGraphFilter,80);}).catch(()=>{});}
   if(pg==="report"){j("/report").then(r=>renderReport(r)).catch(()=>{});}
   if(pg==="playbooks"){var s=$("#pbSearch");renderPlaybooks(s?s.value:"");}
   if(pg==="entities"){loadEntities();}
@@ -890,7 +893,8 @@ document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   if(pg==="ems"){j("/fortiems").then(d=>renderEms(d)).catch(()=>{});}
   if(pg==="network"){j("/network").then(d=>renderNetwork(d)).catch(()=>{});}
   if(pg==="deploy"){j("/deploy").then(d=>renderDeploy(d)).catch(()=>{});}
-  if(pg==="globe"){j("/geo-flows").then(d=>renderGlobe(d)).catch(()=>{});setTimeout(()=>{if(GLOBE&&GLOBE.width){const el=$("#globeCanvas");GLOBE.width(el.clientWidth).height(el.clientHeight);}},120);}});
+  if(pg==="globe"){const gw=$("#globeCanvas");if(gw&&!window.Globe)gw.innerHTML='<div class="muted" style="position:absolute;inset:0;display:grid;place-items:center">Chargement de la carte 3D…</div>';
+    loadScript("/soc/globe.gl.min.js").then(()=>j("/geo-flows")).then(d=>{renderGlobe(d);setTimeout(()=>{if(GLOBE&&GLOBE.width){const el=$("#globeCanvas");GLOBE.width(el.clientWidth).height(el.clientHeight);}},120);}).catch(()=>{});}});
 document.querySelectorAll("#nav a").forEach((a,i)=>{if(i<9)a.title=(LANG==="en"?"Shortcut ":"Raccourci ")+(i+1);});
 function renderEms(d){const w=$("#emsWrap");if(!w)return;d=d||{};const EN=LANG==="en";
   const sc=s=>s==="critique"?"#fb3b53":s==="eleve"?"#f5a623":"#38bdf8";
