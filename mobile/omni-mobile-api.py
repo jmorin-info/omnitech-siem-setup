@@ -709,6 +709,39 @@ def get_entity_search(q, size=8):
     return out[: size * 2]
 
 
+def get_search(q, frm=0, size=25, days=2):
+    """Recherche plein-texte serveur sur les logs BRUTS (graylog_*/omni-*/gl-events_*) :
+    query_string OpenSearch (analyze_wildcard), fenetre par defaut 2j, retourne les
+    champs cles. Permet de pivoter d'une alerte vers les evenements correles (Ctrl+K)."""
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {"q": q, "total": 0, "results": []}
+    frm = max(0, min(int(frm), 2000))
+    size = max(1, min(int(size), 50))
+    try:
+        res = os_search("graylog_*,omni-*,gl-events_*", {
+            "size": size, "from": frm, "track_total_hits": True,
+            "sort": [{"timestamp": {"order": "desc"}}],
+            "query": {"bool": {"must": [{"query_string": {"query": q, "analyze_wildcard": True,
+                                                          "default_operator": "AND"}}],
+                               "filter": [{"range": {"timestamp": {"gte": f"now-{int(days)}d"}}}]}},
+            "_source": ["timestamp", "source", "event_source", "message", "short_message",
+                        "user", "src_ip", "alert_tag", "event_action", "net_segment"]})
+    except Exception:
+        return {"q": q, "total": 0, "results": [], "error": "requete invalide"}
+    hits = res.get("hits", {})
+    total = hits.get("total", {})
+    total = total.get("value", 0) if isinstance(total, dict) else (total or 0)
+    out = []
+    for h in hits.get("hits", []):
+        s = h.get("_source", {})
+        out.append({"ts": s.get("timestamp"), "src": s.get("event_source") or _rd(s.get("source")),
+                    "host": _rd(s.get("source")), "user": _rd(s.get("user")), "ip": s.get("src_ip"),
+                    "seg": s.get("net_segment"), "tag": s.get("alert_tag"), "act": s.get("event_action"),
+                    "msg": _scrub(s.get("short_message") or s.get("message"))})
+    return {"q": q, "total": total, "from": frm, "size": size, "results": out}
+
+
 def get_investigation(name, days=14):
     """Pivot d'investigation par entité (utilisateur M365 / compte AD / hôte).
 
@@ -1718,6 +1751,15 @@ class H(BaseHTTPRequestHandler):
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             return self._json({"results": get_entity_search(qs.get("q", [""])[0])})
+        if p == "/m/api/search":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            def _qi(k, d):
+                try:
+                    return int(qs.get(k, [str(d)])[0])
+                except (ValueError, TypeError):
+                    return d
+            return self._json(get_search(qs.get("q", [""])[0], _qi("from", 0), _qi("size", 25), _qi("days", 2)))
         if p == "/m/api/kpi-trend":
             return self._json({"trend": get_kpi_trend()})
         if p == "/m/api/leaks2":
