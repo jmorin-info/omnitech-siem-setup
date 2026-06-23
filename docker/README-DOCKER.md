@@ -1,10 +1,15 @@
 # OMNITECH SIEM — déploiement Docker (plateforme complète)
 
-Reproduit la plateforme en conteneurs, **bout en bout** : moteur Graylog 7.1.3 + OpenSearch 2.19.5
+Reproduit le **cœur** de la plateforme en conteneurs : moteur Graylog 7.1.3 + OpenSearch 2.19.5
 + MongoDB, **console SOC** (`/soc`), **PWA** (`/m`) + backend `/m/api`, et **nginx TLS** en frontal
-(`/soc //m //kit` + Graylog). Toute la configuration Graylog vit dans MongoDB : **restaurer le
-dump de sauvegarde = la plateforme entière** (17 streams, 13 inputs, 136 détections, 27 lookups,
-alertes, notifications).
+(`/soc //m //kit` + Graylog). Toute la **configuration** Graylog vit dans MongoDB : **restaurer le
+dump = toute la config** (17 streams, 13 inputs, 136 détections, 27 lookups, alertes, notifications).
+
+> **Périmètre (honnête).** Le restore remonte la config Graylog + la console + le proxy. Pour que les
+> inputs TLS et la **carte 3D** fonctionnent, fournir les **certs** (`docker/certs/`) et les bases
+> **GeoIP** (`docker/geoip/`) — voir ci-dessous. Les moteurs **oms-xdr / oms-ml / oms-graph** et les
+> **fetchers** (M365/ESET/EMS) sont des **add-ons** lancés séparément : un restore seul ne ré-active
+> donc pas la corrélation/ML/graphe ni ces collecteurs (cf. tableau).
 
 > Pour **staging, reprise après incident (DR), portabilité et démonstration**. La production reste
 > le déploiement bare-metal chiffré LUKS ; ce bundle ne le remplace pas.
@@ -19,9 +24,20 @@ alertes, notifications).
 | `console`   | `Dockerfile.console` (Python+pywebpush) | Backend `/m/api` (lecture OpenSearch, push) |
 | `nginx`     | `nginx:1.27-alpine`                 | TLS, sert `/soc //m //kit`, proxy Graylog      |
 
-**Collecteurs optionnels (non inclus)** : les fetchers M365/ESET/EMS, l'export SMB et les moteurs
-oms-xdr/oms-ml/oms-graph sont des **add-ons** déployés séparément (cf. leurs dossiers). Le cœur SIEM
-+ console + proxy fonctionne sans eux ; leurs secrets ne sont donc pas requis ici.
+**Porté vs non porté (après `restore`) :**
+
+| Élément | État | Pour l'activer |
+|---|---|---|
+| Config Graylog (streams/pipelines/détections/lookups/alertes) | ✅ porté | `restore` (mongodump) |
+| Console `/soc` + PWA `/m` + `/m/api` + nginx TLS | ✅ porté | services compose |
+| Inputs TLS (Beats 5044, EMS 1518) | ⚠️ certs requis | déposer `docker/certs/` |
+| Carte 3D / GeoIP (`geo_*`) | ⚠️ mmdb requis | `docker/geoip/fetch-geoip.sh` |
+| Corrélation oms-xdr / ML / graphe d'attaque | ➕ add-on | lancés séparément (dossiers `oms-*`) |
+| Fetchers M365 / ESET / EMS / export SMB | ➕ add-on | déployés séparément |
+
+**Prérequis données** (avant `restore`, pour des inputs RUNNING + une carte vivante) :
+- `docker/geoip/` → `dbip-city-lite.mmdb` + `dbip-asn-lite.mmdb` (`./geoip/fetch-geoip.sh`).
+- `docker/certs/` → `graylog.crt`+`graylog-pkcs8.key` (Beats), `fortiems-syslog.cert.pem`+`.key.pem` (EMS).
 
 ## 🇫🇷 Démarrage
 
