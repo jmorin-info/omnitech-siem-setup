@@ -1207,6 +1207,21 @@ def login_fail(ip):
         rec[0] += 1
 
 
+ATTACK_GRAPH_FILE = "/var/lib/omni-mobile/attack-graph.json"
+
+
+def get_attack_graph():
+    """Artefact du jumeau d'attaque (oms-graph) : exposition des joyaux, chokepoints,
+    rayon de souffle, points uniques, recommandations de leurres. Lecture seule ;
+    la redaction est appliquee automatiquement par _json (_walk_redact)."""
+    try:
+        with open(ATTACK_GRAPH_FILE, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {"error": "indisponible",
+                "hint": "lancer 89-attack-graph.sh puis le timer oms-graph (analyse quotidienne)"}
+
+
 # ------------------------------------------------------------------------- handler
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silencieux
@@ -1269,6 +1284,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_health())
         if p == "/m/api/risk":
             return self._json(get_risk())
+        if p == "/m/api/attack-graph":
+            return self._json(get_attack_graph())
         if p == "/m/api/geo":
             return self._json(get_geo_threats())
         if p == "/m/api/report":
