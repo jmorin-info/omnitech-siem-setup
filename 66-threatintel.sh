@@ -169,11 +169,12 @@ EOF
 ensure_rule "omni-ti-10-c2-src" <<'EOF'
 rule "omni-ti-10-c2-src"
 when
-  to_string($message.event_source) == "fortigate"
+  has_field("src_ip")
   AND ! is_null(lookup_value("omni-ti-c2-ip", to_string($message.src_ip)))
 then
   set_field("ti_c2_ip", to_string($message.src_ip));
   set_field("ti_c2_malware", to_string(lookup_value("omni-ti-c2-ip", to_string($message.src_ip))));
+  set_field("ti_reputation", "c2");
   set_field("alert_tag", "c2_ioc");
 end
 EOF
@@ -195,6 +196,17 @@ then
   set_field("alert_tag", "malware_domain");
 end
 EOF
+# Nouvelle source DNS (DC) : champ dns_name confronte aux 2418 domaines malware URLhaus.
+ensure_rule "omni-ti-10-mal-dnsname" <<'EOF'
+rule "omni-ti-10-mal-dnsname"
+when
+  has_field("dns_name") AND ! is_null(lookup_value("omni-ti-mal-domain", to_string($message.dns_name)))
+then
+  set_field("ti_mal_domain", to_string($message.dns_name));
+  set_field("ti_reputation", "malware_domain");
+  set_field("alert_tag", "malware_domain");
+end
+EOF
 PL="$(ensure_pipeline "OMNI - Threat Intel IOC" <<'PIPE'
 pipeline "OMNI - Threat Intel IOC"
 stage 18 match either
@@ -202,10 +214,12 @@ rule "omni-ti-10-c2-dest"
 rule "omni-ti-10-c2-src"
 rule "omni-ti-10-mal-dns"
 rule "omni-ti-10-mal-qname"
+rule "omni-ti-10-mal-dnsname"
 end
 PIPE
 )"
-for ST in "OMNI - FortiGate" "OMNI - Sysmon" "OMNI - Windows autres"; do
+# Elargi aux sources externes (WAF/M365) + DNS, en plus de FortiGate/Sysmon/Windows.
+for ST in "OMNI - FortiGate" "OMNI - Sysmon" "OMNI - Windows autres" "OMNI - BunkerWeb" "OMNI - M365"; do
   SID="$(get_stream_id "$ST")"; [[ -n "$SID" ]] && connect_pipeline "$SID" "$PL"
 done
 
