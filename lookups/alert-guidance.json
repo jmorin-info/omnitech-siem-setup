@@ -652,5 +652,17 @@
     "a_verifier": "Switch, compte, IP source, horaire. Admin réseau connu en intervention ? Hors heures ouvrées ou source inhabituelle = à corroborer. Suivi d'un changement de config ?",
     "correction": "Accès management restreint (VLAN/IP admin), comptes nominatifs + RADIUS/TACACS+, journalisation des sessions, alerter sur login hors plage.",
     "remediation": "Si suspect : confirmer avec l'équipe réseau, sinon traiter le compte comme compromis, auditer les actions de la session (changements de config), restreindre l'accès."
+  },
+  "m365_app_credential_add": {
+    "ce_que_cest": "Un secret/certificat a été ajouté à une application ou un service principal Entra ID (Add service principal credentials). Technique de PERSISTANCE cloud majeure (T1098.001) : avec un secret d'app, l'attaquant obtient un accès programmatique persistant au tenant (Graph, mail, données) qui SURVIT au changement de mot de passe de l'utilisateur et contourne la MFA. Très prisé post-compromission d'un admin.",
+    "a_verifier": "Quelle app/SP (target), qui a ajouté le secret (identity/acteur), quand. Ajout légitime (rotation de secret par l'IT, déploiement d'app) ou non ? L'app a-t-elle des permissions élevées (Mail.ReadWrite, Directory, application permissions) ? Corréler avec une connexion admin récente / un consentement.",
+    "correction": "Restreindre qui peut gérer les apps (rôles), revue régulière des credentials d'app, durée de vie courte des secrets, alerter sur tout ajout, privilégier les certificats managés. Workload Identity Premium pour la détection de risque sur SP.",
+    "remediation": "Si non autorisé : SUPPRIMER le secret/cert immédiatement, auditer ce que l'app a fait (logs Graph/sign-in du SP), retirer les permissions excessives, traiter le compte ayant ajouté le secret comme compromis. Chasser d'autres backdoors (autres SP/secrets). Remonter au RSSI."
+  },
+  "m365_ca_change": {
+    "ce_que_cest": "Une policy de Conditional Access (CA) a été modifiée/supprimée/désactivée dans Entra ID. Les policies CA gouvernent MFA, accès conditionnel, blocage legacy/géo. Les affaiblir (T1556.009 / T1562.001) = ouvrir une brèche d'authentification à l'échelle du tenant. Un attaquant qui a compromis un admin désactive la MFA/le blocage avant d'agir.",
+    "a_verifier": "Quelle policy, quel changement (désactivation ? exclusion d'un compte ? assouplissement MFA ?), par qui, quand. Changement déclaré (ticket) ou non ? Une désactivation de MFA / d'un blocage legacy / l'ajout d'une exclusion = forte présomption d'attaque.",
+    "correction": "Restreindre les admins CA (rôle Conditional Access Administrator), exiger un processus de changement, sauvegarder/versionner les policies, activer la revue d'accès, alerter sur tout changement CA. PIM pour les rôles d'admin.",
+    "remediation": "INTRUSION PROBABLE si non planifié. Restaurer la policy, identifier l'auteur (compte admin compromis ?), vérifier ce qui a été fait pendant la fenêtre d'affaiblissement (sign-ins sans MFA, accès), réinitialiser le compte admin, chasser persistance. Remonter au RSSI sans délai."
   }
 }

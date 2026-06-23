@@ -106,3 +106,5 @@ aruba_auth_fail,T1110,Brute Force (admin switch),Credential Access,moyen,5
 aruba_config_change,T1601.001,Modify System Image / config reseau,Defense Evasion,eleve,7
 aruba_port_security,T1200,Hardware Additions / port-security,Initial Access,eleve,7
 aruba_admin_login,T1078,Valid Accounts (admin switch),Defense Evasion,moyen,4
+m365_app_credential_add,T1098.001,Additional Cloud Credentials (app/SP secret),Persistence,critique,9
+m365_ca_change,T1556.009,Modify Authentication Process (Conditional Access),Defense Evasion,critique,9
