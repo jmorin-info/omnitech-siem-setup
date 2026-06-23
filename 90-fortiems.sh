@@ -183,7 +183,21 @@ add_mitre forticlient_av_off  T1562.001 "Impair Defenses: Disable/Modify Tools" 
 install -m 644 "$CSV" /etc/graylog/lookup/mitre-attack.csv; chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true
 ok "MITRE forticlient_malware / forticlient_vuln / forticlient_av_off"
 
-echo "==> [4/4] Routage event_source=fortiems hors des streams partages (deja dedie via input)"
+echo "==> [4/4] Alertes (mail + Teams) sur les detections endpoint"
+NMAIL="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Mail equipe IT")|.id')"
+NTEAMS="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Teams SOC")|.id')"
+NF="$(jq -n --arg m "$NMAIL" --arg tm "$NTEAMS" '[{notification_id:$m,notification_parameters:null}]+(if $tm=="" or $tm=="null" then [] else [{notification_id:$tm,notification_parameters:null}] end)')"
+mk_a() { local T="$1" Q="$2" P="${3:-3}"
+  api_get "/events/definitions?per_page=300" | jq -e --arg t "$T" '.event_definitions[]|select(.title==$t)' >/dev/null && { skip "alerte '$T'"; return; }
+  jq -n --arg t "$T" --arg q "$Q" --arg st "$ST_EMS" --argjson p "$P" --argjson n "$NF" '{title:$t,description:"90-fortiems.sh",priority:$p,alert:true,
+    config:{type:"aggregation-v1",query:$q,query_parameters:[],streams:[$st],group_by:[],series:[{id:"count()",type:"count"}],
+      conditions:{expression:{expr:">=",left:{expr:"number-ref",ref:"count()"},right:{expr:"number",value:1}}},
+      search_within_ms:300000,execute_every_ms:300000,use_cron_scheduling:false,event_limit:50},
+    field_spec:{},key_spec:[],notification_settings:{grace_period_ms:0,backlog_size:20},notifications:$n}' \
+    | post_entity "/events/definitions?schedule=true" | jqr '.id' >/dev/null && ok "alerte '$T'" || warn "alerte '$T' KO"; }
+mk_a "OMNI - Malware sur endpoint (FortiClient AV)"        "alert_tag:forticlient_malware"
+mk_a "OMNI - Protection endpoint desactivee (FortiClient)" "alert_tag:forticlient_av_off"
+mk_a "OMNI - Vulnerabilite critique sur endpoint (EMS)"    "alert_tag:forticlient_vuln"
 echo
 echo "=== 90 termine. Stream 'OMNI - FortiClient EMS' + parse KV + 3 detections (marqueurs)."
 echo "    VERIFIER au 1er event securite reel : noms de champs (threat/endpoint/user) +"

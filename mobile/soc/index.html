@@ -539,6 +539,7 @@
       <a data-p="attack"><span class="ic"><svg class="svi"><use href="#i-matrix"></use></svg></span><span data-i18n="nav_attack">ATT&CK</span></a>
       <a data-p="graph"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span><span data-i18n="nav_graph">Graphe d'attaque</span></a>
       <a data-p="twin"><span class="ic"><svg class="svi"><use href="#i-target"></use></svg></span><span data-i18n="nav_twin">Jumeau d'attaque</span></a>
+      <a data-p="ems"><span class="ic"><svg class="svi"><use href="#i-cpu"></use></svg></span><span data-i18n="nav_ems">Endpoint (EMS)</span></a>
       <a data-p="leaks"><span class="ic"><svg class="svi"><use href="#i-unlock"></use></svg></span><span data-i18n="nav_leaks">Fuites & Dark Web</span></a>
       <a data-p="health"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span><span data-i18n="nav_health">Santé & Collecte</span></a>
       <a data-p="report"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span><span data-i18n="nav_report">Rapport</span></a>
@@ -632,6 +633,9 @@
     <section class="page" id="p-twin">
       <div id="twinWrap"><div class="card"><p class="muted" data-i18n="twin_loading">Chargement du jumeau d'attaque…</p></div></div>
     </section>
+    <section class="page" id="p-ems">
+      <div id="emsWrap"><div class="card"><p class="muted" data-i18n="ems_loading">Chargement de la télémétrie endpoint…</p></div></div>
+    </section>
     <section class="page" id="p-leaks">
       <div class="grid kpis" id="leakSummary"></div>
       <div class="card"><h3><svg class="svi"><use href="#i-unlock"></use></svg> <span data-i18n="card_leaksrc">Sources de fuite surveillées</span><span class="tag" data-i18n="tag_leaksrc">30 j · RansomLook / HIBP / Dehashed / GitHub</span></h3>
@@ -703,7 +707,7 @@ const TACCOL={"Initial Access":"#fb3b53","Execution":"#f97316","Persistence":"#f
 let LANG=localStorage.getItem("soc_lang")||"fr";
 const I18N={
  fr:{
-  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_twin:"Jumeau d'attaque",twin_loading:"Chargement du jumeau d'attaque…",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",maint_title:"Maintenance requise",watch_on:"Surveillée",watch_off:"Surveiller",watch_hint:"Ajouter/retirer de la liste de surveillance",watch_added:"Ajoutée à la surveillance",watch_removed:"Retirée de la surveillance",watch_section:"Sous surveillance",
+  nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_twin:"Jumeau d'attaque",twin_loading:"Chargement du jumeau d'attaque…",nav_ems:"Endpoint (EMS)",ems_loading:"Chargement de la télémétrie endpoint…",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",maint_title:"Maintenance requise",watch_on:"Surveillée",watch_off:"Surveiller",watch_hint:"Ajouter/retirer de la liste de surveillance",watch_added:"Ajoutée à la surveillance",watch_removed:"Retirée de la surveillance",watch_section:"Sous surveillance",
   cluster_ok:"Cluster opérationnel",dens_comfort:"Confort",dens_compact:"Compact",
   al_search:"Recherche et navigation (Ctrl ou Cmd + K)",al_refresh:"Rafraîchir les données",al_density:"Basculer la densité d'affichage",al_help:"Ouvrir l'aide et les raccourcis clavier",al_logout:"Se déconnecter",al_lang:"Changer la langue (FR/EN)",
   t_search:"Recherche (Ctrl/Cmd+K)",t_refresh:"Rafraîchir maintenant",t_help:"Aide et raccourcis (touche ?)",t_logout:"Se déconnecter",t_lang:"Langue : Français — cliquer pour English",
@@ -724,7 +728,7 @@ const I18N={
   case_status:"Statut du cas mis à jour.",case_disp:"Disposition enregistrée — le modèle de réduction des faux positifs s'ajustera.",case_assign:"Cas assigné.",case_note:"Note d'investigation ajoutée.",case_def:"Cas mis à jour."
  },
  en:{
-  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_twin:"Attack twin",twin_loading:"Loading the attack twin…",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",maint_title:"Maintenance required",watch_on:"Watched",watch_off:"Watch",watch_hint:"Add/remove from watchlist",watch_added:"Added to watchlist",watch_removed:"Removed from watchlist",watch_section:"Watchlist",
+  nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_twin:"Attack twin",twin_loading:"Loading the attack twin…",nav_ems:"Endpoint (EMS)",ems_loading:"Loading endpoint telemetry…",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",maint_title:"Maintenance required",watch_on:"Watched",watch_off:"Watch",watch_hint:"Add/remove from watchlist",watch_added:"Added to watchlist",watch_removed:"Removed from watchlist",watch_section:"Watchlist",
   cluster_ok:"Cluster operational",dens_comfort:"Comfort",dens_compact:"Compact",
   al_search:"Search and navigation (Ctrl or Cmd + K)",al_refresh:"Refresh data",al_density:"Toggle display density",al_help:"Open help and keyboard shortcuts",al_logout:"Sign out",al_lang:"Change language (FR/EN)",
   t_search:"Search (Ctrl/Cmd+K)",t_refresh:"Refresh now",t_help:"Help and shortcuts (press ?)",t_logout:"Sign out",t_lang:"Language: English — click for Français",
@@ -773,8 +777,8 @@ function start(){$("#login").style.display="none";$("#app").style.display="grid"
 
 // nav
 const titles={
-  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",entities:"Recherche d'entités",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",twin:"Jumeau d'attaque — Exposition",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
-  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",entities:"Entity search",attack:"MITRE ATT&CK",graph:"Attack graph",twin:"Attack twin — Exposure",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
+  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",entities:"Recherche d'entités",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",twin:"Jumeau d'attaque — Exposition",ems:"Endpoint — FortiClient EMS",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
+  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",entities:"Entity search",attack:"MITRE ATT&CK",graph:"Attack graph",twin:"Attack twin — Exposure",ems:"Endpoint — FortiClient EMS",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
 const PDESC={
  fr:{
   overview:"<b>Posture en un coup d'œil</b> — indicateurs clés, activité des dernières 24 h, tactiques ATT&CK et flux d'événements en temps réel. Chaque indicateur est cliquable.",
@@ -783,6 +787,7 @@ const PDESC={
   attack:"<b>Matrice MITRE ATT&CK</b> — chaque cellule est une technique que vous détectez, colorée selon le volume d'activité réel. Le rouge signale une forte activité à investiguer.",
   graph:"<b>Graphe d'attaque</b> — relie les utilisateurs aux techniques qu'ils ont déclenchées. Taille du nœud = volume, couleur = tactique. Cliquez un nœud bleu pour la fiche entité.",
   twin:"<b>Jumeau d'attaque (oms-graph)</b> — reconstruit passivement les chemins d'exposition vers les joyaux (DC, SIEM, Veeam, PKI…). Montre où durcir en priorité (<b>chokepoints</b>), le <b>rayon de souffle</b> d'un compromis, les <b>points uniques</b>, et où <b>pré-positionner les leurres</b>. Défensif, lecture passive.",
+  ems:"<b>Endpoint — FortiClient EMS</b> — télémétrie des postes via FortiClient EMS (syslog TLS) : <b>malware</b> détecté par l'AV, <b>vulnérabilités</b> critiques, <b>protection désactivée</b>, et l'activité par type/poste. Les événements apparaissent au fur et à mesure que les postes remontent.",
   leaks:"<b>Fuites & Dark Web</b> — surveille les sites d'extorsion ransomware (RansomLook), les comptes exposés (HIBP/Dehashed) et le code public (GitHub).",
   health:"<b>Santé de la collecte</b> — volume et fraîcheur de chaque source. Une source qui décroche = angle mort, alerté automatiquement (preuve ISO A.8.15).",
   report:"<b>Rapport de posture</b> — synthèse exécutive imprimable (PDF) pour la direction et l'audit ISO. Bouton « Imprimer / PDF » en haut à droite.",
@@ -796,6 +801,7 @@ const PDESC={
   attack:"<b>MITRE ATT&CK matrix</b> — each cell is a technique you detect, colored by real activity volume. Red flags high activity to investigate.",
   graph:"<b>Attack graph</b> — links users to the techniques they triggered. Node size = volume, color = tactic. Click a blue node for the entity profile.",
   twin:"<b>Attack twin (oms-graph)</b> — passively reconstructs exposure paths to the crown jewels (DC, SIEM, Veeam, PKI…). Shows where to harden first (<b>chokepoints</b>), the <b>blast radius</b> of a compromise, <b>single points of failure</b>, and where to <b>pre-position decoys</b>. Defensive, passive read.",
+  ems:"<b>Endpoint — FortiClient EMS</b> — endpoint telemetry via FortiClient EMS (syslog TLS): <b>malware</b> caught by the AV, critical <b>vulnerabilities</b>, <b>protection disabled</b>, and activity by type/host. Events appear as endpoints report in.",
   leaks:"<b>Leaks & Dark Web</b> — monitors ransomware extortion sites (RansomLook), exposed accounts (HIBP/Dehashed) and public code (GitHub).",
   health:"<b>Collection health</b> — volume and freshness of each source. A source going dark = blind spot, alerted automatically (ISO A.8.15 evidence).",
   report:"<b>Posture report</b> — printable executive summary (PDF) for management and ISO audit. “Print / PDF” button at top right.",
@@ -812,8 +818,28 @@ document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   if(pg==="report"){j("/report").then(r=>renderReport(r)).catch(()=>{});}
   if(pg==="playbooks"){var s=$("#pbSearch");renderPlaybooks(s?s.value:"");}
   if(pg==="entities"){loadEntities();}
-  if(pg==="twin"){j("/attack-graph").then(d=>renderTwin(d)).catch(()=>{});}});
+  if(pg==="twin"){j("/attack-graph").then(d=>renderTwin(d)).catch(()=>{});}
+  if(pg==="ems"){j("/fortiems").then(d=>renderEms(d)).catch(()=>{});}});
 document.querySelectorAll("#nav a").forEach((a,i)=>{if(i<9)a.title=(LANG==="en"?"Shortcut ":"Raccourci ")+(i+1);});
+function renderEms(d){const w=$("#emsWrap");if(!w)return;d=d||{};const EN=LANG==="en";
+  const sc=s=>s==="critique"?"#fb3b53":s==="eleve"?"#f5a623":"#38bdf8";
+  const K=(v,l,col)=>'<div class="kpi '+(col||'cy')+'"><div class="lab">'+l+'</div><div class="val mono">'+(v||0).toLocaleString("fr")+'</div></div>';
+  let H='<div class="card"><h3><svg class="svi"><use href="#i-cpu"></use></svg> '+(EN?"Endpoint telemetry (FortiClient EMS)":"Télémétrie endpoint (FortiClient EMS)")+'<span class="tag">'+(d.days||7)+'j · syslog TLS</span></h3>'
+    +'<div class="grid kpis">'+K(d.malware,(EN?"malware":"malware"),(d.malware?'red':'cy'))+K(d.vuln,(EN?"critical vuln":"vuln. critiques"),(d.vuln?'amb':'cy'))+K(d.av_off,(EN?"protection off":"protection off"),(d.av_off?'red':'cy'))+K(d.total,(EN?"events":"événements"),'cy')+'</div></div>';
+  if(!d.total){H+='<div class="card"><p class="muted">'+(EN?"No FortiClient EMS event yet — events appear as endpoints report (AV, vulnerabilities, status). Ingestion is live (TLS).":"Aucun événement FortiClient EMS pour l'instant — ils apparaissent au fur et à mesure (AV, vulnérabilités, statut). L'ingestion est active (TLS).")+'</p></div>';w.innerHTML=H;return;}
+  // top sous-types + top postes (2 colonnes)
+  H+='<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">';
+  const st=d.subtypes||[];const sm=st.length?st[0].n:1;
+  H+='<div class="card"><h3>'+(EN?"Event types":"Types d'événements")+'</h3><div class="feed">'+st.map(x=>'<div class="frow" style="display:flex;align-items:center;gap:8px"><span class="mono" style="min-width:36px;text-align:right;color:var(--cy)">'+x.n+'</span><span class="bar" style="height:7px;border-radius:4px;background:#38bdf8;width:'+Math.max(8,Math.round(100*x.n/sm))+'%;display:inline-block"></span> '+esc(x.k)+'</div>').join('')+'</div></div>';
+  const ht=d.hosts||[];
+  H+='<div class="card"><h3>'+(EN?"Top endpoints":"Top postes")+'</h3><div class="feed">'+ht.map(x=>'<div class="frow" onclick="openEntity(\''+_jsq(x.host)+'\',\''+_jsq(x.host)+'\')" title="'+(EN?"Open dossier":"Dossier")+'" style="cursor:pointer;display:flex;gap:8px"><span class="mono" style="min-width:36px;text-align:right;color:var(--cy)">'+x.n+'</span> '+esc(x.host)+'</div>').join('')+'</div></div>';
+  H+='</div>';
+  // événements récents
+  const ev=d.events||[];
+  H+='<div class="card"><h3>'+(EN?"Recent events":"Événements récents")+'</h3><div class="feed">'+ev.map(e=>'<div class="frow" style="border-left:3px solid '+(e.tag?sc(e.sev):"#2a3654")+';padding-left:8px">'
+    +'<div style="display:flex;align-items:center;gap:8px"><span class="ts" style="color:var(--dim);font-size:11px">'+(e.ts?e.ts.slice(11,19):'')+'</span>'+(e.tag?'<span class="chip">'+nice(e.tag)+'</span>':'<span class="muted" style="font-size:11px">'+esc(e.subtype||'')+'</span>')+(e.host?' <b style="font-size:12px">'+esc(e.host)+'</b>':'')+(e.threat?' <span style="color:#fb3b53;font-size:12px">'+esc(e.threat)+'</span>':'')+'</div>'
+    +'<div class="muted" style="font-size:12px;margin-top:2px">'+esc((e.msg||'').slice(0,140))+'</div></div>').join('')+'</div></div>';
+  w.innerHTML=H;}
 function renderPlaybooks(q){const body=$("#pbBody");if(!body)return;
   if(!Object.keys(GUIDANCE).length){j("/guidance").then(r=>{GUIDANCE=r.guidance||{};renderPlaybooks(q);}).catch(()=>{});return;}
   q=(q||"").trim().toLowerCase();
@@ -1195,7 +1221,7 @@ function addLive(ev){const el=$("#liveFeed");if(!el)return;if(liveN===0)el.inner
   const b=$("#liveCount");if(b)b.textContent=liveN+" évén.";}
 
 // --- Command palette (Cmd/Ctrl+K) ---
-const CMDPAGES=["overview","incidents","detections","entities","attack","graph","twin","leaks","health","report","playbooks"];
+const CMDPAGES=["overview","incidents","detections","entities","attack","graph","twin","ems","leaks","health","report","playbooks"];
 function CMDLIST(){return CMDPAGES.map(p=>({k:(titles[LANG]||titles.fr)[p],p:p}));}
 function goNav(p){const a=document.querySelector('#nav a[data-p="'+p+'"]');if(a)a.click();}
 function openPal(){$("#pal").classList.add("on");const i=$("#palIn");i.value="";renderPal("");setTimeout(()=>i.focus(),30);}

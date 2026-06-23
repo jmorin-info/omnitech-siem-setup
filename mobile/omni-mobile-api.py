@@ -1228,6 +1228,44 @@ def get_attack_graph():
                 "hint": "lancer 89-attack-graph.sh puis le timer oms-graph (analyse quotidienne)"}
 
 
+def get_fortiems(days=7):
+    """Télémétrie endpoint FortiClient EMS (event_source=fortiems) : volume, sous-types,
+    sévérité, top postes, détections (malware/vuln/AV-off), événements récents."""
+    flt = [{"term": {"event_source": "fortiems"}},
+           {"range": {"timestamp": {"gte": f"now-{int(days)}d"}}}]
+    res = os_search("omni-*", {
+        "size": 18, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {"filter": flt}},
+        "aggs": {
+            "subtypes": {"terms": {"field": "subtype", "size": 12}},
+            "hosts": {"terms": {"field": "host", "size": 12}},
+            "tags": {"filter": {"exists": {"field": "alert_tag"}},
+                     "aggs": {"t": {"terms": {"field": "alert_tag", "size": 10}}}},
+        },
+        "_source": ["timestamp", "type", "subtype", "level", "host", "user", "ems_msg",
+                    "alert_tag", "virus", "threat", "action", "risk_severity"]})
+    ag = res.get("aggregations", {})
+    def _b(k, sub=None):
+        node = ag.get(k, {})
+        node = node.get(sub, {}) if sub else node
+        return [{"k": b["key"], "n": b["doc_count"]} for b in node.get("buckets", [])]
+    hits = res.get("hits", {})
+    events = [{"ts": s.get("timestamp"), "subtype": s.get("subtype"), "level": s.get("level"),
+              "host": _rd(s.get("host")), "user": _rd(s.get("user")),
+              "tag": s.get("alert_tag"), "sev": s.get("risk_severity"),
+              "threat": s.get("virus") or s.get("threat"), "action": s.get("action"),
+              "msg": _scrub(s.get("ems_msg"))}
+             for s in (h.get("_source", {}) for h in hits.get("hits", []))]
+    tags = {b["k"]: b["n"] for b in _b("tags", "t")}
+    return {"total": hits.get("total", {}).get("value", 0), "days": int(days),
+            "subtypes": _b("subtypes"),
+            "hosts": [{"host": _rd(b["k"]), "n": b["n"]} for b in _b("hosts")],
+            "malware": tags.get("forticlient_malware", 0),
+            "vuln": tags.get("forticlient_vuln", 0),
+            "av_off": tags.get("forticlient_av_off", 0),
+            "events": events}
+
+
 OMS_GRAPH_DIR = "/root/omnitech-siem-setup/oms-graph"
 OMS_GRAPH_PY = OMS_GRAPH_DIR + "/.venv/bin/python"
 OMS_GRAPH_CFG = "/etc/oms-graph/config.yaml"
@@ -1341,6 +1379,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_risk())
         if p == "/m/api/attack-graph":
             return self._json(get_attack_graph())
+        if p == "/m/api/fortiems":
+            return self._json(get_fortiems())
         if p == "/m/api/sentinel-sim":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
