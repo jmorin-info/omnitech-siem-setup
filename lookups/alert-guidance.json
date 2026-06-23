@@ -628,5 +628,29 @@
     "a_verifier": "Quel fichier (clé auditd : omni_passwd/shadow/sudoers/sshkeys), quel serveur, quel processus/utilisateur a fait la modif. Changement légitime (admin, package) ou non ? Une modif de sudoers/authorized_keys hors changement déclaré = forte présomption d'intrusion.",
     "correction": "Restreindre l'écriture sur ces fichiers, immutabilité (chattr +i où possible), gestion de configuration (Ansible) traçable, alerter sur toute modif.",
     "remediation": "INTRUSION PROBABLE. Isoler le serveur, comparer le fichier à une référence, identifier le processus/compte fautif, chasser persistance + autres serveurs, réinitialiser les secrets exposés. Remonter au RSSI."
+  },
+  "aruba_auth_fail": {
+    "ce_que_cest": "Échec d'authentification à l'administration d'un switch Aruba (SSH/console/Web). Isolé = erreur ; répété = brute force sur l'équipement réseau (T1110). Compromettre un switch = interception/redirection de trafic, pivot.",
+    "a_verifier": "Switch (host), compte ciblé, IP source. Source interne attendue (poste admin) ou inhabituelle ? Répétition (brute force) ? Un succès a-t-il suivi ? L'admin réseau était-il en intervention ?",
+    "correction": "Authentification centralisée (RADIUS/TACACS+), accès management restreint à un VLAN/IP admin (ACL), comptes nominatifs, désactiver Telnet/HTTP au profit de SSH/HTTPS, MFA si supporté.",
+    "remediation": "Si brute force/compromission : changer les identifiants du switch, restreindre l'accès management, vérifier la config (changements non autorisés), auditer le trafic. Isoler le poste source si interne."
+  },
+  "aruba_config_change": {
+    "ce_que_cest": "La configuration d'un switch Aruba a été modifiée (running/startup config). Légitime si changement planifié ; suspect sinon (T1601) — un attaquant modifie la config réseau (VLAN, ACL, SPAN/mirroring pour intercepter, route) pour pivoter ou intercepter.",
+    "a_verifier": "Switch, qui a fait le changement, quand. Changement déclaré (ticket) ? Quel type (VLAN, ACL, port mirroring/SPAN = interception, désactivation de sécurité) ? Corréler avec un login admin juste avant.",
+    "correction": "Sauvegarde/versionnement de config (RANCID/Oxidized), validation des changements (ticket), alerter sur tout changement, séparer les rôles, journaliser les commandes.",
+    "remediation": "Si non autorisé : comparer à la dernière config validée, restaurer si nécessaire, identifier l'auteur (compte compromis ?), vérifier l'ajout de SPAN/route/ACL malveillant, traiter comme intrusion réseau."
+  },
+  "aruba_port_security": {
+    "ce_que_cest": "Violation de port-security sur un switch Aruba (MAC non autorisée, intrusion sur un port). Signale un équipement BRANCHÉ physiquement non autorisé (T1200) ou une usurpation MAC — accès physique malveillant ou rogue device.",
+    "a_verifier": "Switch + port + MAC en cause. Port censé être vide/restreint ? MAC connue (déménagement légitime) ou inconnue (rogue device, attaque physique) ? Localiser physiquement le port.",
+    "correction": "Port-security strict (MAC sticky, limite de MAC), désactiver les ports inutilisés, 802.1X (NAC) pour l'authentification des postes, alerter sur violation.",
+    "remediation": "Localiser et débrancher l'équipement non autorisé, identifier qui l'a branché, vérifier ce qu'il a fait sur le réseau (DHCP, scan, trafic), maintenir le port en shutdown jusqu'à investigation."
+  },
+  "aruba_admin_login": {
+    "ce_que_cest": "Connexion à l'administration d'un switch Aruba (SSH/session ouverte). Trace d'accès au plan de contrôle réseau. Légitime pour l'équipe réseau ; à surveiller hors plage ou depuis une source inhabituelle (T1078).",
+    "a_verifier": "Switch, compte, IP source, horaire. Admin réseau connu en intervention ? Hors heures ouvrées ou source inhabituelle = à corroborer. Suivi d'un changement de config ?",
+    "correction": "Accès management restreint (VLAN/IP admin), comptes nominatifs + RADIUS/TACACS+, journalisation des sessions, alerter sur login hors plage.",
+    "remediation": "Si suspect : confirmer avec l'équipe réseau, sinon traiter le compte comme compromis, auditer les actions de la session (changements de config), restreindre l'accès."
   }
 }

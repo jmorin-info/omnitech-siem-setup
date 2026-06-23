@@ -54,6 +54,8 @@ table inet filter {
         tcp dport ${EMS_PORT} ip saddr ${IP_EMS} accept comment "Syslog TLS FortiClient EMS (514 redirige -> ${EMS_PORT})"
         tcp dport 514 ip saddr ${IP_EMS} accept comment "FortiClient EMS 514 (avant redirect)"
         tcp dport 1519 ip saddr ${NET_BEATS} accept comment "Syslog TCP Linux (serveurs Debian)"
+        tcp dport 1520 ip saddr 10.33.0.0/16 accept comment "Syslog TCP Aruba"
+        udp dport 1520 ip saddr 10.33.0.0/16 accept comment "Syslog UDP Aruba"
         tcp dport 1517 ip saddr 10.33.80.252 accept comment "Syslog TCP FortiManager"
         udp dport 1517 ip saddr 10.33.80.252 accept comment "Syslog UDP FortiManager"
         # NPS (${IP_NPS}) et BunkerWeb (${IP_BUNKERWEB}) passent par Beats 5044 (deja ouvert au ${NET_BEATS})
