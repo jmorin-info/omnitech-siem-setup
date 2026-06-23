@@ -309,6 +309,10 @@ def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
     return env
 ENV = load_env()
 SPEED_KMH = float(ENV.get("UEBA_GEO_SPEED", "900"))    # > vitesse d'un avion de ligne
+# Au-dela de ce plafond, ce n'est plus un deplacement humain mais du JITTER geo-IP
+# (egress datacenter O365 : 2 IP Microsoft geolocalisees dans des villes/pays differents
+# a quelques secondes -> vitesse absurde). On ecarte ces faux positifs (ex FR->FR 30543 km/h).
+MAX_SPEED_KMH = float(ENV.get("UEBA_GEO_MAXSPEED", "4000"))
 MIN_KM    = float(ENV.get("UEBA_GEO_MINKM", "500"))    # ignore les petits ecarts (bruit centroide)
 WINDOW_H  = int(ENV.get("UEBA_GEO_WINDOW_H", "24"))
 
@@ -395,6 +399,8 @@ def main():
             hours = max((t2 - t1) / 3600000.0, 0.001)
             speed = km / hours
             if speed < SPEED_KMH:
+                continue
+            if speed > MAX_SPEED_KMH:        # jitter geo-IP (egress O365), pas un humain -> FP ecarte
                 continue
             found += 1
             gelf({"event_source": "ueba_geo", "alert_tag": "impossible_travel",
