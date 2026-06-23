@@ -192,6 +192,28 @@ signals:
     entity_field: host
     window: 360
 
+  # --- Déception (OMNI Sentinel Pilier 1) : signaux à fidélité ~100% ---
+  S_DECOY_IDENTITY:
+    description: "Leurre d'identité touché (honeytoken compte/machine)"
+    stream: windows
+    query: 'alert_tag:decoy_identity'
+    type: presence
+    entity_field: user
+
+  S_DECOY_KERBEROAST:
+    description: "Leurre Kerberoast touché (TGS sur SPN leurre)"
+    stream: windows
+    query: 'alert_tag:decoy_kerberoast'
+    type: presence
+    entity_field: user
+
+  S_CANARY:
+    description: "Token canari déclenché (fichier appât ouvert)"
+    stream: sysmon
+    query: 'alert_tag:canary_token'
+    type: presence
+    entity_field: host
+
 # ---- RÈGLES DE CORRÉLATION ----------------------------------------
 # require_all : tous les signaux présents pour la MÊME entité dans la fenêtre
 # any_of      : au moins un des signaux listés
@@ -255,6 +277,14 @@ rules:
     any_of: [S_LSASS]
     mitre: ["T1003.001"]
     tactic: ["Credential Access"]
+
+  CR_DECEPTION_TRIGGERED:
+    title: "Leurre de déception déclenché — compromission quasi-certaine"
+    severity: critical
+    join_entity: false
+    any_of: [S_DECOY_IDENTITY, S_DECOY_KERBEROAST, S_CANARY]
+    mitre: ["T1078", "T1558.003", "T1005"]
+    tactic: ["Credential Access", "Collection"]
 
   CR_RANSOMWARE:
     title: "Indicateur de rançongiciel (destruction de sauvegardes / clichés)"

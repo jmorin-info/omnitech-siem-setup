@@ -84,6 +84,21 @@ PLAYBOOKS: dict[str, dict[str, Any]] = {
             {"text": "Analyse ESET EDR, capture mémoire, recherche d'outils de credential dumping."},
         ],
     },
+    "CR_DECEPTION_TRIGGERED": {
+        "summary": "Un leurre (honeytoken OMNI Sentinel) a été touché : aucun usage légitime "
+                   "possible → compromission quasi-certaine, à traiter comme une intrusion confirmée.",
+        "steps": [
+            {"text": "Identifier la SOURCE (hôte/IP à l'origine du contact avec le leurre) et l'isoler "
+                     "immédiatement (NinjaOne). Le compte/SPN/canari touché n'est qu'un appât.",
+             "action": "isolate_ninjaone"},
+            {"text": "Croiser avec le jumeau d'attaque (console → Jumeau) : si la source est un chokepoint "
+                     "ou à courte distance d'un joyau, escalader en priorité maximale."},
+            {"text": "Réinitialiser le compte réel utilisé par l'attaquant + révoquer ses tickets Kerberos.",
+             "action": "force_pwd_reset"},
+            {"text": "Chasser le mouvement latéral, la persistance et les autres leurres touchés (vue Entités). "
+                     "Préserver les preuves. Remonter au RSSI sans délai."},
+        ],
+    },
     "CR_RANSOMWARE": {
         "summary": "Indicateur de rançongiciel : destruction des clichés/sauvegardes (vssadmin/wbadmin/bcdedit).",
         "steps": [
