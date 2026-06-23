@@ -47,7 +47,7 @@ ensure_rule "omni-file-12-sensitive" <<EOF
 rule "omni-file-12-sensitive"
 when
   to_string(\$message.event_source) == "windows_security"
-  AND ( to_long(\$message.event_id, 0) == 4663 OR to_long(\$message.event_id, 0) == 5145 )
+  AND to_long(\$message.event_id, 0) == 4663
   AND NOT ends_with(to_string(\$message.user), "\$")
   AND NOT contains(to_string(\$message.${WD}_ObjectName), "\\\\Device\\\\CdRom", true)
   AND NOT contains(to_string(\$message.${WD}_ObjectName), "C:\\\\Windows", true)

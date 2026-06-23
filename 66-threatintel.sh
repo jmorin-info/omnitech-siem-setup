@@ -69,6 +69,9 @@ TI_SHARED_INFRA = {
     "amazonaws.com", "blob.core.windows.net",
     "pastebin.com", "paste.ee", "mega.nz", "mediafire.com", "anonfiles.com",
     "t.me", "telegram.org", "bit.ly", "tinyurl.com",
+    # hebergeurs d'images / paste (malware a une URL precise -> match domaine = FP)
+    "postimg.cc", "i.postimg.cc", "imgur.com", "i.imgur.com", "ibb.co", "imgbb.com",
+    "catbox.moe", "files.catbox.moe", "transfer.sh", "filebin.net", "gofile.io",
 }
 
 def _shared_infra(h):
