@@ -67,6 +67,11 @@ else skip "lookups/aruba-switches.csv existe (conserve)"; fi
 install -m 644 lookups/aruba-switches.csv "${LOOKUP_DIR}/aruba-switches.csv"
 chown root:graylog "${LOOKUP_DIR}/aruba-switches.csv" 2>/dev/null || true
 ensure_lookup "aruba-switch" "OMNI Aruba IP -> nom" "aruba-switches.csv" "ip" "name"
+# Referentiel segments reseau (3e octet -> segment/VLAN). Donne du contexte aux IP
+# internes (correlation : « echec admin switch depuis le VLAN utilisateurs »).
+install -m 644 lookups/net-segments.csv "${LOOKUP_DIR}/net-segments.csv"
+chown root:graylog "${LOOKUP_DIR}/net-segments.csv" 2>/dev/null || true
+ensure_lookup "net-segment" "OMNI octet -> segment reseau" "net-segments.csv" "octet" "segment"
 
 echo "==> [3/5] Pipeline 'OMNI - Aruba' (base + parsing enrichi + detections)"
 # --- STAGE 0 : base + parsing (toutes gardes independantes des mutations du stage) -
@@ -97,6 +102,10 @@ when has_field("source") AND contains(to_string($message.message), " from ", tru
 then
   set_fields(grok("from %{IP:aruba_client_ip}", to_string($message.message), true));
   set_fields(grok("from %{IP:src_ip}", to_string($message.message), true));
+  // segment reseau via le 3e octet de l'IP (contexte de correlation interne)
+  set_fields(grok("%{INT}.%{INT}.%{INT:net_octet}.%{INT}", to_string($message.src_ip), true));
+  let seg = lookup_value("omni-net-segment", to_string($message.net_octet));
+  set_field("net_segment", seg);
 end
 EOF
 # Numero de port (events 'ports:')

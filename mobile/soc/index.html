@@ -1238,7 +1238,7 @@ function loadEntityNetwork(u){const w=$("#netEntWrap");if(!w)return;w.innerHTML=
     (d.tags||[]).forEach(x=>{h+='<span class="pchip" style="color:'+col+'">'+nice(x.k)+' · '+x.n+'</span> ';});
     h+='</div>';
     const ev=(d.events||[]).slice(0,4);
-    if(ev.length)h+='<div style="margin-top:6px">'+ev.map(e=>'<div class="muted" style="font-size:11px;border-top:1px solid var(--bd);padding-top:4px;margin-top:4px">'+(e.tag?'<b style="color:'+col+'">'+nice(e.tag)+'</b> · ':'')+(e.host?esc(e.host)+' · ':'')+(e.ip?esc(e.ip)+' · ':'')+esc((e.msg||'').slice(0,80))+'</div>').join('')+'</div>';
+    if(ev.length)h+='<div style="margin-top:6px">'+ev.map(e=>'<div class="muted" style="font-size:11px;border-top:1px solid var(--bd);padding-top:4px;margin-top:4px">'+(e.tag?'<b style="color:'+col+'">'+nice(e.tag)+'</b> · ':'')+(e.host?esc(e.host)+' · ':'')+(e.ip?esc(e.ip)+' · ':'')+(e.seg?'<span style="color:var(--cy)">'+esc(e.seg)+'</span> · ':'')+esc((e.msg||'').slice(0,80))+'</div>').join('')+'</div>';
     h+='</div>';w.innerHTML=h;
   }).catch(()=>{});}
 function loadEntityEms(u){const w=$("#emsEntWrap");if(!w)return;w.innerHTML="";

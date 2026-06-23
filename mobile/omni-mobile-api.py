@@ -651,7 +651,7 @@ def get_entity_network(name, days=14):
                           "aggs": {"t": {"terms": {"field": "alert_tag", "size": 8}}}},
                  "src": {"terms": {"field": "event_source", "size": 4}}},
         "_source": ["timestamp", "event_source", "source", "aruba_switch_name", "aruba_subsystem",
-                    "src_ip", "alert_tag", "message"]})
+                    "src_ip", "net_segment", "alert_tag", "message"]})
     hits = res.get("hits", {})
     total = hits.get("total", {})
     total = total.get("value", 0) if isinstance(total, dict) else (total or 0)
@@ -661,7 +661,7 @@ def get_entity_network(name, days=14):
     events = [{"ts": s.get("timestamp"), "src": s.get("event_source"),
                "host": _rd(s.get("aruba_switch_name") or s.get("source")),
                "sub": s.get("aruba_subsystem"), "tag": s.get("alert_tag"),
-               "ip": s.get("src_ip"), "msg": _scrub(s.get("message"))}
+               "ip": s.get("src_ip"), "seg": s.get("net_segment"), "msg": _scrub(s.get("message"))}
               for s in (h.get("_source", {}) for h in hits.get("hits", []))]
     return {"found": True, "entity": short, "total": total,
             "sources": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("src", {}).get("buckets", [])],
