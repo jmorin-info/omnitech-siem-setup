@@ -10,21 +10,21 @@
 <script src="/soc/globe.gl.min.js"></script>
 <style>
   :root{
-    --bg:#06080f; --bg2:#0a0e1a; --card:#0d1424; --card2:#111a2e; --bd:#1a2540;
-    --fg:#e6edf6; --mut:#7c8aa6; --dim:#52607d;
-    --cy:#22d3ee; --cy2:#0ea5b7; --red:#fb3b53; --amb:#f5a623; --grn:#34d399; --vio:#a78bfa; --blu:#3b82f6;
+    --bg:#070a11; --bg2:#0a0f18; --card:#0d131e; --card2:#111824; --bd:#1b2433; --bd2:#28354a;
+    --fg:#e8eef6; --mut:#8493a8; --dim:#566377;
+    --cy:#2dd4e3; --cy2:#0e94a8; --red:#f0556a; --amb:#f0a838; --grn:#36d39f; --vio:#a78bfa; --blu:#4b87f0;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
   body{background:
-      radial-gradient(900px 500px at 80% -10%, rgba(34,211,238,.10), transparent 60%),
-      radial-gradient(700px 500px at 0% 110%, rgba(167,139,250,.08), transparent 55%),
+      radial-gradient(1100px 600px at 82% -12%, rgba(45,212,227,.045), transparent 62%),
       var(--bg);
-    color:var(--fg);font:14px/1.5 'Segoe UI',-apple-system,Roboto,sans-serif;overflow:hidden}
+    color:var(--fg);font:14px/1.55 ui-sans-serif,-apple-system,'Segoe UI',Roboto,Inter,system-ui,sans-serif;overflow:hidden;
+    -webkit-font-smoothing:antialiased}
   body::before{content:"";position:fixed;inset:0;pointer-events:none;
-    background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
-    background-size:42px 42px;mask:radial-gradient(circle at 50% 30%,#000,transparent 90%)}
-  .mono{font-family:'SF Mono',ui-monospace,'Cascadia Code',Consolas,monospace}
+    background-image:linear-gradient(rgba(140,170,210,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(140,170,210,.012) 1px,transparent 1px);
+    background-size:46px 46px;mask:radial-gradient(circle at 50% 24%,#000,transparent 88%)}
+  .mono{font-family:ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
 
   /* LOGIN */
   #login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
@@ -987,19 +987,18 @@ function renderGlobe(d){d=d||{};const el=$("#globeCanvas");if(!el||!window.Globe
   if(!GLOBE){
     GLOBE=Globe()(el)
       .backgroundColor('rgba(0,0,0,0)')
-      .showAtmosphere(true).atmosphereColor('#173447').atmosphereAltitude(.18).showGraticules(true)
+      .globeImageUrl('/soc/earth-night.jpg').bumpImageUrl('/soc/earth-topology.png')
+      .showAtmosphere(true).atmosphereColor('#3a6f93').atmosphereAltitude(.2)
       .arcColor('color').arcDashLength(.45).arcDashGap(.6).arcDashInitialGap(()=>Math.random())
       .arcDashAnimateTime(1400).arcStroke(a=>a._k==="menace"?0.55:0.28).arcAltitudeAutoScale(.45)
       .pointColor('color').pointAltitude(p=>p._oms?0.04:0.008).pointRadius('size').pointResolution(6)
       .ringColor(()=>t=>'rgba(34,211,238,'+(1-t)+')').ringMaxRadius(5).ringPropagationSpeed(2.2).ringRepeatPeriod(1100)
       .onArcHover(a=>globeHover(a,EN));
-    try{GLOBE.globeMaterial().color.set('#0a1320');GLOBE.globeMaterial().emissive.set('#06090f');GLOBE.globeMaterial().shininess=4;}catch(e){}
-    GLOBE.pointOfView({lat:32,lng:6,altitude:2.3},0);
-    if(GLOBE.controls){const c=GLOBE.controls();c.autoRotate=true;c.autoRotateSpeed=.42;c.enableDamping=true;}
-    fetch('/soc/carte-world.geojson').then(r=>r.json()).then(geo=>{
-      GLOBE.hexPolygonsData(geo.features).hexPolygonResolution(3).hexPolygonMargin(.32)
-        .hexPolygonUseDots(true).hexPolygonColor(()=>'rgba(90,150,170,.32)');}).catch(()=>{});
-    window.addEventListener("resize",()=>{if(GLOBE&&$("#globeCanvas")){GLOBE.width($("#globeCanvas").clientWidth).height($("#globeCanvas").clientHeight);}});
+    const _fit=()=>{const s=el.parentElement;if(s&&GLOBE){GLOBE.width(s.clientWidth).height(s.clientHeight);}};
+    _fit();setTimeout(_fit,200);setTimeout(_fit,700);
+    GLOBE.pointOfView({lat:OMS.lat,lng:OMS.lng,altitude:2.4},0);   // centre sur OMNITECH (Europe)
+    if(GLOBE.controls){const c=GLOBE.controls();c.autoRotate=true;c.autoRotateSpeed=.36;c.enableDamping=true;c.minDistance=200;c.maxDistance=600;}
+    window.addEventListener("resize",_fit);
   }
   GLOBE.ringsData([{lat:OMS.lat,lng:OMS.lng}]).pointsData(pts).arcsData(arcs);
   globeRail(d,EN);}
