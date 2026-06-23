@@ -1299,6 +1299,53 @@ def get_entity_ems(name, days=30):
             "av_off": tags.get("forticlient_av_off", 0), "events": events}
 
 
+def get_network(days=7):
+    """Synthèse Réseau & Infra (sources on-prem ajoutées) : switches Aruba (sécurité +
+    activité), serveurs Linux, DNS (DC). Volumes, top hôtes, détections par source,
+    sous-systèmes & IP clientes côté Aruba, événements de sécurité récents.
+    Alimente la page /soc « Réseau & Infra »."""
+    since = f"now-{int(days)}d"
+
+    def _summary(filt_term, index="omni-*"):
+        flt = [filt_term, {"range": {"timestamp": {"gte": since}}}]
+        r = os_search(index, {"size": 0, "query": {"bool": {"filter": flt}},
+            "aggs": {"hosts": {"terms": {"field": "source", "size": 10}},
+                     "tags": {"filter": {"exists": {"field": "alert_tag"}},
+                              "aggs": {"t": {"terms": {"field": "alert_tag", "size": 12}}}}}})
+        ag = r.get("aggregations", {})
+        return {"total": r.get("hits", {}).get("total", {}).get("value", 0),
+                "hosts": [{"k": _rd(b["key"]), "n": b["doc_count"]} for b in ag.get("hosts", {}).get("buckets", [])],
+                "tags": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tags", {}).get("t", {}).get("buckets", [])]}
+
+    aruba = _summary({"term": {"event_source": "aruba"}}, "omni-aruba*")
+    # Aruba : sous-systèmes + IP clientes + événements récents (TOUTE l'activité ;
+    # les détections taggées sont mises en évidence côté front).
+    ar = os_search("omni-aruba*", {
+        "size": 16, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": since}}}]}},
+        "aggs": {"subs": {"terms": {"field": "aruba_subsystem", "size": 10}},
+                 "clients": {"terms": {"field": "aruba_client_ip", "size": 8}}},
+        "_source": ["timestamp", "source", "aruba_switch_name", "aruba_subsystem",
+                    "aruba_event_id", "aruba_client_ip", "aruba_port", "alert_tag", "message"]})
+    aag = ar.get("aggregations", {})
+    aruba["subsystems"] = [{"k": b["key"], "n": b["doc_count"]} for b in aag.get("subs", {}).get("buckets", [])]
+    aruba["clients"] = [{"k": b["key"], "n": b["doc_count"]} for b in aag.get("clients", {}).get("buckets", [])]
+    aruba["events"] = [{"ts": s.get("timestamp"),
+                        "sw": _rd(s.get("aruba_switch_name") or s.get("source")),
+                        "sub": s.get("aruba_subsystem"), "tag": s.get("alert_tag"),
+                        "client": s.get("aruba_client_ip"), "port": s.get("aruba_port"),
+                        "msg": _scrub(s.get("message"))}
+                       for s in (h.get("_source", {}) for h in ar.get("hits", {}).get("hits", []))]
+    # nb de switches distincts vus (tous events, pas que sécurité)
+    swc = os_search("omni-aruba*", {"size": 0, "query": {"range": {"timestamp": {"gte": since}}},
+        "aggs": {"sw": {"cardinality": {"field": "source"}}}})
+    aruba["switches_seen"] = swc.get("aggregations", {}).get("sw", {}).get("value", 0)
+
+    return {"days": int(days), "aruba": aruba,
+            "linux": _summary({"term": {"event_source": "linux"}}),
+            "dns": _summary({"term": {"event_category": "dns"}})}
+
+
 OMS_GRAPH_DIR = "/root/omnitech-siem-setup/oms-graph"
 OMS_GRAPH_PY = OMS_GRAPH_DIR + "/.venv/bin/python"
 OMS_GRAPH_CFG = "/etc/oms-graph/config.yaml"
@@ -1414,6 +1461,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_attack_graph())
         if p == "/m/api/fortiems":
             return self._json(get_fortiems())
+        if p == "/m/api/network":
+            return self._json(get_network())
         if p == "/m/api/sentinel-sim":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
