@@ -676,5 +676,17 @@
   "a_verifier": "Quel switch / quel port ? Équipement raccordé (poste, AP, caméra) ? Câble/SFP suspect ? Corréler avec STP (boucle) et port-security (MAC changeante). Intervention physique récente sur ce port ?",
   "correction": "Remplacer câble/SFP défaillant, fixer la négociation (vitesse/duplex), activer le debounce/link-flap protection, port-security pour figer la MAC, superviser l'état des ports (SNMP).",
   "remediation": "Stabiliser ou désactiver le port instable, remplacer le matériel fautif, si la MAC change à chaque flap traiter comme un appareil rogue (corréler port_security/STP), documenter."
+ },
+ "ems_admin_login": {
+  "ce_que_cest": "Connexion d'un administrateur à la console FortiClient EMS (serveur de gestion des postes). Légitime pour l'IT ; à surveiller car un accès admin EMS permet de pousser des politiques/désactiver la protection sur tout le parc (T1078).",
+  "a_verifier": "Quel compte, depuis quelle IP/segment (corréler net_segment — un login depuis un VLAN inhabituel = suspect) ? Heure ouvrée ? Compte connu de l'équipe IT ? Suivi d'un changement de config (ems_config_change) ?",
+  "correction": "MFA sur la console EMS, restreindre l'accès admin par IP/VLAN d'administration, comptes nominatifs, journaliser et alerter sur les logins hors plage.",
+  "remediation": "Si login inattendu : vérifier l'origine (compte compromis ?), corréler avec les changements de config/politique poussés, révoquer la session, réinitialiser le compte, auditer les politiques EMS modifiées."
+ },
+ "ems_config_change": {
+  "ce_que_cest": "Modification de configuration sur la console FortiClient EMS depuis l'UI (profil d'accès distant/VPN, politique, déploiement). Un attaquant avec accès EMS peut affaiblir la protection du parc ou créer un accès (T1098).",
+  "a_verifier": "Qui (user), quoi (quel profil/policy), depuis quel segment ? Changement déclaré (ticket) ? Profil VPN/accès distant modifié = sensible. Corréler avec le login admin EMS juste avant.",
+  "correction": "Validation des changements (ticket), séparation des rôles, alerter sur toute modif de profil VPN/policy, sauvegarde/versionnement de la config EMS, MFA admin.",
+  "remediation": "Si non autorisé : comparer à la config validée, restaurer, identifier l'auteur (compte compromis ?), vérifier qu'aucun profil d'accès/déploiement malveillant n'a été créé, traiter comme intrusion."
  }
 }

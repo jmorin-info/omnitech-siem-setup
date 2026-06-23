@@ -645,7 +645,7 @@ def get_entity_network(name, days=14):
                   "should": [{"terms": {"src_ip": cands}},
                              {"terms": {"aruba_client_ip": cands}},
                              {"terms": {"source": cands}}]}}
-    res = os_search("omni-aruba*,omni-linux*", {
+    res = os_search("omni-aruba*,omni-linux*,omni-fortiems*", {
         "size": 12, "sort": [{"timestamp": {"order": "desc"}}], "track_total_hits": True, "query": q,
         "aggs": {"tags": {"filter": {"exists": {"field": "alert_tag"}},
                           "aggs": {"t": {"terms": {"field": "alert_tag", "size": 8}}}},

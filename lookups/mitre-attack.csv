@@ -110,3 +110,5 @@ m365_app_credential_add,T1098.001,Additional Cloud Credentials (app/SP secret),P
 m365_ca_change,T1556.009,Modify Authentication Process (Conditional Access),Defense Evasion,critique,9
 aruba_stp_loop,T1498,Network DoS (boucle / STP),Impact,moyen,5
 aruba_port_flap,T1200,Hardware Additions (port flap),Initial Access,moyen,4
+ems_admin_login,T1078,Login admin console EMS,Defense Evasion,moyen,5
+ems_config_change,T1098,Changement config EMS (profil/policy),Persistence,eleve,7

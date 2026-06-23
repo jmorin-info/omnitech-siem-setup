@@ -3,5 +3,6 @@ octet,segment,site
 50,Serveurs & services,Bourgoin
 70,DMZ Web,Bourgoin
 80,Management & reseau,Bourgoin
+90,Admin / VPN,Bourgoin
 140,VLAN 140 (a qualifier),Bourgoin
 220,SIEM & securite,Bourgoin

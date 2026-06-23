@@ -116,6 +116,33 @@ then
 end
 EOF
 
+# --- DECOMPO CONSOLE EMS (events serveur EMS reels) : login admin + changement config -
+# Format mesure : msg="admjlongo has logged in from 10.33.90.13." / "... updated Remote
+# Access Profile: OMS_Admin_VPN from UI." -> extrait user + src_ip + net_segment (correlation).
+ensure_rule "omni-ems-10-adminlogin" <<'EOF'
+rule "omni-ems-10-adminlogin"
+when to_string($message.event_source)=="fortiems" AND contains(to_string($message.message),"has logged in from",true)
+then
+  set_fields(grok("%{USERNAME:user} has logged in from %{IP:src_ip}", to_string($message.ems_msg), true));
+  set_fields(grok("%{INT}.%{INT}.%{INT:net_octet}.%{INT}", to_string($message.src_ip), true));
+  let seg = lookup_value("omni-net-segment", to_string($message.net_octet));
+  set_field("net_segment", seg);
+  set_field("alert_tag","ems_admin_login");
+  set_field("event_action","login_admin_ems");
+  set_field("mitre_technique","T1078"); set_field("mitre_tactic","Defense Evasion");
+end
+EOF
+ensure_rule "omni-ems-10-config" <<'EOF'
+rule "omni-ems-10-config"
+when to_string($message.event_source)=="fortiems" AND contains(to_string($message.message),"from UI",true)
+then
+  set_fields(grok("%{USERNAME:user} %{WORD:ems_verb} ", to_string($message.ems_msg), true));
+  set_field("alert_tag","ems_config_change");
+  set_field("event_action","changement_config_ems");
+  set_field("mitre_technique","T1098"); set_field("mitre_tactic","Persistence");
+end
+EOF
+
 # --- DETECTIONS (marqueurs ROBUSTES contains() ; a CONFIRMER au 1er event securite) ---
 # Malware/virus detecte par l'AV FortiClient sur un poste.
 ensure_rule "omni-ems-10-malware" <<'EOF'
@@ -175,6 +202,8 @@ rule "omni-ems-05-sev-crit"
 rule "omni-ems-05-sev-elev"
 rule "omni-ems-05-host"
 stage 10 match either
+rule "omni-ems-10-adminlogin"
+rule "omni-ems-10-config"
 rule "omni-ems-10-malware"
 rule "omni-ems-10-vuln"
 rule "omni-ems-10-avoff"
@@ -189,6 +218,8 @@ add_mitre() { grep -q "^$1," "$CSV" || { echo "$1,$2,$3,$4,$5,$6" >> "$CSV"; ok 
 add_mitre forticlient_malware T1204     "Malware sur endpoint (FortiClient AV)"      "Execution"        critique 9
 add_mitre forticlient_vuln    T1190     "Vulnerabilite exploitable (endpoint)"        "Initial Access"   eleve    7
 add_mitre forticlient_av_off  T1562.001 "Impair Defenses: Disable/Modify Tools"       "Defense Evasion"  critique 8
+add_mitre ems_admin_login     T1078     "Login admin console EMS"                     "Defense Evasion"  moyen    5
+add_mitre ems_config_change   T1098     "Changement config EMS (profil/policy)"       "Persistence"      eleve    7
 install -m 644 "$CSV" /etc/graylog/lookup/mitre-attack.csv; chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true
 ok "MITRE forticlient_malware / forticlient_vuln / forticlient_av_off"
 

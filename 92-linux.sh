@@ -60,6 +60,10 @@ then
   set_fields(grok("Failed password for (invalid user )?%{USERNAME:user} from %{IP:src_ip} port %{INT:src_port}", to_string($message.message), true));
   set_fields(grok("Accepted %{WORD:ssh_method} for %{USERNAME:user} from %{IP:src_ip} port %{INT:src_port}", to_string($message.message), true));
   set_fields(grok("Invalid user %{USERNAME:user} from %{IP:src_ip}", to_string($message.message), true));
+  // segment reseau via le 3e octet de src_ip (meme correlation que Aruba/EMS)
+  set_fields(grok("%{INT}.%{INT}.%{INT:net_octet}.%{INT}", to_string($message.src_ip), true));
+  let lseg = lookup_value("omni-net-segment", to_string($message.net_octet));
+  set_field("net_segment", lseg);
 end
 EOF
 ensure_rule "omni-linux-05-sudo" <<'EOF'
