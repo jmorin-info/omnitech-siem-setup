@@ -81,6 +81,7 @@ Plateforme **SIEM + XDR + console SOC** complète et reproductible, déployée s
 | 🛡️ **Detection engineering** | **177 règles** de pipeline sur 7 streams (AD/Sysmon, FortiGate, FortiManager, M365, vSphere…) → événements tagués (`alert_tag`) + **114 définitions d'alerte** (mail + Teams), fenêtres glissantes |
 | 🎯 **MITRE ATT&CK** | `alert_tag` → techniques / tactiques, score de risque 0–10, couche ATT&CK Navigator + **matrice de couverture interactive** |
 | 🔎 **Recherche d'entités & dossier 360°** | Page dédiée : **tout compte ou machine** → identité unifiée, authentifications, logons, détections, **chronologie**, guides ; **score de risque FUSIONNÉ** (ML+UEBA+sévérité), entités **classées par risque**, **watchlist** de suivi |
+| 🗺️ **Console SOC visuelle** | **28 tableaux de bord natifs** par domaine (identité, M365, réseau, Aruba/Linux/EMS, endpoint…) + **carte mondiale 3D** des flux temps réel (vue satellite) + **recherche plein‑texte** (palette Ctrl+K, pivot alerte→logs bruts) |
 | 🧬 **Corrélation d'identité** | `SECURITY\rdupont`, `adm-rdupont`, `rdupont@dom` reconnus comme **une seule personne** (comptes liés agrégés) ; machines jamais fusionnées |
 | 🕑 **Chronologie unifiée** | Le **récit** d'une entité : détections + échecs d'auth Windows + sign‑ins M365 fusionnés et triés par date, sur tous les comptes liés |
 | 🧠 **XDR & LLM local** | `oms-xdr` : corrélation kill‑chain multi‑sources, scoring d'incident, triage/narration par LLM **local** (Ollama, CPU), réponse en **dry‑run** (double verrou) |
@@ -121,6 +122,7 @@ Plateforme **SIEM + XDR + console SOC** complète et reproductible, déployée s
 | `30–85*.sh` | Résilience, rétention/ISO, LDAPS, **SOAR**, **MITRE**, **UEBA/NDR**, scan vuln, corrélation, intégrité, **allowlists FP**, détections additionnelles |
 | `oms-ml/` · `oms-xdr/` | Couche ML (anomalie + réduction FP) · moteur de corrélation XDR |
 | `mobile/` | Backend console SOC + **PWA** (`omni-mobile-api.py`, stdlib), front `soc/` & `www/` |
+| `docker/` | **Déploiement conteneurisé** (DR/staging) : stack 6 services + secrets durcis + restore (cf. `docker/README-DOCKER.md`) |
 | `lib-graylog.sh` | Helpers API Graylog (TLS, `ensure_rule`/`ensure_pipeline`, `wrap_entity`…) |
 | `windows/` · `fortigate/` | GPO d'audit AD + kit agent · durcissement UTM/VPN FortiGate |
 | `lookups/` | Tables CSV (EventID, MITRE, **`alert-guidance.json`**…) |
@@ -140,6 +142,11 @@ cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env && $EDITOR 00-vars.e
 ```
 
 Console : `https://bx-it-graylog-vm.omnitech.security/soc/` (VPN). Volet Windows/AD : `windows/README-WINDOWS.md`.
+
+> **Variante conteneurisée (DR / staging / démo)** — toute la plateforme (Graylog + OpenSearch +
+> MongoDB + console + nginx TLS + oms-xdr) en `docker compose`, secrets durcis et **restauration**
+> de la configuration complète depuis une sauvegarde : voir **`docker/README-DOCKER.md`**. La
+> production reste le déploiement bare-metal chiffré LUKS.
 
 ### Enrôlement des hôtes (Centre de déploiement)
 
@@ -188,6 +195,7 @@ A complete, reproducible **SIEM + XDR + SOC console** deployed on a single harde
 | 🛡️ **Detection engineering** | **177 pipeline rules** across 7 streams (AD/Sysmon, FortiGate, FortiManager, M365, vSphere…) → tagged events + **114 alert definitions** (mail + Teams), tumbling windows |
 | 🎯 **MITRE ATT&CK** | `alert_tag` → techniques / tactics, 0–10 risk score, ATT&CK Navigator layer + **interactive coverage matrix** |
 | 🔎 **Entity search & 360° dossier** | Dedicated page: **any account or machine** → unified identity, authentications, logons, detections, **timeline**, guides; **FUSED risk score** (ML+UEBA+severity), entities **ranked by risk**, follow-up **watchlist** |
+| 🗺️ **Visual SOC console** | **28 native dashboards** by domain (identity, M365, network, Aruba/Linux/EMS, endpoint…) + **3D world map** of real-time flows (satellite view) + **full-text search** (Ctrl+K palette, alert→raw-logs pivot) |
 | 🧬 **Identity correlation** | `SECURITY\jdoe`, `adm-jdoe`, `jdoe@dom` recognised as **one person** (linked accounts aggregated); machines never merged |
 | 🕑 **Unified timeline** | An entity's **story**: detections + Windows auth failures + M365 sign‑ins merged and time‑sorted, across all linked accounts |
 | 🧠 **XDR & local LLM** | `oms-xdr`: cross‑source kill‑chain correlation, incident scoring, **local** LLM triage/narration (Ollama, CPU), **dry‑run** response (double‑lock) |
@@ -228,6 +236,7 @@ A complete, reproducible **SIEM + XDR + SOC console** deployed on a single harde
 | `30–85*.sh` | Resilience, retention/ISO, LDAPS, **SOAR**, **MITRE**, **UEBA/NDR**, vuln scan, correlation, integrity, **FP allowlists**, extra detections |
 | `oms-ml/` · `oms-xdr/` | ML layer (anomaly + FP reduction) · XDR correlation engine |
 | `mobile/` | SOC console + **PWA** backend (`omni-mobile-api.py`, stdlib), `soc/` &amp; `www/` front‑ends |
+| `docker/` | **Containerised deployment** (DR/staging): 6-service stack + hardened secrets + restore (see `docker/README-DOCKER.md`) |
 | `lib-graylog.sh` | Graylog API helpers (TLS, `ensure_rule`/`ensure_pipeline`, `wrap_entity`…) |
 | `windows/` · `fortigate/` | AD audit GPO + agent kit · FortiGate UTM/VPN hardening |
 | `lookups/` | CSV lookups (EventID, MITRE, **`alert-guidance.json`**…) |
@@ -247,6 +256,11 @@ cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env && $EDITOR 00-vars.e
 ```
 
 Console: `https://bx-it-graylog-vm.omnitech.security/soc/` (VPN). Windows/AD side: `windows/README-WINDOWS.md`.
+
+> **Containerised variant (DR / staging / demo)** — the whole platform (Graylog + OpenSearch +
+> MongoDB + console + nginx TLS + oms-xdr) via `docker compose`, hardened secrets and full-config
+> **restore** from a backup: see **`docker/README-DOCKER.md`**. Production stays the LUKS-encrypted
+> bare-metal deployment.
 
 ### Security &amp; secrets
 
