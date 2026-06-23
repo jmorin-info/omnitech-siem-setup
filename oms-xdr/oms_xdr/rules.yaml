@@ -214,6 +214,21 @@ signals:
     type: presence
     entity_field: host
 
+  # --- FortiClient EMS (télémétrie endpoint) ---
+  S_FORTICLIENT_MALWARE:
+    description: "Malware détecté par l'AV FortiClient sur un poste"
+    stream: ""
+    query: 'alert_tag:forticlient_malware'
+    type: presence
+    entity_field: host
+
+  S_FORTICLIENT_AVOFF:
+    description: "Protection FortiClient désactivée / altérée sur un poste"
+    stream: ""
+    query: 'alert_tag:forticlient_av_off'
+    type: presence
+    entity_field: host
+
 # ---- RÈGLES DE CORRÉLATION ----------------------------------------
 # require_all : tous les signaux présents pour la MÊME entité dans la fenêtre
 # any_of      : au moins un des signaux listés
@@ -285,6 +300,14 @@ rules:
     any_of: [S_DECOY_IDENTITY, S_DECOY_KERBEROAST, S_CANARY]
     mitre: ["T1078", "T1558.003", "T1005"]
     tactic: ["Credential Access", "Collection"]
+
+  CR_ENDPOINT_MALWARE:
+    title: "Malware sur endpoint (FortiClient AV) — éventuellement avec défense désactivée"
+    severity: critical
+    join_entity: false
+    any_of: [S_FORTICLIENT_MALWARE, S_FORTICLIENT_AVOFF]
+    mitre: ["T1204", "T1562.001"]
+    tactic: ["Execution", "Defense Evasion"]
 
   CR_RANSOMWARE:
     title: "Indicateur de rançongiciel (destruction de sauvegardes / clichés)"

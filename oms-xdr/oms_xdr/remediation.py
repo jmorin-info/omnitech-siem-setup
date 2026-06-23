@@ -99,6 +99,20 @@ PLAYBOOKS: dict[str, dict[str, Any]] = {
                      "Préserver les preuves. Remonter au RSSI sans délai."},
         ],
     },
+    "CR_ENDPOINT_MALWARE": {
+        "summary": "Malware détecté par l'AV FortiClient sur un poste (éventuellement avec la "
+                   "protection désactivée/altérée = signe d'attaquant actif).",
+        "steps": [
+            {"text": "Isoler le poste (NinjaOne) si la protection a été désactivée ou si le malware "
+                     "n'est pas en quarantaine (échec de nettoyage).",
+             "action": "isolate_ninjaone"},
+            {"text": "Vérifier dans FortiClient EMS l'action (quarantine/blocked vs detected-only), le "
+                     "chemin du fichier et l'utilisateur ; lancer un scan complet EDR."},
+            {"text": "Si la protection temps-réel a été désactivée : traiter comme intrusion (l'attaquant "
+                     "a désarmé l'AV) — réinitialiser le compte de l'utilisateur, chasser persistance + latéral."},
+            {"text": "Identifier la source (pièce jointe, téléchargement, clé USB) et bloquer le vecteur."},
+        ],
+    },
     "CR_RANSOMWARE": {
         "summary": "Indicateur de rançongiciel : destruction des clichés/sauvegardes (vssadmin/wbadmin/bcdedit).",
         "steps": [
