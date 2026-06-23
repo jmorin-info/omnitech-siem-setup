@@ -91,6 +91,15 @@ Graylog conteneurisé (exporter `API` = URL du conteneur). À privilégier pour 
 - La console pose des cookies `Secure` → **HTTPS obligatoire** (assuré par nginx).
 - `.env` (secrets) : `chmod 600`, hors git (déjà `.gitignore`). Les lookups CSV (`../lookups`) sont
   montés en lecture seule dans Graylog et la console.
+- **Durcissement (production) — docker secrets** : pour ne pas exposer les secrets en variables
+  d'environnement (visibles via `docker inspect`), utiliser l'override `docker-compose.secrets.yml` :
+  ```bash
+  ./gen-secrets.sh                                   # génère ./secrets/* (chmod 600, hors git)
+  # mettre des placeholders non vides dans .env (GRAYLOG_PASSWORD_SECRET=managed-by-docker-secret, …)
+  docker compose -f docker-compose.yml -f docker-compose.secrets.yml up -d
+  ```
+  Les secrets sont alors montés en `/run/secrets/*` (Graylog via un wrapper d'entrypoint, console et
+  oms-xdr via la convention `*_FILE`).
 
 ## Exploitation
 ```bash

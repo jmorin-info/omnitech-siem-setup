@@ -47,3 +47,6 @@ docker/certs/*.pem
 docker/certs/*.crt
 docker/geoip/*.mmdb
 docker/geoip/*.gz
+# Docker : fichiers de secrets (override docker-compose.secrets.yml)
+docker/secrets/*
+!docker/secrets/README.md
