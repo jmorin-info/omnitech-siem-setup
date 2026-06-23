@@ -574,6 +574,10 @@
         <div class="tstats" id="tstats"></div>
       </div>
       <div class="grid kpis" id="kpis"></div>
+      <div class="card" id="sentinelCard" style="margin-bottom:16px;display:none;cursor:pointer" onclick="goNav('twin')">
+        <h3><svg class="svi"><use href="#i-target"></use></svg> <span data-i18n="card_sentinel">OMNI Sentinel — Posture proactive</span><span class="tag" data-i18n="tag_sentinel">jumeau d'attaque · cliquer</span></h3>
+        <div id="sentinelBody" class="grid kpis"></div>
+      </div>
       <div class="grid cols" style="margin-bottom:16px">
         <div class="card"><h3><svg class="svi"><use href="#i-chart"></use></svg> <span data-i18n="card_det24">Détections (24 h)</span><span class="tag" data-i18n="tag_perhour">par heure</span></h3><div class="chartbox"><canvas id="cTs"></canvas></div></div>
         <div class="card"><h3><svg class="svi"><use href="#i-target"></use></svg> <span data-i18n="card_tactics">Tactiques ATT&CK</span><span class="tag" data-i18n="tag_7d">7 j</span></h3><div class="chartbox"><canvas id="cTac"></canvas></div></div>
@@ -704,6 +708,7 @@ const I18N={
   al_search:"Recherche et navigation (Ctrl ou Cmd + K)",al_refresh:"Rafraîchir les données",al_density:"Basculer la densité d'affichage",al_help:"Ouvrir l'aide et les raccourcis clavier",al_logout:"Se déconnecter",al_lang:"Changer la langue (FR/EN)",
   t_search:"Recherche (Ctrl/Cmd+K)",t_refresh:"Rafraîchir maintenant",t_help:"Aide et raccourcis (touche ?)",t_logout:"Se déconnecter",t_lang:"Langue : Français — cliquer pour English",
   login_account:"Compte AD",login_password:"Mot de passe",login_signin:"Se connecter",
+  card_sentinel:"OMNI Sentinel — Posture proactive",tag_sentinel:"jumeau d'attaque · cliquer",
   card_det24:"Détections (24 h)",tag_perhour:"par heure",card_tactics:"Tactiques ATT&CK",tag_7d:"7 j",card_topdet:"Top détections",card_sources:"Sources",
   card_mlanom:"Anomalies ML",tag_mlanom:"oms-ml · IsolationForest · cliquer pour la fiche",card_uebarisk:"Risque UEBA",tag_uebarisk:"score comportemental · 24 h",
   card_topent:"Top entités à risque",tag_topent:"7 j · risque fusionné · cliquer",card_live:"Flux temps réel",card_geo:"Origines géographiques des sources externes",tag_geo:"7 j · FortiGate GeoIP",
@@ -724,6 +729,7 @@ const I18N={
   al_search:"Search and navigation (Ctrl or Cmd + K)",al_refresh:"Refresh data",al_density:"Toggle display density",al_help:"Open help and keyboard shortcuts",al_logout:"Sign out",al_lang:"Change language (FR/EN)",
   t_search:"Search (Ctrl/Cmd+K)",t_refresh:"Refresh now",t_help:"Help and shortcuts (press ?)",t_logout:"Sign out",t_lang:"Language: English — click for Français",
   login_account:"AD account",login_password:"Password",login_signin:"Sign in",
+  card_sentinel:"OMNI Sentinel — Proactive posture",tag_sentinel:"attack twin · click",
   card_det24:"Detections (24h)",tag_perhour:"per hour",card_tactics:"ATT&CK tactics",tag_7d:"7d",card_topdet:"Top detections",card_sources:"Sources",
   card_mlanom:"ML anomalies",tag_mlanom:"oms-ml · IsolationForest · click for details",card_uebarisk:"UEBA risk",tag_uebarisk:"behavioral score · 24h",
   card_topent:"Top risk entities",tag_topent:"7d · fused risk · click",card_live:"Live feed",card_geo:"External source geography",tag_geo:"7d · FortiGate GeoIP",
@@ -842,6 +848,7 @@ async function loadAll(){
     j("/risk").then(r=>renderRisk(r)).catch(()=>{});
     j("/kpi-trend").then(t=>renderKpiTrend(t.trend)).catch(()=>{});
     j("/geo").then(g=>renderGeo(g)).catch(()=>{});
+    j("/attack-graph").then(a=>renderSentinelPosture(a)).catch(()=>{});
     // /graph et /report : charges a l'ouverture de leur onglet (cf. routeur #nav) -
     // evite de relancer le graphe lourd + la matrice 300-termes toutes les 60 s.
   }catch(e){if(e==="auth"){toastWarn("Session expirée — reconnexion à la console SOC…",{title:"Session",sticky:true});setTimeout(()=>location.reload(),1200);}else{toastNet();}}
@@ -898,6 +905,15 @@ function renderTimeline(w,d){const items=(d&&d.items)||[];if(!w)return;if(!items
     else {cls="tl-high";icon=ic("alert");txt='<b>Windows</b> <span style="color:#f5a623">'+t("tl_fail")+'</span> '+(x.ip?'<span class="mono">'+esc(x.ip)+'</span>':'');}
     return '<div class="tlrow '+cls+'"><span class="tlt">'+ago(x.ts)+'</span><span class="tli">'+icon+'</span><span class="tlx">'+txt+'</span></div>';};
   w.innerHTML='<div class="blk"><div class="lbl">'+ic("bars")+' '+t("tl_title")+' <span class="muted" style="font-weight:400">'+t("tl_sub")+'</span></div><div class="tl">'+items.map(row).join("")+'</div></div>';}
+function renderSentinelPosture(d){const c=$("#sentinelCard"),b=$("#sentinelBody");if(!c||!b||!d||d.error)return;
+  const EN=LANG==="en";const jx=d.jewel_exposure||[];const minh=jx.length?jx[0].min_hops:null;
+  const spof=(d.single_points_of_failure||[]).length;const chk=(d.chokepoints||[]).length;
+  const tile=(v,l,col)=>'<div class="kpi '+(col||'cy')+'"><div class="lab">'+l+'</div><div class="val mono">'+v+'</div></div>';
+  b.innerHTML=tile(jx.length,(EN?"jewels exposed":"joyaux exposés"),jx.length?'red':'cy')
+    +tile(minh==null?'—':'≤'+minh,(EN?"hops to nearest":"sauts au + proche"),(minh!=null&&minh<=3)?'red':'amb')
+    +tile(chk,(EN?"chokepoints":"chokepoints"),'amb')
+    +tile(spof,(EN?"single points":"points uniques"),spof?'red':'cy');
+  c.style.display="block";}
 function renderRisk(d){d=d||{};
   const M={CRITIQUE:["red","Compromission probable — action immédiate"],ELEVE:["amb","Activité critique en cours"],SURVEILLE:["blu","Signaux à surveiller"],NOMINAL:["grn","Aucune menace active"]};
   const m=M[d.threat_level]||M.NOMINAL;const t=$("#threat");
