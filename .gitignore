@@ -40,3 +40,4 @@ oms-xdr/.venv/
 
 # PWA mobile (venv)
 mobile/.venv/
+docker/.env

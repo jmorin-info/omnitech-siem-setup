@@ -1,0 +1,88 @@
+# =============================================================================
+#  OMNITECH SIEM — stack Docker (Graylog + OpenSearch + MongoDB)
+#  Reproduit la plateforme bare-metal en conteneurs (versions epinglees a l'identique :
+#  Graylog 7.1.3 / OpenSearch 2.19.5 / MongoDB). DEUX usages :
+#    1. DR / clone : monter la stack puis RESTAURER la conf complete (mongorestore du
+#       dump de 30-backup-config.sh + lookups) -> ./deploy.sh restore <archive>
+#    2. From-scratch : monter la stack vide puis appliquer les scripts (cf README-DOCKER).
+#  Toute la conf Graylog (streams, pipelines, 136 detections, lookups, alertes,
+#  notifications) vit dans MongoDB -> un mongorestore = la plateforme entiere.
+#  Secrets via .env (cf .env.example). NON destine a remplacer la prod chiffree LUKS ;
+#  pour staging / reprise / demonstration / portabilite.
+# =============================================================================
+name: omni-siem
+
+services:
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 8s
+      retries: 6
+    networks: [omni]
+
+  opensearch:
+    image: opensearchproject/opensearch:2.19.5
+    restart: unless-stopped
+    environment:
+      - cluster.name=omni-siem
+      - node.name=omni-os01
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms${OS_HEAP:-2g} -Xmx${OS_HEAP:-2g}"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      - "DISABLE_SECURITY_PLUGIN=true"          # interne au reseau docker uniquement
+      - "action.auto_create_index=false"
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    volumes:
+      - os_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\"'"]
+      interval: 15s
+      timeout: 8s
+      retries: 8
+    networks: [omni]
+
+  graylog:
+    image: graylog/graylog:7.1.3
+    restart: unless-stopped
+    depends_on:
+      mongodb: { condition: service_healthy }
+      opensearch: { condition: service_healthy }
+    entrypoint: ["/usr/bin/tini", "--", "wait-for-it", "opensearch:9200", "--", "/docker-entrypoint.sh"]
+    environment:
+      - GRAYLOG_PASSWORD_SECRET=${GRAYLOG_PASSWORD_SECRET:?definir dans .env}
+      - GRAYLOG_ROOT_PASSWORD_SHA2=${GRAYLOG_ROOT_PASSWORD_SHA2:?definir dans .env (sha256 du mot de passe admin)}
+      - GRAYLOG_HTTP_EXTERNAL_URI=${GRAYLOG_HTTP_EXTERNAL_URI:-http://127.0.0.1:9000/}
+      - GRAYLOG_MONGODB_URI=mongodb://mongodb:27017/graylog
+      - GRAYLOG_ELASTICSEARCH_HOSTS=http://opensearch:9200
+      - GRAYLOG_ELASTICSEARCH_VERSION=7
+      - GRAYLOG_TIMEZONE=Europe/Paris
+    ports:
+      - "9000:9000"        # console web Graylog
+      - "5044:5044"        # Winlogbeat / Beats
+      - "1514:1514/udp"    # syslog FortiAnalyzer
+      - "1519:1519"        # syslog Linux
+      - "1520:1520/udp"    # syslog Aruba
+      - "12201:12201"      # GELF (oms-ml / oms-xdr / robots)
+    volumes:
+      - graylog_data:/usr/share/graylog/data
+      - graylog_journal:/usr/share/graylog/data/journal
+      - ../lookups:/etc/graylog/lookup:ro          # CSV de lookup versionnes (mitre, ti, net-segments, aruba...)
+    networks: [omni]
+
+volumes:
+  mongo_data:
+  os_data:
+  graylog_data:
+  graylog_journal:
+
+networks:
+  omni:
+    driver: bridge

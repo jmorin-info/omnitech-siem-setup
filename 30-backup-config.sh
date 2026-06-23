@@ -99,10 +99,23 @@ openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "${ARCH}.enc" -out "${VERIF
 tar tzf "${VERIF}" > "${TMP}/manifest.txt" 2>/dev/null || fail "verif restaurabilite: archive corrompue (tar illisible)"
 VENTRIES="$(wc -l < "${TMP}/manifest.txt")"
 [[ "${VENTRIES}" -ge 100 ]] || fail "verif restaurabilite: archive suspecte (${VENTRIES} entrees < 100)"
-grep -q 'mongodump/graylog/streams.bson' "${TMP}/manifest.txt" || fail "verif restaurabilite: dump Mongo Graylog absent"
-grep -q 'etc/graylog/server/server.conf'  "${TMP}/manifest.txt" || fail "verif restaurabilite: server.conf absent"
+# Composants CRITIQUES exiges dans l'archive (sinon la restauration serait incomplete) :
+# streams + pipelines + regles de detection + event definitions (alertes) + notifications,
+# le server.conf, et au moins un CSV de lookup (preuve que /etc/graylog/lookup est capte).
+for COMP in \
+  'mongodump/graylog/streams.bson:streams' \
+  'mongodump/graylog/pipeline_processor_pipelines.bson:pipelines' \
+  'mongodump/graylog/pipeline_processor_rules.bson:regles de detection' \
+  'mongodump/graylog/event_definitions.bson:event definitions (alertes)' \
+  'mongodump/graylog/event_notifications.bson:notifications' \
+  'mongodump/graylog/inputs.bson:inputs' \
+  'etc/graylog/server/server.conf:server.conf' \
+  'etc/graylog/lookup/mitre-attack.csv:lookups (CSV)'; do
+  PAT="${COMP%%:*}"; LBL="${COMP##*:}"
+  grep -q "${PAT}" "${TMP}/manifest.txt" || fail "verif restaurabilite: ${LBL} absent de l'archive (${PAT})"
+done
 shred -u "${VERIF}" "${TMP}/manifest.txt" 2>/dev/null || rm -f "${VERIF}" "${TMP}/manifest.txt"
-echo "[+] restaurabilite verifiee : ${VENTRIES} entrees, dump Mongo + server.conf presents"
+echo "[+] restaurabilite verifiee : ${VENTRIES} entrees ; streams+pipelines+regles+alertes+notifs+inputs+server.conf+lookups presents"
 
 # --- 4. Export SMB ---------------------------------------------------------------
 if ! mountpoint -q "${MNT}"; then
