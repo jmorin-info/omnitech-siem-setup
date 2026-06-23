@@ -254,6 +254,20 @@ signals:
     entity_field: user
     threshold: 1
 
+  S_UEBA_HIGH_USER:
+    description: "Utilisateur à risque UEBA élevé (score >= 80) — entité user (fix user-keyed 23/06)"
+    stream: internal
+    query: 'event_source:ueba_score AND entity_type:user AND ueba_score:>=80'
+    type: presence
+    entity_field: user
+
+  S_PRIV_ACTION_USER:
+    description: "Action privilégiée/sensible attribuée à un user (cloud, AD, réseau, DNS)"
+    stream: ""
+    query: 'alert_tag:(m365_role OR m365_app_credential_add OR m365_ca_change OR local_admin_add OR local_account_create OR dns_sensitive_change OR aruba_config_change OR ems_config_change)'
+    type: presence
+    entity_field: user
+
 # ---- RÈGLES DE CORRÉLATION ----------------------------------------
 # require_all : tous les signaux présents pour la MÊME entité dans la fenêtre
 # any_of      : au moins un des signaux listés
@@ -275,6 +289,14 @@ rules:
     require_all: [S_M365_FOREIGN_SIGNIN, S_LOGON_SUCCESS]
     mitre: ["T1078", "T1078.004"]
     tactic: ["Initial Access", "Defense Evasion"]
+
+  CR_RISKY_USER_PRIV_ACTION:
+    title: "Utilisateur à risque UEBA réalisant une action privilégiée (débloqué par le fix user-keyed)"
+    severity: high
+    join_entity: true
+    require_all: [S_UEBA_HIGH_USER, S_PRIV_ACTION_USER]
+    mitre: ["T1078", "T1098"]
+    tactic: ["Privilege Escalation", "Persistence"]
 
   CR_RECON_TO_ACCESS:
     title: "Reconnaissance suivie d'attaque par force brute"
