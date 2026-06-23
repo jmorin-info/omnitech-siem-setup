@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#06080f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,7 +11,7 @@
 <title>OMNI SOC</title>
 <script src="/m/chart.min.js"></script>
 <style>
-  :root{--bg:#06080f;--card:#0d1424;--card2:#111a2e;--bd:#1a2540;--fg:#e6edf6;--mut:#7c8aa6;--dim:#52607d;
+  :root{--bg:#06080f;--card:#0d1424;--card2:#111a2e;--bd:#1a2540;--fg:#e6edf6;--mut:#7c8aa6;--dim:#79879d;
     --cy:#22d3ee;--red:#fb3b53;--amb:#f5a623;--grn:#34d399;--vio:#a78bfa;--blu:#3b82f6;
     --top:env(safe-area-inset-top);--bot:env(safe-area-inset-bottom)}
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -52,7 +52,7 @@
   .appbar b{font-size:16px;letter-spacing:.5px}.spacer{flex:1}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:pulse 2s infinite}
   @keyframes pulse{50%{opacity:.4}}
-  .ibtn{background:#0c1525;border:1px solid var(--bd);color:var(--mut);border-radius:9px;padding:7px 10px;font-size:14px}
+  .ibtn{background:#0c1525;border:1px solid var(--bd);color:var(--mut);border-radius:9px;padding:0 10px;font-size:14px;min-width:40px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
   .ibtn.act{color:var(--cy);border-color:var(--cy)}
 
   main{padding:16px}
@@ -143,7 +143,7 @@
   .thgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
   .thm{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:11px 8px;text-align:center}
   .thm .tmv{font-size:24px;font-weight:800;letter-spacing:-1px;line-height:1}
-  .thm .tml{color:var(--dim);font-size:9.5px;margin-top:5px;line-height:1.2}
+  .thm .tml{color:var(--mut);font-size:11px;margin-top:5px;line-height:1.2}
   .risk{display:flex;flex-direction:column;gap:9px}
   .rrow{background:var(--card2);border:1px solid var(--bd);border-radius:11px;padding:11px 13px}
   .rrow .rtop{display:flex;align-items:center;gap:8px}
@@ -163,6 +163,7 @@
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
 </svg>
 <div id="login">
   <form class="lcard" onsubmit="login(event)">
