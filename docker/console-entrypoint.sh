@@ -2,6 +2,15 @@
 # Genere /etc/default/omni-mobile depuis l'environnement (12-factor) puis lance la console.
 set -e
 mkdir -p /etc/default /app/data
+
+# Support docker secrets : si <VAR>_FILE pointe un fichier (ex. /run/secrets/...),
+# charge <VAR> depuis son contenu (precede la valeur d'environnement en clair).
+load_file_secret() {
+  local f; eval "f=\${${1}_FILE:-}"
+  [ -n "$f" ] && [ -r "$f" ] && eval "export ${1}=\"\$(cat \"$f\")\""
+}
+load_file_secret MOBILE_SECRET
+load_file_secret MOBILE_PUSH_SECRET
 cat > /etc/default/omni-mobile <<EOF
 MOBILE_BIND=0.0.0.0
 MOBILE_PORT=${MOBILE_PORT:-8090}

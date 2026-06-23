@@ -3,6 +3,11 @@
 # LLM desactive dans le conteneur) puis lance la boucle de correlation.
 set -e
 
+# Support docker secrets : OMS_TEAMS_WEBHOOK_FILE -> OMS_TEAMS_WEBHOOK
+if [ -n "${OMS_TEAMS_WEBHOOK_FILE:-}" ] && [ -r "${OMS_TEAMS_WEBHOOK_FILE}" ]; then
+  OMS_TEAMS_WEBHOOK="$(cat "${OMS_TEAMS_WEBHOOK_FILE}")"; export OMS_TEAMS_WEBHOOK
+fi
+
 python - <<'PY'
 import yaml
 c = yaml.safe_load(open("/app/config.yaml")) or {}
