@@ -84,6 +84,25 @@ footholds:
   - "iv-tech-"
   - "in-dev-"
 
+# ---- Pilier 3 : réponse graduée (DEFENSIF, human-gated) -------------
+# SÉCURITÉ : dry-run par défaut. Exécution réelle SEULEMENT si dry_run=false +
+# auto_<action>=true + env OMNI_SENTINEL_ARM=1 + approbation explicite. Les actions
+# identitaires (AD) restent TOUJOURS en recommandation. Co-managé forcé en dry-run.
+response:
+  dry_run: true
+  auto_isolate_ninjaone: false   # armable (infra OMNITECH propre)
+  auto_block_fortigate: false    # armable (infra OMNITECH propre)
+  comanaged_markers: ["invissys"]  # toute cible contenant ceci -> forcée dry-run
+  fortigate:
+    soar_url: "http://127.0.0.1:8088/block"   # délégation feed omni-soar (pas de creds pare-feu)
+    soar_hits: 10
+  ninjaone:
+    base_url_env: "OMS_NINJA_URL"
+    client_id_env: "OMS_NINJA_CLIENT_ID"
+    secret_env: "OMS_NINJA_SECRET"
+  triggers: ["decoy_identity", "decoy_kerberoast", "canary_token"]  # leurres = déclencheurs
+  trigger_window: "24h"
+
 output:
   top: 12                    # nb d'éléments par classement (chemins/chokepoints/blast)
   decoy_registry: "/etc/graylog/lookup/deception-decoys.csv"   # leurres déjà posés (88)

@@ -1,0 +1,13 @@
+[Unit]
+Description=OMS-GRAPH - reponse graduee (grade les leurres declenches + audit GELF ; SANS execution)
+After=network-online.target opensearch.service graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/omnitech-siem-setup/oms-graph
+# --push (audit GELF) SANS --execute : detection + gradation + surface seulement.
+# L'execution reste MANUELLE et approuvee (oms-graph respond --execute), jamais auto.
+ExecStart=/root/omnitech-siem-setup/oms-graph/.venv/bin/python -m oms_graph.run respond --push --config /etc/oms-graph/config.yaml
+Nice=15

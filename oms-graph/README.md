@@ -38,5 +38,22 @@ lu par la console SOC). Avec `--push` : réinjecte les chemins en GELF
 (`event_source=attack_path`, **informationnel, sans alert_tag** — c'est une posture, pas
 une alerte). Lecture **passive** ; n'exécute **aucune** action sur le SI.
 
-Déploiement : `89-attack-graph.sh` (venv + config `/etc/oms-graph` + timer quotidien +
+Déploiement : `89-attack-graph.sh` (venv + config `/etc/oms-graph` + timers +
 routage vers « OMNI - Interne SIEM »).
+
+## Pilier 3 — Réponse graduée (`respond`)
+```
+oms-graph respond [--simulate ENTITE] [--push] [--execute]
+```
+Compose un **leurre déclenché** (Pilier 1) avec le **contexte du jumeau** (Pilier 2) →
+un **plan de réponse gradé** (critique/élevé/modéré). `--simulate <hôte|compte>` =
+tabletop (compromission hypothétique). `--push` = audit GELF `event_source=sentinel_response`.
+`--execute` = approbation d'exécution.
+
+**Garde-fous (par construction)** : DRY-RUN par défaut. Exécution réelle seulement si
+`response.dry_run=false` + `auto_<action>=true` + env **`OMNI_SENTINEL_ARM=1`** +
+`--execute` (quadruple verrou). **Périmètre** : seules les actions sur l'infra OMNITECH
+propre sont armables (isolation NinjaOne, blocage FortiGate via feed omni-soar) ; les
+actions **identitaires (AD) restent toujours en recommandation** ; toute cible
+**co-managée** (invissys) est forcée en dry-run. Le timer `oms-graph-respond` grade +
+audite **sans jamais exécuter** (pas de `--execute`) — l'exécution est **manuelle et approuvée**.

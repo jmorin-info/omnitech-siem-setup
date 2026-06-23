@@ -50,3 +50,17 @@ class Gelf:
         # chemin court = exposition aiguë, surfacé dans la console/dashboard, à durcir.
         payload["_exposure_acute"] = path["hops"] <= threshold_hops
         return self.send(payload)
+
+    def push_response(self, plan: dict) -> bool:
+        """Audite un plan de réponse gradué (event_source=sentinel_response)."""
+        acts = ";".join(f"{s['action']}:{s.get('status','?')}" for s in plan.get("results", plan.get("steps", [])))
+        payload: dict[str, Any] = {
+            "short_message": f"Réponse {plan.get('grade')} pour {plan.get('entity')} — {acts}",
+            "event_source": "sentinel_response",
+            "_sentinel_entity": plan.get("entity"),
+            "_sentinel_grade": plan.get("grade"),
+            "_sentinel_jewels_at_risk": ", ".join(plan.get("jewels_at_risk", [])),
+            "_sentinel_actions": acts,
+            "_sentinel_approved": str(plan.get("approved", False)),
+        }
+        return self.send(payload)

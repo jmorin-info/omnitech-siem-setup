@@ -41,13 +41,13 @@ mkdir -p "$ETC" "$STATE"
 if [[ -f "$ETC/config.yaml" ]]; then echo "    [=] config existante conservee"
 else install -m 644 "$APP/config.yaml" "$ETC/config.yaml" && echo "    [+] config installee"; fi
 
-echo "==> [3/5] Unites systemd (analyse quotidienne)"
-for u in oms-graph.service oms-graph.timer; do
+echo "==> [3/5] Unites systemd (analyse quotidienne + reponse graduee 15 min, SANS execution)"
+for u in oms-graph.service oms-graph.timer oms-graph-respond.service oms-graph-respond.timer; do
   install -m 644 "$APP/deploy/$u" "/etc/systemd/system/$u"
 done
 systemctl daemon-reload
-systemctl enable --now oms-graph.timer >/dev/null 2>&1 \
-  && echo "    [+] timer actif" || echo "    [!] activation timer KO"
+systemctl enable --now oms-graph.timer oms-graph-respond.timer >/dev/null 2>&1 \
+  && echo "    [+] timers actifs (analyse + reponse audit-seul)" || echo "    [!] activation timers KO"
 
 echo "==> [4/5] Routage event_source=attack_path -> 'OMNI - Interne SIEM' (+ exclusion M365)"
 if declare -f require_api >/dev/null 2>&1 && require_api 2>/dev/null; then

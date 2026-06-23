@@ -78,6 +78,39 @@ def has_session_edges(os_url: str, index: str, window: str, logon_types: list[st
     return _terms_edges(os_url, index, body, acct)
 
 
+def recent_triggers(os_url: str, index: str, tags: list[str], window: str
+                    ) -> list[dict]:
+    """Leurres déclenchés récemment (Pilier 1) = déclencheurs de réponse (Pilier 3).
+    Extrait pour chacun : tag, hôte source, IP source, compte concerné."""
+    body = {
+        "size": 50, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {"filter": [
+            {"terms": {"alert_tag": tags}},
+            {"range": {"timestamp": {"gte": f"now-{window}"}}}]}},
+        "_source": ["timestamp", "alert_tag", "source", f"{ED}_IpAddress",
+                    f"{ED}_TargetUserName", f"{ED}_ServiceName", f"{ED}_QueryName"],
+    }
+    try:
+        r = requests.post(f"{os_url.rstrip('/')}/{index}/_search", json=body, timeout=60)
+        r.raise_for_status()
+        hits = r.json().get("hits", {}).get("hits", [])
+    except requests.RequestException as exc:
+        log.error("Lecture des déclencheurs échouée : %s", exc)
+        return []
+    out = []
+    for h in hits:
+        s = h.get("_source", {})
+        ip = s.get(f"{ED}_IpAddress")
+        out.append({
+            "tag": s.get("alert_tag"), "ts": s.get("timestamp"),
+            "source_host": s.get("source"),
+            "source_ip": ip if ip and ip not in ("-", "::1", "127.0.0.1") else None,
+            "account": s.get(f"{ED}_TargetUserName") or s.get(f"{ED}_ServiceName"),
+            "decoy": s.get(f"{ED}_QueryName") or s.get(f"{ED}_TargetUserName") or s.get(f"{ED}_ServiceName"),
+        })
+    return out
+
+
 def admin_to_edges(os_url: str, index: str, window: str,
                    system_accounts: list[str], patterns: list[str]
                    ) -> list[tuple[str, str, int]]:
