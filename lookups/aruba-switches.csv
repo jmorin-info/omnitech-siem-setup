@@ -1,0 +1,7 @@
+ip,name,role,site
+10.33.80.1,bx-aruba-01,distribution,Bourgoin
+10.33.80.2,bx-aruba-02,acces,Bourgoin
+10.33.80.3,bx-aruba-03,acces,Bourgoin
+10.33.80.4,bx-aruba-04,acces,Bourgoin
+10.33.80.5,bx-aruba-05,acces,Bourgoin
+10.33.80.6,bx-aruba-06,acces,Bourgoin
