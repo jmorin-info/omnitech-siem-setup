@@ -18,7 +18,7 @@ echo "==> [1/4] Config /etc/default/omni-watchdog (seuils par source, en minutes
 if [[ ! -f /etc/default/omni-watchdog ]]; then
   cat > /etc/default/omni-watchdog <<'EOF'
 # Seuils de silence par source (minutes). Au-dela = alerte. Adapter a la cadence reelle.
-WATCHDOG_SOURCES=fortigate:30,sysmon:30,windows_security:30,windows:90,vsphere:90,bunkerweb:240,m365:360,forti_dhcp:180,vaultwarden:1440,inventory:2880,veeam:4320,eset:4320,fortimanager:1440,adcs:2880,aruba:240,linux:1440,fortiems:2880,dns:1440
+WATCHDOG_SOURCES=fortigate:30,sysmon:30,windows_security:30,windows:90,vsphere:90,bunkerweb:240,m365:360,forti_dhcp:180,vaultwarden:1440,inventory:2880,veeam:4320,eset:4320,fortimanager:1440,adcs:2880,aruba:240,linux:1440,fortiems:2880,cert_parc:2880
 OPENSEARCH=http://127.0.0.1:9200
 GELF_URL=http://127.0.0.1:12201/gelf
 EOF
@@ -51,7 +51,7 @@ def gelf(f):
 body = {"size": 0, "query": {"range": {"timestamp": {"gte": "now-30d"}}},
         "aggs": {"src": {"terms": {"field": "event_source", "size": 60},
                          "aggs": {"last": {"max": {"field": "timestamp"}}}}}}
-req = urllib.request.Request(OS + "/omni-*/_search", data=json.dumps(body).encode(),
+req = urllib.request.Request(OS + "/omni-*,graylog_*/_search", data=json.dumps(body).encode(),
                             headers={"Content-Type": "application/json"})
 res = json.load(urllib.request.urlopen(req, timeout=30))
 now = time.time() * 1000
