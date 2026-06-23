@@ -1144,10 +1144,16 @@ def get_health():
 
     robots = _latest([{"term": {"event_source": "siem_health"}}, {"term": {"health_type": "summary"}}],
                      ["health_ok", "health_fail", "health_total", "health_maint"])
-    # rappel de maintenance (reboot sécurité) — distinct d'une panne de robot
-    maint = _latest([{"term": {"event_source": "siem_health"}}, {"term": {"health_type": "reboot_required"}},
-                     {"range": {"timestamp": {"gte": "now-12h"}}}],
-                    ["message", "short_message", "health_reason"])
+    # rappel de maintenance (reboot sécurité) — distinct d'une panne de robot.
+    # Piloté par le DERNIER run self-health (health_maint, qui re-vérifie needrestart/
+    # reboot-required à chaque passage) et NON par un vieil événement reboot_required :
+    # sinon la bannière persiste après le reboot qui a pourtant résolu la MAJ (le vieil
+    # événement reste dans la fenêtre temporelle). health_maint=0 => plus de bannière.
+    maint = None
+    if int((robots or {}).get("health_maint", 0) or 0) > 0:
+        maint = _latest([{"term": {"event_source": "siem_health"}}, {"term": {"health_type": "reboot_required"}},
+                         {"range": {"timestamp": {"gte": "now-3h"}}}],
+                        ["message", "short_message", "health_reason"])
     sla = _latest([{"term": {"event_source": "collecte_sla"}}, {"term": {"sla_type": "summary"}}],
                   ["sla_coverage_pct", "sla_active_24h", "sla_go_dark", "sla_expected"])
     dres = os_search("omni-*", {"size": 0,
