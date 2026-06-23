@@ -116,3 +116,5 @@ m365_authority_drift,T1098,Anomalie d'autorite (action privilegiee M365 hors bas
 admin_login_off_segment,T1078,Login admin hors VLAN admin (contournement jump host),Defense Evasion,eleve,7
 ip_spray_multisource,T1110.003,Spray d'identifiants multi-systeme (meme IP),Credential Access,eleve,8
 impossible_travel_xsrc,T1078.004,Voyage impossible (signin etranger + presence on-prem),Initial Access,critique,9
+host_go_dark,T1562.001,Impair Defenses: Disable or Modify Tools (source silencieuse),Defense Evasion,moyen,5
+vuln_kev,T1190,Exploit Public-Facing Application (CVE KEV exposee),Initial Access,eleve,8

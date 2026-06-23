@@ -399,6 +399,8 @@ rule "omni-sysmon-10-injection"
 when
   (to_string($message.winlogbeat_winlog_event_id) == "8"
    OR to_string($message.winlogbeat_winlog_event_id) == "25")
+  AND NOT ( to_string($message.winlogbeat_winlog_event_id) == "25"
+            AND contains(to_string($message.winlogbeat_winlog_event_data_Type), "Image is replaced", true) )
   AND NOT ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\dwm.exe", true)
   AND NOT ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\winlogon.exe", true)
   AND NOT ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\csrss.exe", true)
