@@ -5,11 +5,11 @@ Reproduit le **cœur** de la plateforme en conteneurs : moteur Graylog 7.1.3 + O
 (`/soc //m //kit` + Graylog). Toute la **configuration** Graylog vit dans MongoDB : **restaurer le
 dump = toute la config** (17 streams, 13 inputs, 136 détections, 27 lookups, alertes, notifications).
 
-> **Périmètre (honnête).** Le restore remonte la config Graylog + la console + le proxy. Pour que les
-> inputs TLS et la **carte 3D** fonctionnent, fournir les **certs** (`docker/certs/`) et les bases
-> **GeoIP** (`docker/geoip/`) — voir ci-dessous. Les moteurs **oms-xdr / oms-ml / oms-graph** et les
-> **fetchers** (M365/ESET/EMS) sont des **add-ons** lancés séparément : un restore seul ne ré-active
-> donc pas la corrélation/ML/graphe ni ces collecteurs (cf. tableau).
+> **Périmètre (honnête).** Le restore remonte la config Graylog + la console + le proxy + la
+> **corrélation oms-xdr** (service dédié). Pour que les inputs TLS et la **carte 3D** fonctionnent,
+> fournir les **certs** (`docker/certs/`) et les bases **GeoIP** (`docker/geoip/`) — voir ci-dessous.
+> Restent des **add-ons** lancés séparément : **oms-ml / oms-graph** (ML/graphe) et les **fetchers**
+> (M365/ESET/EMS) — un restore seul ne les ré-active pas (cf. tableau).
 
 > Pour **staging, reprise après incident (DR), portabilité et démonstration**. La production reste
 > le déploiement bare-metal chiffré LUKS ; ce bundle ne le remplace pas.
@@ -23,6 +23,7 @@ dump = toute la config** (17 streams, 13 inputs, 136 détections, 27 lookups, al
 | `graylog`   | `graylog/graylog:7.1.3`             | Moteur SIEM (inputs, pipelines, détections)    |
 | `console`   | `Dockerfile.console` (Python+pywebpush) | Backend `/m/api` (lecture OpenSearch, push) |
 | `nginx`     | `nginx:1.27-alpine`                 | TLS, sert `/soc //m //kit`, proxy Graylog      |
+| `oms-xdr`   | `Dockerfile.oms-xdr` (Python)       | Corrélation/réponse (lit OpenSearch → GELF Graylog), DRY-RUN |
 
 **Porté vs non porté (après `restore`) :**
 
@@ -32,7 +33,8 @@ dump = toute la config** (17 streams, 13 inputs, 136 détections, 27 lookups, al
 | Console `/soc` + PWA `/m` + `/m/api` + nginx TLS | ✅ porté | services compose |
 | Inputs TLS (Beats 5044, EMS 1518) | ⚠️ certs requis | déposer `docker/certs/` |
 | Carte 3D / GeoIP (`geo_*`) | ⚠️ mmdb requis | `docker/geoip/fetch-geoip.sh` |
-| Corrélation oms-xdr / ML / graphe d'attaque | ➕ add-on | lancés séparément (dossiers `oms-*`) |
+| Corrélation **oms-xdr** | ✅ porté | service `oms-xdr` (IDs streams ✓ après `restore` ; réajuster si base neuve) |
+| ML (oms-ml) / graphe d'attaque (oms-graph) | ➕ add-on | lancés séparément (dossiers `oms-*`) |
 | Fetchers M365 / ESET / EMS / export SMB | ➕ add-on | déployés séparément |
 
 **Prérequis données** (avant `restore`, pour des inputs RUNNING + une carte vivante) :

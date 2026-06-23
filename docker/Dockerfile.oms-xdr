@@ -1,0 +1,17 @@
+# OMS-XDR — moteur de correlation/reponse (add-on porte dans le bundle Docker).
+# Lit OpenSearch (opensearch:9200), reinjecte les incidents en GELF (graylog:12201).
+FROM python:3.12-slim
+
+RUN useradd -r -u 10091 -m omsxdr
+WORKDIR /app
+
+COPY oms-xdr/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+COPY oms-xdr/ /app/
+COPY docker/oms-xdr-entrypoint.sh /usr/local/bin/oms-xdr-entrypoint.sh
+RUN chmod +x /usr/local/bin/oms-xdr-entrypoint.sh
+
+USER omsxdr
+# Boucle de correlation (un cycle --once toutes les OMS_INTERVAL secondes).
+ENTRYPOINT ["/usr/local/bin/oms-xdr-entrypoint.sh"]
