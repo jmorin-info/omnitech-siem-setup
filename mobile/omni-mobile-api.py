@@ -1080,6 +1080,71 @@ def get_report():
                              "av_off": ems.get("av_off", 0), "total": ems.get("total", 0)}}
 
 
+OMS_GEO = {"lat": 45.5853, "lng": 5.2741, "label": "OMNITECH · Bourgoin (FR)"}
+_MENACE = {"bool": {"minimum_should_match": 1, "should": [
+    {"exists": {"field": "alert_tag"}},
+    {"term": {"event_action": "echec_connexion"}},
+    {"bool": {"filter": [{"term": {"event_source": "bunkerweb"}}, {"range": {"http_status": {"gte": 400, "lt": 500}}}]}},
+    {"bool": {"filter": [{"term": {"event_source": "fortigate"}}, {"terms": {"action": ["deny", "blocked", "dropped", "drop"]}}]}},
+]}}
+
+
+def get_geo_flows(hours=3, top=150):
+    """Flux geolocalises monde -> OMNITECH (carte/globe 3D facon attack-map).
+    Agrege par coordonnee (src_ip_geolocation, top N), separe menace/trafic, +
+    detail des derniers evenements de menace + top pays attaquants. Donnees REELLES
+    (GeoIP DB-IP sur les IP publiques : fortigate/m365/bunkerweb)."""
+    since = f"now-{int(hours)}h"
+    res = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"filter": [{"exists": {"field": "src_ip_geolocation"}},
+                                       {"range": {"timestamp": {"gte": since}}}]}},
+        "aggs": {"loc": {"terms": {"field": "src_ip_geolocation", "size": int(top)},
+                         "aggs": {"men": {"filter": _MENACE},
+                                  "cc": {"terms": {"field": "src_ip_country_code", "size": 1}},
+                                  "src": {"terms": {"field": "event_source", "size": 1}}}}}})
+    arcs = []
+    for b in res.get("aggregations", {}).get("loc", {}).get("buckets", []):
+        try:
+            lat, lng = (float(x) for x in str(b["key"]).split(","))
+        except (ValueError, TypeError):
+            continue
+        n = b["doc_count"]
+        men = b.get("men", {}).get("doc_count", 0)
+        cc = (b.get("cc", {}).get("buckets") or [{}])[0].get("key", "?")
+        src = (b.get("src", {}).get("buckets") or [{}])[0].get("key", "")
+        arcs.append({"lat": round(lat, 3), "lng": round(lng, 3), "n": n, "threat": men,
+                     "cc": cc, "src": src, "kind": "menace" if men > 0 else "trafic"})
+    # detail des derniers evenements de MENACE (geolocalises)
+    rd = os_search("omni-*", {"size": 16, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {"filter": [{"exists": {"field": "src_ip_geolocation"}},
+                                      {"range": {"timestamp": {"gte": since}}}], "must": [_MENACE]}},
+        "_source": ["timestamp", "src_ip", "src_ip_country_code", "src_ip_city_name", "user",
+                    "event_source", "event_action", "alert_tag", "http_status", "src_ip_geolocation"]})
+    recent = []
+    for h in rd.get("hits", {}).get("hits", []):
+        s = h.get("_source", {})
+        try:
+            la, lo = (float(x) for x in str(s.get("src_ip_geolocation", "")).split(","))
+        except (ValueError, TypeError):
+            la = lo = None
+        recent.append({"ts": s.get("timestamp"), "ip": s.get("src_ip"),
+                       "cc": s.get("src_ip_country_code"), "city": s.get("src_ip_city_name"),
+                       "user": _rd(s.get("user")), "src": s.get("event_source"),
+                       "what": s.get("alert_tag") or s.get("event_action") or s.get("event_source"),
+                       "lat": la, "lng": lo})
+    # top pays attaquants (menace)
+    tc = os_search("omni-*", {"size": 0,
+        "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": since}}}], "must": [_MENACE]}},
+        "aggs": {"c": {"terms": {"field": "src_ip_country_code", "size": 12}}}})
+    topc = [{"cc": b["key"], "n": b["doc_count"]}
+            for b in tc.get("aggregations", {}).get("c", {}).get("buckets", [])
+            if b.get("key") not in (None, "", "Reserved", "Private", "-")]
+    return {"oms": OMS_GEO, "hours": int(hours), "arcs": arcs, "recent": recent,
+            "top_countries": topc,
+            "totals": {"arcs": len(arcs), "menace": sum(a["threat"] for a in arcs),
+                       "flux": sum(a["n"] for a in arcs)}}
+
+
 def get_geo_threats():
     out = {"countries": []}
     for field in ("src_ip_country_code", "srcip_country_code", "src_country"):
@@ -1610,6 +1675,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(get_entity_network(qs.get("u", [""])[0]))
         if p == "/m/api/geo":
             return self._json(get_geo_threats())
+        if p == "/m/api/geo-flows":
+            return self._json(get_geo_flows())
         if p == "/m/api/report":
             return self._json(get_report())
         if p == "/m/api/detections":
