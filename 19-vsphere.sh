@@ -220,6 +220,10 @@ when
   // Erreur interne de cast de jeton (vpxd Authorize) = bug/transitoire, PAS un echec d'auth
   // client (663 events/7j, 0 recouvrement avec les vrais echecs).
   AND NOT contains(to_string($message.message), "Failed to cast authentication token helper", true)
+  // Echange de jeton INTERNE vlcm/vcrestlib (token-exchange 401 = retry de service vCenter,
+  // pas un login client ; ~6300 events/7j sans user). Exclu.
+  AND NOT contains(to_string($message.message), "tokenservice/token-exchange", true)
+  AND NOT contains(to_string($message.message), "vcrestlib/helper.go", true)
   // Exclure les comptes de service vCenter/ESXi (auth interne permanente = PAS du brute-force)
   // et localhost. Sinon vpxuser/dcui generent des centaines de faux positifs/jour.
   AND lowercase(to_string($message.user)) != "vpxuser"
