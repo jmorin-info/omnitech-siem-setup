@@ -63,6 +63,23 @@ set_alert_fields "OMNI - Boucle reseau / STP (Aruba)"                      sourc
 # elargies ici -> changer leur group_by fausserait le seuil. La passe [1] leur a deja
 # pose field_spec=group_by (l'IP remonte dans l'evenement).
 
+echo "==> [3/3] Alertes de PRESENCE (group_by vide) : field_spec contexte SANS toucher au seuil"
+# Les ~74 detections critiques en presence (LSASS/DCSync/NTDS/ransomware/webshell...) avaient
+# field_spec={} -> l'event ne portait NI host NI user NI process. On pose un field_spec de
+# contexte (template-v1, require_values:false) sans modifier query/group_by/condition (PUT verifie sur).
+CTX_FIELDS=(host user src_ip net_segment alert_tag mitre_technique event_action)
+FS_CTX="$(fs_from_fields "${CTX_FIELDS[@]}")"
+api_get '/events/definitions?per_page=500' \
+  | jq -r '.event_definitions[] | select(.title|startswith("OMNI"))
+           | select(.config.type=="aggregation-v1")
+           | select((.field_spec|length)==0 and ((.config.group_by // [])|length)==0)
+           | .id' | while read -r ID; do
+  [[ -z "$ID" ]] && continue
+  DEF="$(api_get "/events/definitions/${ID}")"
+  echo "$DEF" | jq -c --argjson fs "$FS_CTX" '.field_spec=$fs' | api_put "/events/definitions/${ID}" >/dev/null 2>&1 \
+    && ok "contexte: $(echo "$DEF" | jq -r .title)" || warn "echec PUT presence: $ID"
+done
+
 echo
 echo "=== 97 termine. Les events portent desormais les champs de contexte (fields)."
 echo "    Cote console : get_alerts doit renvoyer 'fields' (cf patch backend). ==="
