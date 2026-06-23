@@ -1227,6 +1227,30 @@ OMS_GRAPH_PY = OMS_GRAPH_DIR + "/.venv/bin/python"
 OMS_GRAPH_CFG = "/etc/oms-graph/config.yaml"
 
 
+def get_entity_exposure(name):
+    """Exposition (jumeau d'attaque) d'une entité, pour enrichir son dossier 360° :
+    est-elle un chokepoint / quel rayon de souffle / quels joyaux atteint-elle ?
+    Ne renvoie 'found' que si l'entité figure parmi les nœuds notables (top exposition)."""
+    name = (name or "").strip()
+    if not name:
+        return {"found": False}
+    short = name.split("\\")[-1].split("@")[0]
+    art = get_attack_graph()
+    if art.get("error"):
+        return {"found": False}
+    cands = {name.lower(), short.lower()}
+    bl = next((b for b in art.get("blast_radius", []) if str(b.get("entity", "")).lower() in cands), None)
+    chk = next((c for c in art.get("chokepoints", []) if str(c.get("entity", "")).lower() in cands), None)
+    if not bl and not chk:
+        return {"found": False, "entity": short}
+    return {"found": True, "entity": short,
+            "hosts_reached": (bl or {}).get("hosts_reached", 0),
+            "jewels_reached": (bl or {}).get("jewels_reached", []),
+            "kind": (bl or {}).get("kind", "host"),
+            "on_paths": (chk or {}).get("on_paths", 0),
+            "is_chokepoint": chk is not None}
+
+
 def get_sentinel_sim(entity):
     """Aperçu de réponse graduée (Pilier 3) pour une entité : délègue à
     `oms-graph respond --simulate --json` (SOURCE UNIQUE de la logique de grade/plan).
@@ -1315,6 +1339,10 @@ class H(BaseHTTPRequestHandler):
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             return self._json(get_sentinel_sim(qs.get("entity", [""])[0]))
+        if p == "/m/api/entity-exposure":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return self._json(get_entity_exposure(qs.get("u", [""])[0]))
         if p == "/m/api/geo":
             return self._json(get_geo_threats())
         if p == "/m/api/report":

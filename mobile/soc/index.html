@@ -1070,15 +1070,29 @@ function openEntity(full,label,size){
       <div class="muted" style="margin-bottom:4px">${esc(full||"")} · <b style="color:var(--cy)">${(d.total||0).toLocaleString("fr")}</b> ${t("ent_detn")}</div>
       ${(d.linked&&d.linked.length>1)?`<div class="idu"><span class="idulb">${ic("network")} ${t("id_unified").replace("{n}",d.linked.length)}</span> ${d.linked.map(a=>`<span class="idchip">${esc(a)}</span>`).join("")}</div>`:''}
       ${entScoreBanner(d)}
+      <div id="expWrap"></div>
       <div id="invWrap"></div>
       <div id="tlWrap"></div>
       <div class="blk"><div class="lbl">${t("ent_tactics")}</div><div>${tacs}</div></div>
       <div class="blk"><div class="lbl">${t("ent_techniques")}</div><div>${techs}</div></div>
       <div class="blk"><div class="lbl">${t("ent_events")}</div>${evs}${more}</div>`;
     $("#emodal").classList.add("on");
-    loadInvestigation(full||label);loadTimeline(full||label);
+    loadInvestigation(full||label);loadTimeline(full||label);loadExposure(full||label);
   }).catch(()=>{});
 }
+function loadExposure(u){const w=$("#expWrap");if(!w)return;w.innerHTML="";
+  j("/entity-exposure?u="+encodeURIComponent(u)).then(d=>{if(!d||!d.found){return;}
+    const EN=LANG==="en";const jr=d.jewels_reached||[];
+    const crit=jr.length>0;const col=crit?"#fb3b53":(d.is_chokepoint?"#f5a623":"#38bdf8");
+    let h='<div class="blk" style="border:1px solid '+col+'44;border-radius:10px;padding:10px 12px;background:'+col+'0d">'
+      +'<div class="lbl" style="display:flex;align-items:center;gap:8px">'+ic("target")+' '+(EN?"Attack-twin exposure":"Exposition (jumeau d'attaque)")
+      +'<button class="stb" style="margin-left:auto" onclick="simResponse(\''+_jsq(d.entity)+'\')">'+(EN?"Simulate response":"Simuler la réponse")+'</button></div>'
+      +'<div style="font-size:13px;margin-top:6px">';
+    if(d.is_chokepoint)h+='<span class="pchip" style="color:#f5a623">'+(EN?"Chokepoint":"Chokepoint")+' · '+d.on_paths+' '+(EN?"paths":"chemins")+'</span> ';
+    h+='<span class="pchip">'+(d.hosts_reached||0)+' '+(EN?"hosts reachable":"hôtes atteignables")+'</span> ';
+    if(jr.length)h+='<span class="pchip" style="color:#fb3b53">'+(EN?"reaches: ":"atteint : ")+jr.map(esc).join(", ")+'</span>';
+    h+='</div></div>';w.innerHTML=h;
+  }).catch(()=>{});}
 const M365CODE={
  fr:{"0":"Succès","50053":"Compte verrouillé (lockout)","50055":"Mot de passe expiré","50057":"Compte désactivé","50074":"MFA requise","50076":"MFA requise (CA)","50079":"MFA à enregistrer","50126":"Identifiants invalides","50158":"Conditional Access","53003":"Bloqué (Conditional Access)","500121":"MFA refusée / timeout"},
  en:{"0":"Success","50053":"Account locked (lockout)","50055":"Password expired","50057":"Account disabled","50074":"MFA required","50076":"MFA required (CA)","50079":"MFA registration required","50126":"Invalid credentials","50158":"Conditional Access","53003":"Blocked (Conditional Access)","500121":"MFA denied / timeout"}};
