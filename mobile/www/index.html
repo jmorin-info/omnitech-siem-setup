@@ -201,6 +201,7 @@
       <h3 class="sec" data-i18n="sec_ml">Anomalies ML (3 h)</h3><div class="risk" id="mlList"></div>
       <h3 class="sec" data-i18n="sec_ueba">Risque UEBA (24 h)</h3><div class="risk" id="uebaList"></div>
       <h3 class="sec" data-i18n="sec_topdet">Top détections (24 h)</h3><div class="feed" id="detMini"></div>
+      <h3 class="sec" data-i18n="sec_ems">Endpoint — FortiClient EMS (7 j)</h3><div id="emsMini"></div>
     </section>
     <section class="page" id="p-twin">
       <h3 class="sec" data-i18n="sec_twin">Jumeau d'attaque — Exposition</h3>
@@ -245,7 +246,7 @@ let LANG=localStorage.getItem("soc_lang")||"fr";
 const I18N={
  fr:{login_sub:"Centre des opérations · accès RSSI (VPN)",ph_account:"Compte AD",ph_password:"Mot de passe",btn_signin:"Se connecter",err_creds:"Identifiants invalides",err_net:"Erreur réseau",
   status_op:"opérationnel",push_al:"Activer les notifications",lang_al:"Changer la langue",
-  sec_activity:"Activité (24 h)",card_detperhour:"Détections par heure",tag_live:"temps réel",sec_tactics:"Tactiques ATT&CK (7 j)",sec_alerts:"Alertes récentes (24 h)",sec_inc:"Incidents corrélés",sec_ml:"Anomalies ML (3 h)",sec_ueba:"Risque UEBA (24 h)",sec_topdet:"Top détections (24 h)",
+  sec_activity:"Activité (24 h)",card_detperhour:"Détections par heure",tag_live:"temps réel",sec_tactics:"Tactiques ATT&CK (7 j)",sec_alerts:"Alertes récentes (24 h)",sec_inc:"Incidents corrélés",sec_ml:"Anomalies ML (3 h)",sec_ueba:"Risque UEBA (24 h)",sec_topdet:"Top détections (24 h)",sec_ems:"Endpoint — FortiClient EMS (7 j)",
   nav_home:"Synthèse",nav_alerts:"Alertes",nav_inc:"Incidents",nav_threat:"Menace",nav_twin:"Exposition",sec_twin:"Jumeau d'attaque — Exposition",twin_load:"Chargement…",nav_guides:"Guides",sec_guides:"Playbooks de réponse",ph_guides:"Rechercher une détection, technique…",guides_none:"Aucune détection ne correspond.",
   kpi_critinc:"Incidents critiques",kpi_7d:"7 jours",kpi_riskhosts:"Hôtes à risque",kpi_uebage:"UEBA ≥ 80",kpi_det:"Détections",kpi_24h:"24 h",kpi_kev:"CVE KEV exposées",kpi_cisa:"CISA",
   empty_inc:"Aucun incident corrélé",empty_ras:"RAS",
@@ -256,7 +257,7 @@ const I18N={
   k_tactic:"Tactique",k_technique:"Technique",k_source:"Source",blk_message:"Message",chip_score:"score",ago_now:"à l'instant",ago_day:"j"},
  en:{login_sub:"Operations center · CISO access (VPN)",ph_account:"AD account",ph_password:"Password",btn_signin:"Sign in",err_creds:"Invalid credentials",err_net:"Network error",
   status_op:"operational",push_al:"Enable notifications",lang_al:"Change language",
-  sec_activity:"Activity (24h)",card_detperhour:"Detections per hour",tag_live:"live",sec_tactics:"ATT&CK tactics (7d)",sec_alerts:"Recent alerts (24h)",sec_inc:"Correlated incidents",sec_ml:"ML anomalies (3h)",sec_ueba:"UEBA risk (24h)",sec_topdet:"Top detections (24h)",
+  sec_activity:"Activity (24h)",card_detperhour:"Detections per hour",tag_live:"live",sec_tactics:"ATT&CK tactics (7d)",sec_alerts:"Recent alerts (24h)",sec_inc:"Correlated incidents",sec_ml:"ML anomalies (3h)",sec_ueba:"UEBA risk (24h)",sec_topdet:"Top detections (24h)",sec_ems:"Endpoint — FortiClient EMS (7d)",
   nav_home:"Overview",nav_alerts:"Alerts",nav_inc:"Incidents",nav_threat:"Threat",nav_twin:"Exposure",sec_twin:"Attack twin — Exposure",twin_load:"Loading…",nav_guides:"Guides",sec_guides:"Response playbooks",ph_guides:"Search a detection, technique…",guides_none:"No matching detection.",
   kpi_critinc:"Critical incidents",kpi_7d:"7 days",kpi_riskhosts:"At-risk hosts",kpi_uebage:"UEBA ≥ 80",kpi_det:"Detections",kpi_24h:"24h",kpi_kev:"Exposed KEV CVEs",kpi_cisa:"CISA",
   empty_inc:"No correlated incidents",empty_ras:"All clear",
@@ -443,7 +444,15 @@ function openDetSheet(i){const x=DETM[i];if(!x)return;
 async function loadThreat(){try{
   const [r,det]=await Promise.all([j("/risk"),j("/detections")]);
   renderThreat(r||{});renderDetMini((det&&det.items)||[]);
+  j("/fortiems").then(renderEmsMini).catch(()=>{});
 }catch(e){if(e==="auth")location.reload();}}
+function renderEmsMini(d){const el=$("#emsMini");if(!el)return;d=d||{};const EN=(LANG==="en");
+  const K=(v,l,col)=>'<div class="kpi '+(col||'cy')+'" style="padding:10px"><div class="l">'+l+'</div><div class="v mono" style="font-size:22px">'+(v||0)+'</div></div>';
+  let h='<div class="kpis" style="margin-bottom:8px">'+K(d.malware,(EN?"malware":"malware"),(d.malware?'red':'cy'))+K(d.vuln,(EN?"vuln":"vuln"),(d.vuln?'amb':'cy'))+K(d.av_off,(EN?"prot. off":"prot. off"),(d.av_off?'red':'cy'))+'</div>';
+  if(!d.total){h+='<p class="muted" style="font-size:12px">'+(EN?"No EMS event yet (ingestion live, TLS).":"Aucun événement EMS pour l'instant (ingestion active, TLS).")+'</p>';el.innerHTML=h;return;}
+  const ev=(d.events||[]).filter(e=>e.tag).slice(0,6);
+  h+='<div class="feed">'+(ev.length?ev:(d.events||[]).slice(0,5)).map(e=>'<div class="item sev-'+(e.sev==="critique"?"critical":e.sev==="eleve"?"high":"low")+'"><div class="top">'+(e.tag?'<span class="chip">'+nice(e.tag)+'</span>':'<span class="ttl">'+esc(e.subtype||'')+'</span>')+'<span class="ts">'+(e.ts?e.ts.slice(11,16):'')+'</span></div><div class="meta">'+esc(e.host||'')+(e.threat?' · '+esc(e.threat):'')+'</div></div>').join('')+'</div>';
+  el.innerHTML=h;}
 
 // ===== onglet "Guides" (parité console : 70 playbooks par tactique ATT&CK) =====
 function renderGuides(q){const el=$("#gBody");if(!el)return;
