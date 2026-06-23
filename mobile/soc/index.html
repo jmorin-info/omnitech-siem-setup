@@ -654,6 +654,7 @@
     <section class="page" id="p-health">
       <div id="hmaint"></div>
       <div class="grid kpis" id="hkpis"></div>
+      <div class="card" style="margin-top:16px"><h3><svg class="svi"><use href="#i-pulse"></use></svg> <span data-i18n="card_integ">Intégrations attendues</span><span class="tag" data-i18n="tag_integ">référentiel · ok / lent / absent</span></h3><div id="hint" style="display:flex;flex-wrap:wrap;gap:8px"></div></div>
       <div class="grid cols" style="margin-top:16px">
         <div class="card"><h3><svg class="svi"><use href="#i-antenna"></use></svg> <span data-i18n="card_collect">Sources de collecte (24 h)</span><span class="tag" data-i18n="tag_collect">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
         <div class="card"><h3><svg class="svi"><use href="#i-eyeoff"></use></svg> <span data-i18n="card_dark">Hôtes silencieux (go‑dark)</span><span class="tag" data-i18n="tag_dark">muets &gt; 26 h · à vérifier</span></h3><div class="feed" id="hdark"></div></div>
@@ -1216,15 +1217,30 @@ function openEntity(full,label,size){
       ${entScoreBanner(d)}
       <div id="expWrap"></div>
       <div id="emsEntWrap"></div>
+      <div id="netEntWrap"></div>
       <div id="invWrap"></div>
       <div id="tlWrap"></div>
       <div class="blk"><div class="lbl">${t("ent_tactics")}</div><div>${tacs}</div></div>
       <div class="blk"><div class="lbl">${t("ent_techniques")}</div><div>${techs}</div></div>
       <div class="blk"><div class="lbl">${t("ent_events")}</div>${evs}${more}</div>`;
     $("#emodal").classList.add("on");
-    loadInvestigation(full||label);loadTimeline(full||label);loadExposure(full||label);loadEntityEms(full||label);
+    loadInvestigation(full||label);loadTimeline(full||label);loadExposure(full||label);loadEntityEms(full||label);loadEntityNetwork(full||label);
   }).catch(()=>{});
 }
+function loadEntityNetwork(u){const w=$("#netEntWrap");if(!w)return;w.innerHTML="";
+  j("/entity-network?u="+encodeURIComponent(u)).then(d=>{if(!d||!d.found)return;const EN=LANG==="en";
+    const hasSec=(d.tags||[]).length>0;const col=hasSec?"#f5a623":"#38bdf8";
+    let h='<div class="blk" style="border:1px solid '+col+'44;border-radius:10px;padding:10px 12px;background:'+col+'0d">'
+      +'<div class="lbl" style="display:flex;align-items:center;gap:8px">'+ic("network")+' '+(EN?"Network / infra activity":"Activité réseau / infra")
+      +'<span class="muted" style="margin-left:auto;font-size:11px">'+(d.total||0)+' '+(EN?"events / 14d":"events / 14j")+'</span></div>'
+      +'<div style="font-size:13px;margin-top:6px">';
+    (d.sources||[]).forEach(s=>{h+='<span class="pchip">'+esc(s.k)+' · '+s.n+'</span> ';});
+    (d.tags||[]).forEach(x=>{h+='<span class="pchip" style="color:'+col+'">'+nice(x.k)+' · '+x.n+'</span> ';});
+    h+='</div>';
+    const ev=(d.events||[]).slice(0,4);
+    if(ev.length)h+='<div style="margin-top:6px">'+ev.map(e=>'<div class="muted" style="font-size:11px;border-top:1px solid var(--bd);padding-top:4px;margin-top:4px">'+(e.tag?'<b style="color:'+col+'">'+nice(e.tag)+'</b> · ':'')+(e.host?esc(e.host)+' · ':'')+(e.ip?esc(e.ip)+' · ':'')+esc((e.msg||'').slice(0,80))+'</div>').join('')+'</div>';
+    h+='</div>';w.innerHTML=h;
+  }).catch(()=>{});}
 function loadEntityEms(u){const w=$("#emsEntWrap");if(!w)return;w.innerHTML="";
   j("/entity-ems?u="+encodeURIComponent(u)).then(d=>{if(!d||!d.found)return;const EN=LANG==="en";
     const crit=(d.malware||d.av_off);const col=crit?"#fb3b53":(d.vuln?"#f5a623":"#38bdf8");
@@ -1710,7 +1726,13 @@ function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{},mt=d.mainten
   $("#hsrc").innerHTML=(d.sources||[]).map(x=>`<div class="inc"><div class="top">
     <span class="ttl">${esc(x.k)}</span>
     <span class="mono" style="color:var(--cy);margin-left:auto">${(x.n||0).toLocaleString("fr")}</span>
-    <span class="ts">${ago(x.last)}</span></div></div>`).join("")||'<div class="empty">—</div>';}
+    <span class="ts">${ago(x.last)}</span></div></div>`).join("")||'<div class="empty">—</div>';
+  const EN=LANG==="en";const SC={ok:"#2dd4a7",stale:"#f5a623",missing:"#fb3b53"};
+  const SL={ok:"ok",stale:(EN?"slow":"lent"),missing:(EN?"absent":"absent")};
+  if($("#hint"))$("#hint").innerHTML=(d.integrations||[]).map(i=>{const c=SC[i.status]||"#39507a";
+    const age=i.age_min==null?(EN?"never":"jamais"):(i.age_min<60?i.age_min+" min":Math.round(i.age_min/60)+" h");
+    return `<span class="pchip" style="border:1px solid ${c}66;color:${c}" title="${EN?'threshold':'seuil'} ${i.threshold_min} min">${esc(i.k)} · ${SL[i.status]||i.status} · ${age}</span>`;
+  }).join("")||'<div class="empty">—</div>';}
 let DETI=[],DETV=[],detF={tactic:"",source:"",technique:""},detQ="";
 function onFilter(){detF.tactic=$("#fTactic").value;detF.source=$("#fSource").value;detF.technique="";loadDetections();}
 function clearFilter(){detF={tactic:"",source:"",technique:""};detQ="";if($("#detSearch"))$("#detSearch").value="";if($("#fTactic"))$("#fTactic").value="";if($("#fSource"))$("#fSource").value="";loadDetections();}

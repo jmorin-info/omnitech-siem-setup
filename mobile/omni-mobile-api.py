@@ -260,9 +260,12 @@ def get_timeseries():
             for b in res.get("aggregations", {}).get("h", {}).get("buckets", [])]
 
 
-def get_terms(field, gte="now-7d", size=8):
+def get_terms(field, gte="now-7d", size=8, tagged=True):
+    # tagged=False : compte TOUTE l'activite (pas seulement les detections) -> rend les
+    # sources benignes (aruba/linux/dns : ports/STP/CADownload) visibles dans top-sources.
+    must = [{"exists": {"field": "alert_tag"}}] if tagged else []
     res = os_search("omni-*", {"size": 0,
-        "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}],
+        "query": {"bool": {"must": must,
                            "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
         "aggs": {"t": {"terms": {"field": field, "size": size}}}})
     return [{"k": b.get("key"), "n": b.get("doc_count")}
@@ -626,6 +629,46 @@ def get_entity(name, size=20, frm=0):
             "events": ev}
 
 
+def get_entity_network(name, days=14):
+    """Activité réseau/infra d'une entité pour le dossier 360° : sessions/échecs admin
+    switch (Aruba), SSH/sudo (Linux), où l'entité = une IP (src_ip/aruba_client_ip) ou un
+    hôte (source). Relie une IP brute-forçant l'admin switch a son dossier. Lecture seule.
+    Ne renvoie 'found' que si l'entité a une activité réseau/infra."""
+    name = (name or "").strip()
+    if not name:
+        return {"found": False}
+    name = _RD_REV.get(name, name)
+    short = name.split("\\")[-1].split("@")[0]
+    cands = list({name, short})
+    q = {"bool": {"filter": [{"range": {"timestamp": {"gte": f"now-{int(days)}d"}}}],
+                  "minimum_should_match": 1,
+                  "should": [{"terms": {"src_ip": cands}},
+                             {"terms": {"aruba_client_ip": cands}},
+                             {"terms": {"source": cands}}]}}
+    res = os_search("omni-aruba*,omni-linux*", {
+        "size": 12, "sort": [{"timestamp": {"order": "desc"}}], "track_total_hits": True, "query": q,
+        "aggs": {"tags": {"filter": {"exists": {"field": "alert_tag"}},
+                          "aggs": {"t": {"terms": {"field": "alert_tag", "size": 8}}}},
+                 "src": {"terms": {"field": "event_source", "size": 4}}},
+        "_source": ["timestamp", "event_source", "source", "aruba_switch_name", "aruba_subsystem",
+                    "src_ip", "alert_tag", "message"]})
+    hits = res.get("hits", {})
+    total = hits.get("total", {})
+    total = total.get("value", 0) if isinstance(total, dict) else (total or 0)
+    if not total:
+        return {"found": False, "entity": short}
+    ag = res.get("aggregations", {})
+    events = [{"ts": s.get("timestamp"), "src": s.get("event_source"),
+               "host": _rd(s.get("aruba_switch_name") or s.get("source")),
+               "sub": s.get("aruba_subsystem"), "tag": s.get("alert_tag"),
+               "ip": s.get("src_ip"), "msg": _scrub(s.get("message"))}
+              for s in (h.get("_source", {}) for h in hits.get("hits", []))]
+    return {"found": True, "entity": short, "total": total,
+            "sources": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("src", {}).get("buckets", [])],
+            "tags": [{"k": b["key"], "n": b["doc_count"]} for b in ag.get("tags", {}).get("t", {}).get("buckets", [])],
+            "events": events}
+
+
 def get_entity_search(q, size=8):
     """Recherche d'entités par sous-chaîne (insensible à la casse) — pour la palette.
 
@@ -637,11 +680,13 @@ def get_entity_search(q, size=8):
         return []
     wc_u = {"wildcard": {"user": {"value": f"*{q}*", "case_insensitive": True}}}
     wc_h = {"wildcard": {"source": {"value": f"*{q}*", "case_insensitive": True}}}
+    wc_i = {"wildcard": {"src_ip": {"value": f"*{q}*", "case_insensitive": True}}}
     res = os_search("omni-*", {"size": 0,
         "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": "now-7d"}}}],
-                           "minimum_should_match": 1, "should": [wc_u, wc_h]}},
+                           "minimum_should_match": 1, "should": [wc_u, wc_h, wc_i]}},
         "aggs": {"u": {"filter": wc_u, "aggs": {"t": {"terms": {"field": "user", "size": size}}}},
-                 "h": {"filter": wc_h, "aggs": {"t": {"terms": {"field": "source", "size": size}}}}}})
+                 "h": {"filter": wc_h, "aggs": {"t": {"terms": {"field": "source", "size": size}}}},
+                 "i": {"filter": wc_i, "aggs": {"t": {"terms": {"field": "src_ip", "size": size}}}}}})
     ag = res.get("aggregations", {})
     out, seen = [], set()
     for b in ag.get("u", {}).get("t", {}).get("buckets", []):
@@ -653,6 +698,12 @@ def get_entity_search(q, size=8):
         k = b.get("key")
         if k and _rd(k) not in seen:
             out.append({"entity": _rd(k), "n": b["doc_count"], "kind": "host"})
+            seen.add(_rd(k))
+    for b in ag.get("i", {}).get("t", {}).get("buckets", []):
+        k = b.get("key")
+        if k and _rd(k) not in seen:
+            out.append({"entity": _rd(k), "n": b["doc_count"], "kind": "ip"})
+            seen.add(_rd(k))
     return out[: size * 2]
 
 
@@ -1164,10 +1215,32 @@ def get_health():
     dark = [{"host": _rd(b["key"]), "hours": round((b.get("hrs", {}) or {}).get("value", 0) or 0, 1)}
             for b in dres.get("aggregations", {}).get("h", {}).get("buckets", []) if b.get("key")]
     dark.sort(key=lambda d: -d["hours"])
+    # Référentiel des sources ATTENDUES : detecte une integration entiere qui decroche
+    # (ok/stale/missing), distinct du go-dark par hote. Seuil de fraicheur par source (min).
+    EXPECTED_SOURCES = {"fortigate": 120, "sysmon": 180, "windows_security": 180, "m365": 360,
+                        "aruba": 240, "linux": 1440, "dns": 1440, "fortiems": 2880,
+                        "fortimanager": 1440, "eset": 1440, "vsphere": 1440}
+    ires = os_search("omni-*", {"size": 0, "query": {"range": {"timestamp": {"gte": "now-30d"}}},
+        "aggs": {"src": {"terms": {"field": "event_source", "size": 50},
+                         "aggs": {"last": {"max": {"field": "timestamp"}}}}}})
+    seen_last = {b["key"]: (b.get("last", {}) or {}).get("value")
+                 for b in ires.get("aggregations", {}).get("src", {}).get("buckets", [])}
+    now_ms = time.time() * 1000
+    integrations = []
+    for src, thr in EXPECTED_SOURCES.items():
+        last = seen_last.get(src)
+        if not last:
+            integrations.append({"k": src, "status": "missing", "age_min": None, "threshold_min": thr})
+        else:
+            age = round((now_ms - last) / 60000.0)
+            integrations.append({"k": src, "status": ("ok" if age <= thr else "stale"),
+                                 "age_min": age, "threshold_min": thr})
+    order = {"missing": 0, "stale": 1, "ok": 2}
+    integrations.sort(key=lambda i: (order.get(i["status"], 3), i["k"]))
     return {"cluster": ch.get("status", "?"), "nodes": ch.get("number_of_nodes"),
             "shards": ch.get("active_shards"), "events_24h": ag.get("tot", {}).get("value", 0),
             "sources": sources, "robots": robots, "sla": sla, "dark_hosts": dark,
-            "maintenance": maint}
+            "integrations": integrations, "maintenance": maint}
 
 
 def get_leaks():
@@ -1491,7 +1564,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/m/api/top-detections":
             return self._json({"data": get_terms("alert_tag")})
         if p == "/m/api/top-sources":
-            return self._json({"data": get_terms("event_source")})
+            return self._json({"data": get_terms("event_source", size=16, tagged=False)})
         if p == "/m/api/attack-matrix":
             return self._json({"matrix": get_attack_matrix()})
         if p == "/m/api/leaks":
@@ -1520,6 +1593,10 @@ class H(BaseHTTPRequestHandler):
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             return self._json(get_entity_ems(qs.get("u", [""])[0]))
+        if p == "/m/api/entity-network":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return self._json(get_entity_network(qs.get("u", [""])[0]))
         if p == "/m/api/geo":
             return self._json(get_geo_threats())
         if p == "/m/api/report":
