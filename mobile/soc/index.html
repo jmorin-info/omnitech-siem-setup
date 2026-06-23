@@ -396,6 +396,9 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
   .sevtag-high{color:var(--amb);border-color:rgba(240,168,56,.4);background:rgba(240,168,56,.1)}
   .sevtag-medium{color:var(--cy);border-color:rgba(45,212,227,.35);background:rgba(45,212,227,.1)}
   .sevtag-low{color:var(--mut);border-color:var(--bd)}
+  .search{background:#0c1525;border:1px solid var(--bd);border-radius:9px;color:var(--fg);padding:10px 13px;font-size:13px}
+  .search:focus{border-color:var(--cy);box-shadow:0 0 0 3px rgba(34,211,238,.12);outline:none}
+  .search::placeholder{color:var(--mut)}
   .inc:hover{transform:translateX(2px);border-color:rgba(120,150,210,.26);
     box-shadow:-7px 0 20px -11px var(--sev,var(--cy)), 0 8px 22px -16px rgba(0,0,0,.85)}
   .chip{box-shadow:inset 0 0 12px rgba(255,255,255,.05)}
@@ -643,8 +646,8 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
     <section class="page" id="p-detections"><div class="card"><h3><svg class="svi"><use href="#i-target"></use></svg> <span data-i18n="card_det24">Détections (24 h)</span>
         <span class="tag" id="detCount"></span></h3>
       <div class="dfilter">
-        <input id="detSearch" oninput="applyDetSearch()" placeholder="🔎 Rechercher (tag, entité, technique, message…)" data-i18n-ph="ph_detsearch" autocomplete="off"
-          style="background:#0c1525;border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:8px 12px;font-size:13px;flex:1;min-width:200px;margin:0">
+        <input id="detSearch" class="search" oninput="applyDetSearch()" placeholder="🔎 Rechercher (tag, entité, technique, message…)" data-i18n-ph="ph_detsearch" autocomplete="off"
+          style="flex:1;min-width:200px;margin:0">
         <select id="fTactic" onchange="onFilter()"><option value="">Toutes tactiques</option></select>
         <select id="fSource" onchange="onFilter()"><option value="">Toutes sources</option></select>
         <button class="stb" onclick="clearFilter()" data-i18n="btn_reset">Réinitialiser</button>
@@ -663,8 +666,8 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
           <label class="muted" style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;font-size:12px">Volume min.
             <input id="gMinVol" type="range" min="0" max="1" value="0" step="1" oninput="gMinLbl()" onchange="applyGraphFilter()" style="flex:1;accent-color:var(--cy)">
             <span id="gMinVal" class="mono" style="color:var(--cy);min-width:42px">≥ 0</span></label>
-          <input id="gSearch" list="gEntList" oninput="gFocusEntity((this.value||'').trim().toLowerCase())" placeholder="🔎 Centrer une entité…" data-i18n-ph="ph_gsearch" autocomplete="off"
-            style="background:#0c1525;border:1px solid var(--bd);color:var(--fg);border-radius:8px;padding:8px 12px;font-size:13px;min-width:200px;margin:0">
+          <input id="gSearch" class="search" list="gEntList" oninput="gFocusEntity((this.value||'').trim().toLowerCase())" placeholder="🔎 Centrer une entité…" data-i18n-ph="ph_gsearch" autocomplete="off"
+            style="min-width:200px;margin:0">
           <datalist id="gEntList"></datalist>
           <button class="stb" onclick="gClear()" data-i18n="btn_reset">Réinitialiser</button>
         </div>
@@ -729,15 +732,15 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
     </section>
     <section class="page" id="p-playbooks">
       <div class="card"><h3><svg class="svi"><use href="#i-help"></use></svg> <span data-i18n="pb_title">Playbooks de réponse</span><span class="tag" data-i18n="pb_sub">guide d'action par détection, regroupé par tactique ATT&CK</span></h3>
-        <input id="pbSearch" oninput="renderPlaybooks(this.value)" placeholder="🔎 Rechercher une détection, technique, mot-clé…" data-i18n-ph="pb_search" autocomplete="off"
-          style="width:100%;margin:6px 0 4px;padding:9px 12px;background:#0c1424;border:1px solid var(--bd);border-radius:9px;color:var(--fg);font-size:13px">
+        <input id="pbSearch" class="search" oninput="renderPlaybooks(this.value)" placeholder="🔎 Rechercher une détection, technique, mot-clé…" data-i18n-ph="pb_search" autocomplete="off"
+          style="width:100%;margin:6px 0 4px">
         <div id="pbBody"></div></div>
     </section>
     <section class="page" id="p-entities">
       <div class="card"><h3><svg class="svi"><use href="#i-network"></use></svg> <span data-i18n="ent_pgt">Recherche d'entités</span><span class="tag" data-i18n="ent_pgs">comptes &amp; machines — dossier 360° unifié</span></h3>
         <div id="entWatch"></div>
-        <input id="entSearch" oninput="entSearchDo(this.value)" placeholder="🔎 Compte AD, e-mail, ou nom de machine…" data-i18n-ph="ent_ph" autocomplete="off"
-          style="width:100%;margin:6px 0 4px;padding:11px 13px;background:#0c1424;border:1px solid var(--bd);border-radius:10px;color:var(--fg);font-size:14px">
+        <input id="entSearch" class="search" oninput="entSearchDo(this.value)" placeholder="🔎 Compte AD, e-mail, ou nom de machine…" data-i18n-ph="ent_ph" autocomplete="off"
+          style="width:100%;margin:6px 0 4px">
         <div id="entResults"></div>
         <div class="entcols">
           <div><div class="lbl2"><span data-i18n="ent_topu">Comptes les plus actifs</span></div><div id="entUsers"></div></div>
@@ -765,7 +768,7 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
 
 <script>
 const API="/m/api", $=s=>document.querySelector(s);
-function ic(n){return '<svg class="svi"><use href="#i-'+n+'"></use></svg>';}
+function ic(n){return '<svg class="svi" aria-hidden="true" focusable="false"><use href="#i-'+n+'"></use></svg>';}
 const j=(u,o)=>fetch(API+u,{credentials:"same-origin",...o}).then(r=>{if(r.status===401)throw"auth";return r.json()});
 const esc=s=>(s==null?"":""+s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 const nice=s=>esc((s||"").toString().replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()));
