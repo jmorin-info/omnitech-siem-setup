@@ -144,6 +144,27 @@ services:
       - nginx_certs:/etc/nginx/certs
     networks: [omni]
 
+  # ---- OMS-XDR : moteur de correlation/reponse (corrélation dans le DR) -------
+  # Les IDs de streams (oms-xdr/config.yaml) correspondent a la prod -> exact apres
+  # un RESTORE DR. Sur une base NEUVE (IaC), reajuster les IDs. Reponse en DRY-RUN.
+  oms-xdr:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.oms-xdr
+    image: omni-siem/oms-xdr:latest
+    restart: unless-stopped
+    depends_on:
+      opensearch: { condition: service_healthy }
+      graylog: { condition: service_healthy }
+    environment:
+      - OMS_INTERVAL=${OMS_INTERVAL:-300}
+      - OMS_TEAMS_WEBHOOK=${OMS_TEAMS_WEBHOOK:-}
+    deploy:
+      resources:
+        limits:
+          memory: "${OMS_XDR_MEM:-512m}"
+    networks: [omni]
+
 volumes:
   mongo_data:
   os_data:
