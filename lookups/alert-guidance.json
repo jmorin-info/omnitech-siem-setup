@@ -586,5 +586,23 @@
     "a_verifier": "VRAI POSITIF probable. Identifier le POSTE et QUI/QUOI a désactivé la protection (utilisateur ? processus ?). Désactivation manuelle légitime (rare, IT) ou non autorisée ? Croiser IMMÉDIATEMENT avec les autres détections sur l'hôte dans la même fenêtre (malware, exécution, latéral) : un attaquant désarme l'AV AVANT d'agir → forte présomption d'intrusion.",
     "correction": "Verrouiller la configuration FortiClient (mot de passe de désinstallation/altération, anti-tamper EMS) pour empêcher la désactivation par l'utilisateur. Politique : protection temps-réel non désactivable. Alerter sur tout changement d'état de protection.",
     "remediation": "TRAITER COMME INTRUSION jusqu'à preuve du contraire. Isoler le poste (NinjaOne). Réactiver la protection + scan EDR complet. Identifier qui a désactivé + pourquoi. Si non légitime : réinitialiser le compte de l'utilisateur, chasser malware/persistance/latéral. Remonter au RSSI."
+  },
+  "dns_admin_change": {
+    "ce_que_cest": "Un enregistrement DNS a été modifié MANUELLEMENT (par un admin) sur le DC (DNSServer/Audit EID 515/516, AUDIT_REC_ADMIN) — distinct des enregistrements dynamiques automatiques des postes (519/520, non remontés). Tracé pour audit : tout changement DNS manuel doit être attribuable. Un changement non autorisé = détournement de résolution (rediriger un nom vers une IP attaquant, T1565.001).",
+    "a_verifier": "Identifier le nom (dns_name), la zone, la nouvelle valeur (RDATA) et QUI a fait le changement (croiser avec les sessions admin sur le DC à cet instant). Changement planifié/légitime (IT) ou non ? Le nom est-il sensible (service interne, passerelle) ? Croiser avec le registre des changements.",
+    "correction": "Restreindre les droits de modification DNS (délégation), exiger un ticket de changement, activer l'audit DNS complet, surveiller les zones critiques. Envisager DNSSEC pour les zones sensibles.",
+    "remediation": "Si non autorisé : restaurer l'enregistrement d'origine, identifier le compte ayant fait le changement et le traiter comme compromis (réinitialiser, chasser), vérifier qu'aucun client n'a résolu vers la mauvaise IP entre-temps. Remonter au RSSI."
+  },
+  "dns_sensitive_change": {
+    "ce_que_cest": "Un enregistrement DNS d'un nom SENSIBLE (wpad, autodiscover, _msdcs, _ldap, _kerberos, proxy) a été modifié manuellement sur le DC. Ces noms gouvernent la découverte automatique (proxy, autoconfig, localisation des DC/Kerberos) — les détourner = MITM/credential theft à l'échelle du parc (T1565.001 / empoisonnement WPAD). Forte présomption d'attaque si non planifié.",
+    "a_verifier": "TRAITER EN PRIORITÉ. Nom exact + nouvelle IP (RDATA) + auteur. Une création de wpad/autodiscover pointant vers une IP non-infra = quasi-certain malveillant (relais NTLM/MITM). Vérifier les authentifications suspectes vers cette IP depuis le changement.",
+    "correction": "Bloquer wpad par GPO (désactiver la découverte auto de proxy) ; protéger les noms _msdcs/autodiscover ; DNSSEC ; alerter sur tout changement de ces noms.",
+    "remediation": "INTRUSION PROBABLE. Restaurer/supprimer l'enregistrement immédiatement. Isoler l'IP cible (NinjaOne/FortiGate). Identifier le compte fautif → compromis. Chasser le vol d'identifiants (relais NTLM) sur la fenêtre. Remonter au RSSI sans délai."
+  },
+  "dns_cache_flush": {
+    "ce_que_cest": "Le cache du serveur DNS (DC) a été vidé (DNSServer/Audit EID 536, AUDIT_CACHE). Opération parfois légitime (dépannage), mais peut servir à effacer des traces (résolutions malveillantes en cache) ou à forcer une re-résolution après empoisonnement (T1070, Indicator Removal).",
+    "a_verifier": "Qui a vidé le cache et pourquoi ? Dépannage planifié ou non ? Corréler avec d'autres événements DNS suspects (changements d'enregistrement) ou une activité admin inhabituelle sur le DC dans la même fenêtre.",
+    "correction": "Restreindre les droits d'administration DNS ; journaliser et alerter sur les vidages de cache ; procédure de changement pour les opérations DNS.",
+    "remediation": "Si non justifié : enquêter sur l'activité DNS récente (changements, résolutions vers IP suspectes) avant le flush, vérifier le compte ayant exécuté l'opération. Généralement faible gravité seul ; à corréler."
   }
 }
