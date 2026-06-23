@@ -42,7 +42,7 @@ create_input "Winlogbeat (Beats TLS 5044)" "$(cat <<EOF
   "configuration": {
     "bind_address": "0.0.0.0",
     "port": 5044,
-    "recv_buffer_size": 1048576,
+    "recv_buffer_size": 16777216,
     "no_beats_prefix": false,
     "tls_enable": true,
     "tls_cert_file": "/etc/graylog/server/certs/graylog.crt",
@@ -64,7 +64,7 @@ create_input "FortiAnalyzer (Syslog TCP 1514)" "$(cat <<EOF
   "configuration": {
     "bind_address": "0.0.0.0",
     "port": 1514,
-    "recv_buffer_size": 1048576,
+    "recv_buffer_size": 16777216,
     "allow_override_date": true,
     "expand_structured_data": false,
     "force_rdns": false,
@@ -84,7 +84,7 @@ create_input "FortiAnalyzer (Syslog UDP 1514)" "$(cat <<EOF
   "configuration": {
     "bind_address": "0.0.0.0",
     "port": 1514,
-    "recv_buffer_size": 1048576,
+    "recv_buffer_size": 16777216,
     "allow_override_date": true,
     "expand_structured_data": false,
     "force_rdns": false,
