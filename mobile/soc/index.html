@@ -1860,9 +1860,14 @@ function caseAct(id,action,value){
    .catch(e=>{if(e==="auth"){toastWarn("Session expirée — reconnexion…",{title:"Session"});setTimeout(()=>location.reload(),1100);}
      else toastErr("Échec de la mise à jour du cas. Réessayez.");});}
 function renderAlerts(list){list=list||[];$("#alFeed").innerHTML=list.length?list.map(a=>{const c=a.priority==3?"critical":a.priority==2?"high":"medium";
+  const fcss='background:#0c1525;border:1px solid var(--bd);border-radius:5px;padding:1px 7px;font-size:11px';
+  const f=a.fields||{};const piv={user:1,src_ip:1,host:1,source:1,aruba_client_ip:1};
+  const fchips=Object.keys(f).map(k=>{const v=f[k];const clk=piv[k]?` onclick="openEntity('${_jsq(v)}','${_jsq(v)}')" style="cursor:pointer;${fcss}" title="Dossier 360°"`:` style="${fcss}"`;
+    return `<span${clk}><b style="color:var(--cy)">${esc(k)}</b> ${esc(v)}</span>`;}).join(" ");
+  const ctx=fchips||(a.entity?`<span style="${fcss}">${esc(a.entity)}</span>`:"");
   return `<div class="inc sev-${c}"><div class="top"><span class="chip ${c=='high'?'h':c=='medium'?'m':''}">P${a.priority||'-'}</span>
     <span class="ttl">${esc(a.title)}</span><span class="ts">${ago(a.ts)}</span></div>
-    ${a.entity?`<div class="meta">${esc(a.entity)}</div>`:""}</div>`;}).join(""):'<div class="empty">RAS</div>';}
+    ${ctx?`<div class="meta" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${ctx}</div>`:""}</div>`;}).join(""):'<div class="empty">RAS</div>';}
 
 setInterval(()=>{$("#clock")&&($("#clock").textContent=new Date().toLocaleTimeString("fr"))},1000);
 document.documentElement.lang=LANG;applyI18n();updateLangBtn();

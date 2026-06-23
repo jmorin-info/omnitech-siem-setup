@@ -198,6 +198,8 @@ def get_alerts(limit: int = 50) -> list:
             "title": s.get("event_definition_title") or s.get("message"),
             "priority": s.get("priority"),
             "entity": _rd(s.get("key") or ""),
+            # contexte structure (qui/ou/quoi) issu du field_spec de l'event definition
+            "fields": {k: _rd(v) for k, v in (s.get("fields") or {}).items() if v not in (None, "", "null")},
         })
     return out
 
