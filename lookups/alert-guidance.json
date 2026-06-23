@@ -604,5 +604,29 @@
     "a_verifier": "Qui a vidé le cache et pourquoi ? Dépannage planifié ou non ? Corréler avec d'autres événements DNS suspects (changements d'enregistrement) ou une activité admin inhabituelle sur le DC dans la même fenêtre.",
     "correction": "Restreindre les droits d'administration DNS ; journaliser et alerter sur les vidages de cache ; procédure de changement pour les opérations DNS.",
     "remediation": "Si non justifié : enquêter sur l'activité DNS récente (changements, résolutions vers IP suspectes) avant le flush, vérifier le compte ayant exécuté l'opération. Généralement faible gravité seul ; à corréler."
+  },
+  "linux_ssh_fail": {
+    "ce_que_cest": "Échec d'authentification SSH sur un serveur Linux (mauvais mot de passe / utilisateur invalide). Isolé = bruit normal ; RÉPÉTÉ depuis une même IP = brute force (T1110). L'alerte agrégée 'Brute force SSH' se déclenche à >8 échecs/IP/5min.",
+    "a_verifier": "src_ip (source), user ciblé, host (serveur). IP interne (poste compromis qui pivote) ou externe (exposition SSH) ? Comptes ciblés (root, génériques) ? Un succès a-t-il suivi (croiser ssh_login_success même src_ip/host) = compromission probable.",
+    "correction": "Désactiver l'auth par mot de passe (clés uniquement), fail2ban, restreindre SSH par IP/VLAN admin (pare-feu), MFA SSH, désactiver le login root direct.",
+    "remediation": "Si brute force aboutie : isoler le serveur, réinitialiser le compte, chasser persistance (clés ajoutées, cron, comptes). Bloquer l'IP source (FortiGate/feed). Vérifier l'exposition SSH."
+  },
+  "linux_sudo_root": {
+    "ce_que_cest": "Élévation vers root via sudo sur un serveur Linux (USER=root + COMMAND). Légitime pour l'admin attendu ; suspect si compte/horaire/commande inhabituels (T1548.003).",
+    "a_verifier": "Qui (user), quelle commande (command_line), quel serveur, quand. Compte d'admin attendu ou utilisateur applicatif/inhabituel ? Commande sensible (ajout d'utilisateur, modif sudoers, désactivation de logs, téléchargement) ?",
+    "correction": "Principe du moindre privilège sudo (commandes restreintes, pas de NOPASSWD large), journalisation sudo I/O, comptes d'admin nominatifs, revue régulière de /etc/sudoers.",
+    "remediation": "Si non légitime : traiter le compte comme compromis (révoquer, réinitialiser), investiguer les commandes exécutées en root, chasser persistance, isoler si nécessaire."
+  },
+  "linux_user_added": {
+    "ce_que_cest": "Création d'un compte local (useradd) ou ajout à un groupe sur un serveur Linux. Mécanisme de PERSISTANCE classique (T1136.001) — un attaquant crée un compte (souvent UID 0 ou dans sudo/wheel) pour conserver l'accès.",
+    "a_verifier": "Nom du compte (new_user), UID/GID (UID=0 = équivalent root = ALARME), groupe, serveur, qui l'a créé. Création planifiée (provisioning légitime) ou non ? Un compte UID 0 ou dans sudo non documenté = quasi-certain malveillant.",
+    "correction": "Provisioning centralisé/traçable, alerter sur toute création locale, interdire les comptes UID 0 hors root, revue des comptes locaux.",
+    "remediation": "Si non autorisé : désactiver/supprimer le compte, identifier qui l'a créé (croiser sudo/ssh), traiter comme intrusion (chasser persistance, autres comptes, clés), isoler le serveur. Remonter au RSSI."
+  },
+  "linux_sensitive_tamper": {
+    "ce_que_cest": "Modification d'un fichier sensible d'identité/privilèges sur un serveur Linux, captée par auditd (/etc/passwd, /etc/shadow, /etc/sudoers, clés SSH, sshd_config). Signature forte de PERSISTANCE/élévation (T1098) — un attaquant modifie ces fichiers pour se maintenir ou élever ses droits.",
+    "a_verifier": "Quel fichier (clé auditd : omni_passwd/shadow/sudoers/sshkeys), quel serveur, quel processus/utilisateur a fait la modif. Changement légitime (admin, package) ou non ? Une modif de sudoers/authorized_keys hors changement déclaré = forte présomption d'intrusion.",
+    "correction": "Restreindre l'écriture sur ces fichiers, immutabilité (chattr +i où possible), gestion de configuration (Ansible) traçable, alerter sur toute modif.",
+    "remediation": "INTRUSION PROBABLE. Isoler le serveur, comparer le fichier à une référence, identifier le processus/compte fautif, chasser persistance + autres serveurs, réinitialiser les secrets exposés. Remonter au RSSI."
   }
 }

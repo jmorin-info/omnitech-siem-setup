@@ -98,3 +98,7 @@ forticlient_av_off,T1562.001,Impair Defenses: Disable/Modify Tools,Defense Evasi
 dns_admin_change,T1565.001,Stored Data Manipulation (enregistrement DNS),Impact,moyen,5
 dns_sensitive_change,T1565.001,Manipulation DNS d'un nom sensible (hijack),Impact,eleve,8
 dns_cache_flush,T1070,Indicator Removal (vidage cache DNS),Defense Evasion,moyen,5
+linux_ssh_fail,T1110,Brute Force (SSH),Credential Access,moyen,5
+linux_sudo_root,T1548.003,Sudo and Sudo Caching,Privilege Escalation,moyen,5
+linux_user_added,T1136.001,Create Account: Local Account,Persistence,eleve,7
+linux_sensitive_tamper,T1098,Account Manipulation (fichier sensible),Persistence,critique,8
