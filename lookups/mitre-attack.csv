@@ -112,3 +112,7 @@ aruba_stp_loop,T1498,Network DoS (boucle / STP),Impact,moyen,5
 aruba_port_flap,T1200,Hardware Additions (port flap),Initial Access,moyen,4
 ems_admin_login,T1078,Login admin console EMS,Defense Evasion,moyen,5
 ems_config_change,T1098,Changement config EMS (profil/policy),Persistence,eleve,7
+m365_authority_drift,T1098,Anomalie d'autorite (action privilegiee M365 hors baseline),Privilege Escalation,critique,9
+admin_login_off_segment,T1078,Login admin hors VLAN admin (contournement jump host),Defense Evasion,eleve,7
+ip_spray_multisource,T1110.003,Spray d'identifiants multi-systeme (meme IP),Credential Access,eleve,8
+impossible_travel_xsrc,T1078.004,Voyage impossible (signin etranger + presence on-prem),Initial Access,critique,9
