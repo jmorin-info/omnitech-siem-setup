@@ -1266,6 +1266,39 @@ def get_fortiems(days=7):
             "events": events}
 
 
+def get_entity_ems(name, days=30):
+    """État FortiClient EMS d'un hôte, pour enrichir son dossier 360° : malware/vuln/
+    protection-off + événements récents. Ne renvoie 'found' que si le poste a des events EMS."""
+    name = (name or "").strip()
+    if not name:
+        return {"found": False}
+    short = name.split("\\")[-1].split("@")[0]
+    res = os_search("omni-*", {
+        "size": 6, "sort": [{"timestamp": {"order": "desc"}}],
+        "query": {"bool": {
+            "filter": [{"term": {"event_source": "fortiems"}},
+                       {"range": {"timestamp": {"gte": f"now-{int(days)}d"}}}],
+            "must": [{"terms": {"host": list({name, short})}}]}},
+        "aggs": {"tags": {"filter": {"exists": {"field": "alert_tag"}},
+                          "aggs": {"t": {"terms": {"field": "alert_tag", "size": 6}}}}},
+        "_source": ["timestamp", "subtype", "alert_tag", "risk_severity", "virus",
+                    "threat", "action", "ems_msg"]})
+    hits = res.get("hits", {})
+    total = hits.get("total", {}).get("value", 0)
+    if not total:
+        return {"found": False, "entity": short}
+    tags = {b["key"]: b["doc_count"] for b in
+            res.get("aggregations", {}).get("tags", {}).get("t", {}).get("buckets", [])}
+    events = [{"ts": s.get("timestamp"), "subtype": s.get("subtype"), "tag": s.get("alert_tag"),
+              "sev": s.get("risk_severity"), "threat": s.get("virus") or s.get("threat"),
+              "action": s.get("action"), "msg": _scrub(s.get("ems_msg"))}
+             for s in (h.get("_source", {}) for h in hits.get("hits", []))]
+    return {"found": True, "entity": short, "total": total,
+            "malware": tags.get("forticlient_malware", 0),
+            "vuln": tags.get("forticlient_vuln", 0),
+            "av_off": tags.get("forticlient_av_off", 0), "events": events}
+
+
 OMS_GRAPH_DIR = "/root/omnitech-siem-setup/oms-graph"
 OMS_GRAPH_PY = OMS_GRAPH_DIR + "/.venv/bin/python"
 OMS_GRAPH_CFG = "/etc/oms-graph/config.yaml"
@@ -1389,6 +1422,10 @@ class H(BaseHTTPRequestHandler):
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             return self._json(get_entity_exposure(qs.get("u", [""])[0]))
+        if p == "/m/api/entity-ems":
+            import urllib.parse as _up
+            qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return self._json(get_entity_ems(qs.get("u", [""])[0]))
         if p == "/m/api/geo":
             return self._json(get_geo_threats())
         if p == "/m/api/report":

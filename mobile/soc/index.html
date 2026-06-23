@@ -1121,15 +1121,32 @@ function openEntity(full,label,size){
       ${(d.linked&&d.linked.length>1)?`<div class="idu"><span class="idulb">${ic("network")} ${t("id_unified").replace("{n}",d.linked.length)}</span> ${d.linked.map(a=>`<span class="idchip">${esc(a)}</span>`).join("")}</div>`:''}
       ${entScoreBanner(d)}
       <div id="expWrap"></div>
+      <div id="emsEntWrap"></div>
       <div id="invWrap"></div>
       <div id="tlWrap"></div>
       <div class="blk"><div class="lbl">${t("ent_tactics")}</div><div>${tacs}</div></div>
       <div class="blk"><div class="lbl">${t("ent_techniques")}</div><div>${techs}</div></div>
       <div class="blk"><div class="lbl">${t("ent_events")}</div>${evs}${more}</div>`;
     $("#emodal").classList.add("on");
-    loadInvestigation(full||label);loadTimeline(full||label);loadExposure(full||label);
+    loadInvestigation(full||label);loadTimeline(full||label);loadExposure(full||label);loadEntityEms(full||label);
   }).catch(()=>{});
 }
+function loadEntityEms(u){const w=$("#emsEntWrap");if(!w)return;w.innerHTML="";
+  j("/entity-ems?u="+encodeURIComponent(u)).then(d=>{if(!d||!d.found)return;const EN=LANG==="en";
+    const crit=(d.malware||d.av_off);const col=crit?"#fb3b53":(d.vuln?"#f5a623":"#38bdf8");
+    let h='<div class="blk" style="border:1px solid '+col+'44;border-radius:10px;padding:10px 12px;background:'+col+'0d">'
+      +'<div class="lbl" style="display:flex;align-items:center;gap:8px">'+ic("cpu")+' '+(EN?"Endpoint state (FortiClient EMS)":"État endpoint (FortiClient EMS)")
+      +'<span class="muted" style="margin-left:auto;font-size:11px">'+(d.total||0)+' '+(EN?"events / 30d":"events / 30j")+'</span></div>'
+      +'<div style="font-size:13px;margin-top:6px">';
+    if(d.malware)h+='<span class="pchip" style="color:#fb3b53">'+d.malware+' '+(EN?"malware":"malware")+'</span> ';
+    if(d.av_off)h+='<span class="pchip" style="color:#fb3b53">'+(EN?"protection off":"protection désactivée")+'</span> ';
+    if(d.vuln)h+='<span class="pchip" style="color:#f5a623">'+d.vuln+' '+(EN?"critical vuln":"vuln. critiques")+'</span> ';
+    if(!d.malware&&!d.av_off&&!d.vuln)h+='<span class="muted">'+(EN?"reporting, no security event":"remonte, aucun event sécurité")+'</span>';
+    h+='</div>';
+    const ev=(d.events||[]).filter(e=>e.tag).slice(0,3);
+    if(ev.length)h+='<div style="margin-top:6px">'+ev.map(e=>'<div class="muted" style="font-size:11px;border-top:1px solid var(--bd);padding-top:4px;margin-top:4px"><b style="color:'+col+'">'+nice(e.tag)+'</b>'+(e.threat?' · '+esc(e.threat):'')+' · '+esc((e.msg||'').slice(0,80))+'</div>').join('')+'</div>';
+    h+='</div>';w.innerHTML=h;
+  }).catch(()=>{});}
 function loadExposure(u){const w=$("#expWrap");if(!w)return;w.innerHTML="";
   j("/entity-exposure?u="+encodeURIComponent(u)).then(d=>{if(!d||!d.found){return;}
     const EN=LANG==="en";const jr=d.jewels_reached||[];
