@@ -308,12 +308,19 @@ function renderPwaTwin(d){const el=$("#twinBody");if(!el)return;d=d||{};const EN
     rc.forEach(r=>{h+='<div class="erow" style="font-size:12px"><span class="mono" style="color:#f5a623">'+esc(r.suggested_key)+'</span> <span class="muted">'+esc(r.place_on_host||r.near_jewel||"")+'</span></div>';});h+='</div>';}
   el.innerHTML=h;}
 function pwaSim(ent){if(!ent)return;const EN=(LANG==="en");
-  j("/sentinel-sim?entity="+encodeURIComponent(ent)).then(d=>{if(!d||d.error){alert((d&&d.error)||"?");return;}
+  $("#sheetc").innerHTML='<div class="grip"></div><p class="muted">'+(EN?"Computing…":"Calcul…")+'</p>';$("#sheet").classList.add("on");
+  j("/sentinel-sim?entity="+encodeURIComponent(ent)).then(d=>{
+    if(!d||d.error){$("#sheetc").innerHTML='<div class="grip"></div><h2>'+esc(ent)+'</h2><p class="muted">'+esc((d&&d.error)||"?")+'</p>';return;}
+    const gc={critique:"#fb3b53",eleve:"#f5a623",modere:"#9aa7bd"}[d.grade]||"#9aa7bd";
     const gl=EN?{critique:"CRITICAL",eleve:"HIGH",modere:"MODERATE"}:{critique:"CRITIQUE",eleve:"ÉLEVÉ",modere:"MODÉRÉ"};
-    const jr=(d.jewels_at_risk||[]).join(", ");
-    const steps=(d.steps||[]).map(s=>"• "+s.action+" → "+s.target).join("\n");
-    alert((gl[d.grade]||d.grade)+" — "+ent+"\n"+(d.hosts_reachable||0)+(EN?" hosts reachable":" hôtes atteignables")+(jr?"\n"+(EN?"Jewels: ":"Joyaux: ")+jr:"")+"\n\n"+(EN?"Mode ":"Mode ")+(d.mode==="armed"?"ARMÉ":"DRY-RUN")+" (reco)\n"+steps);
-  }).catch(()=>{});}
+    const jr=d.jewels_at_risk||[];
+    let h='<div class="grip"></div><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="chip" style="background:'+gc+'22;color:'+gc+';border-color:'+gc+'55">'+(gl[d.grade]||d.grade)+'</span><h2 style="margin:0">'+esc(ent)+'</h2></div>';
+    h+='<p class="muted" style="font-size:12px">'+(EN?"Hypothetical compromise (tabletop)":"Compromission hypothétique (tabletop)")+' · '+(d.hosts_reachable||0)+' '+(EN?"hosts reachable":"hôtes atteignables")+'</p>';
+    if(jr.length)h+='<p style="font-size:12px;color:'+gc+'">'+(EN?"Jewels at risk: ":"Joyaux menacés: ")+jr.map(esc).join(", ")+'</p>';
+    h+='<p class="muted" style="font-size:11px;margin:8px 0;padding:6px 9px;background:#0a1322;border-radius:8px">Mode: <b style="color:'+(d.mode==="armed"?"#fb3b53":"#38bdf8")+'">'+(d.mode==="armed"?(EN?"ARMED":"ARMÉ"):"DRY-RUN")+'</b> — '+(EN?"recommendations until armed + approved":"recommandations tant que non armé + approuvé")+'</p>';
+    h+=(d.steps||[]).map(s=>'<div style="display:flex;gap:8px;padding:9px 0;border-top:1px solid var(--bd)"><span class="mono" style="color:'+gc+';font-size:12px;min-width:120px">'+esc(s.action)+'</span><span style="flex:1;font-size:12px">'+esc(s.text)+'</span></div>').join("");
+    $("#sheetc").innerHTML=h;
+  }).catch(()=>{$("#sheetc").innerHTML='<div class="grip"></div><p class="muted">'+(EN?"Unavailable":"Indisponible")+'</p>';});}
 
 if(window.Chart){Chart.defaults.color="#7c8aa6";Chart.defaults.font.family="Segoe UI";Chart.defaults.borderColor="rgba(255,255,255,.05)";}
 const charts={};const mk=(id,cfg)=>{if(!window.Chart)return;if(charts[id])charts[id].destroy();charts[id]=new Chart($("#"+id),cfg);};
