@@ -1,0 +1,18 @@
+# Console SOC OMNITECH (backend /m/api + service de la PWA/console).
+# Stdlib Python + pywebpush (push web VAPID). Lit OpenSearch en lecture seule.
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir pywebpush==2.3.0 \
+ && useradd -r -u 10090 -m omni
+
+WORKDIR /app
+COPY mobile/   /app/mobile/
+COPY lookups/  /app/lookups/
+COPY docker/console-entrypoint.sh /usr/local/bin/console-entrypoint.sh
+RUN chmod +x /usr/local/bin/console-entrypoint.sh && mkdir -p /app/data && chown -R omni /app/data
+
+USER omni
+EXPOSE 8090
+HEALTHCHECK --interval=20s --timeout=5s --retries=5 \
+  CMD python -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8090/m/api/vapid',timeout=4)" || exit 1
+ENTRYPOINT ["/usr/local/bin/console-entrypoint.sh"]

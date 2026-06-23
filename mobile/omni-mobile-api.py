@@ -39,7 +39,7 @@ for path in ("/etc/default/omni-mobile",):
     except OSError:
         pass
 
-LISTEN = ("127.0.0.1", int(CONF.get("MOBILE_PORT", "8090")))
+LISTEN = (CONF.get("MOBILE_BIND", "127.0.0.1"), int(CONF.get("MOBILE_PORT", "8090")))
 OS_URL = CONF.get("OPENSEARCH", "http://127.0.0.1:9200")
 GL_URL = CONF.get("GRAYLOG_API", "https://bx-it-graylog-vm.omnitech.security:9000/api")
 GL_CACERT = CONF.get("GRAYLOG_CACERT", "/etc/graylog/certs/omnitech-rootca.crt")
