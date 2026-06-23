@@ -1,0 +1,11 @@
+[Unit]
+Description=OMS-GRAPH - analyse d'exposition (quotidienne ; l'exposition evolue lentement)
+
+[Timer]
+OnBootSec=12min
+OnUnitActiveSec=24h
+AccuracySec=10min
+Unit=oms-graph.service
+
+[Install]
+WantedBy=timers.target

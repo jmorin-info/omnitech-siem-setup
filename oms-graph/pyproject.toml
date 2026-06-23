@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oms-graph"
+version = "1.0.0"
+description = "Jumeau d'attaque / analyse d'exposition passive (chemins vers joyaux, chokepoints, placement de leurres) au-dessus de Graylog — OMNITECH Security"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+oms-graph = "oms_graph.run:main"
+
+[tool.setuptools]
+packages = ["oms_graph"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

@@ -1,0 +1,91 @@
+# =====================================================================
+#  OMS-GRAPH — Jumeau d'attaque / analyse d'exposition (OMNITECH, Site Oméga)
+#  Local-first : lecture passive OpenSearch (logons), graphe codé main,
+#  réinjection GELF (event_source=attack_path). DEFENSIF — priorise le
+#  durcissement et le placement des leurres. Aucun secret ici.
+# =====================================================================
+
+opensearch:
+  url: "http://127.0.0.1:9200"
+  index: "omni-*"
+
+gelf:
+  host: "127.0.0.1"
+  port: 12201
+  proto: "http"
+
+state_dir: "/var/lib/oms-graph"
+window: "14d"                 # fenêtre d'observation des arêtes (logons interactifs + admin)
+
+graph:
+  # Arête HasSession : un compte s'est authentifié INTERACTIVEMENT sur un hôte ->
+  # ses identifiants y sont exposés/cachés. LogonType pertinents (creds en mémoire) :
+  session_logon_types: ["2", "10", "11"]   # 2 console, 10 RDP, 11 cached-interactive
+  # Au-delà de ce nb d'hôtes administrés, un compte est considéré comme un compte de
+  # GESTION ubiquitaire (RMM/sync) : c'est un point unique catastrophique (rapporté à
+  # part) mais EXCLU des chemins latéraux pour ne pas relier tout à tout (anti-bruit).
+  ubiquitous_admin_hosts: 35
+  max_path_hops: 6           # profondeur max de propagation (BFS)
+
+# Comptes système/virtuels jamais traversés (bruit, pas des cibles latérales).
+system_accounts:
+  - "SYSTEM"
+  - "Systeme"
+  - "Système"
+  - "ANONYMOUS LOGON"
+  - "LOCAL SERVICE"
+  - "NETWORK SERVICE"
+  - "SERVICE LOCAL"
+  - "SERVICE RÉSEAU"
+  - "SERVICE RESEAU"
+  - "IUSR"
+  - "-"
+# Motifs de comptes virtuels (wildcard, insensible à la casse) : comptes machine ($),
+# instances de service (MSSQL$...), comptes de fenêtrage/police (DWM-n, UMFD-n, etc.).
+system_account_patterns:
+  - "*$*"
+  - "dwm-*"
+  - "umfd-*"
+  - "iusr*"
+  - "mssql*"
+  - "font driver host*"
+  - "sshd*"
+
+# Classification des comptes (préfixes/exacts, minuscules ; comparaison insensible casse).
+classes:
+  privileged:                # admin délégué / comptes à fort privilège
+    prefixes: ["adm-", "adm_", "admin-", "a-"]
+    exact: ["administrateur", "administrator", "krbtgt"]
+  management:                # RMM / sync / service ubiquitaires (hubs connus)
+    prefixes: ["svc_", "svc-", "msol_", "msol-", "healthmailbox", "aad_", "adsync"]
+    exact: ["ninjaone", "defaultaccount", "guest", "invité"]
+
+# Joyaux (cibles protégées) — sous-chaînes de nom d'hôte (minuscules).
+crown_jewels:
+  - { match: "bx-ad-01-it-vm",  label: "Contrôleur de domaine (DC1)" }
+  - { match: "bx-ad02-it-vm",   label: "Contrôleur de domaine (DC2)" }
+  - { match: "bx-it-graylog",   label: "SIEM Graylog (la détection elle-même)" }
+  - { match: "bx-veeam",        label: "Sauvegardes Veeam (anti-ransomware)" }
+  - { match: "bx-pki",          label: "PKI / ADCS (usurpation d'identité)" }
+  - { match: "bx-info-eset",    label: "Console ESET (EDR)" }
+  - { match: "bx-files-it",     label: "Serveur de fichiers (données métier)" }
+  - { match: "vcenter",         label: "vCenter (hyperviseur)" }
+  - { match: "bx-esxi",         label: "Hôte ESXi (hyperviseur)" }
+
+# Classes de pieds-à-terre probables (origine d'attaque) — sous-chaînes de nom d'hôte.
+footholds:
+  - "bx-dev-"
+  - "bx-qa-"
+  - "bx-com-"
+  - "bx-comm-"
+  - "bx-dom-user"
+  - "bx-adv-"
+  - "bx-hl-"
+  - "iv-tech-"
+  - "in-dev-"
+
+output:
+  top: 12                    # nb d'éléments par classement (chemins/chokepoints/blast)
+  decoy_registry: "/etc/graylog/lookup/deception-decoys.csv"   # leurres déjà posés (88)
+  artifact: "/var/lib/omni-mobile/attack-graph.json"           # lu par la console SOC
+  push_threshold_hops: 3     # chemin foothold->joyau en <= N sauts -> GELF alert_tag
