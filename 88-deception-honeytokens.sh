@@ -181,7 +181,7 @@ M365="$(get_stream_id 'OMNI - M365')"; FGT="$(get_stream_id 'OMNI - FortiGate')"
 SID_ID="$(jq -n --arg a "$WSEC" --arg b "$M365" '[$a,$b]')"
 SID_KB="$(jq -n --arg a "$WSEC" '[$a]')"
 SID_CA="$(jq -n --arg a "$SYSM" --arg b "$FGT" '[$a,$b]')"
-mk_a "OMNI - LEURRE Identite touche (honeytoken compte/machine)" "alert_tag:decoy_identity"   "$SID_ID"
+mk_a "OMNI - LEURRE Identité touché (honeytoken compte/machine)" "alert_tag:decoy_identity"   "$SID_ID"
 mk_a "OMNI - LEURRE Kerberoast (TGS sur SPN leurre)"             "alert_tag:decoy_kerberoast" "$SID_KB"
 mk_a "OMNI - LEURRE Canari ouvert (fichier appat)"               "alert_tag:canary_token"     "$SID_CA"
 echo

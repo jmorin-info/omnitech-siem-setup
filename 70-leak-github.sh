@@ -128,7 +128,7 @@ grep -q '^github_leak,' "$CSV" || echo 'github_leak,T1552.001,Credentials In Fil
 install -m 644 "$CSV" /etc/graylog/lookup/mitre-attack.csv; chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true
 NMAIL="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Mail equipe IT")|.id')"
 NTEAMS="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Teams SOC")|.id')"
-T="OMNI - Fuite potentielle sur GitHub (donnees OMNITECH)"
+T="OMNI - Fuite potentielle sur GitHub (données OMNITECH)"
 if api_get "/events/definitions?per_page=300" | jq -e --arg t "$T" '.event_definitions[]|select(.title==$t)' >/dev/null; then
   skip "alerte fuite GitHub existe"
 else

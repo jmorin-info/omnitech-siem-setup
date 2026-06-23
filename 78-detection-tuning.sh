@@ -35,7 +35,7 @@ mk_a() { local T="$1" Q="$2" ST="$3"
       search_within_ms:300000,execute_every_ms:300000,use_cron_scheduling:false,event_limit:50},
     field_spec:{},key_spec:[],notification_settings:{grace_period_ms:3600000,backlog_size:10},notifications:$n}' \
     | post_entity "/events/definitions?schedule=true" | jqr '.id' >/dev/null && ok "alerte '$T'" || warn "alerte '$T' KO"; }
-mk_a "OMNI - Arret service de securite (precurseur ransomware)" "alert_tag:service_stop_securite" "$SYS"
+mk_a "OMNI - Arrêt service de sécurité (précurseur ransomware)" "alert_tag:service_stop_securite" "$SYS"
 
 echo
 echo "=== 78 termine. (Detections laterales PtH/RDP : backlog, besoin liste jump-hosts.) ==="

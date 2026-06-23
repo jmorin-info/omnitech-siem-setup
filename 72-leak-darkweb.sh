@@ -187,7 +187,7 @@ mk_leak_alert() {
     | post_entity "/events/definitions?schedule=true" | jqr '.id' >/dev/null && ok "alerte '$T'" || warn "alerte '$T' KO"
 }
 mk_leak_alert "OMNI - RANSOMWARE : OMNITECH nomme sur un site d'extorsion" "alert_tag:ransomware_mention" 3
-mk_leak_alert "OMNI - Comptes/donnees OMNITECH exposes (fuite / dark web)" "alert_tag:credential_leak OR alert_tag:github_leak" 3
+mk_leak_alert "OMNI - Comptes/données OMNITECH exposés (fuite / dark web)" "alert_tag:credential_leak OR alert_tag:github_leak" 3
 
 echo
 echo "=== 72 termine. RansomLook actif (gratuit). Pour HIBP/Dehashed : renseigner les"

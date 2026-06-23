@@ -64,7 +64,7 @@ echo "==> [3/3] Alerte P3 mail+Teams"
 ST_WINSEC="$(get_stream_id 'OMNI - Windows Security')"
 NOTIF_MAIL="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[] | select(.title=="OMNI - Mail equipe IT") | .id')"
 NOTIF_TEAMS="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[] | select(.title=="OMNI - Teams SOC") | .id')"
-TITLE="OMNI - COMPTE CANARI touche (intrusion AD probable)"
+TITLE="OMNI - COMPTE CANARI touché (intrusion AD probable)"
 EXIST="$(api_get "/events/definitions?per_page=300" | jq -r --arg t "${TITLE}" '.event_definitions[] | select(.title==$t) | .id')"
 if [[ -n "${EXIST}" && "${EXIST}" != "null" ]]; then
   skip "alerte canari existe deja"

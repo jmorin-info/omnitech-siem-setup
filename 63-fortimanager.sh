@@ -179,7 +179,7 @@ ok "MITRE fmg_admin_login_fail / fmg_config_change / fmg_admin_login"
 # Alerte : >=5 echecs de login admin FortiManager / 10 min (P3, mail+Teams).
 NOTIF_MAIL="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Mail equipe IT")|.id')"
 NOTIF_TEAMS="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Teams SOC")|.id')"
-TITLE="OMNI - FortiManager : echecs de login admin (>=5 / 10 min)"
+TITLE="OMNI - FortiManager : échecs de login admin (>=5 / 10 min)"
 if api_get "/events/definitions?per_page=300" | jq -e --arg t "$TITLE" '.event_definitions[]|select(.title==$t)' >/dev/null; then
   skip "alerte FMG login existe"
 else

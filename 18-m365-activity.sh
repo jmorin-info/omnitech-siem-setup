@@ -89,7 +89,7 @@ ev_m365() { # titre prio query grace_min within every
 }
 
 ev_m365 "OMNI - M365 transfert mail vers domaine externe" 3 'alert_tag:m365_mail_forward' 30 15 10
-ev_m365 "OMNI - M365 delegation de boite mail" 2 'alert_tag:m365_mailbox_deleg' 60 15 10
+ev_m365 "OMNI - M365 délégation de boîte mail" 2 'alert_tag:m365_mailbox_deleg' 60 15 10
 ev_m365 "OMNI - M365 partage externe / lien anonyme" 2 'alert_tag:m365_partage_externe' 60 15 10
 
 # -------------------------------------------------- 3. Collecteur + timer

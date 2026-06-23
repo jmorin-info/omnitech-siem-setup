@@ -157,7 +157,7 @@ ExecStart=${SBIN} --verify
 EOF
 cat > /etc/systemd/system/omni-integrity-verify.timer <<'EOF'
 [Unit]
-Description=OMNI - Verification integrite (hebdomadaire, lundi 04:00)
+Description=OMNI - Vérification intégrité (hebdomadaire, lundi 04:00)
 [Timer]
 OnCalendar=Mon *-*-* 04:00:00
 Persistent=true

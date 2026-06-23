@@ -148,9 +148,9 @@ mk_a() { local T="$1" Q="$2" ST="$3"
     field_spec:{},key_spec:[],notification_settings:{grace_period_ms:3600000,backlog_size:10},notifications:$n}' \
     | post_entity "/events/definitions?schedule=true" | jqr '.id' >/dev/null && ok "alerte '$T'" || warn "alerte '$T' KO"; }
 SYS="$(get_stream_id 'OMNI - Sysmon')"
-mk_a "OMNI - Detournement IFEO (valeur Debugger)"            "alert_tag:ifeo_debugger"      "$SYS"
-mk_a "OMNI - Service systeme lance un shell (exploitation)"  "alert_tag:service_host_shell" "$SYS"
-mk_a "OMNI - Mouvement lateral WinRM (wsmprovhost -> recon)" "alert_tag:winrm_lateral"      "$SYS"
+mk_a "OMNI - Détournement IFEO (valeur Debugger)"            "alert_tag:ifeo_debugger"      "$SYS"
+mk_a "OMNI - Service système lance un shell (exploitation)"  "alert_tag:service_host_shell" "$SYS"
+mk_a "OMNI - Mouvement latéral WinRM (wsmprovhost -> recon)" "alert_tag:winrm_lateral"      "$SYS"
 echo
 echo "=== 87 termine. 3 techniques : T1574.012 (ifeo_debugger, PrivEsc/Persist),"
 echo "    T1068 (service_host_shell, PrivEsc), T1021.006 (winrm_lateral, Lateral Movement)."

@@ -167,14 +167,14 @@ ensure_event_m365() { # titre prio query group series cond within every
   [[ -n "${ID}" && "${ID}" != "null" ]] && ok "evenement '${TITLE}'" || warn "evenement '${TITLE}' REFUSE"
 }
 NOCOND='{"expression":null}'
-ensure_event_m365 "OMNI - M365 connexion reussie hors France" 3 \
+ensure_event_m365 "OMNI - M365 connexion réussie hors France" 3 \
   'alert_tag:m365_etranger' '[]' '[]' "${NOCOND}" 15 5
 # Detection m365_risque : geree par 13-graylog-alerts.sh ("Compte M365 a risque
 # (Entra ID Protection)") en mode AGREGE par compte (anti-spam, grace 6h) + mail.
 # L'ancienne def filtre-mode ici faisait DOUBLON (1 alerte/evenement) -> retiree.
-ensure_event_m365 "OMNI - M365 modification de role privilegie" 3 \
+ensure_event_m365 "OMNI - M365 modification de rôle privilégié" 3 \
   'alert_tag:m365_role' '[]' '[]' "${NOCOND}" 15 5
-ensure_event_m365 "OMNI - M365 force brute (>=10 echecs / compte / 30 min)" 2 \
+ensure_event_m365 "OMNI - M365 force brute (>=10 échecs / compte / 30 min)" 2 \
   'm365_type:signin AND event_action:echec_connexion' '["user"]' \
   '[{"id":"count()","type":"count"}]' \
   '{"expression":{"expr":">=","left":{"expr":"number-ref","ref":"count()"},"right":{"expr":"number","value":10}}}' 30 10

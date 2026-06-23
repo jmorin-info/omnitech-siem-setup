@@ -204,9 +204,9 @@ WSEC="$(get_stream_id 'OMNI - Windows Security')"
 WOTH="$(get_stream_id 'OMNI - Windows autres')"
 # defender_tamper peut tomber sur Sysmon (cmd+reg) -> alerte sur le stream Sysmon.
 mk_a "OMNI - Neutralisation de Defender (tamper/exclusion)" "alert_tag:defender_tamper" "$SYS"
-mk_a "OMNI - Tache planifiee a charge offensive (4698)"     "alert_tag:schtask_payload" "$WSEC"
+mk_a "OMNI - Tâche planifiée à charge offensive (4698)"     "alert_tag:schtask_payload" "$WSEC"
 # amsi_bypass arrive surtout via 4104 (stream Windows autres).
-mk_a "OMNI - Contournement AMSI (patch memoire PowerShell)"  "alert_tag:amsi_bypass"     "$WOTH"
+mk_a "OMNI - Contournement AMSI (patch mémoire PowerShell)"  "alert_tag:amsi_bypass"     "$WOTH"
 echo
 echo "=== 80 termine. 3 techniques : T1562.001 (defender_tamper, amsi_bypass) + T1053.005"
 echo "    (schtask_payload). Relancer 57 (carte ATT&CK) puis 14 (couleurs/dashboards). ==="

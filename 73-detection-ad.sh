@@ -70,6 +70,6 @@ mk_ad_alert() {  # titre query priorite
     | post_entity "/events/definitions?schedule=true" | jqr '.id' >/dev/null && ok "alerte '$T'" || warn "alerte '$T' KO"
 }
 mk_ad_alert "OMNI - Kerberoasting (ticket Kerberos RC4 demande)" "alert_tag:kerberoasting" 3
-mk_ad_alert "OMNI - AS-REP Roasting (compte sans pre-auth Kerberos)" "alert_tag:asrep_roasting" 3
+mk_ad_alert "OMNI - AS-REP Roasting (compte sans pré-auth Kerberos)" "alert_tag:asrep_roasting" 3
 echo
 echo "=== 73 termine. Tripwire kerberoasting actif (silencieux tant que pas de RC4). Relancer 57. ==="

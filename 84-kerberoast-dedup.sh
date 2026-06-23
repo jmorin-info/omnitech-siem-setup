@@ -11,7 +11,7 @@
 #           [SUPPR ] OMNI - Kerberoasting suspect (>=5 SPN / compte/10min) (13, card>=5)
 #           [SUPPR ] OMNI - Kerberos RC4 / downgrade (kerberoasting)       (13, tag kerberos_rc4)
 #         AS-REP roasting x2 :
-#           [GARDE ] OMNI - AS-REP Roasting (compte sans pre-auth Kerberos) (73, count>=1, 5min)
+#           [GARDE ] OMNI - AS-REP Roasting (compte sans pré-auth Kerberos) (73, count>=1, 5min)
 #           [SUPPR ] OMNI - AS-REP roasting (compte sans pre-auth)          (13, count>=1, 30min)
 #
 #   DECISION : 73 (script de detection AD dedie) est la source canonique.
@@ -84,7 +84,7 @@ dedup_cluster \
 echo
 echo "--- Cluster AS-REP roasting (x2 -> x1) ---"
 dedup_cluster \
-  "OMNI - AS-REP Roasting (compte sans pre-auth Kerberos)" \
+  "OMNI - AS-REP Roasting (compte sans pré-auth Kerberos)" \
   "OMNI - AS-REP roasting (compte sans pré-auth)"
 
 echo

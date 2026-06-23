@@ -1462,11 +1462,11 @@ function buildHelp(){
     ["Enter / Space","Activate the target element (rows, cells, KPIs)"],
     ["Tab","Keyboard navigation — focus trapped in modals"]
   ]:[
-    ["Ctrl / Cmd + K","Ouvrir la palette — chercher une page ou une entite"],
+    ["Ctrl / Cmd + K","Ouvrir la palette — chercher une page ou une entité"],
     ["?","Ouvrir / fermer ce panneau d'aide"],
     ["Échap","Fermer la palette, une fiche ou l'aide"],
     ["Entrée / Espace","Activer l'élément cible (lignes, cellules, KPI)"],
-    ["Tab","Naviguer au clavier — focus confine dans les modales"]
+    ["Tab","Naviguer au clavier — focus confiné dans les modales"]
   ];
   var PAGES=EN?[
     [ic("grid"),"Overview","Posture at a glance: KPIs, 24h activity, ATT&CK tactics and live feed. Everything is clickable."],
@@ -1495,12 +1495,12 @@ function buildHelp(){
     ["KEV","Known Exploited Vulnerabilities (CISA) — actively exploited flaws; their exposure is tracked as a priority."],
     ["Kill-chain","Sequence of attack stages (initial access → execution → … → impact) reconstructed by incident correlation."]
   ]:[
-    ["Score ML","Anomalie attribuee par le modèle non supervisé oms-ml (IsolationForest). Plus le score est élevé, plus le comportement s'ecarte de la normale apprise."],
-    ["UEBA","User &amp; Entity Behavior Analytics — score de risque comportemental agrégé par entite sur 24 h (volume, diversité de techniques, sévérité)."],
+    ["Score ML","Anomalie attribuée par le modèle non supervisé oms-ml (IsolationForest). Plus le score est élevé, plus le comportement s'écarte de la normale apprise."],
+    ["UEBA","User &amp; Entity Behavior Analytics — score de risque comportemental agrégé par entité sur 24 h (volume, diversité de techniques, sévérité)."],
     ["Sévérité","Gravité d'une détection : critique (rouge), élevée (ambre), moyenne, faible. Pilote le routage des alertes et la priorité de traitement."],
-    ["Go-dark","Hôte muet : aucune donnée reçue depuis &gt; 26 h. Signale une perte de visibilité (panne d'agent, isolement, contournement) a vérifier."],
-    ["KEV","Known Exploited Vulnerabilities (CISA) — failles activement exploitees ; leur exposition est suivie en priorité."],
-    ["Kill-chain","Enchainement des étapes d'une attaque (accès initial → exécution → … → impact) reconstitué par la corrélation d'incidents."]
+    ["Go-dark","Hôte muet : aucune donnée reçue depuis &gt; 26 h. Signale une perte de visibilité (panne d'agent, isolement, contournement) à vérifier."],
+    ["KEV","Known Exploited Vulnerabilities (CISA) — failles activement exploitées ; leur exposition est suivie en priorité."],
+    ["Kill-chain","Enchaînement des étapes d'une attaque (accès initial → exécution → … → impact) reconstitué par la corrélation d'incidents."]
   ];
   var h="";
   h+='<div class="hsec"><div class="hsk">'+(EN?"Keyboard shortcuts":"Raccourcis clavier")+'</div><div class="hkeys">';
@@ -1741,7 +1741,7 @@ j("/me").then(d=>{if(d.user)start();}).catch(()=>{});
     var pal = document.getElementById("pal");
     if(pal){ pal.setAttribute("role","dialog"); pal.setAttribute("aria-modal","true"); pal.setAttribute("aria-label","Recherche et navigation"); if(!pal.classList.contains("on")) pal.setAttribute("aria-hidden","true"); }
     var pin = document.getElementById("palIn");
-    if(pin){ pin.setAttribute("role","combobox"); pin.setAttribute("aria-expanded","true"); pin.setAttribute("aria-autocomplete","list"); pin.setAttribute("aria-label","Rechercher une page ou une entite"); }
+    if(pin){ pin.setAttribute("role","combobox"); pin.setAttribute("aria-expanded","true"); pin.setAttribute("aria-autocomplete","list"); pin.setAttribute("aria-label","Rechercher une page ou une entité"); }
     var main = document.querySelector("main");
     if(main) a11yScan(main);
   }

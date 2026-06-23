@@ -59,7 +59,7 @@ done <<'EOT'
 OMNI - Force brute (>=10 echecs / compte / 10 min)|3600000|["user"]|event_id:4625 AND logon_fail:1
 OMNI - Force brute SUIVIE d'un succes (meme compte / 15 min)|3600000|["user"]|-
 OMNI - Password spraying (>=8 comptes / IP / 10 min)|1800000|["src_ip"]|-
-OMNI - Force brute portail VPN (>=30 echecs / IP / h)|3600000|[]|-
+OMNI - Force brute portail VPN (>=30 échecs / IP / h)|3600000|[]|-
 OMNI - Compte verrouille (4740)|3600000|[]|-
 OMNI - Injection de processus (Sysmon 8/25)|3600000|[]|-
 OMNI - PowerShell suspect|3600000|[]|-
@@ -68,7 +68,7 @@ EOT
 
 echo "==> [2/2] Alerte d'hygiene dediee : comptes de service casses"
 
-TITLE_SVC="OMNI - Echec logon service/batch (compte de service casse)"
+TITLE_SVC="OMNI - Échec logon service/batch (compte de service cassé)"
 EXIST="$(echo "${DEFS}" | jq -r --arg t "${TITLE_SVC}" \
         '.event_definitions[] | select(.title==$t) | .id')"
 if [[ -n "${EXIST}" && "${EXIST}" != "null" ]]; then
@@ -116,7 +116,7 @@ fi
 
 echo "==> [3/3] Alerte Veeam : job de sauvegarde en echec / avertissement"
 
-TITLE_VEEAM="OMNI - Veeam : job en echec ou avertissement"
+TITLE_VEEAM="OMNI - Veeam : job en échec ou avertissement"
 EXIST="$(api_get "/events/definitions?per_page=200" | jq -r --arg t "${TITLE_VEEAM}" \
         '.event_definitions[] | select(.title==$t) | .id')"
 if [[ -n "${EXIST}" && "${EXIST}" != "null" ]]; then
@@ -239,7 +239,7 @@ ensure_def_simple() {  # TITLE QUERY COND_JSON WITHIN_MS EXEC_MS GRACE_MS
 COND_GE1='{"expression":{"expr":">=","left":{"expr":"number-ref","ref":"count()"},"right":{"expr":"number","value":1}}}'
 COND_LT1='{"expression":{"expr":"<","left":{"expr":"number-ref","ref":"count()"},"right":{"expr":"number","value":1}}}'
 
-ensure_def_simple "OMNI - Backup config SIEM en echec" \
+ensure_def_simple "OMNI - Backup config SIEM en échec" \
   "event_action:backup_config_echec" "${COND_GE1}" 1800000 1800000 14400000
 ensure_def_simple "OMNI - Backup config SIEM absent (>26h)" \
   "event_action:backup_config_ok" "${COND_LT1}" 93600000 21600000 43200000
@@ -250,16 +250,16 @@ ensure_def_simple "OMNI - Disque SIEM >80% (/data)" \
   "event_action:disk_warn" "${COND_GE1}" 23400000 21600000 86400000
 ensure_def_simple "OMNI - PURGE D'URGENCE retention (disque presque plein)" \
   "event_action:disk_guard_prune" "${COND_GE1}" 23400000 1800000 14400000
-ensure_def_simple "OMNI - Rapport hebdomadaire en echec" \
+ensure_def_simple "OMNI - Rapport hebdomadaire en échec" \
   "event_action:report_echec" "${COND_GE1}" 1800000 1800000 14400000
-ensure_def_simple "OMNI - Certificat SIEM expire bientot (<45j)" \
+ensure_def_simple "OMNI - Certificat SIEM expire bientôt (<45j)" \
   "event_action:cert_expire_proche" "${COND_GE1}" 604800000 86400000 604800000
 
 # Re-pointage idempotent des 4 definitions vers le stream interne (au cas ou
 # elles auraient ete creees avant le stream, sur le mauvais stream)
-for T in "OMNI - Backup config SIEM en echec" "OMNI - Backup config SIEM absent (>26h)" \
+for T in "OMNI - Backup config SIEM en échec" "OMNI - Backup config SIEM absent (>26h)" \
          "OMNI - Disque SIEM >80% (/data)" "OMNI - PURGE D'URGENCE retention (disque presque plein)" \
-         "OMNI - Rapport hebdomadaire en echec"; do
+         "OMNI - Rapport hebdomadaire en échec"; do
   ID="$(api_get "/events/definitions?per_page=200" | jq -r --arg t "${T}" \
        '.event_definitions[] | select(.title==$t) | .id')"
   [[ -z "${ID}" || "${ID}" == "null" ]] && continue

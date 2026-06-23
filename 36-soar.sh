@@ -235,7 +235,7 @@ attach() {  # attach <titre_definition>
     | api_put "/events/definitions/${ID}?schedule=true" >/dev/null \
     && ok "'$T' -> SOAR" || warn "'$T' : echec attachement"
 }
-attach "OMNI - Force brute portail VPN (>=30 echecs / IP / h)"
+attach "OMNI - Force brute portail VPN (>=30 échecs / IP / h)"
 attach "OMNI - Password spraying (>=8 comptes / IP / 10 min)"
 
 echo "==> [4/4] Alerte de tracabilite (mail)"
