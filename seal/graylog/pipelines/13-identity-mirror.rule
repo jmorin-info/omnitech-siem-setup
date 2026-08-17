@@ -1,0 +1,65 @@
+// =============================================================================
+// 13-identity-mirror.rule - REGLE MIROIR identity_upn (mission 3.4)
+//
+//   OBJET : garantir la CONDITION de la correlation croisee XCO (badge physique
+//   SEAL  <->  logon Windows/AD). Le pont d'identite est le champ COMMUN
+//   `identity_upn`. Cote SEAL (QA), l'UPN est INDISPONIBLE en base (cf D0/§9.3
+//   RECON : SYNCHRO_LDAP_HISTORY et CFIC_LDAP_ATTRIBUT vides) ; SEAL n'expose
+//   que `identity_matricule`. L'UPN est donc resolu SIEM-side :
+//     - flux AD/Sysmon : `identity_upn` normalise A L'IDENTIQUE ci-dessous ;
+//     - flux SEAL       : `identity_matricule` -> `identity_upn` par enrichissement
+//       (lookup matricule->UPN alimente depuis AD/M365, hors de ce fichier).
+//   Les deux cotes DOIVENT produire la MEME forme d'UPN (minuscule, domaine
+//   canonique) sinon la jointure XCO echoue silencieusement.
+//
+//   PERIMETRE : cette regle s'applique aux streams "OMNI - Windows Security" /
+//   "OMNI - Sysmon" / "OMNI - Windows autres", dont la normalisation vit dans
+//   12-graylog-pipelines.sh (HORS du perimetre SEAL). Elle est fournie ici comme
+//   SQUELETTE DE REFERENCE a integrer par le proprietaire de la couche AD :
+//   NE PAS la connecter a un stream SEAL. Ne pas la provisionner via
+//   provision_seal.py (qui ne touche pas les streams AD).
+//
+//   FORME CANONIQUE D'UPN (contrat, a respecter des deux cotes) :
+//     identity_upn = lowercase(sAMAccountName + "@" + domaine_fqdn)
+//   ex : "jmorin" + "OMNITECH-SECURITY.FR" -> "jmorin@omnitech-security.fr"
+//
+//   Champs Winlogbeat sources (deja normalises en `user` par 12-*, cf
+//   winlogbeat_winlog_event_data_TargetUserName / _SubjectUserName /
+//   _TargetDomainName). Adapter les noms si le schema Winlogbeat differe.
+// =============================================================================
+rule "omni-identity-upn-mirror"
+when
+  // Ne s'active que si on dispose d'un compte utilisateur exploitable et pas
+  // deja d'un UPN. On ecarte les comptes machine (suffixe "$").
+  has_field("user")
+  AND NOT ends_with(to_string($message.user), "$", false)
+then
+  // --- 1. Si le logon porte deja un UPN natif (event_data_*UserPrincipalName
+  //        sur certains 4624/AzureAD), le canonicaliser directement. ---
+  let native_upn = to_string($message.winlogbeat_winlog_event_data_TargetUserPrincipalName, "");
+
+  // --- 2. Sinon reconstruire sAMAccountName@domaine. Le domaine NetBIOS
+  //        (SECURITY) doit etre mappe vers le FQDN canonique
+  //        (omnitech-security.fr) via un lookup dedie omni-ad-domain-fqdn
+  //        (a fournir cote couche AD : NetBIOS -> FQDN). ---
+  let sam = lowercase(to_string($message.user));
+  let nb  = to_string($message.winlogbeat_winlog_event_data_TargetDomainName, "");
+  let fqdn = to_string(lookup_value("omni-ad-domain-fqdn", lowercase(nb)), "omnitech-security.fr");
+  let built_upn = concat(concat(sam, "@"), fqdn);
+
+  // --- 3. Choix : UPN natif prioritaire, sinon reconstruit. En pipeline
+  //        Graylog (pas de ternaire), on pose le reconstruit puis on ecrase
+  //        seulement si un UPN natif non vide existe. ---
+  set_field("identity_upn", lowercase(built_upn));
+end
+
+// Compagnon (stage suivant) : ecrase par l'UPN natif quand present.
+// A placer dans un stage POSTERIEUR pour l'ordre d'ecriture (cf 12-seal-audit).
+rule "omni-identity-upn-mirror-native"
+when
+  has_field("winlogbeat_winlog_event_data_TargetUserPrincipalName")
+  AND to_string($message.winlogbeat_winlog_event_data_TargetUserPrincipalName) != ""
+then
+  set_field("identity_upn",
+    lowercase(to_string($message.winlogbeat_winlog_event_data_TargetUserPrincipalName)));
+end

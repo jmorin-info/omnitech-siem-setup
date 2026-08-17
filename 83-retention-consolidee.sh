@@ -43,11 +43,17 @@ MAX_DELETE="${MAX_DELETE:-5}"  # garde-fou : refus si un seuil supprime plus que
 
 # --- SOURCE UNIQUE DE VERITE (alignee docs/POLITIQUE-RETENTION.md) ------------
 # prefixe -> retention en NOMBRE D'INDEX (rotation P1D => 1 index = 1 jour)
+# RECALIBRE 14/08/2026 (arbitrage risque x CAPACITE) : 365j partout = ~9 To >
+# disque 7,3 To -> irrealiste. Paliers : 180j sources securite volume moyen
+# (winsec/eset/vsphere/fortigate = 6 mois forensic), 90j sources gros volume
+# ou faible valeur (sysmon/winother/bunkerweb/vaultwarden/fortimanager/interne),
+# 365j haute-valeur faible-volume (m365). Projection ~5,3 To = 72%. NB : 31- et
+# 41-retention-iso.sh sont OBSOLETES (contradictoires) -> ce script fait foi.
 declare -A PLAN=(
-  [omni-winsec]=365      [omni-winother]=365   [omni-sysmon]=365
-  [omni-m365]=365        [omni-vsphere]=365     [omni-eset]=365
-  [omni-fortigate]=180   [omni-bunkerweb]=90    [omni-vaultwarden]=90
-  [omni-fortimanager]=365 [omni-interne]=90
+  [omni-winsec]=180      [omni-winother]=90    [omni-sysmon]=90
+  [omni-m365]=365        [omni-vsphere]=180    [omni-eset]=180
+  [omni-fortigate]=180   [omni-bunkerweb]=90   [omni-vaultwarden]=90
+  [omni-fortimanager]=90 [omni-interne]=90
 )
 # Affectation stream -> prefixe d'index set attendu (controle de routage)
 declare -A STREAM_IS=(

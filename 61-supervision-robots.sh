@@ -40,7 +40,9 @@ JOBS = {
     "omni-ndr-beacon":        43200,
     "omni-ndr-dns":            7200,
     "omni-ueba-score":         4500,
-    "omni-incident-correlate": 2400,
+    # omni-incident-correlate RETIRE de la surveillance (02/07/2026) :
+    # deprecie volontairement le 28/06 (remplace par oms-xdr, cf 44-incidents.sh).
+    # Le garder ici generait un faux [PANNE] permanent dans self-health.
     "omni-ndr-scan":           2400,
     "omni-ndr-exfil":          7200,
     "omni-ueba-geo-newcountry": 14400,
@@ -51,6 +53,15 @@ JOBS = {
     "omni-m365-fetch":         1800,
     "omni-m365-activity":      3600,
     "omni-integrity":        172800,
+    # Veille de version (timer quotidien) : 2x la cadence. La veille doit elle-meme
+    # etre supervisee, sinon son silence serait pris pour "aucune version en retard"
+    # -- exactement le trou qui a laisse Graylog 7.1.4 passer 11 jours inapercu.
+    # ORDRE DE DEPLOIEMENT IMPERATIF : DE-COMMENTER cette ligne qu'APRES avoir
+    # installe ET lance omni-version-watch.timer. Active avant le timer, elle genere
+    # un faux [PANNE] permanent toutes les 30 min (unite absente -> alert_tag=
+    # siem_job_fail, qui EST alerte par 13-graylog-alerts.sh) -- meme piege que
+    # omni-incident-correlate ci-dessus, donc meme traitement : commentee par defaut.
+    "omni-version-watch":    172800,
 }
 
 def gelf(fields):

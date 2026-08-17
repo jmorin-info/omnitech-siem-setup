@@ -1,0 +1,33 @@
+// =============================================================================
+// 14-seal-identity-upn.rule - Pont d'identite SEAL : matricule -> UPN
+//
+//   OBJET : resoudre `identity_upn` sur les evenements SEAL qui portent un
+//   `identity_matricule` (badge -> matricule, cf CONTRACT D4). Le SQL SEAL ne
+//   fournit PAS l'UPN (identity_upn VIDE en base) ; il est resolu SIEM-side par
+//   la table de lookup `omni-seal-identity` (matricule -> UPN), regeneree depuis
+//   l'AD par regen-seal-identity.sh (LDAPS, lecture seule).
+//
+//   L'UPN pose ici est la CLE DE JOINTURE avec les logons Windows/M365 (champ
+//   `identity`, forme canonique minuscule) -> il DOIT donc etre minuscule. Le
+//   CSV produit par regen-seal-identity.sh met deja l'UPN en minuscule ; on
+//   applique lowercase() par securite.
+//
+//   ORDRE : cette regle DOIT s'executer dans un stage POSTERIEUR a la
+//   normalisation (10/11/12-*), qui pose identity_upn="" (placeholder). Elle
+//   ECRASE ce placeholder quand le lookup renvoie une valeur. provision_seal.py
+//   la connecte en STAGE TERMINAL des 3 pipelines SEAL.
+//
+//   Syntaxe pipeline Graylog : PAS de ternaire. Le garde has_field + test !=""
+//   evite d'ecraser identity_upn quand il n'y a pas de matricule.
+// =============================================================================
+rule "omni-seal-identity-upn"
+when
+  has_field("identity_matricule")
+  AND to_string($message.identity_matricule, "") != ""
+then
+  // lookup_value renvoie null si le matricule est absent du CSV : le repli ""
+  // laisse alors identity_upn vide (pas de fausse valeur). On n'ecrase pas le
+  // placeholder par du null.
+  let resolved = to_string(lookup_value("omni-seal-identity", to_string($message.identity_matricule)), "");
+  set_field("identity_upn", lowercase(resolved));
+end

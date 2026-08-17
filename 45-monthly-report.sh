@@ -117,21 +117,25 @@ def gather():
     d["detections"]  = count(allidx, AND(M("30d"), {"exists":{"field":"alert_tag"}}))
     d["hosts"]       = cardv(allidx, "host", M("30d"))
     d["deny"]        = count("omni-fortigate_*", AND(M("30d"), {"term":{"action":"deny"}}))
-    # incidents (dernier passage) -- evenements INT -> index par defaut graylog_*
-    # (JAMAIS un numero en dur : le deflector tourne, graylog_0 finit en 404)
-    INT_IDX = "graylog_*"
-    d["inc_crit"]    = cardv(INT_IDX, "incident_entity", AND(M("35m"), {"term":{"event_source":"incident"}}, {"term":{"incident_severity":"critique"}}))
-    d["inc_high"]    = cardv(INT_IDX, "incident_entity", AND(M("35m"), {"term":{"event_source":"incident"}}, {"term":{"incident_severity":"eleve"}}))
+    # incidents -- moteur UNIQUE oms-xdr depuis le 28/06/2026 (event_source
+    # xdr_incident, stream interne -> omni-interne_*). L'ancien moteur 'incident'
+    # (44-incidents.sh) est deprecie : ses champs incident_* n'existent plus.
+    # graylog_* garde en secours (vide post-wipe ; JAMAIS de numero en dur).
+    # Fenetre 30 j : oms-xdr emet a l'OCCURRENCE (l'ancien re-emettait son etat
+    # a chaque passage, d'ou l'ancienne fenetre 35 min).
+    INT_IDX = "omni-interne_*,graylog_*"
+    d["inc_crit"]    = cardv(INT_IDX, "entities", AND(M("30d"), {"term":{"event_source":"xdr_incident"}}, {"term":{"severity":"critical"}}))
+    d["inc_high"]    = cardv(INT_IDX, "entities", AND(M("30d"), {"term":{"event_source":"xdr_incident"}}, {"term":{"severity":"high"}}))
     d["incidents"]   = []
-    for b in es(INT_IDX, {"size":8, "query":AND(M("35m"), {"term":{"event_source":"incident"}}),
-                "sort":[{"incident_score":"desc"}],
-                "_source":["incident_severity","incident_entity","incident_score","incident_tactics","incident_kill_chain","incident_span_h"]})["hits"]["hits"]:
+    for b in es(INT_IDX, {"size":8, "query":AND(M("30d"), {"term":{"event_source":"xdr_incident"}}),
+                "sort":[{"timestamp":{"order":"desc","unmapped_type":"date"}}],
+                "_source":["severity","source","rule_id","tactic","mitre","message"]})["hits"]["hits"]:
         d["incidents"].append(b["_source"])
     # UEBA top (dernier passage)
     d["ueba"] = {"host":[], "user":[]}
     for et in ("host","user"):
         for b in es(INT_IDX, {"size":8, "query":AND(M("35m"), {"term":{"event_source":"ueba_score"}}, {"term":{"entity_type":et}}),
-                    "sort":[{"ueba_score":"desc"}], "_source":["ueba_entity","ueba_score","ueba_top_factor"]})["hits"]["hits"]:
+                    "sort":[{"ueba_score":{"order":"desc","unmapped_type":"long"}}], "_source":["ueba_entity","ueba_score","ueba_top_factor"]})["hits"]["hits"]:
             d["ueba"][et].append(b["_source"])
     # MITRE
     d["techniques"]  = cardv("omni-*", "mitre_technique", AND(M("30d"), {"exists":{"field":"mitre_technique"}}))
@@ -153,13 +157,14 @@ def gather():
 
 # ------------------------------------------------------------------------- HTML
 def build_html(d, period):
-    sevcol = {"critique":"#d64550","eleve":"#e09f3e","moyen":"#e6c200"}
+    sevcol = {"critical":"#d64550","high":"#e09f3e","medium":"#e6c200",
+              "critique":"#d64550","eleve":"#e09f3e","moyen":"#e6c200"}
     def kpi(val, lbl, col="#1f6feb"):
         return f'<div class="kpi"><div class="v" style="color:{col}">{val}</div><div class="l">{lbl}</div></div>'
     inc_rows = "".join(
-        f'<tr><td><span class="pill" style="background:{sevcol.get(i.get("incident_severity"),"#888")}">{i.get("incident_severity","")}</span></td>'
-        f'<td><b>{i.get("incident_entity","")}</b></td><td class="num">{i.get("incident_score","")}/100</td>'
-        f'<td class="num">{i.get("incident_tactics","")}</td><td class="chain">{i.get("incident_kill_chain","")}</td></tr>'
+        f'<tr><td><span class="pill" style="background:{sevcol.get(i.get("severity"),"#888")}">{i.get("severity","")}</span></td>'
+        f'<td><b>{i.get("source","")}</b></td><td>{i.get("rule_id","")}</td>'
+        f'<td class="num">{i.get("tactic","")}</td><td class="chain">{i.get("mitre","")} &mdash; {str(i.get("message",""))[:120]}</td></tr>'
         for i in d["incidents"]) or '<tr><td colspan="5" class="muted">Aucun incident correle sur la periode.</td></tr>'
     def ueba_rows(lst):
         return "".join(f'<tr><td><b>{u.get("ueba_entity","")}</b></td><td class="num">{u.get("ueba_score","")}</td>'
@@ -205,7 +210,7 @@ def build_html(d, period):
 </div></section>
 
 <section><h2>Incidents marquants &mdash; chaines d'attaque correlees</h2>
-<table><tr><th>Severite</th><th>Entite</th><th>Score</th><th>Tactiques</th><th>Kill-chain ATT&amp;CK (ordonnee)</th></tr>
+<table><tr><th>Severite</th><th>Entite</th><th>Regle</th><th>Tactique</th><th>MITRE / resume</th></tr>
 {inc_rows}</table></section>
 
 <section class="map"><h2>Geographie des menaces &mdash; trafic refuse (30 jours)</h2>

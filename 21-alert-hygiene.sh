@@ -25,7 +25,7 @@ require_api
 
 echo "==> [1/2] Tuning grace / cle / requete des definitions existantes"
 
-DEFS="$(api_get "/events/definitions?per_page=200")"
+DEFS="$(all_event_defs)"
 
 # Format : TITRE|grace_ms|key_spec_json|query ("-" = requete inchangee)
 while IFS='|' read -r TITLE GRACE KEYS QUERY; do
@@ -117,8 +117,7 @@ fi
 echo "==> [3/3] Alerte Veeam : job de sauvegarde en echec / avertissement"
 
 TITLE_VEEAM="OMNI - Veeam : job en échec ou avertissement"
-EXIST="$(api_get "/events/definitions?per_page=200" | jq -r --arg t "${TITLE_VEEAM}" \
-        '.event_definitions[] | select(.title==$t) | .id')"
+EXIST="$(event_def_id "${TITLE_VEEAM}")"
 if [[ -n "${EXIST}" && "${EXIST}" != "null" ]]; then
   skip "definition '${TITLE_VEEAM}' existe deja"
 else
@@ -179,7 +178,9 @@ if [[ -z "${ST_INTERNE}" ]]; then
         {field: "event_source", type: 1, value: "siem_disk_guard", inverted: false},
         {field: "event_source", type: 1, value: "siem_report",     inverted: false},
         {field: "event_source", type: 1, value: "siem_soar",       inverted: false},
-        {field: "event_source", type: 1, value: "siem_cert",       inverted: false}
+        {field: "event_source", type: 1, value: "siem_cert",       inverted: false},
+        {field: "event_source", type: 1, value: "siem_drift",      inverted: false},
+        {field: "event_source", type: 1, value: "siem_integrity",  inverted: false}
       ]}' | post_entity "/streams" | jqr '.stream_id // .id')"
   if [[ -n "${ST_INTERNE}" && "${ST_INTERNE}" != "null" ]]; then
     "${CURL[@]}" -X POST "${API}/streams/${ST_INTERNE}/resume" >/dev/null
@@ -189,13 +190,30 @@ if [[ -z "${ST_INTERNE}" ]]; then
   fi
 fi
 
+# Inclusion idempotente (les regles ci-dessus ne s'appliquent qu'a la CREATION du stream ;
+# sur un stream deja existant il faut ajouter les sources manquantes explicitement).
+# siem_drift (29-drift-check) et siem_integrity (integrite des logs) etaient absents ->
+# leurs events tombaient dans le stream/index M365 et leurs detections ne tiraient jamais.
+ST_INTERNE="$(get_stream_id 'OMNI - Interne SIEM')"
+if [[ -n "${ST_INTERNE}" ]]; then
+  INC="$(api_get "/streams/${ST_INTERNE}" | jq -r '.rules[]? | select(.field=="event_source" and .inverted==false) | .value')"
+  for V in siem_drift siem_integrity; do
+    if echo "${INC}" | grep -qx "${V}"; then skip "Interne SIEM inclut deja ${V}"
+    else
+      jq -n --arg v "${V}" '{field:"event_source", type:1, value:$v, inverted:false,
+          description:("source interne (routage): "+$v)}' \
+        | api_post "/streams/${ST_INTERNE}/rules" >/dev/null && ok "Interne SIEM inclut desormais ${V}"
+    fi
+  done
+fi
+
 # Anti-duplication : le stream M365 capte TOUT le GELF (regle gl2_source_input)
 # -> il faut EXCLURE les event_source internes, sinon double-indexation (graylog_0
 # + omni-m365 avec retention M365 appliquee a tort). Meme pattern que 38-46.
 M365_ID="$(get_stream_id 'OMNI - M365')"
 if [[ -n "${M365_ID}" ]]; then
   MEX="$(api_get "/streams/${M365_ID}" | jq -r '.rules[]? | select(.field=="event_source" and .inverted==true) | .value')"
-  for V in siem_backup siem_disk_guard siem_report siem_soar siem_cert; do
+  for V in siem_backup siem_disk_guard siem_report siem_soar siem_cert siem_drift siem_integrity; do
     if echo "${MEX}" | grep -qx "${V}"; then skip "M365 exclut deja ${V}"
     else
       jq -n --arg v "${V}" '{field:"event_source", type:1, value:$v, inverted:true,
@@ -211,8 +229,7 @@ NOTIF_MAIL="$(api_get "/events/notifications?per_page=100" \
 ensure_def_simple() {  # TITLE QUERY COND_JSON WITHIN_MS EXEC_MS GRACE_MS
   local TITLE="$1" QUERY="$2" COND="$3" WITHIN="$4" EXEC="$5" GRACE="$6"
   local EXIST NEWID
-  EXIST="$(api_get "/events/definitions?per_page=200" | jq -r --arg t "${TITLE}" \
-          '.event_definitions[] | select(.title==$t) | .id')"
+  EXIST="$(event_def_id "${TITLE}")"
   if [[ -n "${EXIST}" && "${EXIST}" != "null" ]]; then skip "definition '${TITLE}' existe deja"; return; fi
   NEWID="$(jq -n --arg t "${TITLE}" --arg q "${QUERY}" --arg st "${ST_INTERNE}" \
               --arg n "${NOTIF_MAIL}" --argjson co "${COND}" \
@@ -243,6 +260,12 @@ ensure_def_simple "OMNI - Backup config SIEM en échec" \
   "event_action:backup_config_echec" "${COND_GE1}" 1800000 1800000 14400000
 ensure_def_simple "OMNI - Backup config SIEM absent (>26h)" \
   "event_action:backup_config_ok" "${COND_LT1}" 93600000 21600000 43200000
+# Sauvegarde QUOTIDIENNE (siem-backup.sh, durci 02/07/2026 apres 17 jours
+# d'echec silencieux des snapshots) : echec explicite + detection d'absence.
+ensure_def_simple "OMNI - Sauvegarde quotidienne SIEM en échec" \
+  "event_action:backup_daily_echec" "${COND_GE1}" 1800000 1800000 14400000
+ensure_def_simple "OMNI - Sauvegarde quotidienne SIEM absente (>26h)" \
+  "event_action:backup_daily_ok" "${COND_LT1}" 93600000 21600000 43200000
 
 echo "==> [5/5] Garde-fou disque /data (32-disk-guard)"
 
@@ -254,14 +277,20 @@ ensure_def_simple "OMNI - Rapport hebdomadaire en échec" \
   "event_action:report_echec" "${COND_GE1}" 1800000 1800000 14400000
 ensure_def_simple "OMNI - Certificat SIEM expire bientôt (<45j)" \
   "event_action:cert_expire_proche" "${COND_GE1}" 604800000 86400000 604800000
+# Controle de derive depot/production (omni-drift-check, 29-drift-check.sh,
+# hebdomadaire) : alerte si un ecart critique est detecte (snapshot casse, regle
+# pare-feu non appliquee, backup absent, binaire derive, lookup threat-intel
+# manquant). Ajout 02/07/2026 apres l'audit qui a trouve 2 pannes silencieuses.
+ensure_def_simple "OMNI - Dérive dépôt/production détectée" \
+  'event_source:siem_drift AND alert_tag:drift_ecart' "${COND_GE1}" 604800000 604800000 604800000
 
 # Re-pointage idempotent des 4 definitions vers le stream interne (au cas ou
 # elles auraient ete creees avant le stream, sur le mauvais stream)
 for T in "OMNI - Backup config SIEM en échec" "OMNI - Backup config SIEM absent (>26h)" \
+         "OMNI - Sauvegarde quotidienne SIEM en échec" "OMNI - Sauvegarde quotidienne SIEM absente (>26h)" \
          "OMNI - Disque SIEM >80% (/data)" "OMNI - PURGE D'URGENCE retention (disque presque plein)" \
          "OMNI - Rapport hebdomadaire en échec"; do
-  ID="$(api_get "/events/definitions?per_page=200" | jq -r --arg t "${T}" \
-       '.event_definitions[] | select(.title==$t) | .id')"
+  ID="$(event_def_id "${T}")"
   [[ -z "${ID}" || "${ID}" == "null" ]] && continue
   REP="$(api_get "/events/definitions/${ID}" \
     | jq --arg st "${ST_INTERNE}" \

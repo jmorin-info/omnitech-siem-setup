@@ -28,6 +28,15 @@ wget -q https://packages.graylog2.org/repo/packages/graylog-7.1-repository_lates
 dpkg -i /tmp/graylog-repo.deb >/dev/null
 apt-get update -qq
 apt-get install -y -qq graylog-server
+# Paquet gele (apt-mark hold), par symetrie avec mongodb-org (02) et opensearch (03).
+# Sans ce gel, un "apt upgrade" reflexe pose les JAR de la nouvelle version sur le
+# disque SANS redemarrer le service (le postinst sort en 0 sur un upgrade) : la JVM
+# en cours continue de tourner sur l'ancien code -> split JAR-disque / JVM-en-cours
+# qui ne detone qu'au PROCHAIN redemarrage, sans lien de cause visible.
+# MAJ uniquement en controle : unhold -> matrice Graylog/OpenSearch/Mongo -> upgrade
+# -> redemarrage controle -> re-hold (cf README). Le gel ne masque PAS la veille :
+# apt-cache policy continue d'afficher le Candidat (omni-version-watch).
+apt-mark hold graylog-server >/dev/null
 systemctl stop graylog-server || true
 
 echo "==> [2/5] Secrets"

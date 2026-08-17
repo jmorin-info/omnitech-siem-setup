@@ -20,6 +20,9 @@ graylog:
     m365:      "6a2ac4a165bc77613c83b22a"   # OMNI - M365
     vaultwarden: "6a2e61e9b61861c0c218d9c9" # OMNI - Vaultwarden
     bunkerweb: "6a2da8d2b61861c0c21300a4"   # OMNI - BunkerWeb
+    seal_access: "6a50fac93411482ad6e00e40" # OMNI - SEAL Accès (badge)
+    seal_alarm:  "6a50faca3411482ad6e00e57" # OMNI - SEAL Alarmes
+    seal_audit:  "6a50faca3411482ad6e00e6e" # OMNI - SEAL Audit hyperviseur
   # Réinjection des incidents : réutilise le bus GELF existant du SIEM (pas de 12222).
   output_gelf:
     host: "127.0.0.1"           # local sur la VM SIEM

@@ -1,8 +1,11 @@
 octet,segment,site
 20,Postes utilisateurs,Bourgoin
+30,Telephonie / VoIP,Bourgoin
 50,Serveurs & services,Bourgoin
+60,Video / multimedia,Bourgoin
 70,DMZ Web,Bourgoin
 80,Management & reseau,Bourgoin
 90,Admin / VPN,Bourgoin
+120,Outils IT & supervision,Bourgoin
 140,VLAN 140 (a qualifier),Bourgoin
 220,SIEM & securite,Bourgoin

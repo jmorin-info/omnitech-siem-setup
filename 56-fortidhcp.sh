@@ -176,6 +176,44 @@ ensure_lookup() {
 }
 ensure_lookup "dhcp-attribution" "FortiGate DHCP IP->hostname" "dhcp-attribution.csv" "ip" "hostname"
 
+# --- Index set + stream dedies (ajout 02/07/2026) ----------------------------
+# Les baux DHCP arrivaient via l'input GELF HTTP dans le stream OMNI - M365
+# -> index omni-m365 a retention 365 j. A 65k evts/j c'est une pollution de
+# retention (donnee technique conservee 4x trop longtemps). Index dedie 90 j.
+echo "==> Index set + stream dedies (omni-fortidhcp, 90 j)"
+IS_DHCP="$(api_get "/system/indices/index_sets?limit=200" | jq -r '.index_sets[] | select(.index_prefix=="omni-fortidhcp") | .id')"
+if [[ -z "${IS_DHCP}" ]]; then
+  IS_DHCP="$(jq -n --arg d "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" '{
+    title:"OMNI - Forti DHCP", description:"Baux DHCP FortiGate (separe de M365 pour retention 90j). Provisionne par 56-fortidhcp.sh",
+    index_prefix:"omni-fortidhcp", shards:1, replicas:0,
+    rotation_strategy_class:"org.graylog2.indexer.rotation.strategies.TimeBasedRotationStrategy",
+    rotation_strategy:{type:"org.graylog2.indexer.rotation.strategies.TimeBasedRotationStrategyConfig", rotation_period:"P1D", rotate_empty_index_set:false},
+    retention_strategy_class:"org.graylog2.indexer.retention.strategies.DeletionRetentionStrategy",
+    retention_strategy:{type:"org.graylog2.indexer.retention.strategies.DeletionRetentionStrategyConfig", max_number_of_indices:90},
+    index_analyzer:"standard", index_optimization_max_num_segments:1, index_optimization_disabled:false,
+    field_type_refresh_interval:5000, writable:true, creation_date:$d}' | api_post "/system/indices/index_sets" | jqr '.id')"
+  ok "index set omni-fortidhcp (${IS_DHCP})"
+else skip "index set omni-fortidhcp existe"; fi
+# Profil de champs IP (recherches CIDR, cf 10-graylog-model.sh)
+PROF="$(api_get "/system/indices/index_sets/profiles/all" | jq -r 'if type=="array" then . else (.elements//[]) end | .[]? | select(.name=="omni-ip-fields") | .id' | head -1)"
+[[ -n "${PROF}" ]] && api_get "/system/indices/index_sets/${IS_DHCP}" | jq --arg p "${PROF}" '.field_type_profile=$p'   | api_put "/system/indices/index_sets/${IS_DHCP}" >/dev/null && ok "profil ip-fields applique"
+ST_DHCP="$(get_stream_id 'OMNI - Forti DHCP')"
+if [[ -z "${ST_DHCP}" ]]; then
+  IN_GELF="$(api_get "/system/inputs" | jq -r '.inputs[] | select(.title|contains("M365")) | .id')"
+  ST_DHCP="$(jq -n --arg is "${IS_DHCP}" --arg in "${IN_GELF}" '{
+    title:"OMNI - Forti DHCP", description:"Baux DHCP FortiGate. Provisionne par 56-fortidhcp.sh",
+    index_set_id:$is, remove_matches_from_default_stream:true, matching_type:"AND",
+    rules:[{field:"gl2_source_input",type:1,value:$in,inverted:false,description:"input GELF HTTP"},
+           {field:"event_source",type:1,value:"forti_dhcp",inverted:false,description:"baux DHCP"}]}'     | post_entity "/streams" | jqr '.stream_id // .id')"
+  "${CURL[@]}" -X POST "${API}/streams/${ST_DHCP}/resume" >/dev/null 2>&1
+  ok "stream OMNI - Forti DHCP (${ST_DHCP}, demarre)"
+else skip "stream OMNI - Forti DHCP existe"; fi
+# Exclusion sur le stream M365 (sinon double-ecriture m365+fortidhcp)
+ST_M365="$(get_stream_id 'OMNI - M365')"
+if [[ -n "${ST_M365}" ]] && ! api_get "/streams/${ST_M365}" | jq -e '.rules[] | select(.value=="forti_dhcp")' >/dev/null; then
+  echo '{"field":"event_source","type":1,"value":"forti_dhcp","inverted":true,"description":"baux DHCP -> stream dedie"}'     | api_post "/streams/${ST_M365}/rules" >/dev/null && ok "exclusion forti_dhcp sur stream M365"
+else skip "exclusion M365 deja en place"; fi
+
 echo
 echo "=== 56-fortidhcp.sh termine."
 echo "    Le pipeline FortiGate (12, regles omni-forti-06-dhcp-src/dest) pose deja"

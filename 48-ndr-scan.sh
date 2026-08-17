@@ -78,6 +78,13 @@ def main():
     agg = es({"size": 0,
         "query": {"bool": {"must": [{"term": {"action": "deny"}},
                                     {"term": {"src_ip_reserved_ip": True}},
+                                    # dest INTERNE aussi : un scan LATERAL vise le parc
+                                    # interne. Sans ce filtre, un poste bloque vers 30+
+                                    # services EXTERNES (Google, CDN, telemetrie) etait
+                                    # compte comme "scan de 30 hotes" (FP www.google.com,
+                                    # constat Julien 02/07/2026). Le webfiltering sortant
+                                    # n'est PAS du mouvement lateral.
+                                    {"term": {"dest_ip_reserved_ip": True}},
                                     {"range": {"timestamp": {"gte": f"now-{WINDOW_M}m"}}}]}},
         "aggs": {"s": {"terms": {"field": "src_ip", "size": 200},
                        "aggs": {"dips": {"cardinality": {"field": "dest_ip"}},

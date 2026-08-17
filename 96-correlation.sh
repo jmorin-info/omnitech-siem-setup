@@ -54,7 +54,7 @@ PIPE
 # Connecte a TOUTES les sources internes (pas seulement 5) -> net_segment cross-source.
 for S in 'OMNI - Windows Security' 'OMNI - Windows autres' 'OMNI - Sysmon' 'OMNI - M365' \
          'OMNI - BunkerWeb' 'OMNI - Vaultwarden' 'OMNI - FortiGate' \
-         'OMNI - Linux' 'OMNI - Aruba' 'OMNI - FortiClient EMS'; do
+         'OMNI - Linux' 'OMNI - Aruba' 'OMNI - FortiClient EMS' 'OMNI - Cert Orchestrator'; do
   SID="$(get_stream_id "$S")"
   [[ -n "$SID" ]] && connect_pipeline "$SID" "$PL" || warn "stream absent: $S"
 done
@@ -90,7 +90,7 @@ echo "==> [3/4] Anomalie d'autorite M365 (action privilegiee hors baseline)"
 # Baseline mesuree 30j : ca_change 100% jmorin ; credential_add jmorin + 3 SP connus.
 ALLOW='NOT user:"jmorin" AND NOT user:"microsoft azure ad internal - jit provisioning" AND NOT user:"ztna network access control plane" AND NOT user:"aad app management"'
 mk_corr_alert "OMNI - Anomalie d'autorite M365 (user inattendu)" \
-  "(alert_tag:m365_app_credential_add OR alert_tag:m365_ca_change OR alert_tag:m365_role) AND ${ALLOW}" \
+  "(alert_tag:m365_app_credential_add OR alert_tag:m365_ca_change) AND ${ALLOW}" \
   "user" 1 "96-correlation.sh : action privilegiee M365 (secret app / Conditional Access / role) par un compte HORS baseline (jmorin + service principals connus). T1098.001/T1556."
 
 echo "==> [4/4] Login admin hors VLAN admin (net_octet != 90)"

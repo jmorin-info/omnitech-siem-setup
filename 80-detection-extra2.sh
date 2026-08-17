@@ -127,7 +127,11 @@ when
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "regsvr32", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "mshta", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "rundll32", true)
-     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "\\appdata\\", true)
+     // \appdata\ RETIRE (mesure live 2026-06-30) : chemin-seul = faux positif massif
+     // (Zoom, PowerToys, OneDrive, Teams... tout updater par-utilisateur vit dans
+     // %AppData%). Les vraies charges offensives matchent deja les indicateurs de
+     // COMMANDE ci-dessus (-enc, downloadstring, iex, bitsadmin, mshta...). On garde
+     // \users\public\ et \windows\temp\ (rares et reellement suspects pour une tache).
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "\\users\\public\\", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "\\windows\\temp\\", true) )
 then

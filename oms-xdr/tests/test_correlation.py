@@ -71,11 +71,14 @@ Q_LSASS = 'alert_tag:lsass_access'
 Q_RANSOM = 'alert_tag:ransomware_indicator'
 
 
-def test_lsass_theft_critical(rules_path, graylog_factory):
+def test_lsass_theft_medium(rules_path, graylog_factory):
+    # DESIGN : LSASS mono-signal est FP-prone -> severity=medium (à corréler).
+    # Le CRITIQUE est porté par les kill-chains à join réel (CR_CREDDUMP_PERSIST /
+    # CR_CREDDUMP_LATERAL : LSASS + persistance/partage admin sur le même hôte).
     data = {(Q_LSASS, "", "host"): {"WS-042": 1}}
     inc = _corr(rules_path, graylog_factory, data).evaluate()
     r = next(i for i in inc if i.rule_id == "CR_LSASS_THEFT")
-    assert r.severity == "critical"
+    assert r.severity == "medium"
     assert "WS-042" in r.entities
 
 

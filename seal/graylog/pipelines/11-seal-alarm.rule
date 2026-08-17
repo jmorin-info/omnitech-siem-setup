@@ -1,0 +1,27 @@
+// =============================================================================
+// 11-seal-alarm.rule - Normalisation SEAL "Alarmes" -> contrat D4
+//
+// PRINCIPE (corrige apres validation) : la NORMALISATION D4 est portee par la
+// VUE SQL vw_SealAlarms_SIEM (elle produit deja event_action = REEV_LIBELLE,
+// event_outcome grant/deny/na derive du REEV, severity_num, actor_usercode,
+// trigger_code, target_object_id/label/type, IS_INHIBITED/IS_INTEMPESTIVE/
+// INTEMPESTIVE_COUNT/IS_PRIORITY, EVEN_LIFESTATUS, timestamp UTC). Le pipeline
+// n'AJOUTE que event_category et le placeholder identity_upn ; il ne re-mappe PAS
+// depuis des noms bruts (ALARMES ne porte pas de badge : pas de badge_number ici,
+// la resolution refus/badge se fait cote domaine "access" via l'evenement).
+//
+// Champs GELF fournis par la vue : event_source, event_domain, timestamp,
+//   EVEN_GROUP_ID, REEV_CODE, event_action, event_outcome, severity_num,
+//   EVEN_LIFESTATUS, trigger_code, actor_usercode, user_description_anon,
+//   IS_INHIBITED, IS_INTEMPESTIVE, INTEMPESTIVE_COUNT, IS_PRIORITY, ACK_EVEN_ID,
+//   END_EVEN_ID, target_object_id/label/type, site, WatermarkBig.
+// =============================================================================
+rule "omni-seal-alarm-normalize"
+when
+  to_string($message.event_domain) == "alarm"
+then
+  set_field("event_source", "seal");
+  set_field("event_category", "physical_alarm");
+  set_field("identity_upn", "");
+  set_field("seal_watermark", to_string($message.WatermarkBig));
+end

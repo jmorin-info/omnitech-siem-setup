@@ -1,0 +1,92 @@
+{
+  "generated": "2026-07-10T10:20:10.010308+00:00",
+  "phase": "preflight",
+  "worst": "FAIL",
+  "checks": [
+    {
+      "name": "env SEAL_DB_HOST",
+      "status": "PASS",
+      "detail": "= bx-qa-seal-vm.omnitech.security"
+    },
+    {
+      "name": "env SEAL_DB_NAME",
+      "status": "PASS",
+      "detail": "= SEAL"
+    },
+    {
+      "name": "env SEAL_DB_SVC_USER",
+      "status": "PASS",
+      "detail": "= svc_graylog_seal"
+    },
+    {
+      "name": "env SEAL_DB_SVC_PWD",
+      "status": "PASS",
+      "detail": "(present, valeur masquee)"
+    },
+    {
+      "name": "env GRAYLOG_API_URL",
+      "status": "PASS",
+      "detail": "= https://10.33.220.10"
+    },
+    {
+      "name": "env GRAYLOG_API_TOKEN",
+      "status": "FAIL",
+      "detail": "ABSENT (a fournir avant la suite)"
+    },
+    {
+      "name": "env GRAYLOG_GELF_HOST",
+      "status": "PASS",
+      "detail": "= 10.33.220.10"
+    },
+    {
+      "name": "env GRAYLOG_GELF_PORT",
+      "status": "PASS",
+      "detail": "= 12201"
+    },
+    {
+      "name": "env TEAMS_WEBHOOK_URL",
+      "status": "PASS",
+      "detail": "(present, valeur masquee)"
+    },
+    {
+      "name": "env SEAL_DB_ADMIN_USER",
+      "status": "SKIP",
+      "detail": "(DDL uniquement)"
+    },
+    {
+      "name": "env SEAL_DB_ADMIN_PWD",
+      "status": "SKIP",
+      "detail": "(DDL uniquement)"
+    },
+    {
+      "name": "DNS bx-qa-seal-vm.omnitech.security",
+      "status": "PASS",
+      "detail": "10.33.120.2"
+    },
+    {
+      "name": "TCP 10.33.120.2:1433",
+      "status": "PASS",
+      "detail": "ouvert"
+    },
+    {
+      "name": "Graylog API",
+      "status": "SKIP",
+      "detail": "GRAYLOG_API_URL/TOKEN absents (verif manuelle : Open = pas de Correlation native)"
+    },
+    {
+      "name": "pilote pyodbc",
+      "status": "SKIP",
+      "detail": "absent"
+    },
+    {
+      "name": "pilote pymssql",
+      "status": "PASS",
+      "detail": "disponible"
+    },
+    {
+      "name": "SQL SELECT 1",
+      "status": "PASS",
+      "detail": "connexion TLS + login OK"
+    }
+  ]
+}

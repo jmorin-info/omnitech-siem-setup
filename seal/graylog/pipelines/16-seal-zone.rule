@@ -1,0 +1,26 @@
+// =============================================================================
+// 16-seal-zone.rule - Enrichissement ZONE PHYSIQUE de l'objet cible
+//
+// Les evenements d'acces (99% ont un target_object_id = OBFI_ID de la porte) et
+// les alarmes/audit localises portent l'ID de l'objet physique, mais PAS sa zone
+// (la hierarchie topologique ObjectsHierarchicalCatalog n'est pas jointe dans les
+// vues -> site/zone NULL). Cette regle resout la zone via un lookup csvfile
+// alimente par l'operateur (vue vw_SealZone_SIEM -> regen_zone_lookup.sh).
+//
+// CLE COMPOSITE seal_site:OBFI_ID : un OBFI_ID peut COLLISIONNER entre sites
+// (QA porte 285 != OMEGA porte 285) -> on prefixe par seal_site. OBFI_ID est
+// stocke en flottant (0.285e3) -> to_long le normalise en entier ("285").
+//
+// Stage TERMINAL (apres normalisation). Pose seal_zone (et seal_zone_path si le
+// lookup fournit une hierarchie). Reste inerte tant que le CSV est vide -> aucune
+// regression : les evenements sans zone connue gardent simplement seal_zone absent.
+// =============================================================================
+rule "omni-seal-zone"
+when
+  has_field("target_object_id") AND has_field("seal_site")
+then
+  let oid  = to_string(to_long(to_double($message.target_object_id)));
+  let key  = concat(concat(to_string($message.seal_site), ":"), oid);
+  let zone = lookup_value("omni-seal-zone", key);
+  set_field("seal_zone", zone);
+end

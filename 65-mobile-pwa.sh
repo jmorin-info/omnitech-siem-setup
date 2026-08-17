@@ -91,6 +91,37 @@ User=root
 [Install]
 WantedBy=multi-user.target
 EOF
+# Durcissement systemd (audit 02/07/2026) : la PWA est atteignable depuis
+# Internet via nginx (/m/api/) -> on neutralise le pouvoir de root en cas de RCE.
+# User reste root car le code + le venv + oms_graph vivent dans /root
+# (ProtectHome=read-only : lecture OK, ecriture interdite). Ecrit uniquement dans
+# /var/lib/omni-mobile. Deplacer le code hors de /root = chantier separe (compte
+# dedie). CAP_DAC_OVERRIDE retire, aucune capability conservee.
+install -d /etc/systemd/system/omni-mobile-api.service.d
+cat > /etc/systemd/system/omni-mobile-api.service.d/hardening.conf <<'OMNIHARD'
+[Service]
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/omni-mobile
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+OMNIHARD
 systemctl daemon-reload
 systemctl enable --now omni-mobile-api.service >/dev/null 2>&1
 sleep 1

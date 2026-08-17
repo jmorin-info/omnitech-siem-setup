@@ -46,11 +46,61 @@ NGX=/etc/nginx/sites-enabled/graylog
 if grep -q 'location /soc/' "$NGX"; then
   skip "route /soc/ deja presente"
 else
-  cp "$NGX" "${NGX}.bak.soc"
+  mkdir -p /etc/nginx/archives && cp "$NGX" "/etc/nginx/archives/graylog.bak.soc"
   SNIP='    location /soc/ {\n        alias /var/www/siem-soc/;\n        try_files $uri $uri/ /soc/index.html;\n    }\n'
   awk -v snip="$SNIP" '!done && /location \/ \{/{printf snip; done=1} {print}' "$NGX" > "${NGX}.new" && mv "${NGX}.new" "$NGX"
   if nginx -t >/dev/null 2>&1; then systemctl reload nginx && ok "route /soc/ ajoutee"
   else mv "${NGX}.bak.soc" "$NGX"; warn "nginx -t ECHEC -> conf restauree"; fi
+fi
+
+echo "==> [4bis] Rate-limiting (anti brute-force, console exposee toute source)"
+# Zones dans conf.d (contexte http) + limit_req sur le login Graylog et /m/api/.
+# Ajout 02/07/2026 : fail2ban ne couvre que SSH ; la console est en 80/443
+# toute source depuis le 24/06 (decision RSSI). 429 au-dela des seuils.
+cat > /etc/nginx/conf.d/omni-ratelimit.conf <<'RLEOF'
+# Rate-limiting OMNI (02/07/2026) - console exposee 80/443 toute source depuis
+# le 24/06 ; fail2ban ne couvre que SSH. Deux zones par IP source :
+#   omni_auth : login Graylog (brute force) - 30 req/min, rafale 15
+#   omni_api  : API PWA mobile (/m/api/)    - 5 req/s,    rafale 50
+limit_req_zone $binary_remote_addr zone=omni_auth:10m rate=30r/m;
+limit_req_zone $binary_remote_addr zone=omni_api:10m  rate=5r/s;
+limit_req_status 429;
+RLEOF
+if grep -q 'omni_api' "$NGX"; then
+  skip "limit_req deja en place"
+else
+  mkdir -p /etc/nginx/archives && cp "$NGX" "/etc/nginx/archives/graylog.bak.ratelimit"
+  python3 - "$NGX" <<'PYRL'
+import sys
+p = sys.argv[1]; s = open(p).read()
+s = s.replace("""    location /m/api/ {
+        proxy_set_header X-Real-IP $remote_addr;""",
+"""    location /m/api/ {
+        limit_req zone=omni_api burst=50 nodelay;
+        proxy_set_header X-Real-IP $remote_addr;""", 1)
+s = s.replace("""    location / {
+        proxy_pass https://127.0.0.1:9000;""",
+"""    # Login Graylog : anti brute-force (POST /api/system/sessions)
+    location = /api/system/sessions {
+        limit_req zone=omni_auth burst=15 nodelay;
+        proxy_pass https://127.0.0.1:9000;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/graylog/certs/omnitech-rootca.crt;
+        proxy_ssl_server_name on;
+        proxy_ssl_name bx-it-graylog-vm.omnitech.security;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Server $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Graylog-Server-URL https://$host/;
+    }
+    location / {
+        proxy_pass https://127.0.0.1:9000;""", 1)
+open(p, "w").write(s)
+PYRL
+  if nginx -t >/dev/null 2>&1; then systemctl reload nginx && ok "rate-limit actif (auth 30r/m, api 5r/s)"
+  else cp "/etc/nginx/archives/graylog.bak.ratelimit" "$NGX"; warn "nginx -t ECHEC -> conf restauree"; fi
 fi
 
 echo "==> [5/5] Tests"

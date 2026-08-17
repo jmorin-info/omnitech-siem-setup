@@ -1,0 +1,27 @@
+// =============================================================================
+// 15-seal-console-identity.rule - Pont CONSOLE SEAL <-> compte AD/Windows
+//
+// Sur les evenements d'audit hyperviseur, `actor_login` est le compte de
+// connexion a la console SEAL. Contrairement au matricule badge (champ libre
+// incoherent), c'est un VRAI compte Windows : soit "DOMAINE\login" (ex.
+// SECURITY\retevenard), soit "login" (ex. jmorin). On le NORMALISE en
+// `identity_console` = login seul, en minuscules -> MEME forme canonique que le
+// champ `identity` des logons Windows (4624). Cle de jointure FIABLE pour la
+// correlation console x logon (cf oms-xdr S_SEAL_CONSOLE_ID / CR_XCO_CONSOLE_RISKY).
+//
+// Verifie (15/07) : retevenard/pgelard/atremelo/sdourdin/jmorin ont tous des
+// logons Windows sur identity:<login> -> la jointure fonctionne.
+//
+// regex_replace("^.*\\", ...) : retire tout jusqu'au dernier antislash inclus
+// (greedy) -> "SECURITY\retevenard" -> "retevenard" ; "jmorin" reste "jmorin".
+// Stage TERMINAL (apres normalisation 12-seal-audit). Pas de ternaire.
+// =============================================================================
+rule "omni-seal-console-identity"
+when
+  to_string($message.event_domain) == "hypervisor_audit"
+  AND has_field("actor_login")
+then
+  let raw  = to_string($message.actor_login);
+  let bare = lowercase(regex_replace("^.*\\\\", raw, ""));
+  set_field("identity_console", bare);
+end

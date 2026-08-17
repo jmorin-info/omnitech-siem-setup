@@ -40,7 +40,11 @@ table inet filter {
 
         # Administration
         tcp dport 22 ip saddr ${NET_ADMIN} accept comment "SSH admin"
-        tcp dport { 80, 443 } ip saddr ${NET_ADMIN} accept comment "Console Graylog"
+        # Console web Graylog EXPOSEE PUBLIQUEMENT (decision RSSI 2026-06-24).
+        # SSH (ci-dessus) reste restreint a NET_ADMIN. Durcissement applicatif :
+        # nginx rate-limit + fail2ban sur l'auth Graylog (cf 07-hardening-web.sh).
+        # Rappel : l'exposition Internet reelle exige AUSSI une VIP/DNAT FortiGate.
+        tcp dport { 80, 443 } accept comment "Console Graylog (PUBLIC - toute source)"
 
         # Collecte
         tcp dport 5044 ip saddr ${NET_BEATS} accept comment "Winlogbeat TLS"
@@ -60,6 +64,7 @@ table inet filter {
         tcp dport 514 ip saddr 10.33.80.1-10.33.80.6 accept comment "Aruba 514 (avant redirect)"
         tcp dport 1517 ip saddr 10.33.80.252 accept comment "Syslog TCP FortiManager"
         udp dport 1517 ip saddr 10.33.80.252 accept comment "Syslog UDP FortiManager"
+        udp dport 12201 ip saddr ${IP_CERT} accept comment "GELF UDP Cert Orchestrator (BX-IT-CERT-VM)"
         # NPS (${IP_NPS}) et BunkerWeb (${IP_BUNKERWEB}) passent par Beats 5044 (deja ouvert au ${NET_BEATS})
 
         # Supervision

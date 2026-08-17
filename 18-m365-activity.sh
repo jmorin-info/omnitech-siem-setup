@@ -69,14 +69,13 @@ connect_pipeline "${ST_M365}" "${PL_ACT}"
 
 # ----------------------------------------------------------------- 2. Alertes
 echo "==> [2/3] Alertes activite M365"
-NOTIF_ID="$(api_get "/events/notifications?per_page=100" | jq -r '(.notifications // [])[] | select(.title=="OMNI - Mail equipe IT") | .id')"
+NOTIF_ID="$(api_get "/events/notifications?per_page=100" | jq -r '(.notifications // [])[] | select(.title=="OMNI - Triage (mail critique)") | .id')"  # triage (pas email direct : audit 13/08/2026)
 TEAMS_ID="$(api_get "/events/notifications?per_page=100" | jq -r '(.notifications // [])[] | select(.title=="OMNI - Teams SOC") | .id')"
 NOTIFS="$(jq -n --arg e "${NOTIF_ID}" --arg t "${TEAMS_ID}" '[{notification_id:$e, notification_parameters:null}] + (if $t != "" then [{notification_id:$t, notification_parameters:null}] else [] end)')"
 
 ev_m365() { # titre prio query grace_min within every
   local TITLE="$1" PRIO="$2" QUERY="$3" GRACE="$4" WITHIN="$5" EVERY="$6"
-  api_get "/events/definitions?per_page=100" | jq -e --arg t "${TITLE}" '(.event_definitions // .elements // [])[] | select(.title==$t)' >/dev/null 2>&1 \
-    && { skip "evenement '${TITLE}' existe"; return 0; }
+  [[ -n "$(event_def_id "${TITLE}")" ]] && { skip "evenement '${TITLE}' existe"; return 0; }
   jq -n --arg t "${TITLE}" --argjson p "${PRIO}" --arg q "${QUERY}" --arg st "${ST_M365}" \
         --argjson w "$(( WITHIN*60000 ))" --argjson e "$(( EVERY*60000 ))" --argjson g "$(( GRACE*60000 ))" --argjson n "${NOTIFS}" '{
     title:$t, description:("P"+($p|tostring)+" - provisionne par 18-m365-activity.sh"), priority:$p, alert:true,

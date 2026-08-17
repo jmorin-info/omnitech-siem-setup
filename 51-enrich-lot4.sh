@@ -175,6 +175,7 @@ when
   to_string($message.winlogbeat_winlog_event_id) == "5136"
   AND lowercase(to_string($message.winlogbeat_winlog_event_data_AttributeLDAPDisplayName)) == "msds-keycredentiallink"
   AND to_string($message.winlogbeat_winlog_event_data_SubjectUserSid) != "S-1-5-18"
+  AND NOT starts_with(to_string($message.winlogbeat_winlog_event_data_SubjectUserName), "MSOL_", true)
 then
   set_field("alert_tag", "shadow_credentials");
   set_field("event_category", "persistance_identite");

@@ -181,9 +181,10 @@ then
   let m = to_string($message.message);
   let u = regex("(?:user|User)[ =']+([A-Za-z0-9._\\\\@-]+)", m);
   set_field("user", u["0"]);
-  // IPv4 STRICTE (octets 0-255, rejette les "004"/versions). Sinon la regex laxiste
-  // extrayait des numeros de version (ex. vLCM "8.0.3.004") dans src_ip -> mapping keyword.
-  let p = regex("(\\b(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}\\b)", m);
+  // IPv4 STRICTE. 1er octet 1-255 (PAS 0) -> rejette "0.0.0.0" (adresse de bind tomcat
+  // "http-nio-0.0.0.0-12080" extraite a tort). Les autres octets 0-255. Note : un numero
+  // de version type "8.0.3.0" reste syntaxiquement une IP (faible volume, sous le seuil).
+  let p = regex("(\\b(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]?)(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}\\b)", m);
   set_field("src_ip", p["0"]);
 end
 EOF
@@ -192,12 +193,17 @@ ensure_rule "omni-vsphere-10-auth-fail" <<'EOF'
 rule "omni-vsphere-10-auth-fail"
 when
   has_field("message")
+  // PHRASE EXACTE (pas "authentication" + "fail" séparés : sinon les gros blobs de
+  // télémétrie vpxd/profiler/SSO matchaient via des noms de classe -> 7831 faux tags,
+  // dont 99% de bruit. Mesuré : seuls ~89 events portent la vraie phrase d'échec).
   AND (
-    (contains(to_string($message.message), "authentication", true) AND contains(to_string($message.message), "fail", true))
+    contains(to_string($message.message), "authentication failed", true)
     OR contains(to_string($message.message), "Failed password", true)
     OR contains(to_string($message.message), "Cannot login", true)
     OR contains(to_string($message.message), "Invalid login", true)
   )
+  // Le profiler de perf vpxd n'est JAMAIS un échec d'auth (2467 blobs de stats).
+  AND NOT contains(to_string($message.application_name), "profiler", true)
   // Exclure le bruit des services cluster ESXi (vCLS/etcd) : les erreurs gRPC TLS
   // ("authentication handshake failed") et clusterAgent "failed to connect ...:2379"
   // ne sont PAS des echecs d'auth (user vide) -> sinon faux brute-force par IP.
@@ -318,14 +324,13 @@ connect_pipeline "${ST_VS}" "${PL_VS}"
 
 # ----------------------------------------------------------------- 4. Alertes
 echo "==> [4/4] Alertes vSphere"
-NOTIF_ID="$(api_get "/events/notifications?per_page=100" | jq -r '(.notifications // [])[] | select(.title=="OMNI - Mail equipe IT") | .id')"
+NOTIF_ID="$(api_get "/events/notifications?per_page=100" | jq -r '(.notifications // [])[] | select(.title=="OMNI - Triage (mail critique)") | .id')"  # triage (pas email direct : audit 13/08/2026)
 TEAMS_ID="$(api_get "/events/notifications?per_page=100" | jq -r '(.notifications // [])[] | select(.title=="OMNI - Teams SOC") | .id')"
 NOTIFS="$(jq -n --arg e "${NOTIF_ID}" --arg t "${TEAMS_ID}" '[{notification_id:$e, notification_parameters:null}] + (if $t != "" then [{notification_id:$t, notification_parameters:null}] else [] end)')"
 
 ev_vs() { # titre prio query group series cond grace within every
   local TITLE="$1" PRIO="$2" QUERY="$3" GB="$4" SE="$5" CO="$6" GRACE="$7" WITHIN="$8" EVERY="$9"
-  api_get "/events/definitions?per_page=100" | jq -e --arg t "${TITLE}" '(.event_definitions // .elements // [])[] | select(.title==$t)' >/dev/null 2>&1 \
-    && { skip "evenement '${TITLE}' existe"; return 0; }
+  [[ -n "$(event_def_id "${TITLE}")" ]] && { skip "evenement '${TITLE}' existe"; return 0; }
   jq -n --arg t "${TITLE}" --argjson p "${PRIO}" --arg q "${QUERY}" --arg st "${ST_VS}" \
         --argjson gb "${GB}" --argjson se "${SE}" --argjson co "${CO}" \
         --argjson w "$(( WITHIN*60000 ))" --argjson e "$(( EVERY*60000 ))" --argjson g "$(( GRACE*60000 ))" --argjson n "${NOTIFS}" '{

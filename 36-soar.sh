@@ -65,7 +65,12 @@ def gelf(action, ip, msg):
 def load():
     try: return json.load(open(STATE))
     except Exception: return {}
-def save(d): json.dump(d, open(STATE,"w"))
+def save(d):
+    # ecriture ATOMIQUE (tmp + replace) : un crash en cours d'ecriture ne corrompt
+    # plus blocklist.json -> on ne perd pas tous les blocages actifs.
+    tmp = STATE + ".tmp"
+    with open(tmp, "w") as f: json.dump(d, f)
+    os.replace(tmp, STATE)
 
 def render(d):
     now = time.time()
@@ -77,9 +82,17 @@ def render(d):
     open(tmp,"w").write("\n".join(lines) + "\n")
     os.replace(tmp, FEED)
 
+# CGNAT RFC6598 (100.64.0.0/10) : espace partage operateur (4G/5G, CGNAT fibre). ipaddress ne le
+# classe PAS is_private -> is_public renverrait True et un teleworker derriere NAT operateur pourrait
+# etre auto-bloque au FortiGate. Le pipeline l'exclut deja (12-graylog-pipelines.sh:782) ; on aligne
+# le SOAR sur la meme protection (audit RC-N4). Fail-safe : n'empeche qu'un blocage, n'en cause jamais.
+_CGNAT = ipaddress.ip_network("100.64.0.0/10")
+
 def is_public(ip):
     try:
         a = ipaddress.ip_address(ip)
+        if a in _CGNAT:
+            return False
         return not (a.is_private or a.is_loopback or a.is_link_local or a.is_multicast or a.is_reserved)
     except ValueError:
         return False
@@ -203,6 +216,37 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 OMNIUNIT
+# Durcissement systemd (audit 02/07/2026) : neutralise le pouvoir de root en cas
+# de RCE. User reste root mais SANS capability (CAP_DAC_OVERRIDE retire) ; le
+# groupe supplementaire www-data permet d'ecrire le feed dans /var/www via le
+# bit group du repertoire, sans rendre a root sa toute-puissance. ProtectHome=
+# true car omni-soar ne lit rien dans /root.
+install -d /etc/systemd/system/omni-soar.service.d
+cat > /etc/systemd/system/omni-soar.service.d/hardening.conf <<'OMNIHARD'
+[Service]
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SupplementaryGroups=www-data
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/omni-soar /var/www/siem-kit/soar
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+OMNIHARD
 systemctl daemon-reload
 systemctl enable --now omni-soar.service omni-soar-expire.timer
 sleep 2
@@ -246,13 +290,17 @@ if [[ -n "${SID}" ]] && ! api_get "/streams/${SID}" | jq -e '.rules[]? | select(
   echo '{"field":"event_source","type":1,"value":"siem_soar","inverted":false,"description":"evenements SOAR"}' \
     | api_post "/streams/${SID}/rules" >/dev/null && ok "stream interne route desormais siem_soar"
 fi
-NOTIF_MAIL="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[] | select(.title=="OMNI - Mail equipe IT") | .id')"
 TITLE="OMNI - SOAR : IP bloquee automatiquement"
+# PAS de notification mail : ce blocage AUTOMATIQUE est la CONSEQUENCE d'une
+# alerte qui a DEJA notifie (pic WAF, threat-intel, scan...). Un 2e mail "IP
+# bloquee" pour la meme IP = doublon sans valeur (constat Julien 2026-06-30).
+# On conserve l'evenement (alert:true) pour la TRACABILITE : il reste visible
+# dans la console SOC, le dashboard Direction et l'audit, mais ne maile pas.
 if api_get "/events/definitions?per_page=300" | jq -e --arg t "${TITLE}" '.event_definitions[] | select(.title==$t)' >/dev/null; then
   skip "alerte SOAR existe"
 else
-  jq -n --arg t "${TITLE}" --arg st "${SID}" --arg n "${NOTIF_MAIL}" '{
-    title:$t, description:"P3 SOAR - une IP a ete bloquee automatiquement sur le FortiGate (feed). Verifier la legitimite. Provisionne par 36-soar.sh",
+  jq -n --arg t "${TITLE}" --arg st "${SID}" '{
+    title:$t, description:"P3 SOAR - une IP a ete bloquee automatiquement sur le FortiGate (feed). Tracabilite uniquement (pas de mail : le declencheur a deja notifie). Provisionne par 36-soar.sh",
     priority:3, alert:true,
     config:{type:"aggregation-v1", query:"event_action:ip_bloquee", query_parameters:[],
       streams:[$st], group_by:[], series:[{id:"count()",type:"count"}],
@@ -260,7 +308,7 @@ else
       search_within_ms:600000, execute_every_ms:300000, use_cron_scheduling:false, event_limit:50},
     field_spec:{}, key_spec:[],
     notification_settings:{grace_period_ms:1800000, backlog_size:10},
-    notifications:[{notification_id:$n, notification_parameters:null}]
-  }' | post_entity "/events/definitions?schedule=true" >/dev/null && ok "alerte SOAR creee" || warn "alerte SOAR REFUSEE"
+    notifications:[]
+  }' | post_entity "/events/definitions?schedule=true" >/dev/null && ok "alerte SOAR creee (sans mail)" || warn "alerte SOAR REFUSEE"
 fi
 echo "=== 36-soar.sh termine. Cote FortiGate : appliquer fortigate/06-soar-threatfeed.conf ==="

@@ -1,0 +1,31 @@
+ID_regle,nom,source,technique_MITRE_ou_referentiel,severite,action,statut,iso27001
+HYP-001,Brute force console (echecs d'authentification),OMNI - SEAL Audit,T1110,High,immediat (Teams),actif,A.8.16
+HYP-002,Brute force suivie d'un succes (meme compte),OMNI - SEAL Audit,T1110/T1078,High,immediat (Teams),[SEQ]-approx,A.8.16
+HYP-003,Connexion console d'administration (SealAdmin),OMNI - SEAL Audit,T1078,Medium,digest,actif,A.8.2
+HYP-004,Changement de profil en session (SwitchProfile),OMNI - SEAL Audit,T1078,Medium,digest,actif,A.8.2
+HYP-005,Connexion admin hors heures ouvrees,OMNI - SEAL Audit,T1078,High,immediat (Teams),[SEQ]-approx,A.8.16
+HYP-006,Export/telechargement de journaux d'audit,OMNI - SEAL Audit,T1005,Medium,digest,actif,A.8.15
+HYP-007,Creation/modification de compte ou de role,OMNI - SEAL Audit,T1136/T1098,High,immediat (Teams),actif,A.5.16
+HYP-008,Modification des autorisations de profil,OMNI - SEAL Audit,T1098,Medium,digest,actif,A.5.18
+HYP-009,Migration d'unite locale (reconfig controleur),OMNI - SEAL Audit,T1565,Medium,digest,actif,A.8.9
+HYP-010,Modification d'objet physique (porte/commande),OMNI - SEAL Audit,T1565.001,Medium,digest,actif,A.8.9
+HYP-011,Sessions simultanees multi-IP (meme compte),OMNI - SEAL Audit,T1078,Medium,digest,[SEQ]-approx,A.8.16
+ACC-001,Attribution d'un passe general (master key),OMNI - SEAL Audit,T1098/T1078,High,immediat (Teams),actif,A.5.18
+ACC-002,Attribution en masse de droits d'acces,OMNI - SEAL Audit,T1098,Medium,digest,actif,A.5.18
+ACC-003,Creation de badge,OMNI - SEAL Audit,T1136,Info,digest,actif,A.7.2
+ACC-004,Reactivation de badge (Status ANN vers VAL),OMNI - SEAL Audit,T1078,High,immediat (Teams),actif,A.7.2
+ACC-005,Badge desactive puis utilise,OMNI - SEAL Audit + OMNI - SEAL Acces,T1078,High,immediat (Teams),[SEQ]-v2,A.7.2
+ACC-006,Acces refuses repetes sur une porte,OMNI - SEAL Acces,T1110,Medium,digest,actif,A.7.2
+ACC-007,Acces accorde hors plage horaire,OMNI - SEAL Acces,T1078,Medium,digest,[SEQ]-approx,A.7.2
+ALM-001,Inhibition d'une alarme (IS_INHIBITED),OMNI - SEAL Alarmes,T1562.001,High,immediat (Teams),actif,A.7.4
+ALM-002,Inhibition suivie d'une effraction (meme point),OMNI - SEAL Alarmes,T1562.001,High,immediat (Teams),[SEQ]-v2,A.7.4
+ALM-003,Intrusion physique (effraction porte/bouton panique),OMNI - SEAL Alarmes,T1200/physique,Critical,immediat (Teams),actif,A.7.4
+ALM-004,Alarme intempestive/flood capteur,OMNI - SEAL Alarmes,T1499/T1562.001,Medium,digest,actif,A.7.4
+EVT-001,Acces usager accorde (base correlation/chasse),OMNI - SEAL Acces,-,Info,digest,actif,A.7.2
+EVT-002,Badge inconnu/non enrole presente,OMNI - SEAL Acces,T1078,Medium,digest,[SEQ]-approx,A.7.2
+XCO-001,Voyage impossible physique vers logon,OMNI - SEAL Acces x Windows,T1078,High,immediat (Teams),[SEQ]-v2,A.8.16
+XCO-002,Acces badge sans logon correle (talonnage/clonage),OMNI - SEAL Acces x Windows,T1078,Medium,digest,[SEQ]-v2,A.8.16
+XCO-003,Reconfig hyperviseur suivie d'une effraction,OMNI - SEAL Audit x OMNI - SEAL Alarmes,T1565/T1562,High,immediat (Teams),[SEQ]-v2,A.8.16
+DMS-001,Flux Audit interrompu (>15 min),OMNI - SEAL Audit,A.8.16,High,immediat (Teams),desactive (recette),A.8.16
+DMS-002,Flux Acces interrompu (>15 min),OMNI - SEAL Acces,A.8.16,High,immediat (Teams),desactive (recette),A.8.16
+DMS-003,Flux Alarmes interrompu (>15 min),OMNI - SEAL Alarmes,A.8.16,High,immediat (Teams),desactive (recette),A.8.16

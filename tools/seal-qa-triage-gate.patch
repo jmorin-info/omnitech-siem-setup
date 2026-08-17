@@ -1,0 +1,37 @@
+# Politique QA transverse SEAL — coupe la voie MAIL du triage pour bx-qa-seal-vm
+# (systeme de TEST). PROD (bx-seal-omega) inchange. Teams reste cable en direct
+# dans Graylog + /soc/ voit toujours l'evenement : on ne supprime QUE le mail.
+#
+# Cible : /usr/local/sbin/omni-alert-triage (== triage/omni-alert-triage)
+# NON APPLIQUE / NON DEPLOYE par cet agent. A relire puis 'patch -p1 < ...' cote depot,
+# puis redemarrer omni-alert-triage.service. Aucune ecriture live n'a ete faite.
+#
+# Placement : APRES 'now = time.time(); d = load()' (l.1066) et AVANT velocity_multi,
+# pour qu'un tir de test QA n'alimente pas la kill-chain d'une identite reelle.
+--- a/triage/omni-alert-triage
++++ b/triage/omni-alert-triage
+@@ -1064,6 +1064,25 @@
+         entity = entity_of(f, ev)
+         tier = classify(title, crit, noise)
+         now = time.time(); d = load()
++        # --- POLITIQUE QA (transverse SEAL) : bx-qa-seal-vm est un systeme de TEST.
++        # Ses alertes ne remontent JAMAIS par mail (console/Teams au pire). Teams
++        # reste cable en direct dans Graylog (firehose SOC) et /soc/ voit toujours
++        # l'evenement ; on coupe uniquement la voie MAIL du triage. PROD (bx-seal-omega)
++        # est inchange. seal_site est pose par Logstash (add_field), present a ~99,9%
++        # sur les fenetres de detection (10-15 min, cf. seal/docs/FAUX-POSITIFS.md) et
++        # injecte dans le group_by + field_spec de chaque def SEAL a group_by non vide
++        # (seal/detections/provision_detections.py l.338-350) -> present sur le payload
++        # ET sur le backlog : cle de routage fiable. AUCUNE exception (meme ALM-003
++        # intrusion : sur le site de test, c'est un essai, pas une effraction).
++        _qa_site = e.get("SEAL_QA_SITE", "bx-qa-seal-vm")
++        if _qa_site and f.get("seal_site", "") == _qa_site:
++            bump(d, "qa_console"); save(d)
++            gelf("qa_console", title, tier, 0, ["seal_site=" + _qa_site],
++                 "site_test:" + _qa_site + " -> console/Teams, mail supprime")
++            self.send_response(200); self.end_headers()
++            self.wfile.write(json.dumps({"decision": "qa_console", "tier": tier,
++                "score": 0, "reason": "qa_test:" + _qa_site}).encode())
++            return
+         # Correlation fil de l'eau : chaque alerte alimente TOUTES ses cles
+         # canoniques (identite/machine/IP/badge) des sa reception ; la kill-chain

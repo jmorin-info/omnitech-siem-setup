@@ -24,8 +24,12 @@ ensure_rule "omni-entra-10-appcred" <<'EOF'
 rule "omni-entra-10-appcred"
 when
   to_string($message.event_source)=="m365" AND to_string($message.m365_type)=="audit"
-  AND ( contains(to_string($message.event_action),"credential",true)
-     OR contains(to_string($message.event_action),"service principal",true)
+  // "credential" NUE retiree le 17/07/2026 (audit B.1) : elle taguait 34 FP/30j
+  // (33 "Add Windows Hello for Business credential" + 1 "passwordless phone sign-in")
+  // pour 1 seul vrai positif, en joignant un playbook "backdoor cloud" a un enrolement
+  // benin. Les clauses specifiques ci-dessous captent les vrais ajouts d'identifiant
+  // d'application ("Add service principal credentials" reste pris par "service principal").
+  AND ( contains(to_string($message.event_action),"service principal",true)
      OR contains(to_string($message.event_action),"key credential",true)
      OR contains(to_string($message.event_action),"password credential",true)
      OR contains(to_string($message.event_action),"Certificates and secrets management",true) )

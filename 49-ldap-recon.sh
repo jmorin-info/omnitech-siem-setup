@@ -79,9 +79,13 @@ OBJ_MIN    = int(ENV.get("LDAPRECON_OBJ_MIN", "250"))
 TYPE_MIN   = int(ENV.get("LDAPRECON_TYPE_MIN", "5"))
 # Comptes a ne jamais alerter (DC, apps LDAP, comptes de service legitimes).
 # Mesure live : owncloud1, BX-AD-01-IT-VM$, BX-AD02-IT-VM$, MSOL_*, svc_intranet.
+#   ems = compte de service FortiClient EMS (inventaire AD legitime, mesure live
+#   2026-06-30 : 300 objets / 9 types / 1480 acces en 10 min depuis BX-AD-01).
+#   Residuel assume : si le compte ems est compromis, on perd ce signal sur lui ;
+#   acceptable car l'inventaire EMS est by-design et le poste EMS a son propre AV.
 ALLOW_RAW  = ENV.get("LDAPRECON_ALLOW",
-    "owncloud1,svc_intranet,fortigate-svc,BX-AD-01-IT-VM$,BX-AD02-IT-VM$,"
-    "BX-FILES-IT-VM$,BX-PKI2022$")
+    "owncloud1,svc_intranet,fortigate-svc,ems,BX-AD-01-IT-VM$,BX-AD02-IT-VM$,"
+    "BX-FILES-IT-VM$,BX-PKI2022$,BX-IT-EMS-VM$")
 ALLOW      = [a.strip().lower() for a in ALLOW_RAW.split(",") if a.strip()]
 # Prefixes de comptes a ignorer (ex: MSOL_ = AAD Connect, qui lit l'annuaire).
 ALLOW_PREFIX = [p.strip().lower() for p in

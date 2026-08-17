@@ -130,8 +130,8 @@ m365_signin = count("omni-m365_*", "m365_type:signin")
 # sauvegardes
 veeam_fail = count("omni-winother_*", "alert_tag:veeam_job_echec")
 veeam_hosts = terms("omni-winother_*", "alert_tag:veeam_job_echec", "source", 10)
-bkp_ok = count("graylog_*", "event_action:backup_config_ok")
-bkp_fail = count("graylog_*", "event_action:backup_config_echec")
+bkp_ok = count("omni-interne_*", "event_action:backup_config_ok")   # audit DASH-01 : les events sante sont dans omni-interne, pas graylog_* (vide) -> KPI affichait 0/0
+bkp_fail = count("omni-interne_*", "event_action:backup_config_echec")
 
 # MITRE ATT&CK + score de risque (champs poses par 37-mitre-attack.sh)
 mitre_techs   = terms("omni-*", "_exists_:mitre_technique_name", "mitre_technique_name", 5)

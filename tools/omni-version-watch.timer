@@ -1,0 +1,12 @@
+[Unit]
+Description=OMNI SIEM - veille de version de la stack (quotidien)
+
+[Timer]
+OnCalendar=*-*-* 07:15:00
+RandomizedDelaySec=1800
+# Persistent : si le SIEM etait eteint a l'heure dite, on rattrape au demarrage.
+# Sans ca, un reboot en fenetre pourrait faire sauter la veille en silence.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

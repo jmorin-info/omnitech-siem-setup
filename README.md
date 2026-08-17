@@ -1,288 +1,431 @@
 <div align="center">
 
-<img src="docs/captures/01-overview.png" alt="OMNI SOC" width="92%">
+<img src="docs/captures/01-overview.png" alt="OMNI SOC — overview console" width="94%">
 
 # OMNI SIEM — Detection &amp; Response Platform
 
-**Self‑hosted, production‑grade SIEM, XDR and SOC console — built on Graylog, provisioned entirely as code.**
-*Plateforme SIEM / XDR &amp; console SOC auto‑hébergée, de niveau production, bâtie sur Graylog et entièrement provisionnée en code.*
+**A self-hosted, on-premise SIEM/SOC platform for OMNITECH Security**
+Built on Graylog · OpenSearch · MongoDB, extended with a custom detection engine,
+an AI-assisted alert-triage service, automated response (SOAR), a purpose-built SOC
+console, and full physical-access-control (SEAL) correlation.
 
-<br>
-
-![Graylog](https://img.shields.io/badge/Graylog-7.1-1971c2?logo=graylog&logoColor=white)
-![OpenSearch](https://img.shields.io/badge/OpenSearch-2.19-005EB8?logo=opensearch&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-8.0-13aa52?logo=mongodb&logoColor=white)
-![Debian](https://img.shields.io/badge/Debian-13-A81D33?logo=debian&logoColor=white)
-![Python](https://img.shields.io/badge/microservices-34-3776AB?logo=python&logoColor=white)
-
-![Detections](https://img.shields.io/badge/pipeline_rules-177-d6336c)
-![Alerts](https://img.shields.io/badge/alert_definitions-114-e8590c)
-![Playbooks](https://img.shields.io/badge/action_playbooks-70-7048e8)
-![ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-mapped-c2255c)
-![i18n](https://img.shields.io/badge/UI-FR_%2F_EN-0c8599)
-![Status](https://img.shields.io/badge/status-production-2b8a3e)
-![ISO 27001](https://img.shields.io/badge/ISO_27001-evidence_ready-364fc7)
-
-**🇫🇷 [Français](#-français) · 🇬🇧 [English](#-english) · 🖼️ [Visual tour](#-aperçu-visuel--visual-tour)**
-
-</div>
-
-> ⚠️ **Internal operational repository.** This repo provisions the **production** SIEM of OMNITECH SECURITY — treat it as sensitive infrastructure‑as‑code. Real secrets are **never** committed (see [Security &amp; secrets](#sécurité--secrets)).
-
----
-
-## 🖼️ Aperçu visuel · Visual tour
-
-> 🔒 Captures **anonymisées** — comptes / hôtes / IP / SID pseudonymisés de façon cohérente (mode `MOBILE_REDACT`).
-> *Anonymised screenshots — accounts / hosts / IPs / SIDs consistently pseudonymised.*
-
-### Console SOC « OMNI SOC »
-
-<div align="center">
-
-| | |
-|:---:|:---:|
-| [![Recherche d'entités](docs/captures/02-entites.png)](docs/captures/02-entites.png)<br>**Entités** · classées par **risque fusionné** + watchlist<br><sub>*Entities ranked by fused risk + watchlist*</sub> | [![Dossier 360°](docs/captures/10-dossier360.png)](docs/captures/10-dossier360.png)<br>**Dossier 360°** · **jauge de risque fusionné**, identité unifiée, provenance & cartographie<br><sub>*Fused-risk gauge, unified identity, provenance*</sub> |
-| [![Chronologie unifiée](docs/captures/10b-timeline.png)](docs/captures/10b-timeline.png)<br>**Chronologie unifiée** · détections + authentifications, par date<br><sub>*Unified timeline — detections + auth*</sub> | [![Détections](docs/captures/04-detections.png)](docs/captures/04-detections.png)<br>**Détections** · liste 24 h + **guide d'action** intégré<br><sub>*Detections + inline action guide*</sub> |
-| [![Playbooks](docs/captures/05-playbooks.png)](docs/captures/05-playbooks.png)<br>**Playbooks** · ce que c'est / vérifier / remédier / corriger<br><sub>*4‑part response playbooks*</sub> | [![Matrice ATT&CK](docs/captures/06-attack.png)](docs/captures/06-attack.png)<br>**Matrice MITRE ATT&CK** · couverture × activité<br><sub>*ATT&CK coverage matrix*</sub> |
-| [![Graphe d'attaque](docs/captures/07-graphe.png)](docs/captures/07-graphe.png)<br>**Graphe d'attaque** · entités ↔ techniques<br><sub>*Attack graph*</sub> | [![Incidents](docs/captures/03-incidents.png)](docs/captures/03-incidents.png)<br>**Incidents** · cas corrélés (oms‑xdr)<br><sub>*Correlated incidents*</sub> |
-| [![Santé & collecte](docs/captures/08-sante.png)](docs/captures/08-sante.png)<br>**Santé & collecte** · cluster, SLA, santé des robots<br><sub>*Health, SLA & robot supervision*</sub> | [![Fuites & Dark Web](docs/captures/09-fuites.png)](docs/captures/09-fuites.png)<br>**Fuites & Dark Web** · RansomLook / HIBP / Dehashed / GitHub<br><sub>*Leaks & dark‑web monitoring*</sub> |
-
-[![Interface bilingue](docs/captures/11-overview-en.png)](docs/captures/11-overview-en.png)
-
-***Interface bilingue FR / EN*** — bascule instantanée et persistée. *Bilingual FR / EN UI, instant & persisted toggle.*
-
-</div>
-
-### PWA mobile — *application installable, notifications web‑push*
-
-<div align="center">
-
-| | |
-|:---:|:---:|
-| [![PWA — Menace](docs/captures/12-pwa-mobile.png)](docs/captures/12-pwa-mobile.png)<br>**Menace** · parité console (ML / UEBA)<br><sub>*Threat — console parity*</sub> | [![PWA — Guides](docs/captures/13-pwa-guides.png)](docs/captures/13-pwa-guides.png)<br>**Guides** · playbooks par tactique<br><sub>*Guides — playbooks by tactic*</sub> |
+`~20 log sources` · `197 detections` · `250 pipeline rules` · `40 pipelines` · `22 streams` · `MITRE ATT&CK-mapped` · `ISO 27001-aligned`
 
 </div>
 
 ---
 
-## 🇫🇷 Français
+## Table of contents
 
-### Vue d'ensemble
+1. [What this is](#1-what-this-is)
+2. [Key capabilities](#2-key-capabilities)
+3. [Architecture](#3-architecture)
+4. [Data sources](#4-data-sources)
+5. [Detection engine](#5-detection-engine)
+6. [Alert triage &amp; notifications](#6-alert-triage--notifications)
+7. [Automated response (SOAR)](#7-automated-response-soar)
+8. [The SOC console](#8-the-soc-console)
+9. [Physical security correlation (SEAL)](#9-physical-security-correlation-seal)
+10. [Deployment](#10-deployment)
+11. [Operations &amp; resilience](#11-operations--resilience)
+12. [Compliance (ISO/IEC 27001)](#12-compliance-isoiec-27001)
+13. [Repository layout](#13-repository-layout)
+14. [Documentation index](#14-documentation-index)
 
-Plateforme **SIEM + XDR + console SOC** complète et reproductible, déployée sur une VM Debian durcie, avec un kit d'enrôlement Windows/AD. Elle collecte Windows Security/Sysmon, FortiGate/FortiAnalyzer, Microsoft 365, vSphere, ESET, Vaultwarden et Veeam ; normalise tout dans un **schéma commun** ; exécute **177 règles de pipeline** et **114 définitions d'alerte** mappées **MITRE ATT&CK** ; ajoute **analyse comportementale (UEBA/NDR)**, **scoring ML (`oms-ml`)**, **corrélation d'incidents kill‑chain (`oms-xdr`)**, **SOAR léger**, une **console SOC web + PWA mobile** bilingue, et **70 playbooks d'action** — le tout provisionné par des scripts **idempotents** et documenté pour l'**audit ISO 27001:2022**.
+---
 
-> *Tout est code.* Chaque script est rejouable sans danger et s'arrête à la première erreur, contrôle final à l'appui.
+## 1. What this is
 
-### Capacités clés
+OMNI SIEM is a **production security-monitoring platform** that ingests logs from the
+whole OMNITECH estate — Windows domain, FortiGate firewalls (multi-site), Microsoft 365 /
+Entra ID, VMware vSphere, endpoint AV/EDR, a WAF, the physical access-control system, and
+more — normalises them, runs **197 detections** mapped to MITRE ATT&CK, correlates them
+into incidents, decides which alerts truly deserve a human's attention, and drives both a
+real-time SOC console and automated response.
 
-| Capacité | Rôle |
+It is **not** a vanilla Graylog install. On top of the ingest/search core it adds:
+
+- a **custom detection library** (Graylog event definitions + pipeline enrichment) covering
+  initial access, credential theft, lateral movement, persistence, defence evasion,
+  exfiltration, ransomware precursors, and physical intrusion;
+- an **alert-triage micro-service** (`omni-alert-triage`) that scores every alert, correlates
+  kill-chains across sources, suppresses noise, and — for the grey zone — asks an LLM judge
+  whether the alert warrants an e-mail, then renders a clean, professional notification;
+- a fleet of **~39 analytics robots** (UEBA geo-velocity, beaconing/C2, DNS tunnelling,
+  volume exfiltration, lateral-movement, source-freshness watchdog, backup/health, …);
+- **SOAR-light** automated IP blocking wired back into the FortiGate;
+- a **purpose-built SOC console** (`/soc/`) and a **mobile PWA**;
+- everything provisioned **idempotently** by ~104 versioned shell scripts, so the entire
+  platform can be rebuilt from source.
+
+---
+
+## 2. Key capabilities
+
+| Area | Capability |
 |---|---|
-| 🛡️ **Detection engineering** | **177 règles** de pipeline sur 7 streams (AD/Sysmon, FortiGate, FortiManager, M365, vSphere…) → événements tagués (`alert_tag`) + **114 définitions d'alerte** (mail + Teams), fenêtres glissantes |
-| 🎯 **MITRE ATT&CK** | `alert_tag` → techniques / tactiques, score de risque 0–10, couche ATT&CK Navigator + **matrice de couverture interactive** |
-| 🔎 **Recherche d'entités & dossier 360°** | Page dédiée : **tout compte ou machine** → identité unifiée, authentifications, logons, détections, **chronologie**, guides ; **score de risque FUSIONNÉ** (ML+UEBA+sévérité), entités **classées par risque**, **watchlist** de suivi |
-| 🗺️ **Console SOC visuelle** | **28 tableaux de bord natifs** par domaine (identité, M365, réseau, Aruba/Linux/EMS, endpoint…) + **carte mondiale 3D** des flux temps réel (vue satellite) + **recherche plein‑texte** (palette Ctrl+K, pivot alerte→logs bruts) |
-| 🧬 **Corrélation d'identité** | `SECURITY\rdupont`, `adm-rdupont`, `rdupont@dom` reconnus comme **une seule personne** (comptes liés agrégés) ; machines jamais fusionnées |
-| 🕑 **Chronologie unifiée** | Le **récit** d'une entité : détections + échecs d'auth Windows + sign‑ins M365 fusionnés et triés par date, sur tous les comptes liés |
-| 🧠 **XDR & LLM local** | `oms-xdr` : corrélation kill‑chain multi‑sources, scoring d'incident, triage/narration par LLM **local** (Ollama, CPU), réponse en **dry‑run** (double verrou) |
-| 📈 **UEBA / NDR** | Z‑score de volume, voyage impossible (Haversine), beaconing C2 (CV des intervalles), tunnel DNS (entropie), scan interne, score de risque d'entité 0–100 |
-| 🤖 **ML (`oms-ml`)** | Anomalie **non‑supervisée** (IsolationForest) en direct + réduction de **faux positifs** supervisée (features contextuelles par entité) |
-| 📖 **Playbooks & alertes auto‑explicatives** | **70 playbooks** (ce que c'est / vérifier / remédier / corriger) + chaque alerte porte cause décodée, EventID, ATT&CK et risque ; guide d'action **intégré** à chaque détection |
-| 🌐 **Threat intel & fuites** | abuse.ch (C2 Feodo / domaines URLhaus, **qualité TI** : infra partagée écartée), CISA KEV + ancienneté de patch ; RansomLook, HIBP, Dehashed, GitHub |
-| ⚙️ **SOAR & réponse** | Blocage auto des IP attaquantes sur FortiGate (sans identifiant, TTL, liste blanche, audit) ; désactivation de compte AD via LDAPS (**dry‑run** + denylist + audit + validation humaine) |
-| ✅ **Précision (~0 % FP visé)** | Tuning FP **mesuré et vérifié adversarialement** (allowlists chemin‑ancrées, garde‑fous anti‑faux‑négatif) ; auto‑supervision des **34 robots** ; chaîne d'intégrité HMAC |
-| 📋 **Conformité & intégrité** | Rétention par paliers, chaîne anti‑altération (`omni-integrity`), registre d'amélioration continue (clause 10) + générateur de preuves daté, mapping ISO 27001:2022 |
+| **Ingestion** | 15 Graylog inputs (Beats/TLS, Syslog TCP/UDP, GELF) across ~20 logical sources |
+| **Normalisation** | 40 pipelines / 250 rules — every source normalised to a common schema (`event_source`, `event_action`, `alert_tag`, `src_ip`, `user`, `host`, MITRE fields…) |
+| **Detection** | 197 event definitions (192 enabled), each mapped to a MITRE ATT&CK technique/tactic |
+| **Correlation** | Cross-source kill-chain correlation on canonical identity/host/IP keys → incidents |
+| **Triage** | Tiered decisioning (Critical / grey zone / noise) + LLM judge for the grey zone + learned false-positive suppression |
+| **Notifications** | One clean, sober HTML e-mail per real alert, with facts, ATT&CK badge, an action playbook, and one-click console / block / false-positive links |
+| **Response** | SOAR-light auto-block of attacking public IPs (FortiGate address-group feed), reversible, whitelisted |
+| **UEBA / NDR** | Geo-velocity ("impossible travel" / new-country), beaconing/C2, DNS anomalies, volume exfiltration, lateral movement, per-entity risk scoring |
+| **Physical** | SEAL access-control events correlated with the cyber timeline (badge, door, intrusion, dead-man switches) |
+| **Visualisation** | Native Graylog dashboards + a bespoke real-time SOC console + mobile PWA |
+| **Resilience** | Nightly application backups, ISO retention tiers, source-freshness watchdog, self-health checks, drift detection |
+| **Compliance** | ISO/IEC 27001 control mapping and evidence generation |
 
-### Architecture
+---
+
+## 3. Architecture
 
 ```
- Postes / Serveurs ───Winlogbeat TLS 5044──┐      GPO OMNI-AUDIT-Baseline (DC)
- (Sysmon + audit GPO)                       │      + distribution NETLOGON\SIEM (NinjaOne)
-                                            ▼
- FortiGate ─► FortiAnalyzer ──syslog/CEF 1514/5555──►  ┌────────────────────────────┐
-                                                       │  bx-it-graylog-vm           │
- Microsoft 365 ──Graph API (pull)──────────────────────│  Nginx TLS :443             │
- vSphere ──────syslog 1516─────────────────────────────│   ├─ Graylog 7.1 :9000 (TLS)│
- ESET PROTECT ─syslog 1515─────────────────────────────│   ├─ OpenSearch 2.19 :9200  │
- Vaultwarden / Veeam ──Filebeat / canal────────────────│   ├─ MongoDB 8.0 rs0        │
- Admins / SOC ─────HTTPS 443 (VPN)─────────────────────│   └─ Console SOC + PWA (8090)│
-                                                        └────────────────────────────┘
-        │                                                          │ GELF :12201
-        │   34 microservices Python (/usr/local/sbin/omni-*)       │ (event_source=siem_*)
-        └──  UEBA · NDR · oms-ml · oms-xdr · SOAR · rapports ──────┘
+                         ┌──────────────────────────────────────────────────────┐
+   Log sources           │                    bx-it-graylog-vm                    │
+ ─────────────           │                                                        │
+  Winlogbeat  ──TLS 5044─▶│  Graylog inputs ─▶ pipelines (40) ─▶ streams (22)      │
+  FortiGate   ──Syslog───▶│      │              normalise/enrich       │           │
+  (via FAZ)               │      │              tag MITRE / alert_tag  │           │
+  M365/Entra  ──GELF─────▶│      ▼                                     ▼           │
+  vSphere     ──Syslog───▶│  OpenSearch (indices on /data, 7.3 TB) ◀── event       │
+  ESET / EMS  ──Syslog───▶│      ▲                                   definitions   │
+  Aruba/Linux ──Syslog───▶│      │                                    (197)        │
+  Vaultwarden ──GELF─────▶│      │                                     │           │
+  SEAL (phys) ──GELF─────▶│      │                                     ▼           │
+  …                       │  analytics robots (39) ──GELF re-inject──▶ alerts       │
+                          │  (UEBA, NDR, watchdog, health)             │           │
+                          │                                            ▼           │
+                          │                                   ┌─────────────────┐  │
+                          │                          Teams ◀──│ notifications   │  │
+                          │                          SOAR ◀──│ (Teams / SOAR / │  │
+                          │                                   │  Triage webhook)│  │
+                          │                                   └────────┬────────┘  │
+                          │                                            ▼           │
+                          │                             omni-alert-triage (:8089)  │
+                          │                             score · correlate · LLM    │
+                          │                             judge · dedup · render     │
+                          │                                            │           │
+                          │   /soc/ console  ·  mobile PWA  ·  e-mail ◀─┘           │
+                          └──────────────────────────────────────────────────────┘
 ```
 
-### Organisation du dépôt
+**Core stack**
 
-| Chemin | Contenu |
-|---|---|
-| `00–09*.sh` | OS de base, MongoDB, OpenSearch, Graylog, Nginx/TLS, pare‑feu, inputs, sauvegarde, SNMP |
-| `10–14*.sh` | Modèle de données, enrichissement, **pipelines**, alertes, tableaux de bord |
-| `15–22*.sh` | Rapports, M365, vSphere, hygiène & routage des alertes |
-| `30–85*.sh` | Résilience, rétention/ISO, LDAPS, **SOAR**, **MITRE**, **UEBA/NDR**, scan vuln, corrélation, intégrité, **allowlists FP**, détections additionnelles |
-| `oms-ml/` · `oms-xdr/` | Couche ML (anomalie + réduction FP) · moteur de corrélation XDR |
-| `mobile/` | Backend console SOC + **PWA** (`omni-mobile-api.py`, stdlib), front `soc/` & `www/` |
-| `docker/` | **Déploiement conteneurisé** (DR/staging) : stack 6 services + secrets durcis + restore (cf. `docker/README-DOCKER.md`) |
-| `lib-graylog.sh` | Helpers API Graylog (TLS, `ensure_rule`/`ensure_pipeline`, `wrap_entity`…) |
-| `windows/` · `fortigate/` | GPO d'audit AD + kit agent · durcissement UTM/VPN FortiGate |
-| `lookups/` | Tables CSV (EventID, MITRE, **`alert-guidance.json`**…) |
-| `docs/` | Politique/standards/procédures ISO 27001, architecture, PRA, registres & captures |
-| `00-vars.env.example` · `SECRETS.example.md` | **Gabarits** de configuration & de secrets (valeurs réelles jamais versionnées) |
+- **Graylog** — ingestion, pipelines, streams, event definitions, dashboards, notifications.
+- **OpenSearch** — the search/analytics backend; indices live on a dedicated encrypted
+  volume (`/data`, LUKS). Snapshots for DR.
+- **MongoDB** — Graylog configuration store (backed up nightly).
+- **NGINX + TLS** — reverse proxy fronting the Graylog UI and the SOC console.
+- **systemd** — every robot and service runs as a hardened unit with timers.
 
-### Démarrage rapide
+**Custom services (Python, stdlib-only, systemd units)**
 
-```bash
-cd omnitech-siem-setup && chmod +x *.sh
-cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env && $EDITOR 00-vars.env  # secrets CHANGEME
+| Service | Port | Role |
+|---|---|---|
+| `omni-alert-triage` | 8089 | Alert scoring, correlation, LLM grey-zone judge, e-mail rendering |
+| `omni-soar` | 8088 | Auto-block webhook → FortiGate address group |
+| `omni-mobile-api` | — | Backend for the mobile PWA and the `/soc/` console |
+| `omni-source-watchdog` | — (timer) | Per-source freshness monitoring (silent-source detection) |
+| ~35 analytics robots | — (timers) | UEBA / NDR / health / enrichment |
 
-./00-preflight.sh --gen-vars   # analyse l'hôte : AVX, RAM, disques, réseau, dépôts, ports
-./01-base.sh ./02-mongodb.sh ./03-opensearch.sh ./04-graylog.sh ./05-nginx-tls.sh
-./06-firewall.sh ./07-inputs.sh ./10-graylog-model.sh … ./14-graylog-dashboards.sh
-#  … puis les scripts fonctionnels (MITRE, UEBA/NDR, SOAR, oms-ml, oms-xdr, console…)
-```
+---
 
-Console : `https://bx-it-graylog-vm.omnitech.security/soc/` (VPN). Volet Windows/AD : `windows/README-WINDOWS.md`.
+## 4. Data sources
 
-> **Variante conteneurisée (DR / staging / démo)** — toute la plateforme (Graylog + OpenSearch +
-> MongoDB + console + nginx TLS + oms-xdr) en `docker compose`, secrets durcis et **restauration**
-> de la configuration complète depuis une sauvegarde : voir **`docker/README-DOCKER.md`**. La
-> production reste le déploiement bare-metal chiffré LUKS.
+Roughly twenty logical sources feed the platform. Each is normalised to a common schema and
+watched for silence by the source-freshness watchdog.
 
-### Enrôlement des hôtes (Centre de déploiement)
-
-Tout hôte s'enrôle en **une commande**, depuis la page **Déploiement** de la console SOC (one-liner à copier + téléchargements + état « déjà vu »). Les installeurs **vérifient les prérequis** et **convergent** (idempotents, relançables). Artefacts servis sous `/kit/` (TLS), publiés par `95-kit-deploy.sh` (génère `SHA256SUMS`).
-
-| OS | One-liner | Téléchargement | Transport |
+| Source | Transport | `event_source` | What it brings |
 |---|---|---|---|
-| **Windows** | `irm https://<siem>/kit/install.ps1 \| iex` | `install.ps1` + conf | Winlogbeat **TLS 5044** |
-| **Linux** Debian/Ubuntu | `curl -fsSL https://<siem>/kit/install.sh \| sudo bash -s -- 10.33.220.10` | `install.sh` | Syslog **TCP 1519** |
-| **Linux** RHEL/Rocky/SUSE | *(idem ; détection `dnf`/`yum`/`zypper`)* | `install.sh` | Syslog **TCP 1519** |
-| **Switch Aruba** AOS-S | `logging 10.33.220.10` (sur le switch) | — | Syslog **UDP/TCP 1520** |
+| Windows Security | Winlogbeat / Beats TLS | `windows_security` | Auth, privilege, account & GPO changes, Kerberos |
+| Sysmon | Winlogbeat | `sysmon` | Process/network/registry telemetry (EDR-grade) |
+| Windows (other) | Winlogbeat | `windows` | Services, tasks, PowerShell, DNS-server audit |
+| FortiGate (multi-site) | Syslog via FortiAnalyzer | `fortigate` | Traffic, UTM, IPS, virus, VPN, DoS |
+| FortiManager | Syslog | `fortimanager` | Admin logins, config changes |
+| FortiGate DHCP | API feeder | `forti_dhcp` | Lease/identity mapping |
+| FortiClient EMS | Syslog TLS | `fortiems` | Endpoint AV, vulnerabilities, protection state |
+| Microsoft 365 / Entra ID | GELF (fetcher) | `m365` | Sign-ins, MFA/device registration, mail forwarding, role changes, Identity Protection |
+| VMware vSphere | Syslog | `vsphere` | Host/VM lifecycle, auth, snapshots |
+| ESET | Syslog | `eset` | Endpoint AV detections |
+| Aruba | Syslog TCP/UDP | `aruba` | Switch/AP auth, port-security, STP |
+| Linux | Syslog | `linux` | Host auth and system logs |
+| BunkerWeb (WAF) | — | `bunkerweb` | Application firewall blocks and scans |
+| Vaultwarden | Filebeat/GELF | `vaultwarden` | Password-vault access and brute force |
+| NinjaOne (inventory) | — | `inventory` | Asset inventory |
+| Veeam | Winlogbeat ("Veeam Backup" channel) | `veeam` | Backup job success / warning / failure |
+| ADCS | — | `adcs` | Certificate-services abuse (ESC1–ESC8) |
+| Certificate parc | GELF UDP | `cert_parc` | Certificate-orchestrator inventory & expiry |
+| Windows DNS | Winlogbeat (DNSServer/Audit) | `dns` | DNS record changes, cache flush, sensitive zones |
+| **SEAL** (physical) | GELF TCP | `seal` | Badge access, doors, alarms, intrusion, dead-man switches |
 
-- **Windows** (`install.ps1`) : prérequis (admin, PowerShell 5.1+, 64-bit, TCP 5044+443), **auto-élévation** UAC, puis délègue au cœur idempotent `Install-OmniSiem-NinjaOne.ps1` (CA TOFU → audit → Sysmon → Winlogbeat → santé → inventaire).
-- **Linux** (`install.sh`) : prérequis + paquets (`rsyslog`/`auditd`/`logger`) multi-distro, forward auth/sudo/sshd/auditd → SIEM:1519, règles auditd `omni_*`, test d'émission, résumé `[OK]/[KO]`.
-- **Intégrité (TOFU)** : le 1ᵉʳ appel HTTPS récupère `omnitech-rootca.pem` (le CA n'est pas encore épinglé), qui est ensuite installé (`LocalMachine\Root` sous Windows) / utilisé par Beats — après quoi tout est validé. Fenêtre MITM **au premier contact uniquement**, sur réseau interne VPN-only. Vérification : `curl https://<siem>/kit/SHA256SUMS` (comparé automatiquement par `install.ps1`).
-
-### Sécurité & secrets
-
-- **Aucun secret n'est versionné.** `.gitignore` exclut `00-vars.env`, `SECRETS.md`, tous les `*.key`/`*.pem`/`*.cred`/certificats. Utiliser les gabarits `*.example`.
-- Secrets de service dans `00-vars.env` (`chmod 600`) ; clés TLS, keyfile Mongo, `password_secret` Graylog sous `/etc` `/root` avec permissions strictes.
-- Services internes en `127.0.0.1` uniquement (OpenSearch, MongoDB, API Graylog, backend console) ; seuls Nginx (443) et les inputs sont exposés, derrière nftables + FortiGate.
-- **`/data` chiffré au repos** (LUKS2/TPM2) ; captures de démonstration **pseudonymisées** (`MOBILE_REDACT`).
-
-### Conformité ISO 27001:2022
-
-Preuves Annexe A produites par la plateforme : **A.8.15/8.16** (journalisation & surveillance), **A.8.8** (vulnérabilités), **A.5.7** (renseignement menaces), **A.8.11** (masquage), **A.5.25/5.26** (réponse à incident), **A.8.13** (sauvegarde), **A.5.37 / A.8.32** (procédures & gestion du changement — ce dépôt), **Clause 10** (amélioration continue). Dossier complet dans `docs/`.
-
-### État & feuille de route
-
-**Production.** **Livré :** corrélation XDR + triage LLM local (`oms-xdr`), scoring **ML** (`oms-ml`), **console SOC + PWA** bilingues (recherche d'entités, dossier 360°, chronologie unifiée, corrélation d'identité, **70 playbooks** intégrés, scores ML/UEBA, graphe d'attaque, SLA collecte/santé robots), threat‑intel **qualité‑filtrée** + surveillance fuites, matrice ATT&CK, actionneur AD (dry‑run), registre clause 10. **À venir :** isolation d'endpoint ESET + armement de la réponse AD (en attente accès API / délégation), couche LLM cloud optionnelle (conseil) avec tokenisation déterministe.
+> Internal, derived sources (`alert_triage`, `alert_correlation`, `ueba_geo`, `ndr_*`,
+> `siem_*`) are re-injected by the robots and the triage service so that every decision is
+> itself searchable and dashboarded.
 
 ---
 
-## 🇬🇧 English
+## 5. Detection engine
 
-### Overview
+**197 event definitions** (192 enabled), each tagged with a MITRE ATT&CK technique and
+tactic. Detections are grouped by kill-chain phase:
 
-A complete, reproducible **SIEM + XDR + SOC console** deployed on a single hardened Debian VM, with a Windows/AD enrolment kit. It ingests Windows Security/Sysmon, FortiGate/FortiAnalyzer, Microsoft 365, vSphere, ESET, Vaultwarden and Veeam; normalises everything into a **common schema**; runs **177 pipeline rules** and **114 alert definitions** mapped to **MITRE ATT&CK**; adds **behavioural analytics (UEBA/NDR)**, an **ML scoring layer (`oms-ml`)**, **kill‑chain incident correlation (`oms-xdr`)**, **light SOAR**, a bilingual **SOC web console + mobile PWA**, and **70 action playbooks** — all provisioned by **idempotent** scripts and documented for **ISO 27001:2022** evidence.
+- **Initial access** — malicious-IP VPN logins, M365 legacy-auth (MFA bypass), foreign M365
+  sign-ins, anomalous geographic logins (new country / impossible travel).
+- **Execution** — Office → interpreter, WMI process-create, InstallUtil / certutil LOLBins,
+  service-launched shells, malware on endpoint (ESET / FortiClient).
+- **Credential access** — LSASS memory access, NTDS.dit extraction, DCSync, Kerberoasting,
+  AS-REP roasting, SAM/SYSTEM hive theft, GPP/SYSVOL credentials, Vaultwarden brute force.
+- **Persistence / privilege** — AdminSDHolder, RBCD, Shadow Credentials, autorun/Run keys,
+  scheduled tasks, IFEO hijack, privileged-group changes, Zerologon.
+- **Defence evasion** — Defender tampering, AMSI bypass, event-log clearing, USN-journal
+  deletion, audit sabotage, **silent-source detection** (a blinded collector is itself an alert).
+- **Discovery / lateral movement** — AD recon (LDAP/nltest), internal scan, admin-share
+  sweeps, WinRM lateral movement, RunAs credential use.
+- **Collection / exfiltration** — sensitive-file mass access, volume-based exfiltration
+  (with legitimate-egress allow-listing, e.g. offsite backup targets).
+- **Impact** — ransomware precursors (shadow-copy deletion, backup destruction, mass file
+  deletion), extortion-site mentions, dark-web leaks.
+- **Health / assurance** — backup failure/absence, disk pressure, certificate expiry,
+  robot self-supervision, repo/production drift, log-integrity chain.
 
-> *Everything is code.* Every script is safe to re‑run and stops on first error with a final check.
+Normalisation and enrichment run in **40 pipelines / 250 rules**: GeoIP, threat-intel
+(Tor/Spamhaus/URLhaus/abuse.ch), MITRE lookup by `alert_tag`, per-source field mapping, and
+noise/false-positive allow-lists learned over time.
 
-### Key capabilities
+<div align="center"><img src="docs/captures/04-detections.png" alt="Detections view" width="90%"></div>
 
-| Capability | What it does |
+*ATT&CK coverage and the live detection catalogue are documented in
+[`docs/COUVERTURE-MITRE-ATTACK.md`](docs/COUVERTURE-MITRE-ATTACK.md) and
+[`docs/REGISTRE-DETECTIONS.md`](docs/REGISTRE-DETECTIONS.md).*
+
+<div align="center"><img src="docs/captures/06-attack.png" alt="ATT&CK matrix" width="90%"></div>
+
+---
+
+## 6. Alert triage &amp; notifications
+
+Raw detections are firehosed to Teams and the console, but **only qualified, actionable
+alerts reach the security mailbox**. That decision is made by the `omni-alert-triage`
+micro-service, to which every mailing detection is wired (a single HTTP notification).
+
+**How a decision is made**
+
+1. **Classify** the alert into a tier — *Critical*, *grey zone*, or *noise* — from the title.
+2. **Score** it on multiple signals: priority, critical-asset match, threat-intel, off-hours,
+   and **kill-chain velocity** (how many *distinct* detection types hit the same entity in
+   the window, across sources — a lateral-moving attacker lights up several).
+3. **Correlate** across sources on canonical keys (identity / host / IP / badge), so that a
+   SEAL console login and a Windows brute-force on the same account join up.
+4. **Grey zone → LLM judge.** For ambiguous alerts, a Claude (Haiku) judge is asked, over a
+   **redacted** context, whether the alert deserves an immediate e-mail. Critical alerts are
+   never suppressed; noise is dropped unless it escalates by score.
+5. **De-duplicate** and honour **learned false-positive rules** (analysts flag FPs from the
+   console; rules are scoped, time-boxed, and never silence a Critical).
+
+**The notification.** Each e-mail is a single, sober, professional HTML message: a colour
+accent by severity, a calm facts table (who / where / how many), the ATT&CK technique as a
+clickable badge, a four-part **action playbook** (what it is / what to check / remediation /
+durable fix), the triggering raw events, correlated alerts on the same entity, and one-click
+buttons (open in console, view logs, block IP, mark false-positive). Physical-security
+alerts additionally carry site / zone / door / badge.
+
+---
+
+## 7. Automated response (SOAR)
+
+`omni-soar` exposes a webhook that the platform calls when an attacking **public** IP is
+confirmed (brute force, scanning, WAF attacker). It pushes the IP into a FortiGate address
+group consumed by a block policy. The action is:
+
+- **guarded** — public IPs only, with a whitelist (never blocks internal or partner ranges);
+- **reversible** — entries carry a TTL (24 h) and can be cleared;
+- **auditable** — every block is re-injected as an event and shown on the console.
+
+A **manual block** path lets an analyst block an IP straight from an alert e-mail via an
+HMAC-signed, time-boxed link.
+
+---
+
+## 8. Visualisation — Graylog dashboards &amp; SOC console
+
+### Native Graylog dashboards
+
+The platform ships purpose-built Graylog dashboards over the normalised data — a security
+overview, an analytics view (collection coverage, robot health, UEBA/ML, geo-anomalies), a
+triage &amp; multi-site view, a sources view, and five SEAL physical-security dashboards. These
+are live captures of the Graylog web UI.
+
+<div align="center"><img src="docs/captures/graylog/graylog-01-soc.png" alt="Graylog — OMNI SOC dashboard" width="90%"></div>
+
+*`OMNI - SOC` — the security overview dashboard.*
+
+<div align="center"><img src="docs/captures/graylog/graylog-02-analytics.png" alt="Graylog — OMNI Analytics dashboard" width="90%"></div>
+
+*`OMNI - Analytics` — collection coverage, analytics-robot telemetry, ML/UEBA anomalies, impossible-travel.*
+
+| | |
 |---|---|
-| 🛡️ **Detection engineering** | **177 pipeline rules** across 7 streams (AD/Sysmon, FortiGate, FortiManager, M365, vSphere…) → tagged events + **114 alert definitions** (mail + Teams), tumbling windows |
-| 🎯 **MITRE ATT&CK** | `alert_tag` → techniques / tactics, 0–10 risk score, ATT&CK Navigator layer + **interactive coverage matrix** |
-| 🔎 **Entity search & 360° dossier** | Dedicated page: **any account or machine** → unified identity, authentications, logons, detections, **timeline**, guides; **FUSED risk score** (ML+UEBA+severity), entities **ranked by risk**, follow-up **watchlist** |
-| 🗺️ **Visual SOC console** | **28 native dashboards** by domain (identity, M365, network, Aruba/Linux/EMS, endpoint…) + **3D world map** of real-time flows (satellite view) + **full-text search** (Ctrl+K palette, alert→raw-logs pivot) |
-| 🧬 **Identity correlation** | `SECURITY\jdoe`, `adm-jdoe`, `jdoe@dom` recognised as **one person** (linked accounts aggregated); machines never merged |
-| 🕑 **Unified timeline** | An entity's **story**: detections + Windows auth failures + M365 sign‑ins merged and time‑sorted, across all linked accounts |
-| 🧠 **XDR & local LLM** | `oms-xdr`: cross‑source kill‑chain correlation, incident scoring, **local** LLM triage/narration (Ollama, CPU), **dry‑run** response (double‑lock) |
-| 📈 **UEBA / NDR** | Volume Z‑score, impossible travel (Haversine), C2 beaconing (interval CV), DNS tunnelling (entropy), internal scan, entity risk 0–100 |
-| 🤖 **ML (`oms-ml`)** | Live **unsupervised** anomaly (IsolationForest) + supervised **false‑positive reduction** (per‑entity contextual features) |
-| 📖 **Playbooks & self‑explaining alerts** | **70 playbooks** (what it is / triage / remediate / harden) + every alert carries decoded cause, EventID, ATT&CK and risk; action guide **inline** on each detection |
-| 🌐 **Threat intel & leaks** | abuse.ch (Feodo C2 / URLhaus domains, **TI‑quality**: shared infra excluded), CISA KEV + patch‑age; RansomLook, HIBP, Dehashed, GitHub |
-| ⚙️ **SOAR & response** | Threat‑feed auto‑block of attacker IPs on FortiGate (no creds, TTL, allowlist, audit); AD account disable via LDAPS (**dry‑run** + denylist + audit + human‑in‑the‑loop) |
-| ✅ **Precision (targeting ~0 % FP)** | FP tuning **measured & adversarially verified** (path‑anchored allowlists, anti‑false‑negative guards); self‑supervision of the **34 robots**; tamper‑evident HMAC chain |
-| 📋 **Compliance & integrity** | Tiered retention, tamper‑evident chain (`omni-integrity`), continual‑improvement register (clause 10) + dated evidence generator, full ISO 27001:2022 mapping |
+| ![Triage & multi-site](docs/captures/graylog/graylog-03-triage-multisite.png) | ![Sources](docs/captures/graylog/graylog-04-sources.png) |
+| `OMNI - Triage & Multi-site` — mail-vs-drop, per-site FortiGate | `Sources` — ingest volume by source |
+| ![SEAL SOC](docs/captures/graylog/graylog-05-seal-soc.png) | ![SEAL multi-site](docs/captures/graylog/graylog-06-seal-multisite.png) |
+| `SEAL - SOC opérationnel` — physical access, live | `SEAL - Vue multi-site` — access across sites |
+| ![Inputs](docs/captures/graylog/graylog-07-inputs.png) | ![Pipelines](docs/captures/graylog/graylog-08-pipelines.png) |
+| Ingest inputs (Beats / Syslog / GELF) | Processing pipelines |
 
-### Architecture
+### The SOC console
 
-```
- Endpoints / Servers ──Winlogbeat TLS 5044──┐      GPO OMNI-AUDIT-Baseline (DC)
- (Sysmon + audit GPO)                        │      + NETLOGON\SIEM distribution (NinjaOne)
-                                             ▼
- FortiGate ─► FortiAnalyzer ──syslog/CEF 1514/5555──►  ┌────────────────────────────┐
-                                                       │  bx-it-graylog-vm           │
- Microsoft 365 ──Graph API (pull)──────────────────────│  Nginx TLS :443             │
- vSphere ──────syslog 1516─────────────────────────────│   ├─ Graylog 7.1 :9000 (TLS)│
- ESET PROTECT ─syslog 1515─────────────────────────────│   ├─ OpenSearch 2.19 :9200  │
- Vaultwarden / Veeam ──Filebeat / channel──────────────│   ├─ MongoDB 8.0 rs0        │
- Admins / SOC ─────HTTPS 443 (VPN)─────────────────────│   └─ SOC console + PWA (8090)│
-                                                        └────────────────────────────┘
-        │                                                          │ GELF :12201
-        │   34 Python microservices (/usr/local/sbin/omni-*)       │ (event_source=siem_*)
-        └──  UEBA · NDR · oms-ml · oms-xdr · SOAR · reports ───────┘
-```
+A bespoke, real-time console (`/soc/`) sits on top of the OpenSearch backend. It is the
+day-to-day analyst surface: posture at a glance, incidents, the detection catalogue, entity
+360° dossiers, the ATT&CK matrix, an attack graph, dark-web leaks, collection health, and
+playbooks. A companion **mobile PWA** brings the essentials and push notifications to a phone.
 
-### Repository layout
-
-| Path | Contents |
+| | |
 |---|---|
-| `00–09*.sh` | Base OS, MongoDB, OpenSearch, Graylog, Nginx/TLS, firewall, inputs, backup, SNMP |
-| `10–14*.sh` | Data model, enrichment, **pipelines**, alerts, dashboards |
-| `15–22*.sh` | Reports, M365, vSphere, alert hygiene &amp; routing |
-| `30–85*.sh` | Resilience, retention/ISO, LDAPS, **SOAR**, **MITRE**, **UEBA/NDR**, vuln scan, correlation, integrity, **FP allowlists**, extra detections |
-| `oms-ml/` · `oms-xdr/` | ML layer (anomaly + FP reduction) · XDR correlation engine |
-| `mobile/` | SOC console + **PWA** backend (`omni-mobile-api.py`, stdlib), `soc/` &amp; `www/` front‑ends |
-| `docker/` | **Containerised deployment** (DR/staging): 6-service stack + hardened secrets + restore (see `docker/README-DOCKER.md`) |
-| `lib-graylog.sh` | Graylog API helpers (TLS, `ensure_rule`/`ensure_pipeline`, `wrap_entity`…) |
-| `windows/` · `fortigate/` | AD audit GPO + agent kit · FortiGate UTM/VPN hardening |
-| `lookups/` | CSV lookups (EventID, MITRE, **`alert-guidance.json`**…) |
-| `docs/` | ISO 27001 policy/standards/procedures, architecture, DRP, registers &amp; screenshots |
-| `00-vars.env.example` · `SECRETS.example.md` | Configuration &amp; secret **templates** (real values never committed) |
+| ![Incidents](docs/captures/03-incidents.png) | ![Entities](docs/captures/02-entites.png) |
+| **Incidents** — correlated kill-chains, ranked | **Entities** — accounts / hosts / IPs at risk |
+| ![Playbooks](docs/captures/05-playbooks.png) | ![Attack graph](docs/captures/07-graphe.png) |
+| **Playbooks** — response guidance per detection | **Attack graph** — lateral-movement paths |
+| ![Health](docs/captures/08-sante.png) | ![Leaks](docs/captures/09-fuites.png) |
+| **Health &amp; collection** — source freshness, cluster | **Leaks &amp; dark web** — exposed credentials / ransomware mentions |
+| ![Entity dossier](docs/captures/10-dossier360.png) | ![Timeline](docs/captures/10b-timeline.png) |
+| **360° dossier** — everything known about an entity | **Timeline** — unified cyber + physical timeline |
+| ![English UI](docs/captures/11-overview-en.png) | ![Mobile PWA](docs/captures/12-pwa-mobile.png) |
+| **Bilingual UI** (FR / EN) | **Mobile PWA** — SOC in your pocket |
 
-### Quick start
+> Console details: [`docs/CONSOLE-SOC.md`](docs/CONSOLE-SOC.md).
 
-```bash
-cd omnitech-siem-setup && chmod +x *.sh
-cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env && $EDITOR 00-vars.env  # CHANGEME secrets
+---
 
-./00-preflight.sh --gen-vars   # analyse host: AVX, RAM, disks, network, repos, ports
-./01-base.sh ./02-mongodb.sh ./03-opensearch.sh ./04-graylog.sh ./05-nginx-tls.sh
-./06-firewall.sh ./07-inputs.sh ./10-graylog-model.sh … ./14-graylog-dashboards.sh
-#  … then the feature scripts (MITRE, UEBA/NDR, SOAR, oms-ml, oms-xdr, console…)
+## 9. Physical security correlation (SEAL)
+
+The SEAL access-control system is a first-class log source. Badge reads, door states,
+alarms, and operator actions are normalised (`event_source:seal`) and correlated on the same
+timeline as cyber events, so a physical intrusion and a suspicious login on the same site or
+account can be seen together. Dead-man switches watch each site's audit / access / alarm
+streams and alert if a flow goes silent. A dedicated Teams channel carries physical alerts.
+
+*See [`docs/captures/10b-timeline.png`](docs/captures/10b-timeline.png) for the unified
+timeline, and the SEAL integration notes under `docs/`.*
+
+---
+
+## 10. Deployment
+
+The whole platform is provisioned by **~104 idempotent shell scripts** (`00-preflight.sh` …
+`99-cert-orchestrator.sh`), each responsible for one concern and safe to re-run. A Docker
+variant exists for DR / staging.
+
+**High-level order**
+
+```
+00–09   preflight · base · MongoDB · OpenSearch · Graylog · NGINX/TLS · firewall · inputs · backup
+10–14   data model · enrichment · pipelines · detections · dashboards
+15–22   reports · M365 · vSphere · alert hygiene · routing
+27–49   hardening · VPN/TI · drift · retention · disk guard · LDAPS · canary · SOAR · MITRE · triage · UEBA/NDR
+50–79   enrichment lots · new sources · Vaultwarden · FortiDHCP · identity correlation · file audit ·
+        integrity · robot supervision · auto-updates · FortiManager · mobile PWA · threat-intel ·
+        leaks (GitHub / dark web) · SOC console · detection tuning · ML scoring · internal index set
+80–99   analytics dashboards · retention consolidation · detections backlog · services versioning ·
+        deception/honeytokens · attack graph · FortiClient EMS · DNS · Linux · Aruba · Entra ·
+        correlation · multi-site SOAR · index templates · cert orchestrator
 ```
 
-Console: `https://bx-it-graylog-vm.omnitech.security/soc/` (VPN). Windows/AD side: `windows/README-WINDOWS.md`.
+Prerequisites, variables, and secrets are described in `docs/` and `SECRETS.example.md`
+(no secret is committed). See [`docs/PRA-RECONSTRUCTION-SIEM.md`](docs/PRA-RECONSTRUCTION-SIEM.md)
+for a full rebuild procedure and [`docs/PROCEDURE-EXPLOITATION-SIEM.md`](docs/PROCEDURE-EXPLOITATION-SIEM.md)
+for operations.
 
-> **Containerised variant (DR / staging / demo)** — the whole platform (Graylog + OpenSearch +
-> MongoDB + console + nginx TLS + oms-xdr) via `docker compose`, hardened secrets and full-config
-> **restore** from a backup: see **`docker/README-DOCKER.md`**. Production stays the LUKS-encrypted
-> bare-metal deployment.
+---
 
-### Security &amp; secrets
+## 11. Operations &amp; resilience
 
-- **No secret is ever committed.** `.gitignore` excludes `00-vars.env`, `SECRETS.md`, all `*.key`/`*.pem`/`*.cred`/certs. Use the `*.example` templates.
-- Service secrets live in `00-vars.env` (`chmod 600`); TLS keys, Mongo keyfile and Graylog `password_secret` under `/etc` `/root` with strict permissions.
-- Internal services bind to `127.0.0.1` only (OpenSearch, MongoDB, Graylog API, console backend); only Nginx (443) and the inputs are exposed, behind nftables + FortiGate.
-- **`/data` encrypted at rest** (LUKS2/TPM2); demo screenshots are **pseudonymised** (`MOBILE_REDACT`).
+- **Backups** — nightly application backup (MongoDB dump + OpenSearch snapshot + configs),
+  restore procedure validated ([`docs/FR-RESTORE.md`](docs/FR-RESTORE.md)).
+- **Retention** — ISO-aligned per-source retention tiers (e.g. FortiGate/Sysmon 90 d,
+  Windows Security / vSphere / ESET 180 d, M365 365 d) — see
+  [`docs/POLITIQUE-RETENTION.md`](docs/POLITIQUE-RETENTION.md).
+- **Source watchdog** — every monitored source has a silence threshold; a blinded collector
+  raises a `source_silent` alert (this is how a stalled DNS-audit or Veeam feed is caught).
+- **Self-health &amp; drift** — periodic self-checks and repo-vs-production drift detection.
+- **Encryption** — the data volume is LUKS-encrypted; TLS everywhere; SSH locked down.
+- **Alerting hygiene** — one clean mail per real alert; the triage service is the single mail
+  path (no legacy double-notifications).
 
-### ISO 27001:2022 alignment
+---
 
-Annex A evidence produced by the platform: **A.8.15/8.16** (logging &amp; monitoring), **A.8.8** (vulnerabilities), **A.5.7** (threat intelligence), **A.8.11** (data masking), **A.5.25/5.26** (incident response), **A.8.13** (backup), **A.5.37 / A.8.32** (operating procedures &amp; change management — this repo), **Clause 10** (continual improvement). Full set in `docs/`.
+## 12. Compliance (ISO/IEC 27001)
 
-### Status &amp; roadmap
+Detections, retention, logging policy, incident procedure, and evidence generation are mapped
+to ISO/IEC 27001 controls (notably A.8.15 logging, A.8.16 monitoring, A.5.x incident
+management). See [`docs/ISO27001-MAPPING.md`](docs/ISO27001-MAPPING.md),
+[`docs/REGISTRE-CONFORMITE-ISO27001.md`](docs/REGISTRE-CONFORMITE-ISO27001.md), and the
+`docs/EVIDENCE-AUDIT-*.md` evidence packs.
 
-**Production.** **Delivered:** XDR correlation + local LLM triage (`oms-xdr`), **ML** scoring (`oms-ml`), bilingual **SOC console + PWA** (entity search, 360° dossier, unified timeline, identity correlation, **70 inline playbooks**, ML/UEBA scores, attack graph, collection‑SLA / robot health), **quality‑filtered** threat‑intel + leak monitoring, ATT&CK coverage matrix, AD actuator (dry‑run), clause‑10 register. **Next:** ESET endpoint isolation + arming the AD response (pending API access / AD delegation), optional cloud‑LLM advisory layer with deterministic tokenisation.
+---
 
-### Stack &amp; versions (pinned)
+## 13. Repository layout
 
-Debian 13 · Graylog 7.1 · OpenSearch 2.19.x (3.x breaks Graylog) · MongoDB 8.0 · Winlogbeat OSS 8.x. Controlled upgrades only: `apt-mark unhold` → check Graylog matrix → upgrade → re‑hold.
+```
+.
+├── 00-preflight.sh … 99-cert-orchestrator.sh   # ~104 idempotent provisioning scripts
+├── lib-graylog.sh                              # shared Graylog API helpers (paginated, idempotent)
+├── triage/omni-alert-triage                    # alert-triage micro-service (+ .env template)
+├── oms-xdr / oms-ml / oms-graph                # correlation, ML scoring, attack graph add-ons
+├── seal/                                        # SEAL physical-access integration & detections
+├── mobile/  (soc/, pwa)                         # SOC console + mobile PWA frontends
+├── lookups/                                     # 20 lookup tables (guidance, MITRE, allow-lists…)
+├── kit/  windows/  fortigate/                   # collector kits & source configs
+├── docker/                                      # Docker variant (DR / staging)
+├── tests/  run-tests.sh                         # test harness
+└── docs/                                        # full documentation set (see below)
+```
+
+---
+
+## 14. Documentation index
+
+The complete documentation set lives under [`docs/`](docs/) — start at
+[`docs/00-INDEX.md`](docs/00-INDEX.md).
+
+**Core documentation (English):**
+
+| Document | Covers |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components, data flow, storage, services, network |
+| [`docs/DATA-SOURCES.md`](docs/DATA-SOURCES.md) | Every source, transport, normalised schema, freshness monitoring |
+| [`docs/DETECTIONS.md`](docs/DETECTIONS.md) | Detection engine, MITRE coverage, enrichment, UEBA/NDR, correlation |
+| [`docs/ALERTING-AND-TRIAGE.md`](docs/ALERTING-AND-TRIAGE.md) | Triage service, scoring, LLM judge, notification design, SOAR |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Health, watchdog, backup/DR, retention, runbook |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Prerequisites, provisioning order, rebuild procedure |
+
+**Reference documentation (original, French — authoritative for audit):**
+
+| Topic | Document |
+|---|---|
+| Architecture dossier | [`docs/DOSSIER-ARCHITECTURE-SIEM.md`](docs/DOSSIER-ARCHITECTURE-SIEM.md) |
+| Source integration &amp; inventory | [`docs/INTEGRATION-SOURCES.md`](docs/INTEGRATION-SOURCES.md) · [`docs/INVENTAIRE-SOURCES.md`](docs/INVENTAIRE-SOURCES.md) |
+| Detection registry | [`docs/REGISTRE-DETECTIONS.md`](docs/REGISTRE-DETECTIONS.md) |
+| MITRE ATT&CK coverage | [`docs/COUVERTURE-MITRE-ATTACK.md`](docs/COUVERTURE-MITRE-ATTACK.md) |
+| SOC console | [`docs/CONSOLE-SOC.md`](docs/CONSOLE-SOC.md) |
+| Automated response &amp; playbooks | [`docs/REPONSE-AUTOMATISEE.md`](docs/REPONSE-AUTOMATISEE.md) · [`docs/SOAR-PLAYBOOKS.md`](docs/SOAR-PLAYBOOKS.md) |
+| Operations runbook | [`docs/PROCEDURE-EXPLOITATION-SIEM.md`](docs/PROCEDURE-EXPLOITATION-SIEM.md) |
+| Incident procedure | [`docs/PROCEDURE-INCIDENT.md`](docs/PROCEDURE-INCIDENT.md) |
+| Disaster recovery / rebuild | [`docs/PRA-RECONSTRUCTION-SIEM.md`](docs/PRA-RECONSTRUCTION-SIEM.md) |
+| Retention policy | [`docs/POLITIQUE-RETENTION.md`](docs/POLITIQUE-RETENTION.md) |
+| Troubleshooting | [`docs/GUIDE-DEPANNAGE.md`](docs/GUIDE-DEPANNAGE.md) |
+| Glossary | [`docs/GLOSSAIRE.md`](docs/GLOSSAIRE.md) |
+| ISO 27001 mapping &amp; evidence | [`docs/ISO27001-MAPPING.md`](docs/ISO27001-MAPPING.md) · `docs/EVIDENCE-AUDIT-*.md` |
+| Executive summary | [`docs/SYNTHESE-EXECUTIVE.md`](docs/SYNTHESE-EXECUTIVE.md) |
+
+> Source-specific integration notes (kept from the original French documentation):
+> [`docs/FR-VEEAM.md`](docs/FR-VEEAM.md), [`docs/FR-M365.md`](docs/FR-M365.md),
+> [`docs/FR-VSPHERE.md`](docs/FR-VSPHERE.md), [`docs/FR-FORTIANALYZER.md`](docs/FR-FORTIANALYZER.md),
+> [`docs/FR-GUIDE.md`](docs/FR-GUIDE.md), [`docs/FR-CONTEXT.md`](docs/FR-CONTEXT.md).
 
 ---
 
 <div align="center">
-<sub>OMNITECH SECURITY — internal SIEM / XDR platform · provisioned by idempotent scripts · secrets excluded by design.</sub>
+<sub>OMNI SIEM · OMNITECH Security · self-hosted detection &amp; response · Graylog + OpenSearch + custom detection/triage/response tier</sub>
 </div>

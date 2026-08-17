@@ -1,0 +1,14 @@
+[Unit]
+Description=OMS SEAL - SLA d'acquittement des alarmes severes (multi-site)
+Documentation=file:/opt/oms-seal-sla/README.md
+After=network-online.target graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/oms-seal-sla/seal-sla.env
+WorkingDirectory=/opt/oms-seal-sla
+ExecStart=/opt/oms-seal-sla/.venv/bin/python /opt/oms-seal-sla/seal_sla_poller.py
+# lecture OpenSearch locale + emission GELF locale : aucun acces externe requis
+Nice=10

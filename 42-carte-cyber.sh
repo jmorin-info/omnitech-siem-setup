@@ -90,9 +90,9 @@ def rng(extra):
 def main():
     sources = [
         ("deny",   "omni-fortigate_*", rng([{"term": {"action": "deny"}},
-                    {"exists": {"field": "src_ip_geolocation"}}]), "src_ip_geolocation", "srccountry"),
+                    {"exists": {"field": "src_ip_geolocation"}}]), "src_ip_geolocation", "src_country"),
         ("threat", "omni-fortigate_*", rng([{"term": {"alert_tag": "threat_intel"}},
-                    {"exists": {"field": "src_ip_geolocation"}}]), "src_ip_geolocation", "srccountry"),
+                    {"exists": {"field": "src_ip_geolocation"}}]), "src_ip_geolocation", "src_country"),
         ("m365",   "omni-m365_*",      rng([{"term": {"alert_tag": "m365_etranger"}},
                     {"exists": {"field": "src_ip_geolocation"}}]), "src_ip_geolocation", "src_country"),
         ("vpn",    "omni-fortigate_*", rng([{"term": {"subtype": "vpn"}}, {"term": {"action": "ssl-login-fail"}},

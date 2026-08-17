@@ -18,6 +18,28 @@ CURL=(curl -s --cacert "${API_CA}" -u "admin:${GRAYLOG_ADMIN_PASS}" -H "Content-
 jqr()       { jq -r "$1" 2>/dev/null; }
 api_get()   { "${CURL[@]}" "${API}$1"; }
 api_post()  { "${CURL[@]}" -X POST "${API}$1" -d @-; }   # JSON sur stdin
+
+# Recupere TOUTES les definitions d'evenements en PAGINANT. Indispensable : le
+# catalogue depasse ~170 defs, donc un simple ?per_page=100 (1ere page) rend
+# invisibles au garde d'existence les defs au-dela du rang 100 -> re-creation =
+# DOUBLONS (cf incident des 11 alertes en double). Sortie : {event_definitions:[...]}.
+all_event_defs() {
+  local page=1 resp n total tmp; tmp="$(mktemp)"; echo '[]' > "${tmp}"
+  while :; do
+    resp="$(api_get "/events/definitions?per_page=100&page=${page}")"
+    n="$(echo "${resp}" | jq '(.event_definitions // .elements // []) | length' 2>/dev/null)"
+    [[ -z "${n}" || "${n}" -eq 0 ]] && break
+    # fusion via fichiers (jq -s) : evite la limite d'argv sur de gros objets
+    echo "${resp}" | jq -c '(.event_definitions // .elements // [])' > "${tmp}.pg"
+    jq -s -c '.[0] + .[1]' "${tmp}" "${tmp}.pg" > "${tmp}.nx" && mv "${tmp}.nx" "${tmp}"
+    total="$(echo "${resp}" | jq -r '.total // 0' 2>/dev/null)"
+    (( page*100 >= ${total:-0} )) && break
+    (( page++ )); (( page > 100 )) && break   # garde-fou anti-boucle
+  done
+  jq -c '{event_definitions: .}' "${tmp}"; rm -f "${tmp}" "${tmp}.pg" "${tmp}.nx"
+}
+# Id d'une definition d'evenement par titre (paginee). Vide si absente.
+event_def_id() { all_event_defs | jq -r --arg t "$1" '.event_definitions[] | select(.title==$t) | .id' | head -1; }
 api_put()   { "${CURL[@]}" -X PUT  "${API}$1" -d @-; }   # JSON sur stdin
 api_del()   { "${CURL[@]}" -X DELETE "${API}$1"; }
 
@@ -156,4 +178,150 @@ ensure_lookup() {
           }' | api_post "/system/lookup/tables" | jqr '.id' >/dev/null \
       && ok "table 'omni-${NAME}'" || { warn "table ${NAME} refusee"; return 1; }
   else skip "table 'omni-${NAME}' existe"; fi
+}
+
+# ============================================================================
+# CONVERGENCE DES DEFINITIONS D'EVENEMENTS (RC-7 - detecteur de derive)
+# ----------------------------------------------------------------------------
+# CONTEXTE : ensure_event() (defini dans 13-graylog-alerts.sh:256) est
+# CREATE-ONLY ("if exists, skip"). Corriger une def au depot ne met donc JAMAIS
+# a jour l'instance vivante -> le depot n'est pas source de verite (audit F.3 :
+# def "kill-chain correlee" commentee au depot mais toujours ENABLED en prod).
+#
+# Ces fonctions sont ADDITIVES : elles NE modifient PAS ensure_event (20+ scripts
+# en dependent). Elles construisent le JSON DESIRE avec le MEME gabarit que
+# ensure_event, le comparent au JSON COURANT (GET, normalise) et rapportent la
+# derive. Par defaut = DRY-RUN (imprime le diff, aucun PUT). Un PUT n'est tente
+# que si GRAYLOG_CONVERGE=1 (jamais arme par l'audit).
+#
+# CE QUI EST COMPARE (champs que 13-graylog-alerts.sh possede seul) :
+#   title, description, priority, alert, config.{query,streams,group_by,series,
+#   conditions,search_within_ms,execute_every_ms,event_limit}, key_spec.
+# CE QUI EST DELIBEREMENT EXCLU (co-gere ailleurs -> un PUT le clobbererait) :
+#   - notifications / storage / scheduler : ajoutes par 21/22-alert-routing ;
+#     un live typique porte 2-3 notifications, le desire n'en construit qu'1.
+#   - notification_settings.grace_period_ms + field_spec : co-geres par
+#     21-alert-hygiene.sh (surcouche anti-tempete). grace/key_spec sont donc
+#     classes "TUNING" (rapportes a part), PAS "LOGIQUE".
+# ============================================================================
+
+# _event_desired_json <TITLE> <PRIO> <QUERY> <STREAMS> <GROUPBY> <SERIES> \
+#                      <COND> <WITHIN_min> <EVERY_min> [GRACE_min]
+# Reproduit A L'IDENTIQUE le gabarit de ensure_event (13-graylog-alerts.sh:262).
+# NOTIF_ID (global pose par 13) est lu depuis l'environnement, comme ensure_event.
+_event_desired_json() {
+  local TITLE="$1" PRIO="$2" QUERY="$3" STREAMS="$4" GROUPBY="$5" SERIES="$6" COND="$7" WITHIN="$8" EVERY="$9"
+  local GRACE="${10:-10}"
+  jq -n --arg t "${TITLE}" --argjson p "${PRIO}" --arg q "${QUERY}" \
+        --argjson st "${STREAMS}" --argjson gb "${GROUPBY}" --argjson se "${SERIES}" \
+        --argjson co "${COND}" --argjson w "$(( WITHIN * 60000 ))" --argjson e "$(( (EVERY < WITHIN ? WITHIN : EVERY) * 60000 ))" \
+        --argjson g "$(( GRACE * 60000 ))" \
+        --arg n "${NOTIF_ID:-}" '{
+    title: $t,
+    description: ("P" + ($p|tostring) + " - provisionne par 13-graylog-alerts.sh"),
+    priority: $p,
+    alert: true,
+    config: {
+      type: "aggregation-v1",
+      query: $q,
+      query_parameters: [],
+      streams: $st,
+      group_by: $gb,
+      series: $se,
+      conditions: $co,
+      search_within_ms: $w,
+      execute_every_ms: $e,
+      use_cron_scheduling: false,
+      event_limit: 100
+    },
+    field_spec: ($gb | map({key: ., value: {data_type: "string",
+        providers: [{type: "template-v1", template: ("${source." + . + "}"),
+                     require_values: false}]}}) | from_entries),
+    key_spec: $gb,
+    notification_settings: { grace_period_ms: $g, backlog_size: 5 },
+    notifications: [ { notification_id: $n, notification_parameters: null } ]
+  }'
+}
+
+# _event_canon : projette une def (desiree OU live) sur le sous-ensemble
+# "possede par 13", canonicalise (tri des cles via -S, series normalisees, champs
+# poses par le serveur retires) pour un diff textuel stable. IMPORTANT : jq 1.7
+# PRESERVE les litteraux numeriques (le live rend 10.0, le desire 10) -> on force
+# une forme canonique sur TOUT nombre via `walk(.+0)` (10.0+0 -> 10), sinon faux
+# positif sur chaque seuil. Lit un objet sur stdin.
+_event_canon() {
+  jq -S 'walk(if type == "number" then . + 0 else . end) | {
+    title, description, priority, alert,
+    config: {
+      type: .config.type,
+      query: .config.query,
+      streams: (.config.streams // [] | sort),
+      group_by: (.config.group_by // []),
+      series: (.config.series // [] | map({type, id, field: (.field // null)}) | sort_by(.id)),
+      conditions: .config.conditions,
+      search_within_ms: .config.search_within_ms,
+      execute_every_ms: .config.execute_every_ms,
+      event_limit: (.config.event_limit // 100)
+    },
+    key_spec: (.key_spec // []),
+    _tuning: {
+      grace_period_ms: (.notification_settings.grace_period_ms // null)
+    }
+  }'
+}
+
+# ensure_event_converge : MEME SIGNATURE que ensure_event (drop-in). Detecteur de
+# derive RC-7. Si la def existe : compare desire vs live et imprime le diff
+# (DRY-RUN). PUT UNIQUEMENT si GRAYLOG_CONVERGE=1 (fusion preservant
+# notifications/storage/scheduler ; jamais arme par l'audit). Si absente :
+# n'ecrit RIEN, signale simplement qu'une creation serait requise (la creation
+# reste la responsabilite de ensure_event, inchangee).
+# Retour : 0 = inchangee ; 10 = derive detectee ; 20 = absente.
+ensure_event_converge() {
+  local TITLE="$1"
+  local ID DESIRED LIVE C_DES C_LIVE
+  ID="$(event_def_id "${TITLE}")"
+  if [[ -z "${ID}" || "${ID}" == "null" ]]; then
+    warn "converge '${TITLE}' : ABSENTE live -> creation requise (ensure_event)"
+    return 20
+  fi
+  DESIRED="$(_event_desired_json "$@")"
+  LIVE="$(api_get "/events/definitions/${ID}")"
+  C_DES="$(echo "${DESIRED}" | _event_canon)"
+  C_LIVE="$(echo "${LIVE}"    | _event_canon)"
+  if [[ "${C_DES}" == "${C_LIVE}" ]]; then
+    skip "converge '${TITLE}' : conforme (aucune derive)"
+    return 0
+  fi
+  warn "converge '${TITLE}' : DERIVE (${ID}) - diff live(-) -> desire(+) :"
+  diff <(echo "${C_LIVE}") <(echo "${C_DES}") | sed 's/^/        /'
+  if [[ "${GRAYLOG_CONVERGE:-0}" != "1" ]]; then
+    echo "        [DRY-RUN] GRAYLOG_CONVERGE!=1 -> aucun PUT. Diff seulement."
+    return 10
+  fi
+  # --- PUT de convergence (DESACTIVE par defaut) ---------------------------
+  # Fusion PRUDENTE : on repart du LIVE (preserve id/notifications/storage/
+  # scheduler/field_spec/grace poses par 21/22) et on n'ecrase QUE les champs
+  # LOGIQUE possedes par 13. On ne touche JAMAIS notifications ni storage.
+  local MERGED
+  MERGED="$(jq -n --argjson live "${LIVE}" --argjson des "${DESIRED}" '
+    $live
+    | .title = $des.title
+    | .description = $des.description
+    | .priority = $des.priority
+    | .alert = $des.alert
+    | .config.query = $des.config.query
+    | .config.streams = $des.config.streams
+    | .config.group_by = $des.config.group_by
+    | .config.series = $des.config.series
+    | .config.conditions = $des.config.conditions
+    | .config.search_within_ms = $des.config.search_within_ms
+    | .config.execute_every_ms = $des.config.execute_every_ms
+    | .config.event_limit = $des.config.event_limit
+    | .key_spec = $des.key_spec
+    | del(._scope, .matched_at, .updated_at, .scheduler)')"
+  echo "${MERGED}" | api_put "/events/definitions/${ID}?schedule=true" >/dev/null \
+    && ok "converge '${TITLE}' : PUT applique (${ID})" \
+    || warn "converge '${TITLE}' : PUT REFUSE"
+  return 10
 }

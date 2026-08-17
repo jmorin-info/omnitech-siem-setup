@@ -139,6 +139,12 @@ class SentinelResponder:
             return f"ERREUR blocage {ip}: {exc}"
 
     def _isolate_ninjaone(self, host: str) -> str:
-        """Isolation réseau via API NinjaOne (creds OMS_NINJA_* ; délégué)."""
-        log.warning("ACTION sentinel: isolation NinjaOne de %s (délégué API).", host)
-        return f"OK(delegated): isolation NinjaOne de {host}"
+        """Isolation reseau via NinjaOne : AUCUN runbook n'est raccorde a ce jour.
+        La methode ne DOIT jamais retourner OK ni journaliser ACTION pour une
+        isolation qui n'a pas lieu (sinon le SOC croit l'hote isole pendant qu'il
+        continue de se propager). Honnetete alignee sur oms-xdr/responder.py
+        (audit 17/07/2026). Ne PAS implementer l'appel NinjaOne ici sans
+        autorisation explicite : le tenant invissys.com est co-gere (reponse interdite)."""
+        log.error("NON-IMPLEMENTE: isolation NinjaOne de %s demandee, mais aucun "
+                  "runbook raccorde : rien n'a ete execute. Traitement MANUEL requis.", host)
+        return f"NON-IMPLEMENTE: isolation NinjaOne de {host} — traitement manuel requis"

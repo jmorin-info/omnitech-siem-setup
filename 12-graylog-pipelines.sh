@@ -272,7 +272,8 @@ when
   to_string($message.winlogbeat_winlog_event_id) == "4662"
   AND has_field("winlogbeat_winlog_event_data_Properties")
   AND (contains(to_string($message.winlogbeat_winlog_event_data_Properties), "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2", true)
-    OR contains(to_string($message.winlogbeat_winlog_event_data_Properties), "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2", true))
+    OR contains(to_string($message.winlogbeat_winlog_event_data_Properties), "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2", true)
+    OR contains(to_string($message.winlogbeat_winlog_event_data_Properties), "89e95b76-6a76-11d0-97d5-00c04fc2dcd2", true))
   AND NOT ends_with(to_string($message.winlogbeat_winlog_event_data_SubjectUserName), "$", false)
   AND NOT starts_with(to_string($message.winlogbeat_winlog_event_data_SubjectUserName), "MSOL_", true)
 then
@@ -388,6 +389,12 @@ when
   AND NOT (
        to_string($message.winlogbeat_winlog_event_data_SourceImage) == "C:\\Program Files (x86)\\NinjaOne\\NinjaRMMAgent.exe"
     OR to_string($message.winlogbeat_winlog_event_data_SourceImage) == "C:\\Program Files\\NinjaOne\\NinjaRMMAgent.exe"
+    OR to_string($message.winlogbeat_winlog_event_data_SourceImage) == "C:\\Program Files\\VMware\\VMware Tools\\vmtoolsd.exe"
+    OR to_string($message.winlogbeat_winlog_event_data_SourceImage) == "C:\\Program Files (x86)\\ossec-agent\\wazuh-agent.exe"
+    // process systeme Windows accedant a LSASS (normal) : casse variable -> ends_with
+    // insensible casse, MAIS ancre sur \system32\ (anti-usurpation hors dossier protege).
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\system32\\csrss.exe", true)
+    OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\system32\\wininit.exe", true)
   )
 then
   set_field("alert_tag", "lsass_access");
@@ -419,6 +426,10 @@ rule "omni-sysmon-10-powershell-suspect"
 when
   to_string($message.winlogbeat_winlog_event_id) == "1"
   AND has_field("winlogbeat_winlog_event_data_CommandLine")
+  // Restreint au VRAI moteur PowerShell : sinon un binaire quelconque avec " -enc"
+  // dans sa ligne de commande (ex. pdftotext "-enc UTF-8") etait tague a tort. 06/07/2026.
+  AND ( ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\powershell.exe")
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\pwsh.exe") )
   AND (contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), " -enc", true)
     OR contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "frombase64string", true)
     OR contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "downloadstring", true)
@@ -518,7 +529,12 @@ when
   to_string($message.winlogbeat_winlog_channel) == "System"
   AND to_string($message.winlogbeat_winlog_event_id) == "104"
 then
-  set_field("alert_tag", "winsec_critique");
+  // 104 (journal SYSTEME efface) = FAIBLE signal : se declenche en usage normal
+  // (rotation, maintenance, postes). Mesure live 2026-06-30 : 4 machines distinctes
+  // en routine. Le VRAI sabotage = 1102/1104 (journal SECURITE efface), traite par
+  // omni-winsec-10-sabotage-audit. On demote donc 104 en tag INFORMATIF, hors mail
+  // critique, mais conserve et cherchable (correlable en volume si besoin).
+  set_field("alert_tag", "system_log_cleared");
 end
 EOF
 

@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# =============================================================================
+# omni-drift-events - Detecteur de derive des definitions d'evenements (RC-7).
+#
+# 100% LECTURE SEULE : n'emet que des GET. Aucun PUT/POST/DELETE, quoi qu'il
+# arrive (GRAYLOG_CONVERGE est ignore ici : ce script ne sert QU'a rapporter).
+#
+# Il fait deux choses :
+#   1. DERIVE DE CHAMP : pour un petit catalogue de defs (arguments EXACTS repris
+#      de 13-graylog-alerts.sh), compare le JSON desire au JSON live et imprime
+#      le diff (via ensure_event_converge en DRY-RUN force).
+#   2. ORPHELINS : defs presentes live mais absentes/desactivees au depot
+#      (ex. "kill-chain correlee", commentee le 17/07 mais toujours ENABLED) -
+#      la signature meme de RC-7.
+#
+# Usage :  bash tools/omni-drift-events
+# =============================================================================
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+# shellcheck disable=SC1091
+source 00-vars.env
+# shellcheck disable=SC1091
+source lib-graylog.sh
+
+# Filet de securite : ce script ne DOIT jamais muter, meme si l'appelant a
+# exporte le flag. On le neutralise explicitement.
+export GRAYLOG_CONVERGE=0
+
+require_api
+
+# --- Constructeurs de conditions/series repris de 13-graylog-alerts.sh -------
+NOCOND='{"expression":null}'
+count_ge()   { echo "{\"expression\":{\"expr\":\">=\",\"left\":{\"expr\":\"number-ref\",\"ref\":\"count()\"},\"right\":{\"expr\":\"number\",\"value\":$1}}}"; }
+card_ge()    { echo "{\"expression\":{\"expr\":\">=\",\"left\":{\"expr\":\"number-ref\",\"ref\":\"card($1)\"},\"right\":{\"expr\":\"number\",\"value\":$2}}}"; }
+sum_ge()     { echo "{\"expression\":{\"expr\":\">=\",\"left\":{\"expr\":\"number-ref\",\"ref\":\"sum($1)\"},\"right\":{\"expr\":\"number\",\"value\":$2}}}"; }
+COUNT_SERIES='[{"id":"count()","type":"count"}]'
+card_series(){ echo "[{\"id\":\"card($1)\",\"type\":\"card\",\"field\":\"$1\"}]"; }
+
+# NOTIF_ID : le desire de ensure_event pose 1 notification (mail). On l'aligne sur
+# le mail live pour ne PAS le compter comme derive (de toute facon exclu du diff).
+NOTIF_ID="$(api_get "/events/notifications?per_page=100" \
+  | jq -r '.notifications[] | select(.title=="OMNI - Mail equipe IT") | .id' | head -1)"
+export NOTIF_ID
+
+# Streams (memes lookups que 13)
+ST_WINSEC="$(get_stream_id 'OMNI - Windows Security')"
+ST_SYSMON="$(get_stream_id 'OMNI - Sysmon')"
+ST_WINOTH="$(get_stream_id 'OMNI - Windows autres')"
+ST_FORTI="$(get_stream_id  'OMNI - FortiGate')"
+ST_INT="$(get_stream_id 'OMNI - Interne SIEM')"
+ST_VS="$(get_stream_id 'OMNI - vSphere' || true)"
+RISK_STREAMS="$(jq -n --arg a "$ST_WINSEC" --arg b "$ST_SYSMON" --arg c "$ST_WINOTH" --arg d "$ST_FORTI" --arg e "$ST_VS" \
+  '[$a,$b,$c,$d,$e] | map(select(. != "" and . != null))')"
+RISK_SERIES='[{"id":"sum(risk_score)","type":"sum","field":"risk_score"}]'
+
+echo "############################################################"
+echo "# 1. DERIVE DE CHAMP (desire depot vs live) - LECTURE SEULE"
+echo "############################################################"
+
+# --- def SEAL corrigee (exclusion sealtoagrid) : temoin "aucune derive" -------
+ensure_event_converge "OMNI - Force brute (>=10 échecs / compte / 10 min)" 3 \
+  'event_id:4625 AND logon_fail:1 AND NOT user:*$ AND NOT user:(ninjaone OR ADSyncMSA_* OR sealtoagrid OR Invité OR Guest)' "[\"${ST_WINSEC}\"]" \
+  '["user"]' "${COUNT_SERIES}" "$(count_ge 10)" 10 2
+
+# --- Hote a risque : arg grace du depot (720 min) vs live -> derive attendue ---
+ensure_event_converge "OMNI - Hôte à risque élevé (score MITRE cumulé / 1h)" 2 \
+  '_exists_:risk_score AND NOT event_source:fortigate' "${RISK_STREAMS}" \
+  '["host"]' "${RISK_SERIES}" "$(sum_ge risk_score 30)" 60 5 720
+
+# --- Tunneling DNS : grace defaut depot (10 min) vs live -> derive attendue ----
+ensure_event_converge "OMNI - Tunneling DNS suspect (exfiltration)" 2 \
+  'event_source:ndr_dns AND alert_tag:dns_tunneling' "[\"${ST_INT}\"]" \
+  '["dns_domain"]' "${COUNT_SERIES}" "$(count_ge 1)" 120 60
+
+# --- Password spraying Kerberos : temoin supplementaire -----------------------
+ensure_event_converge "OMNI - Password spraying Kerberos (>=6 comptes / IP / 10 min)" 3 \
+  'event_id:4771 AND _exists_:winlogbeat_winlog_event_data_IpAddress AND NOT winlogbeat_winlog_event_data_TargetUserName:*$' "[\"${ST_WINSEC}\"]" \
+  '["winlogbeat_winlog_event_data_IpAddress"]' "$(card_series winlogbeat_winlog_event_data_TargetUserName)" "$(card_ge winlogbeat_winlog_event_data_TargetUserName 6)" 10 2
+
+echo
+echo "############################################################"
+echo "# 2. ORPHELINS (live ENABLED mais absents/commentes au depot)"
+echo "############################################################"
+# Catalogue des defs "OMNI -" que le depot NE construit PLUS (retirees/commentees).
+# On verifie leur presence live : si presentes -> RC-7 (create-only ne les a
+# jamais eteintes). Etendre cette liste au besoin.
+ORPHANS=(
+  "OMNI - Incident critique (kill-chain corrélée)"   # commentee 17/07 (audit F.3)
+)
+for T in "${ORPHANS[@]}"; do
+  ID="$(event_def_id "${T}")"
+  if [[ -n "${ID}" && "${ID}" != "null" ]]; then
+    EN="$(api_get "/events/definitions/${ID}" | jq -r '.state // .alert // "?"')"
+    NN="$(api_get "/events/definitions/${ID}" | jq -r '.notifications | length')"
+    warn "ORPHELIN '${T}' : PRESENT live (${ID}), etat=${EN}, ${NN} notif(s) - retire du depot mais jamais eteint (RC-7)"
+  else
+    skip "'${T}' : absent live (coherent avec le depot)"
+  fi
+done

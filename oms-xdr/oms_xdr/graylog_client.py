@@ -71,6 +71,25 @@ class GraylogClient:
         return {str(b["key"]): int(b.get("d", {}).get("value", 0)) for b in buckets
                 if b.get("key") not in (None, "", "null")}
 
+    def pairs(self, query: str, stream_key: str, group_by: str,
+              sub_field: str, minutes: int) -> dict[str, set[str]]:
+        """Retourne {valeur: set(sous_valeurs)} — terms imbriqué.
+
+        Sert le PONT user<->host : depuis les logons 4624, {user: {hôtes}} pour
+        corréler un compte à risque avec une détection sur SON poste (cross-entité)."""
+        body = {"size": 0, "query": self._filters(query, stream_key, minutes),
+                "aggs": {"e": {"terms": {"field": group_by, "size": 5000},
+                               "aggs": {"s": {"terms": {"field": sub_field, "size": 50}}}}}}
+        buckets = self._os_search(body).get("aggregations", {}).get("e", {}).get("buckets", [])
+        out: dict[str, set[str]] = {}
+        for b in buckets:
+            k = str(b.get("key", ""))
+            if k in ("", "null"):
+                continue
+            out[k] = {str(s["key"]) for s in b.get("s", {}).get("buckets", [])
+                      if str(s.get("key", "")) not in ("", "null")}
+        return out
+
     # ------------------------------------------------------------------
     #  Écriture (GELF — HTTP par défaut ; TCP \0 si proto=tcp)
     # ------------------------------------------------------------------

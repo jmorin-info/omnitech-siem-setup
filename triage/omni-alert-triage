@@ -1,0 +1,1362 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-alert-triage - Triage de pertinence des alertes AVANT mail (v2 scoring).
+#
+# Modele : Graylog envoie TOUTES les alertes (qui meritaient un mail) en webhook
+# ici ; Teams reste cable en direct cote Graylog (firehose SOC). Ce service
+# calcule un SCORE multi-signaux et decide si l'alerte merite un MAIL :
+#
+#   score = base[tier] + priorite + criticite_actif + threat_intel
+#           + hors_heures + velocite(kill-chain)
+#
+#   CRITICAL : mail (toujours, apres dedup).
+#   NOISE    : drop, SAUF si le score a ete pousse haut (actif critique /
+#              vague d'alertes sur la meme entite) -> escalade mail.
+#   GRAY     : si LLM dispo -> juge (contexte enrichi : score, actif, site,
+#              velocite) ; sinon decide par SEUIL de score (plus malin qu'un
+#              mail systematique).
+#
+#   Anti-bruit : dedup (titre+entite / fenetre) ; liste FP connus.
+#   Kill-chain : compte les alertes recentes par entite ; au-dela d'un seuil,
+#                bonus de score (un hote qui accumule = incident probable).
+#   Tracabilite : chaque decision -> GELF event_source=alert_triage (+ score,
+#                 signaux). Endpoint GET /stats : compteurs roulants.
+#
+# Config : /etc/omni-alert-triage.env. Tiers surchargeables :
+#   /etc/omni-alert-triage-tiers.json {"critical":[...], "noise":[...]}.
+#   Actifs critiques : ASSET_CRITICAL_REGEX (env, regex sep. par des |).
+# Etat   : /var/lib/omni-alert-triage/state.json   Ecoute : 127.0.0.1:8089.
+# =============================================================================
+import hashlib, hmac, html as _html, ipaddress, json, os, re, smtplib, sys, time, urllib.request, urllib.parse
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.header import Header
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+ENVFILE   = "/etc/omni-alert-triage.env"
+TIERSFILE = "/etc/omni-alert-triage-tiers.json"
+STATE     = "/var/lib/omni-alert-triage/state.json"
+GUIDANCE  = "/root/omnitech-siem-setup/lookups/alert-guidance.json"
+GELF_URL  = "http://127.0.0.1:12201/gelf"
+LISTEN    = ("127.0.0.1", 8089)
+
+_GUIDE_CACHE = {"mtime": 0, "data": {}}
+_SEAL_ID_RE = re.compile(r'\bSEAL\s+([A-Z]{2,3})-(\d{3})\b', re.I)
+_TECH_RE = re.compile(r'T\d{4}(?:\.\d{3})?')   # technique ATT&CK dans un titre
+
+def guidance_key(tag, title):
+    """Cle de playbook. L'identifiant de regle SEAL present dans le titre
+    ("OMNI - SEAL ALM-003 - ...") PRIME sur alert_tag -> cle "seal_alm_003".
+    Raison de l'inversion (audit 17/07/2026) : le tag SEAL est trop grossier pour
+    departager les playbooks. seal_sla_breach est PARTAGE par SLA-001 et SLA-002
+    dont les remediations different ; d'autres detections SEAL n'ont pas de tag du
+    tout, ou un tag sans entree de guidance (seal_console_auth_failure, alors que
+    le playbook seal_hyp_001 existe). Un tag ne peut donc pas servir de cle SEAL :
+    l'identifiant du titre, lui, est unique et deterministe. Le repli sur le tag
+    reste pour les detections NON-SEAL (leurs titres ne matchent pas _SEAL_ID_RE
+    -> comportement strictement inchange pour elles)."""
+    m = _SEAL_ID_RE.search(title or "")
+    if m: return f"seal_{m.group(1).lower()}_{m.group(2)}"
+    return tag or ""
+
+def guidance(tag):
+    """Playbook 4 parties (ce_que_cest/a_verifier/remediation/correction) par alert_tag."""
+    if not tag: return None
+    try:
+        m = os.path.getmtime(GUIDANCE)
+        if m != _GUIDE_CACHE["mtime"]:
+            _GUIDE_CACHE["data"] = json.load(open(GUIDANCE)); _GUIDE_CACHE["mtime"] = m
+    except Exception:
+        return None
+    return _GUIDE_CACHE["data"].get(tag)
+
+GL_BASE = "https://bx-it-graylog-vm.omnitech.security"
+
+# --- Extrait lisible d'un evenement declencheur -------------------------------
+# PROBLEME resolu (02/07/2026) : message brut tronque a 140 c. -> sur un event
+# Sysmon le prefixe inutile (RuleName/UtcTime/ProcessGuid/ProcessId) consommait
+# tout le budget AVANT l'info utile (QueryName, Image, CommandLine coupes).
+# STRATEGIE : 1) privilegier les CHAMPS STRUCTURES de l'evenement (libelles FR
+# compacts) ; 2) a defaut, message brut NETTOYE du bruit Windows/Sysmon, 260 c.
+_EXCERPT_FIELDS = [
+    ("action",    ("event_action",)),
+    ("DNS",       ("dns_query", "winlogbeat_winlog_event_data_QueryName")),
+    ("processus", ("process_name", "winlogbeat_winlog_event_data_Image")),
+    ("commande",  ("winlogbeat_winlog_event_data_CommandLine",)),
+    ("compte",    ("user", "winlogbeat_winlog_event_data_TargetUserName")),
+    ("IP src",    ("src_ip",)),
+    ("IP dst",    ("dest_ip",)),
+    ("port",      ("dest_port",)),
+    ("URL",       ("http_url", "eset_object_uri")),
+    ("statut",    ("http_status",)),
+    ("menace",    ("eset_threat_name",)),
+    ("fichier",   ("winlogbeat_winlog_event_data_TargetFilename",)),
+    ("cause",     ("failure_reason",)),
+]
+# La valeur d'un champ bruit s'arrete au PROCHAIN token 'Mot:' (les messages
+# Sysmon sont monolignes) ou a la fin ; sinon on effacerait toute la suite.
+_MSG_NOISE = re.compile(
+    r"\b(?:RuleName|UtcTime|ProcessGuid|ProcessId|LogonGuid|LogonId|"
+    r"TerminalSessionId|SourceProcessGUID|TargetProcessGUID|ParentProcessGuid|"
+    r"ParentProcessId|FileVersion|IntegrityLevel|Hashes|Company|Product|"
+    r"Description|OriginalFileName|CurrentDirectory|QueryStatus)\s*:\s*"
+    r".*?(?=\s+[A-Z][A-Za-z]+:\s|$)")
+
+def _msg_excerpt(m, cap=260):
+    """Ligne compacte et informative pour un evenement declencheur."""
+    pairs = []
+    for label, keys in _EXCERPT_FIELDS:
+        for k in keys:
+            v = m.get(k)
+            if v not in (None, "", "-", "0.0.0.0"):
+                v = str(v).strip()
+                pairs.append(f"{label}={v[:90]}" + ("…" if len(v) > 90 else ""))
+                break
+        if len(pairs) >= 5:
+            break
+    if len(pairs) >= 2:
+        s = " | ".join(pairs)
+        return s[:cap] + ("…" if len(s) > cap else "")   # plafonne comme le fallback (audit 17/07)
+    # fallback : message brut debarrasse du bruit Windows/Sysmon
+    raw = str(m.get("message", ""))
+    raw = _MSG_NOISE.sub("", raw)
+    raw = re.sub(r"\s+", " ", raw).strip(" -:")
+    if pairs:
+        raw = pairs[0] + " | " + raw
+    return raw[:cap] + ("…" if len(raw) > cap else "")
+
+# --- Rendu LISIBLE du log brut complet (Sysmon / WinSec sont deja des paires
+# "Cle: Valeur" separees par des sauts de ligne). On masque le bruit technique
+# (GUID, versions, IDs nuls) et on garde le corps utile, ligne par ligne. C'est
+# ce qui manquait aux mails : on ne voyait qu'un extrait tronque. -------------
+import unicodedata
+def _noaccent(s):
+    return "".join(c for c in unicodedata.normalize("NFD", str(s)) if unicodedata.category(c) != "Mn")
+_LOG_NOISE_KEYS = {
+    "rulename", "utctime", "processguid", "logonguid", "terminalsessionid",
+    "sourceprocessguid", "targetprocessguid", "parentprocessguid",
+    "fileversion", "product", "company", "description", "originalfilename",
+    "hashes", "integritylevel", "tokenelevationtype", "version",
+    "currentdirectory", "logonid",
+    # WinSec FR : identifiants techniques peu parlants en mail
+    "id de securite", "id d'ouverture de session", "id de l'ouverture de session",
+    "guid d'ouverture de session",
+}
+_LOG_NULL_VALS = {"-", "0x0", "s-1-0-0", "{00000000-0000-0000-0000-000000000000}"}
+
+# --- Logs FortiGate : une SEULE ligne de paires key=value (valeurs parfois
+# entre guillemets). _format_log les rendait illisibles (partition sur le 1er ':'
+# -> tout en une valeur geante tronquee). On les parse et on affiche les champs
+# UTILES d'abord (qui/quoi/ou), en masquant le bruit technique. Constat Julien 06/07/2026.
+_KV_RE = re.compile(r'([A-Za-z_][\w\-]*)=("(?:[^"\\]|\\.)*"|\S*)')
+_FORTI_ORDER = ["devname", "type", "subtype", "level", "severity", "crlevel",
+    "action", "utmaction", "status", "attack", "virus", "msg", "url", "hostname",
+    "filename", "user", "srcip", "srccountry", "srcport", "srcintf", "dstip",
+    "dstcountry", "dstport", "dstintf", "service", "proto", "app", "appcat",
+    "direction", "catdesc", "cat", "ref", "count", "sig", "signal"]
+_FORTI_NOISE = {"logver", "timestamp", "devid", "vd", "eventtime", "tz", "logid",
+    "sessionid", "eventtype", "policyid", "policytype", "poluuid", "attackid",
+    "crscore", "craction", "appid", "itime", "srcintfrole", "dstintfrole",
+    "trandisp", "logdesc", "date", "time", "srcuuid", "dstuuid", "sentbyte",
+    "rcvdbyte", "sentpkt", "rcvdpkt", "srcmac", "dstmac", "mastersrcmac",
+    "masterdstmac", "duration", "transip", "transport", "tranport", "wanin",
+    "wanout", "lanin", "lanout", "ppid", "srchwvendor", "srcswversion", "devtype",
+    "osname", "srcfamily", "dstdevtype", "dstosname", "countav", "countips",
+    "countweb", "countapp", "icmpid", "icmptype", "icmpcode", "vwlid", "q#", "qtypeval"}
+
+# Ancre sur une SIGNATURE FortiGate : sinon tout log mono-ligne d'un AUTRE equipement
+# avec >=4 tokens cle=valeur (vSphere, BunkerWeb, Linux pam/auditd) etait reformate a
+# tort comme du Forti (constat audit multi-agents 06/07/2026 : vsphere 43/500, bunkerweb 13/500).
+_FORTI_SIG = re.compile(r'\b(?:logver|devname|emsserial|device_id|logid|log_id)=')
+
+def _looks_forti_kv(raw):
+    raw = raw.strip()
+    return ("\n" not in raw) and len(_KV_RE.findall(raw)) >= 4 and bool(_FORTI_SIG.search(raw))
+
+def _parse_forti_kv(raw):
+    """key=value (+ valeurs quotees) -> dict ordonne {cle: (cle, valeur)}, bruit exclu."""
+    d, order = {}, []
+    for m in _KV_RE.finditer(raw):
+        k, v = m.group(1), m.group(2)
+        if len(v) >= 2 and v[0] == '"' and v[-1] == '"':
+            v = v[1:-1]
+        kl = k.lower()
+        if kl in _FORTI_NOISE or kl in d:
+            continue
+        if v in ("", "-", "0.0.0.0", "N/A", "n/a"):
+            continue
+        d[kl] = (k, v); order.append(kl)
+    prio = [k for k in _FORTI_ORDER if k in d]
+    rest = [k for k in order if k not in prio]
+    return d, prio + rest
+
+# --- Logs a payload JSON (ESET ERAServer, certains connecteurs) : "prefixe syslog {json}".
+# _format_log les rendait en blob tronque a 240c (action_taken perdue). On extrait l'objet
+# JSON et on affiche ses champs lisiblement, champs utiles d'abord. (audit 06/07/2026)
+_JSON_ORDER = ["event_type", "severity", "threat_name", "threat_type", "threat_handled",
+    "action_taken", "action", "object_uri", "object_name", "hash", "process_name",
+    "processname", "username", "user", "account", "hostname", "computer_name", "ipv4",
+    "ipv6", "source_uuid", "rule_name", "category", "detection", "scanner_id"]
+def _extract_json(raw):
+    m = re.search(r'\{.*\}', raw, re.S)
+    if not m:
+        return None
+    try:
+        obj = json.loads(m.group(0))
+        return obj if isinstance(obj, dict) and obj else None
+    except Exception:
+        return None
+def _json_keys(obj):
+    return [k for k in _JSON_ORDER if k in obj] + [k for k in obj if k not in _JSON_ORDER]
+
+def _format_log(message, max_lines=24):
+    """Message brut -> lignes HTML lisibles (cle grise + valeur), bruit masque."""
+    raw = str(message or "").replace("\xa0", " ").replace("\r", "")
+    if _looks_forti_kv(raw):
+        d, keys = _parse_forti_kv(raw)
+        out = []
+        for kl in keys[:max_lines]:
+            k, v = d[kl]
+            out.append('<div><span style="display:inline-block;min-width:170px;'
+                       f'color:#868e96;vertical-align:top">{_esc(k)}</span>'
+                       f'<span style="color:#212529">{_esc(v[:240])}</span></div>')
+        if len(keys) > max_lines:
+            out.append('<div style="color:#adb5bd">[…]</div>')
+        return "".join(out)
+    _j = _extract_json(raw)
+    if _j is not None:
+        out = []
+        for k in _json_keys(_j)[:max_lines]:
+            v = _j[k]
+            if v in (None, "", "-"):
+                continue
+            out.append('<div><span style="display:inline-block;min-width:170px;'
+                       f'color:#868e96;vertical-align:top">{_esc(k)}</span>'
+                       f'<span style="color:#212529">{_esc(str(v)[:240])}</span></div>')
+        if out:
+            return "".join(out)
+    out, n = [], 0
+    for line in raw.split("\n"):
+        line = line.replace("\t", " ").strip()
+        if not line:
+            continue
+        if ":" in line:
+            k, _, v = line.partition(":")
+            k, v = k.strip(), v.strip()
+            if _noaccent(k).lower() in _LOG_NOISE_KEYS:
+                continue
+            if v == "":                                   # sous-titre (ex "Sujet :")
+                out.append(f'<div style="color:#5f3dc4;font-weight:700;margin-top:6px">{_esc(k)}</div>')
+            elif v.lower() in _LOG_NULL_VALS:             # valeur nulle -> masquee
+                continue
+            else:
+                out.append('<div><span style="display:inline-block;min-width:170px;'
+                           f'color:#868e96;vertical-align:top">{_esc(k)}</span>'
+                           f'<span style="color:#212529">{_esc(v[:240])}</span></div>')
+        else:
+            out.append(f'<div style="color:#343a40;font-weight:600">{_esc(line[:240])}</div>')
+        n += 1
+        if n >= max_lines:
+            out.append('<div style="color:#adb5bd">[…]</div>')
+            break
+    return "".join(out)
+
+def _format_log_text(message, max_lines=24):
+    """Version TEXTE de _format_log (fallback mail plain)."""
+    raw = str(message or "").replace("\xa0", " ").replace("\r", "")
+    if _looks_forti_kv(raw):
+        d, keys = _parse_forti_kv(raw)
+        out = [f"       {d[kl][0]}: {d[kl][1][:240]}" for kl in keys[:max_lines]]
+        if len(keys) > max_lines:
+            out.append("       [...]")
+        return "\n".join(out)
+    _j = _extract_json(raw)
+    if _j is not None:
+        out = [f"       {k}: {str(_j[k])[:240]}" for k in _json_keys(_j)[:max_lines]
+               if _j[k] not in (None, "", "-")]
+        if out:
+            return "\n".join(out)
+    out, n = [], 0
+    for line in raw.split("\n"):
+        line = line.replace("\t", " ").strip()
+        if not line:
+            continue
+        if ":" in line:
+            k, _, v = line.partition(":")
+            k, v = k.strip(), v.strip()
+            if _noaccent(k).lower() in _LOG_NOISE_KEYS or v.lower() in _LOG_NULL_VALS:
+                continue
+            out.append(f"       {k}: {v[:240]}" if v else f"      {k}")
+        else:
+            out.append(f"      {line[:240]}")
+        n += 1
+        if n >= max_lines:
+            out.append("       [...]"); break
+    return "\n".join(out)
+
+def backlog_rows(payload, limit=5):
+    """Evenements declencheurs (contexte forensique) : ts + source + extrait + log brut."""
+    out = []
+    for it in (payload.get("backlog") or [])[:limit]:
+        m = it.get("message") if isinstance(it, dict) and isinstance(it.get("message"), dict) else (it if isinstance(it, dict) else {})
+        out.append({"ts": str(m.get("timestamp", ""))[:19].replace("T", " "),
+                    "src": str(m.get("source", "")),
+                    "msg": _msg_excerpt(m),
+                    "raw": str(m.get("message", ""))})
+    return out
+
+def replay_url(ev):
+    """Lien de pivot vers la recherche Graylog (logs bruts de l'alerte)."""
+    ri = ev.get("replay_info") or {}
+    q = ri.get("query", "")
+    if not q: return ""
+    return (f"{GL_BASE}/search?q={urllib.parse.quote(q)}&rangetype=absolute"
+            f"&from={urllib.parse.quote(str(ri.get('timerange_start','')))}"
+            f"&to={urllib.parse.quote(str(ri.get('timerange_end','')))}")
+
+def flag(cc):
+    cc = (cc or "").strip().upper()
+    if len(cc) != 2 or not cc.isalpha(): return ""
+    return "".join(chr(0x1F1E6 + ord(c) - ord('A')) for c in cc)
+
+def mitre_url(tech):
+    t = (tech or "").strip().upper()
+    if not re.match(r"^T\d{4}(\.\d{3})?$", t): return ""   # ancre fin : rejette T1234">... (injection)
+    return "https://attack.mitre.org/techniques/" + (t[:5] + "/" + t[6:] + "/" if "." in t else t + "/")
+
+def rationale(tier, reason, score):
+    # Formulation SOBRE, sans jargon interne ni mention "IA" (audit 14/08/2026).
+    r = (reason or "").lower()
+    if "killchain" in r:   return "Plusieurs détections corrélées sur la même entité."
+    if tier == "CRITICAL": return "Signal de sécurité critique — traitement immédiat requis."
+    if r.startswith("llm:"): return "Signal qualifié comme pertinent après analyse contextuelle."
+    return f"Niveau de risque élevé ({score}/100)."
+
+def quick_sign(secret, action, entity, tag, exp):
+    return hmac.new(secret.encode(), f"{action}|{entity}|{tag}|{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+def quick_fp_link(e, entity, tag):
+    """Lien signé (7j) 'Marquer faux positif' -> /m/api/quick (page de confirmation).
+    EXIGE un tag (détection précise) : sans tag, un clic mettrait en sourdine TOUTE
+    l'entité -> on ne propose pas le lien (le FP entité-large reste possible via /soc/)."""
+    secret = e.get("QUICK_SECRET", "")
+    if not secret or not entity or entity == "-" or not tag: return ""
+    exp = int(time.time()) + 7*86400
+    p = urllib.parse.urlencode({"a": "fp", "e": entity, "tag": tag or "",
+                                "exp": exp, "sig": quick_sign(secret, "fp", entity, tag or "", exp)})
+    return f"{GL_BASE}/m/api/quick?{p}"
+
+def is_public_ip(ip):
+    try:
+        a = ipaddress.ip_address((ip or "").strip())
+        return not (a.is_private or a.is_loopback or a.is_link_local or a.is_multicast or a.is_reserved)
+    except ValueError:
+        return False
+def quick_block_link(e, ip):
+    """Lien signé 'Bloquer l'IP' -> SOAR. IP PUBLIQUE uniquement. TTL court (24h) :
+    action plus sensible que le FP -> on limite la fenêtre de rejeu d'un lien fuité."""
+    secret = e.get("QUICK_SECRET", "")
+    ip = (ip or "").strip()
+    if not secret or not is_public_ip(ip): return ""
+    exp = int(time.time()) + 86400
+    p = urllib.parse.urlencode({"a": "block", "e": ip, "tag": "",
+                                "exp": exp, "sig": quick_sign(secret, "block", ip, "", exp)})
+    return f"{GL_BASE}/m/api/quick?{p}"
+
+# --- Tiers par defaut (regex sur le titre, insensible casse) -----------------
+CRITICAL_DEFAULT = [
+    r"ransomware", r"extorsion", r"shadow copies", r"destruction des sauvegardes",
+    r"arr.t service de s.curit", r"dcsync", r"ntds", r"lsass", r"sam/system",
+    r"kerberoast", r"as-rep", r"gpp/sysvol", r"shadow credentials", r"ad cs|esc1",
+    r"canari", r"leurre", r"honeytoken", r"int.grit. des logs",
+    r"effacement de journ|anti-forensic|journal usn|wevtutil",
+    r"defender",
+    r"\bamsi\b", r"web shell", r"malware sur endpoint", r"fuite.*github",
+    r"dark web|donn.es expos|comptes/donn.es omnitech", r"vaultwarden",
+    r"kill-chain|incident critique", r"m365 compte . risque|compte m365 . risque|r.le privil.gi",
+    r"login ssl-vpn depuis ip malveillante",   # T1133 accès initial VPN : CRITICAL, jamais NOISE
+    r"contournement uac", r"dump lsass|comsvcs", r"installutil|certutil.*t.l.chargement",
+    r"neutralisation de defender", r"sabotage de l'audit",
+    # --- ajouts audit multi-agents (criticals rates en GRAY/NOISE) ---
+    r"service syst.me lance un shell",        # exploitation/RCE (etait GRAY)
+    r"connexion m365 .trang.re",              # echecs AD + M365 etrangere = compromission (etait GRAY)
+    r"c2 connu contacte",                     # contact C2 Feodo/abuse.ch = infection active (etait NOISE)
+    r"exploitation client",                   # navigateur/PDF -> interpreteur = RCE (T1203, 0 FP)
+    # --- SEAL / surete physique (16/07/2026) : ces alertes n'atteignaient PAS le
+    # mail (les detections SEAL ne poussaient que vers Teams). Une intrusion
+    # physique ou un passe general attribue en douce sont des incidents majeurs :
+    # ils doivent sonner comme tels. Motifs cales sur les titres du catalogue SEAL.
+    r"seal alm-003|intrusion physique|effraction",   # ALM-003 : effraction / bouton panique
+    r"seal alm-001|inhibition d'une alarme",         # ALM-001 : neutralisation de la surete (T1562.001)
+    r"seal acc-001|passe g.n.ral|master key",        # ACC-001 : passe general attribue
+    r"seal sla-001|alarme critique non trait",       # SLA-001 : alarme critique laissee sans suite
+    r"seal hyp-002|brute force suivie d'un succ",    # HYP-002 : console SEAL compromise
+]
+NOISE_DEFAULT = [
+    r"ip malveillante \(tor / spamhaus\)", r"scan r.seau interne", r"compte d.sactiv",
+    r"force brute \(>=10", r"silence winlogbeat|go-dark|source.*silencieuse|siem aveugle",
+    r"ueba|h.te . risque", r"boucle reseau|stp|port-flap|port-security|changement config switch",
+    r"nouveau service install|service windows install|t.che planifi.e cr..e",
+    r"compte verrouill|compte cr.. dans le domaine", r"brute force ssh|brute force admin switch",
+    r"powershell suspect", r"beaconing",
+    # (motif "nouveau service (7045)" retire le 17/07/2026, audit : redondant avec
+    #  "nouveau service install" ci-dessus, ne matchait aucun titre de definition)
+    r"vsphere brute force", r"fortimanager : .checs de login",
+    # --- ALERTES OPERATIONNELLES / SANTE (-> Teams, PAS de mail : pas "securite critique") ---
+    r"veeam", r"backup config siem", r"disque siem", r"rapport hebdo|rapport.*echec|rapport.*chec",
+    r"certificat.*(expire|siem|parc)|cert.*expire", r"robot d'analyse|robot.*panne",
+    r"orchestrateur de certificats", r"backup config.*(absent|chec|echec)",
+    r"silence winlogbeat", r"hote go-dark|go-dark",
+    # --- gestion de vulnerabilites / patch (posture, pas attaque live) -> Teams ---
+    r"vuln.rabilit. critique sur endpoint", r"vuln.rabilit. kev exploit.e",
+    r"ha forti.* instable|out-of-sync",       # sante HA FortiGate (ops, pas securite)
+    # --- Nettoyage mail 06/07/2026 (constat Julien : trop de mails non actionnables) ---
+    r"hors heures ouvr",                       # login admin off-hours : horaires IT variables
+                                               # (RSSI travaille de nuit) -> contexte, pas incident.
+                                               # Les vrais signaux (new country, impossible travel,
+                                               # brute-then-success) restent, eux, en mail.
+    r"waf : scan applicatif|scan applicatif",  # scanner 404 : le WAF a DEJA bloque + SOAR
+    r"bunkerweb",                              # auto-block les recidivistes -> mail redondant.
+]
+
+def env():
+    e = dict(os.environ)
+    try:
+        for line in open(ENVFILE):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: e[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return e
+
+def _valid_patterns(pats):
+    # Un motif regex invalide (ex. faute de frappe dans tiers.json) leverait re.error
+    # dans classify() HORS du try du handler -> plantage silencieux de TOUT le triage,
+    # aucune alerte envoyee. On compile-teste et on ignore les motifs invalides.
+    out = []
+    for rx in pats:
+        try:
+            re.compile(rx); out.append(rx)
+        except re.error:
+            print(f"tiers: motif regex invalide ignore: {rx!r}", file=sys.stderr)
+    return out
+
+def tiers():
+    crit, noise = list(CRITICAL_DEFAULT), list(NOISE_DEFAULT)
+    try:
+        j = json.load(open(TIERSFILE))
+        crit  += j.get("critical", [])
+        noise += j.get("noise", [])
+    except Exception: pass
+    return _valid_patterns(crit), _valid_patterns(noise)
+
+def load():
+    try: return json.load(open(STATE))
+    except Exception: return {}
+def save(d):
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    tmp = STATE + ".tmp"; json.dump(d, open(tmp, "w")); os.replace(tmp, STATE)
+
+def gelf(decision, title, tier, score, signals, reason):
+    try:
+        data = json.dumps({"version":"1.1","host":"bx-it-graylog-vm",
+            "short_message": f"TRIAGE {decision}: {title} [{tier} score={score}]",
+            "_event_source":"alert_triage","_triage_decision":decision,
+            "_triage_tier":tier,"_triage_score":score,"_triage_signals":",".join(signals),
+            "_triage_reason":reason,"_alert_title":title}).encode()
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=data,
+            headers={"Content-Type":"application/json"}), timeout=8)
+    except Exception: pass
+
+def corr_gelf(corr_key, vel, hist, title, score):
+    """Reinjecte l'INCIDENT CORRELE (la kill-chain) dans le SIEM.
+
+    Sans cela, seules les alertes unitaires etaient tracees : le fait que 4
+    detections differentes visaient la meme entite n'existait nulle part apres
+    l'envoi du mail. event_source=alert_correlation -> chasse et tableau de bord."""
+    try:
+        types = sorted({x[0] for x in hist})
+        data = json.dumps({"version": "1.1", "host": "bx-it-graylog-vm",
+            "short_message": f"CORRELATION: {vel} types d'alertes sur {corr_key}",
+            "full_message": "Alertes correlees (fil de l'eau) :\n" + "\n".join(
+                f"- {time.strftime('%d/%m %H:%M', time.localtime(ts))}  {t}" for t, ts in hist),
+            "level": 3,
+            "_event_source": "alert_correlation", "_oms_event": "alert_correlation",
+            "_corr_entity": corr_key, "_corr_types": vel,
+            "_corr_titles": " | ".join(types)[:900],
+            "_corr_trigger": title, "_triage_score": score}).encode()
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=data,
+            headers={"Content-Type": "application/json"}), timeout=8)
+    except Exception:
+        pass   # la tracabilite ne doit jamais empecher l'envoi du mail
+
+def classify(title, crit, noise):
+    t = (title or "").lower()
+    for rx in crit:
+        if re.search(rx, t): return "CRITICAL"
+    for rx in noise:
+        if re.search(rx, t): return "NOISE"
+    return "GRAY"
+
+def fields_of(payload):
+    ev = payload.get("event") or {}
+    f = dict(ev.get("fields") or {})
+    for m in (payload.get("backlog") or [])[:3]:
+        if isinstance(m, dict):
+            mm = m.get("message") if isinstance(m.get("message"), dict) else m
+            if isinstance(mm, dict):
+                for k, v in mm.items():
+                    f.setdefault(k, v)
+    return f
+
+_EMPTY = ("", "-", "(empty value)", "n/a", "null", "none", "unknown", "?")
+def _blank(v):
+    """True si valeur vide/sentinelle, INSENSIBLE A LA CASSE ('N/A', 'NONE',
+    'Null' comptent comme vides -- audit 13/08/2026 : les logs Forti/geo portent
+    'N/A' en majuscules)."""
+    return v is None or str(v).strip().lower() in _EMPTY
+def _first(f, *keys):
+    """1re valeur non vide parmi plusieurs noms de champ possibles. Permet au mail
+    de rester complet quelle que soit la source (ESET vs FortiClient, Windows vs
+    Linux/Aruba/Entra) sans coder un cas par source."""
+    for k in keys:
+        v = f.get(k)
+        if not _blank(v):
+            return v
+    return ""
+
+# La 'description' d'une event definition sert souvent de NOTE DE BUILD interne
+# (ex. "P3 - provisionne par 13-graylog-alerts.sh", "clone 02/07/2026",
+# "desactive (recette)", "90-fortiems.sh"). La rendre comme "Contexte" analyste
+# est incoherent, contradictoire (une alerte live decrite "desactivee") et fuit
+# les noms de scripts internes. Si la desc matche ces marqueurs -> on n'affiche
+# rien (le mail garde titre + faits + guide d'action + backlog). Audit 13/08/2026.
+_BUILD_NOISE = re.compile(r"provisionn[ée]|\.sh\b|\.py\b|clone\s+\d|"
+                          r"d[ée]sactiv[ée].{0,4}\(recette\)|^\s*P\d\b|\bcf\s+\d", re.I)
+def _analyst_desc(s):
+    s = (s or "").strip()
+    return "" if (not s or _BUILD_NOISE.search(s)) else s
+
+# --- Vrai volume agrege vs taille de l'echantillon joint ----------------------
+_COUNT_RE = re.compile(r"\b(?:count\(\)|sum\([^)]*\)|card\([^)]*\))\s*=\s*([0-9]+(?:\.[0-9]+)?)")
+def real_count(ev, n_backlog):
+    """Le VRAI nombre d'occurrences agregees, PAS la taille de l'echantillon joint.
+    Graylog plafonne le backlog a notification_settings.backlog_size (souvent 5) :
+    len(backlog) n'a AUCUN rapport avec le compte reel (facteur de minoration mesure
+    jusqu'a 124x). Le compte reel est deja dans le payload (event.message =
+    '... - count()=161.0', ou aggregation_conditions.count) mais n'etait lu nulle
+    part. Renvoie (valeur, est_reel) ; a defaut, l'echantillon avec est_reel=False
+    pour un libelle honnete. Jamais d'exception : on ne peut pas faire pire que
+    l'etat actuel qui affiche deja l'echantillon."""
+    ac = ev.get("aggregation_conditions")
+    v = ac.get("count") if isinstance(ac, dict) else None
+    if v is None:
+        m = _COUNT_RE.search(str(ev.get("message") or ""))
+        v = m.group(1) if m else None
+    try:
+        return int(float(v)), True
+    except Exception:
+        return n_backlog, False
+
+def _noise_subject(v):
+    """True si 'v' est un compte MACHINE ($) ou SYSTEM/service, donc PAS le sujet
+    d'une alerte (le vrai sujet est l'hote). Couvre les formats FR/EN et domaines
+    avec espace que _canon_user ne strippe pas ('AUTORITE NT\\Systeme'). Sert
+    UNIQUEMENT au choix d'entite d'affichage (audit 13/08/2026)."""
+    s = str(v or "").strip()
+    if not s:
+        return True
+    short = re.split(r"[\\/]", s)[-1].strip().lower()  # part apres le domaine
+    if short.endswith("$"):                            # compte machine
+        return True
+    return short in ("system", "système", "systeme", "anonymous logon",
+                     "local service", "network service", "local system", "-")
+
+def entity_of(f, ev):
+    # Entite PRIMAIRE : sert au dedup, aux regles de FP apprises (/soc/) et a
+    # l'affichage ("Concerne"). Format ("cle=valeur") et ordre des 3 PREMIERES cles
+    # (src_ip, user, host) volontairement INCHANGES : les regles de FP en base sont
+    # indexees dessus (ex. "src_ip=1.2.3.4").
+    # AJOUT 'upn' (audit 17/07/2026) : les detections Entra/M365 portent le sujet
+    # dans 'upn' et nulle part ailleurs ; entity_of l'ignorait -> plusieurs UPN
+    # distincts tombaient sur la meme cle de dedup et s'ecrasaient dans la fenetre.
+    # RELEGATION de 'source' (hote d'ORIGINE du log, champ obligatoire Graylog)
+    # APRES key_tuple, en dernier recours : 'source' n'est jamais le SUJET d'une
+    # alerte, c'est le collecteur. Il preemptait le repli key_tuple (ex. SEAL).
+    for k in ("src_ip", "user", "host", "upn", "dest_ip", "srcip"):
+        v = f.get(k)
+        if not v:
+            continue
+        # 'user' = compte MACHINE ($) ou SYSTEM/ANONYMOUS n'est PAS le sujet d'une
+        # alerte : ex. "ransomware: suppression shadow copies" par AUTORITE NT\
+        # Systeme -> le vrai sujet est l'HOTE. On saute vers host au lieu d'afficher
+        # "Systeme" comme entite (audit 13/08/2026). _canon_user neutralise deja
+        # ces comptes (renvoie "").
+        if k == "user" and _noise_subject(v):
+            continue
+        return f"{k}={v}"
+    # key_tuple : retirer les elements VIDES avant le join (sinon entite
+    # "bx-seal-omega,34D1022962C00000," avec virgule finale quand un membre du
+    # group_by est vide, ex. target_object_id="" sur SEAL ACC-008 - audit 13/08).
+    kt = [str(x) for x in (ev.get("key_tuple") or []) if str(x).strip() not in ("", "-")]
+    if kt: return ",".join(kt)
+    v = f.get("source")
+    if v: return f"source={v}"
+    return "-"
+
+# --- Correlation FIL DE L'EAU : cles transverses ------------------------------
+# Probleme resolu : l'entite primaire prend le PREMIER champ trouve (src_ip en
+# tete). Une meme personne apparait donc sous des cles differentes selon la
+# source -- "user=jmorin" cote M365, "src_ip=..." cote FortiGate, key_tuple cote
+# SEAL -- et les alertes qui la concernent ne se correlaient JAMAIS entre elles.
+# On calcule ici TOUTES les cles canoniques d'une alerte (identite, machine, IP,
+# badge) ; la kill-chain se declenche des qu'UNE de ces cles cumule assez de
+# types d'alertes distincts. Additif : l'entite primaire ne change pas.
+_USER_RE = re.compile(r'^(?:[\w.-]+\\)?([^@\\]+?)(?:@[\w.-]+)?$')
+
+def _canon_user(v):
+    """Forme canonique d'un compte, tous formats confondus :
+       'SECURITY\\RETEVENARD', 'retevenard@omnitech.security', 'retevenard'
+       -> 'retevenard'. C'est ce qui permet a une connexion console SEAL et a une
+       force brute Windows sur le MEME compte de se rejoindre."""
+    s = str(v or "").strip()
+    if not s or s.lower() in ("-", "n/a", "(empty value)", "null", "none"): return ""
+    m = _USER_RE.match(s)
+    s = (m.group(1) if m else s).strip().lower()
+    # comptes techniques omnipresents : correler dessus fabriquerait une
+    # kill-chain permanente reliant des incidents sans rapport.
+    return "" if s in ("system", "anonymous logon", "local service",
+                       "network service", "-", "") else s
+
+_USER_FIELDS = ("identity", "identity_console", "identity_upn", "actor_login", "user", "entity_user",
+                "upn", "winlogbeat_winlog_event_data_TargetUserName", "eset_username",
+                "target_login", "actor_usercode")
+_HOST_FIELDS = ("host", "eset_hostname", "entity_host", "computer", "devname", "dark_host", "cert_machine")
+_IP_RE = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")   # IPv4 litterale (pas un FQDN)
+
+def corr_keys(f, ev, primary):
+    """Cles de correlation d'une alerte (fil de l'eau, cross-source)."""
+    keys = []
+    for k in _USER_FIELDS:
+        u = _canon_user(f.get(k))
+        if u: keys.append("user=" + u); break
+    for k in _HOST_FIELDS:
+        h = str(f.get(k) or "").strip().lower()
+        if h and h not in ("-", "(empty value)"):
+            # FQDN et nom court = meme machine -> on tronque au 1er label. MAIS une IP
+            # litterale n'est pas un FQDN : la tronquer produisait "host=10" et fusionnait
+            # 115 equipements 10.x sur une seule cle (audit 17/07/2026). On la garde entiere.
+            keys.append("host=" + (h if _IP_RE.match(h) else h.split(".")[0])); break
+    for k in ("src_ip", "srcip"):
+        v = str(f.get(k) or "").strip()
+        if v: keys.append("src_ip=" + v); break
+    b = str(f.get("badge_number") or "").strip()
+    if b: keys.append("badge=" + b)
+    # repli : l'entite primaire, sauf 'source=' (hote d'origine du log, present sur
+    # TOUTES les alertes de sante internes -> fausse kill-chain, cf. audit 06/07).
+    if not keys and primary and primary != "-" and not primary.startswith("source="):
+        keys.append(primary)
+    return list(dict.fromkeys(keys))   # dedup ordonne : une cle calculee 2x polluerait l'historique
+
+def velocity(d, entity, title, now, window):
+    """Kill-chain : nb de TYPES d'alertes distincts sur cette entite dans la
+    fenetre (5x la meme alerte = 1, mais 4 detections differentes = signal fort)."""
+    vk = "vel:" + entity
+    # robuste aux anciens formats d'etat (entrees float) : on ne garde que les paires
+    hist = [x for x in d.get(vk, []) if isinstance(x, (list, tuple)) and len(x) == 2 and now - x[1] < window]
+    hist.append([title, now]); d[vk] = hist[-50:]
+    return len({x[0] for x in hist})
+
+def velocity_multi(d, keys, title, now, window):
+    """Applique velocity() a chaque cle de correlation et retient la plus forte.
+
+    Renvoie (nb_types_max, cle_gagnante, historique_trie). L'historique alimente
+    le bloc "Alertes correlees" du mail : sans lui, le mail annoncait une
+    kill-chain sans jamais dire de QUOI elle etait faite."""
+    best_n, best_key, best_hist = 0, "", []
+    for k in keys:
+        n = velocity(d, k, title, now, window)
+        if n > best_n:
+            best_n, best_key = n, k
+            best_hist = [x for x in d.get("vel:" + k, [])
+                         if isinstance(x, (list, tuple)) and len(x) == 2]
+    return best_n, best_key, sorted(best_hist, key=lambda x: x[1])
+
+def score_alert(e, tier, f, ev, entity, vel):
+    sc = {"CRITICAL":100, "GRAY":50, "NOISE":10}[tier]
+    # tier francise dans les "Signaux" affiches (plus de "gray"/"noise" anglais
+    # expose a l'analyste dans le mail - audit 13/08/2026).
+    sig = [{"CRITICAL":"critique", "GRAY":"zone_grise", "NOISE":"bruit"}.get(tier, tier.lower())]
+    pr = ev.get("priority") or f.get("priority")
+    try: pr = int(pr)
+    except Exception: pr = 2
+    if pr >= 3: sc += 25; sig.append("prio_haute")
+    elif pr == 2: sc += 10
+    arx = e.get("ASSET_CRITICAL_REGEX","")
+    if arx and re.search(arx, entity, re.I): sc += 30; sig.append("actif_critique")
+    if str(f.get("src_ip_threat_indicated")).lower()=="true" or \
+       str(f.get("dest_ip_threat_indicated")).lower()=="true" or \
+       f.get("alert_tag")=="threat_intel": sc += 20; sig.append("threat_intel")
+    if str(f.get("off_hours")).lower() in ("oui","true","yes"): sc += 10; sig.append("hors_heures")
+    kth = int(e.get("KILLCHAIN_COUNT","4"))
+    if vel >= kth: sc += 25; sig.append(f"killchain(x{vel})")
+    return min(sc, 100), sig   # borne unique : la barre HTML et "score/100" ne depassent plus 100
+                               # (aucun seuil de decision n'est > 100, l'ordre est preserve). Audit 17/07.
+
+def _redact(s):
+    s = re.sub(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", "x.x.x.x", str(s))
+    s = re.sub(r"[\w.+-]+@[\w.-]+\.\w+", "user@masque", s)
+    return s
+
+# Contexte ENVOYE au juge externe : construit depuis une LISTE BLANCHE, pas depuis
+# le ctx complet. L'ancien redact_ctx partait de dict(ctx) et ne caviardait QUE
+# 'entite' et 'message' : src_ip, user, host, seal_badge et surtout backlog[].raw
+# (le log brut integral) partaient EN CLAIR a l'API. Verrou pose avant toute
+# activation de ANTHROPIC_API_KEY (aujourd'hui inerte : cle vide -> sortie amont).
+_LLM_WHITELIST = ("titre", "tier", "score", "signaux", "velocite", "site", "net",
+                  "country", "ti", "priority", "mitre_tech", "mitre_name",
+                  "mitre_tac", "dest_port", "threat", "threat_type", "desc")
+
+def redact_ctx(ctx):
+    """Caviarde et RESTREINT le contexte avant envoi a l'API externe (gouvernance
+    donnees). N'expose que la liste blanche ci-dessus (assez pour juger la
+    pertinence) + un indice interne/externe de l'IP (sans la valeur) + un extrait
+    de message deja caviarde. EXCLUS explicitement : backlog[].raw (log brut),
+    seal_badge, user, host, src_ip/dest_ip. Passe finale : re-caviardage de toute
+    IP/email residuelle sur le JSON complet."""
+    c = {k: ctx.get(k) for k in _LLM_WHITELIST if ctx.get(k) not in (None, "", [], "-")}
+    ent = ctx.get("entite", "")
+    hint = ""
+    m = re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", ent)
+    if m: hint = " (interne)" if m.group(0).startswith(("10.", "172.", "192.168.")) else " (externe)"
+    c["entite"] = _redact(ent) + hint
+    c["extrait"] = _redact(ctx.get("message", ""))
+    try:
+        return json.loads(_redact(json.dumps(c, ensure_ascii=False)))
+    except Exception:
+        return c   # le round-trip ne doit jamais casser le juge : c est deja caviarde
+
+def llm_relevant(e, ctx):
+    key = e.get("ANTHROPIC_API_KEY","")
+    if not key: return None, "llm_absent"
+    if e.get("OMNI_TRIAGE_LLM_REDACT","true").lower() != "false": ctx = redact_ctx(ctx)
+    model = e.get("OMNI_TRIAGE_LLM_MODEL","claude-haiku-4-5-20251001")
+    prompt = ("Tu es analyste SOC. Au vu de cette alerte ET de son contexte (score de "
+        "risque, actif, site, velocite), decide si elle merite un MAIL immediat a "
+        "l'equipe securite (vrai positif actionnable et important) ou non (bruit, "
+        "informatif, FP probable). Reponds STRICTEMENT en JSON "
+        '{"mail": true|false, "raison":"<12 mots"}.\nContexte:\n' + json.dumps(ctx, ensure_ascii=False))
+    body = json.dumps({"model":model,"max_tokens":150,
+        "messages":[{"role":"user","content":prompt}]}).encode()
+    try:
+        req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body,
+            headers={"x-api-key":key,"anthropic-version":"2023-06-01","content-type":"application/json"})
+        r = json.load(urllib.request.urlopen(req, timeout=20))
+        txt = "".join(b.get("text","") for b in r.get("content",[]))
+        j = json.loads(re.search(r"\{.*\}", txt, re.S).group(0))
+        return bool(j.get("mail")), "llm:"+str(j.get("raison",""))[:60]
+    except Exception as ex:
+        return None, f"llm_erreur:{type(ex).__name__}"
+
+def sev_label(tier, reason):
+    # Libelle de gravite SOBRE (sentence case, sans mention interne "juge IA" ni
+    # emoji ; la couleur porte le signal visuel). Audit 14/08/2026.
+    r = (reason or "").lower()
+    if "killchain" in r:     return "Incident corrélé"
+    if tier == "CRITICAL":   return "Critique"
+    return "À qualifier"
+
+def _esc(s): return _html.escape(str(s if s is not None else ""))
+
+# Code pays ISO -> libelle FR (l'analyste lit "Allemagne", pas "DE"). Sans emoji.
+_PAYS = {"FR":"France","US":"États-Unis","GB":"Royaume-Uni","DE":"Allemagne","IT":"Italie",
+         "ES":"Espagne","NL":"Pays-Bas","BE":"Belgique","CH":"Suisse","LU":"Luxembourg",
+         "PT":"Portugal","CA":"Canada","CN":"Chine","RU":"Russie","UA":"Ukraine","IN":"Inde",
+         "BR":"Brésil","TR":"Turquie","MA":"Maroc","DZ":"Algérie","TN":"Tunisie","SN":"Sénégal",
+         "PL":"Pologne","RO":"Roumanie","IE":"Irlande","SE":"Suède","NO":"Norvège","FI":"Finlande",
+         "DK":"Danemark","AT":"Autriche","GR":"Grèce","CZ":"Tchéquie","HU":"Hongrie","SI":"Slovénie",
+         "SG":"Singapour","HK":"Hong Kong","JP":"Japon","KR":"Corée du Sud","AE":"Émirats","IL":"Israël",
+         "ZA":"Afrique du Sud","AU":"Australie","MX":"Mexique","BG":"Bulgarie","RS":"Serbie","VN":"Vietnam"}
+def _pays(code):
+    c = str(code or "").strip().upper()
+    lib = _PAYS.get(c)
+    return f"{lib} ({c})" if lib else c   # libelle + code, ou code seul si inconnu
+
+# Libelle humain de l'entite "Concerne" : "user=pgelard" -> ("Compte","pgelard"),
+# "src_ip=1.2.3.4" -> ("Adresse IP","1.2.3.4"). Retire le prefixe technique
+# expose a l'analyste (audit 13/08/2026). Renvoie aussi la valeur nue pour
+# dedoublonner les lignes Compte/Hote/IP qui repeteraient l'entite.
+_ENT_LABELS = {"user":"Compte", "upn":"Compte", "src_ip":"Adresse IP",
+               "srcip":"Adresse IP", "dest_ip":"Adresse IP", "host":"Machine",
+               "badge":"Badge", "source":"Source"}
+def _entity_label(entite):
+    s = str(entite or "")
+    if "=" in s:
+        k, v = s.split("=", 1)
+        return _ENT_LABELS.get(k.strip(), "Concerne"), v.strip()
+    return "Concerne", s   # key_tuple (SEAL) ou libre : pas de prefixe a retirer
+
+def _mail_html(titre, level, color, ctx, site, g, soc, why, fp_link="", block_link=""):
+    # Design SOBRE & aere : un seul accent (couleur de gravite = filet superieur +
+    # libelle), tout le reste neutre. Palette tokens (audit 14/08/2026).
+    INK="#101828"; VAL="#1d2939"; BODY="#475467"; MUT="#667085"; LAB="#98a2b3"
+    LINE="#eef0f2"; BOX="#f9fafb"; TAGBG="#f2f4f7"
+    def fact(lab, val):
+        return (f'<tr><td style="padding:7px 18px 7px 0;color:{LAB};font-size:11px;'
+                f'letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;vertical-align:top">{lab}</td>'
+                f'<td style="padding:7px 0;color:{VAL};font-size:14px;line-height:1.5">{val}</td></tr>')
+    grav = f'score {ctx["score"]}/100'
+    if ctx.get("risk_sev") and ctx.get("risk_sev") not in ("none", "-"):
+        rs = _esc(ctx["risk_sev"]) + (f' {_esc(ctx["risk_score"])}/10' if ctx.get("risk_score") not in ("", None) else "")
+        grav += f' <span style="color:{MUT}">&middot; risque {rs}</span>'
+    facts  = fact("Gravité", grav)
+    _ent_lab, _ent_val = _entity_label(ctx.get('entite'))
+    if ctx.get('entite') not in ('-', '', None):
+        facts += fact(_ent_lab, _esc(_ent_val) + (f' &middot; <b style="color:{VAL}">{_esc(site)}</b>' if site not in ('-', '') else ''))
+    ip_main = ctx.get("src_ip") or ctx.get("dest_ip")
+    if ip_main and str(ip_main) != _ent_val:
+        ipv = _esc(ip_main) + (f' <span style="color:{MUT}">({_esc(_pays(ctx["country"]))})</span>' if ctx.get("country") else '')
+        if ctx.get("ti"): ipv += ' <span style="color:#b42318;font-weight:600">&mdash; réputée malveillante</span>'
+        facts += fact("Adresse IP", ipv)
+    if ctx.get("user") and str(ctx["user"]) != _ent_val:
+        facts += fact("Compte", _esc(ctx["user"]))
+    if ctx.get("host") and str(ctx["host"]) != _ent_val and ctx["host"] != ctx.get("entite", ""):
+        facts += fact("Hôte", _esc(ctx["host"]))
+    if ctx.get("seal_site"):
+        facts += fact("Site physique", _esc(ctx["seal_site"]))
+        if ctx.get("seal_zone"):  facts += fact("Zone", _esc(ctx["seal_zone"]))
+        if ctx.get("seal_porte"): facts += fact("Porte / capteur", _esc(ctx["seal_porte"]))
+        if ctx.get("seal_badge"): facts += fact("Badge", _esc(ctx["seal_badge"]))
+        if ctx.get("seal_action"):
+            facts += fact("Événement", _esc(ctx["seal_action"])
+                          + (f' <span style="color:{MUT}">({_esc(ctx["seal_reev"])})</span>' if ctx.get("seal_reev") else ''))
+    if ctx.get("net"):       facts += fact("Réseau", _esc(ctx["net"]))
+    if ctx.get("dest_port"): facts += fact("Port ciblé", _esc(ctx["dest_port"]))
+    if ctx.get("dns_name"):
+        dnsv = _esc(ctx["dns_name"]) + (f' <span style="color:{MUT}">({_esc(ctx["dns_type"])})</span>' if ctx.get("dns_type") else '')
+        facts += fact("Enregistrement DNS", dnsv)
+        if ctx.get("dns_zone"): facts += fact("Zone DNS", _esc(ctx["dns_zone"]))
+    _cnt = ctx.get("count")
+    if ctx.get("count_reel") and str(_cnt) not in ("0", "0.0"):
+        facts += fact("Occurrences", f'{_esc(_cnt)} sur la fenêtre d\'analyse')
+    elif ctx.get("count_reel"):
+        facts += fact("Constat", f'aucun événement reçu sur la fenêtre — <b style="color:{VAL}">flux muet</b>')
+    elif _cnt:
+        try: _many = int(float(_cnt)) >= 5
+        except Exception: _many = False
+        facts += fact("Événements", f'{_esc(_cnt)}' + (' (échantillon, plafond notification)' if _many else ' joint(s)'))
+    if ctx.get("threat"):
+        facts += fact("Menace", f'<b style="color:{VAL}">{_esc(ctx["threat"])}</b>'
+                      + (f' <span style="color:{MUT}">&middot; {_esc(ctx["threat_type"])}</span>' if ctx.get("threat_type") else ''))
+        if ctx.get("av_object"):  facts += fact("Objet", _esc(ctx["av_object"]))
+        if ctx.get("av_process"): facts += fact("Processus", _esc(ctx["av_process"]))
+        if ctx.get("av_action"):
+            rem = (ctx.get("av_remediated", "") or "").lower()
+            tag_r = (' <span style="color:#087443;font-weight:600">(neutralisée)</span>' if rem in ("true", "1", "oui")
+                     else ' <span style="color:#b93815;font-weight:600">(non remédiée &mdash; à traiter)</span>' if rem in ("false", "0", "non")
+                     else '')
+            facts += fact("Action AV", _esc(ctx["av_action"]) + tag_r)
+    pr = ctx.get("priority", "")
+    if pr not in ("", None):
+        leg = {3: "critique", 2: "haute", 1: "info"}.get(pr, "")
+        facts += fact("Priorité", f'{_esc(pr)}' + (f' <span style="color:{MUT}">({leg})</span>' if leg else ''))
+    if ctx.get("ts"): facts += fact("Horodatage", _esc(ctx["ts"]) + " UTC")
+    facts += fact("Signaux", _esc(", ".join(ctx['signaux']) or "-"))
+    # tags discrets : MITRE cliquable, threat-intel, pays
+    def tag(txt, href=None, fg=BODY, bg=TAGBG):
+        s = (f'display:inline-block;background:{bg};color:{fg};font-size:11px;font-weight:600;'
+             f'padding:4px 9px;border-radius:6px;text-decoration:none;margin:0 6px 6px 0')
+        return f'<a href="{_esc(href)}" style="{s}">{txt}</a>' if href else f'<span style="{s}">{txt}</span>'
+    tags = ""
+    if ctx.get("mitre_tech"):
+        mt = _esc(ctx["mitre_tech"]) + (" &middot; " + _esc(ctx["mitre_name"]) if ctx.get("mitre_name") else "")
+        tags += tag(mt, mitre_url(ctx["mitre_tech"]), "#3538cd", "#eef2ff")
+        if ctx.get("mitre_tac"): tags += tag(_esc(ctx["mitre_tac"]))
+    if ctx.get("ti"):      tags += tag("IP réputée malveillante", None, "#b42318", "#fef3f2")
+    if ctx.get("country"): tags += tag(_esc(_pays(ctx["country"])))
+    meta = ""
+    if tags or why:
+        meta = (f'<tr><td style="padding:14px 32px 0">{tags}'
+                + (f'<div style="margin-top:4px;font-size:11px;color:{MUT}">{_esc(why)}</div>' if why else '')
+                + '</td></tr>')
+    summary = ""
+    if ctx.get("desc"):
+        summary = (f'<tr><td style="padding:14px 32px 0"><div style="background:{BOX};border-left:2px solid {color};'
+                   f'padding:11px 14px;border-radius:0 6px 6px 0;font-size:13px;color:{BODY};line-height:1.55">{_esc(ctx["desc"])}</div></td></tr>')
+    bl = ctx.get("backlog") or []
+    if bl:
+        DETAIL_N = 3; cards = []
+        _norm = lambda s: re.sub(r"[^a-z0-9]", "", str(s or "").lower())
+        for b in bl[:DETAIL_N]:
+            body = _format_log(b.get("raw", "")) or _esc(b.get("msg", "")) or "&mdash;"
+            resume = _esc(b.get("msg", ""))
+            _body_txt = _html.unescape(re.sub(r"<[^>]+>", " ", body)); _m = _norm(b.get("msg", ""))
+            if _m and _m in _norm(_body_txt): resume = ""
+            cards.append(
+                f'<div style="border:1px solid {LINE};border-radius:8px;margin-bottom:8px;overflow:hidden">'
+                f'<div style="background:{BOX};padding:7px 12px;border-bottom:1px solid {LINE};font-size:11px">'
+                f'<span style="color:{MUT}">{_esc(b["ts"])}</span> &middot; '
+                f'<span style="color:{BODY};font-weight:600">{_esc(b["src"])}</span>'
+                + (f'<div style="color:{BODY};margin-top:2px">{resume}</div>' if resume else '')
+                + '</div>'
+                f'<div style="padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;'
+                f'font-size:11.5px;line-height:1.6;color:{VAL};word-break:break-word">{body}</div></div>')
+        extra = ""
+        if len(bl) > DETAIL_N:
+            more = bl[DETAIL_N:]
+            more_rows = "".join(
+                f'<div style="font-size:11px;color:{BODY};padding:2px 0">'
+                f'<span style="color:{MUT}">{_esc(x["ts"])}</span> &middot; '
+                f'<span style="color:{MUT}">{_esc(x["src"])}</span> &middot; {_esc(x["msg"])}</div>' for x in more)
+            extra = (f'<div style="margin:6px 0 2px"><div style="font-size:11px;color:{MUT};'
+                     f'margin-bottom:3px">+ {len(more)} autre(s) événement(s) similaire(s)</div>{more_rows}</div>')
+        events = (f'<tr><td style="padding:18px 32px 0">'
+                  f'<div style="font-size:11px;color:{LAB};font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px">'
+                  f'Événements déclencheurs ({len(bl)})</div>{"".join(cards)}{extra}</td></tr>')
+    else:
+        detail = _format_log(ctx.get('message', '')) or _esc(ctx.get('message', '')).replace("\n", "<br>")
+        if detail.strip():
+            events = (f'<tr><td style="padding:18px 32px 0"><div style="font-size:11px;color:{LAB};font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px">Détail</div>'
+                      f'<div style="background:{BOX};border:1px solid {LINE};border-radius:8px;padding:11px 14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.6;color:{VAL};word-break:break-word">{detail}</div></td></tr>')
+        else:
+            events = ""
+    corr = ""; rows = ctx.get("corr_rows") or []
+    if rows:
+        lignes = "".join(
+            f'<div style="font-size:12px;color:{BODY};padding:4px 0;border-bottom:1px solid {LINE}">'
+            f'<span style="color:{MUT};font-family:ui-monospace,Menlo,Consolas,monospace">{_esc(ts)}</span>'
+            f'&nbsp;&nbsp;{_esc(t)}</div>' for ts, t in rows)
+        corr = (f'<tr><td style="padding:18px 32px 0">'
+                f'<div style="font-size:11px;color:{LAB};font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px">'
+                f'Autres alertes sur {_esc(ctx.get("corr_key", "cette entité"))} ({len(rows)})</div>'
+                f'<div style="background:{BOX};border-left:2px solid #f79009;border-radius:0 6px 6px 0;padding:9px 14px">{lignes}'
+                f'<div style="font-size:11px;color:{MUT};margin-top:8px">'
+                f'{_esc(ctx.get("velocite", "?"))} types d\'alertes distincts sur la même entité dans la fenêtre.</div></div></td></tr>')
+    guide = ""
+    if g:
+        def blk(lab, txt):
+            return (f'<tr><td style="padding:8px 0"><div style="border-left:2px solid {LINE};padding:0 0 0 14px">'
+                    f'<div style="font-size:11px;font-weight:600;color:{LAB};text-transform:uppercase;letter-spacing:.3px">{lab}</div>'
+                    f'<div style="font-size:13px;color:{BODY};margin-top:3px;line-height:1.55">{_esc(txt)}</div>'
+                    f'</div></td></tr>') if txt else ""
+        guide = (f'<tr><td style="padding:20px 32px 0"><div style="font-size:11px;color:{LAB};font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px">Guide d\'action</div>'
+                 '<table role="presentation" cellpadding="0" cellspacing="0" width="100%">'
+                 + blk("Ce que c'est", g.get("ce_que_cest")) + blk("À vérifier", g.get("a_verifier"))
+                 + blk("Remédiation", g.get("remediation")) + blk("Correction durable", g.get("correction"))
+                 + '</table></td></tr>')
+    def btn(txt, href, primary=False):
+        st = (f'background:{INK};color:#fff;border:1px solid {INK}' if primary
+              else 'background:#fff;color:#344054;border:1px solid #d0d5dd')
+        return (f'<a href="{_esc(href)}" style="display:inline-block;{st};text-decoration:none;'
+                f'font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;margin:0 8px 8px 0">{txt}</a>')
+    btns = btn("Ouvrir dans la console", soc, primary=True)
+    if ctx.get("replay"): btns += btn("Voir les logs", ctx["replay"])
+    if block_link:        btns += btn("Bloquer l'IP", block_link)
+    if fp_link:           btns += btn("Marquer faux positif", fp_link)
+    return (f'<!doctype html><html><body style="margin:0;background:#f4f5f7;padding:32px 12px;'
+            f'font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">'
+            f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;'
+            f'background:#fff;border:1px solid #e8eaed;border-top:3px solid {color};border-radius:12px;overflow:hidden">'
+            f'<tr><td style="padding:26px 32px 16px">'
+            f'<div style="font-size:11px;letter-spacing:1.5px;color:{LAB};text-transform:uppercase">SIEM OMNITECH &middot; SOC</div>'
+            f'<div style="margin-top:10px"><span style="font-size:12px;font-weight:600;color:{color};text-transform:uppercase;letter-spacing:.5px">{_esc(level)}</span></div>'
+            f'<div style="font-size:20px;font-weight:600;color:{INK};margin-top:6px;line-height:1.35">{_esc(titre)}</div></td></tr>'
+            f'<tr><td style="padding:0 32px"><div style="border-top:1px solid {LINE};font-size:0;line-height:0">&nbsp;</div></td></tr>'
+            f'{meta}{summary}'
+            f'<tr><td style="padding:16px 32px 2px"><table role="presentation" cellpadding="0" cellspacing="0" width="100%">{facts}</table></td></tr>'
+            f'{corr}{events}{guide}'
+            f'<tr><td style="padding:22px 32px 24px">{btns}</td></tr>'
+            f'<tr><td style="background:{BOX};padding:14px 32px;border-top:1px solid {LINE}">'
+            f'<div style="font-size:11px;color:{LAB};line-height:1.6">Notification qualifiée automatiquement — seuls les signaux pertinents sont transmis par courriel ; le détail complet reste en console. '
+            f'Faux positif&nbsp;? Utilisez le bouton dédié ou la console <b style="color:{MUT}">/soc/</b>.</div></td></tr>'
+            f'</table></td></tr></table></body></html>')
+
+def send_mail(e, ctx, decision_reason):
+    host = e.get("SMTP_HOST","smtp-internal.omnitech-security.fr")
+    port = int(e.get("SMTP_PORT","25"))
+    frm  = e.get("SMTP_FROM","no-reply@omnitech-security.fr")
+    to   = [x.strip() for x in e.get("MAIL_RECIPIENTS","informatique@omnitech-security.fr").split(",") if x.strip()]
+    pfx  = e.get("SMTP_SUBJECT_PREFIX","[SIEM OMNITECH]")
+    soc  = e.get("OMNI_SOC_URL","https://bx-it-graylog-vm.omnitech.security/soc/")
+    level = sev_label(ctx['tier'], decision_reason)
+    titre = re.sub(r"^OMNI\s*-\s*", "", ctx['titre'])   # titre epure
+    _lv = level.lower()
+    color = "#b42318" if ("critique" in _lv or "incident" in _lv) else "#d97706"  # rouge profond / ambre
+    site  = ctx.get('site', '-')
+    g     = guidance(guidance_key(ctx.get('tag', ''), ctx.get('titre', '')))
+    why   = rationale(ctx['tier'], decision_reason, ctx['score'])
+    ent_short = (ctx.get('entite', '') or '').split('=', 1)[-1].split('\\')[-1].strip()
+    if ent_short in ('-', ''): ent_short = ''
+    # bouton FP sur tout ce qui N'EST PAS critique : un CRITIQUE ne peut JAMAIS etre mis en
+    # sourdine, mais un NOISE escalade par le score merite le bouton (c'est justement le bruit
+    # que l'analyste veut faire taire). quick_fp_link exige deja un tag -> pas de sourdine large.
+    fp_link = quick_fp_link(e, ctx.get('entite', ''), ctx.get('tag', '')) if ctx.get('tier') != 'CRITICAL' else ""
+    # bouton 'Bloquer l'IP' : 1re IP PUBLIQUE de l'alerte (src puis dest) ; tous tiers
+    block_link = quick_block_link(e, next((ip for ip in (ctx.get('src_ip', ''), ctx.get('dest_ip', '')) if is_public_ip(ip)), ""))
+    # deep-link console -> dossier 360 de l'entite
+    soc_deep = soc + ("#e=" + urllib.parse.quote(ctx['entite']) if ctx.get('entite') and ctx['entite'] not in ('-', '') else "")
+    # fallback texte brut (clients sans HTML)
+    body = (f"Alerte {level} retenue par le triage SIEM.\n\n"
+            f"  Alerte   : {titre}\n")
+    if ctx.get("desc"):     body += f"  Contexte : {ctx['desc']}\n"
+    _ent_lab, _ent_val = _entity_label(ctx.get('entite'))
+    if ctx.get('entite') not in ('-', '', None):
+        body += f"  {_ent_lab:<9}: {_ent_val}" + (f"   (site {site})" if site not in ('-', '') else "") + "\n"
+    _grav = f"  Gravite  : {level}  (score {ctx['score']}/100)"
+    if ctx.get("risk_sev") and ctx.get("risk_sev") not in ("none", "-"):
+        _grav += f"  [risque {ctx['risk_sev']}" + (f" {ctx['risk_score']}/10" if ctx.get('risk_score') not in ('',None) else "") + "]"
+    body += _grav + "\n"
+    _ip = ctx.get("src_ip") or ctx.get("dest_ip")
+    if _ip and str(_ip) != _ent_val: body += f"  IP       : {_ip}" + (f" ({_pays(ctx['country'])})" if ctx.get('country') else "") + (" - reputee malveillante" if ctx.get('ti') else "") + "\n"
+    if ctx.get("user") and str(ctx["user"]) != _ent_val: body += f"  Compte   : {ctx['user']}\n"
+    if ctx.get("host") and str(ctx["host"]) != _ent_val and ctx["host"] != ctx.get("entite",""): body += f"  Hote     : {ctx['host']}\n"
+    if ctx.get("net"):    body += f"  Reseau   : {ctx['net']}\n"
+    # Bloc SEAL (surete physique) symetrique du HTML : le corps texte doit dire la
+    # meme chose (ou / quelle porte / quel badge), sinon un MUA texte-seul perd le OU.
+    if ctx.get("seal_site"):
+        body += f"  Site     : {ctx['seal_site']}\n"
+        if ctx.get("seal_zone"):   body += f"  Zone     : {ctx['seal_zone']}\n"
+        if ctx.get("seal_porte"):  body += f"  Porte    : {ctx['seal_porte']}\n"
+        if ctx.get("seal_badge"):  body += f"  Badge    : {ctx['seal_badge']}\n"
+        if ctx.get("seal_action"): body += f"  Evt SEAL : {ctx['seal_action']}\n"
+    if ctx.get("dest_port"): body += f"  Port     : {ctx['dest_port']}\n"
+    if ctx.get("dns_name"):
+        body += f"  DNS enr. : {ctx['dns_name']}" + (f" ({ctx['dns_type']})" if ctx.get('dns_type') else "") + "\n"
+        if ctx.get("dns_zone"): body += f"  Zone DNS : {ctx['dns_zone']}\n"
+    _cnt = ctx.get("count")
+    if ctx.get("count_reel") and str(_cnt) not in ("0", "0.0"):
+        body += f"  Occurr.  : {_cnt} sur la fenetre\n"
+    elif ctx.get("count_reel"):
+        body += f"  Constat  : aucun evenement recu sur la fenetre (flux muet)\n"
+    elif _cnt:
+        try: _many = int(float(_cnt)) >= 5
+        except Exception: _many = False
+        body += f"  Evenements: {_cnt}" + (" (echantillon, plafond notif)\n" if _many else " joint(s)\n")
+    if ctx.get("threat"):
+        body += f"  Menace   : {ctx['threat']}" + (f" ({ctx['threat_type']})" if ctx.get('threat_type') else "") + "\n"
+        if ctx.get("av_object"):  body += f"  Objet    : {ctx['av_object']}\n"
+        if ctx.get("av_process"): body += f"  Process  : {ctx['av_process']}\n"
+        if ctx.get("av_action"):
+            _rem = (ctx.get('av_remediated','') or '').lower()
+            _suf = " (neutralisee)" if _rem in ("true","1","oui") else " (NON remediee - a traiter)" if _rem in ("false","0","non") else ""
+            body += f"  Action AV: {ctx['av_action']}{_suf}\n"
+    if ctx.get("priority") not in ("", None): body += f"  Priorite : {ctx['priority']}\n"
+    if ctx.get("ts"):       body += f"  Quand    : {ctx['ts']} UTC\n"
+    body += f"  Signaux  : {', '.join(ctx['signaux']) or '-'}\n"
+    if ctx.get("mitre_tech"):
+        _mt = ctx["mitre_tech"] + (f" - {ctx['mitre_name']}" if ctx.get("mitre_name") else "")
+        body += f"  MITRE    : {_mt}" + (f"  ({ctx['mitre_tac']})" if ctx.get("mitre_tac") else "") + "\n"
+    body += f"  Recu car : {why}\n\n"
+    bl = ctx.get("backlog") or []
+    if bl:
+        body += "  Evenements declencheurs :\n"
+        for i, b in enumerate(bl):
+            body += f"   * {b['ts']} | {b['src']} | {b['msg']}\n"
+            if i < 3 and b.get("raw"):
+                lt = _format_log_text(b["raw"])
+                if lt: body += lt + "\n"
+        body += "\n"
+    else:
+        _dt = _format_log_text(ctx.get('message', '')) or str(ctx.get('message', '')).strip()
+        if _dt:   # pas de "Detail : -" vide (incident kill-chain sans log joint)
+            body += "  Detail :\n" + _dt + "\n\n"
+    if g:
+        body += ("  Guide d'action :\n"
+                 f"   - Ce que c'est : {g.get('ce_que_cest','')}\n"
+                 f"   - A verifier   : {g.get('a_verifier','')}\n"
+                 f"   - Remediation  : {g.get('remediation','')}\n"
+                 f"   - Correction   : {g.get('correction','')}\n\n")
+    body += f"  Console : {soc}\n"
+    if ctx.get("replay"):   body += f"  Logs Graylog : {ctx['replay']}\n"
+    if block_link:          body += f"  Bloquer l'IP : {block_link}\n"
+    if fp_link:             body += f"  Marquer faux positif : {fp_link}\n"
+    body += "-- Triage automatique (omni-alert-triage).\n"
+    msg = MIMEMultipart("alternative")
+    # sujet encode RFC 2047 (accents corrects sur tous les MUA) ; pas d'emoji
+    subj = f"{pfx} {level} — {titre}" + (f" · {ent_short}" if ent_short else "")
+    msg["Subject"] = Header(subj, "utf-8")
+    msg["From"] = frm; msg["To"] = ", ".join(to)
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+    msg.attach(MIMEText(_mail_html(titre, level, color, ctx, site, g, soc_deep, why, fp_link, block_link), "html", "utf-8"))
+    with smtplib.SMTP(host, port, timeout=15) as s:
+        s.sendmail(frm, to, msg.as_string())
+
+def bump(d, decision):
+    c = d.setdefault("stats", {}); c[decision] = c.get(decision, 0) + 1
+
+# --- FP dynamiques : suppression de mail apprise (analyste /soc/, script, RSSI) -
+# Sûr par construction : scope (entite + sous-chaine de titre optionnelle), TTL,
+# JAMAIS appliquee a un CRITICAL, et chaque suppression est tracee (GELF fp_drop).
+FP_FILE = "/var/lib/omni-alert-triage/fp.json"
+def load_fp():
+    try: return json.load(open(FP_FILE))
+    except Exception: return []
+def save_fp(lst):
+    os.makedirs(os.path.dirname(FP_FILE), exist_ok=True)
+    tmp = FP_FILE + ".tmp"; json.dump(lst, open(tmp, "w")); os.replace(tmp, FP_FILE)
+def fp_active(now):
+    return [r for r in load_fp() if r.get("until", 0) > now]
+def fp_match(rules, title, entity, tag=""):
+    tl = (title or "").lower(); tg = (tag or "").lower()
+    for r in rules:
+        ent = r.get("entity", "")
+        if not ent or ent not in (entity or ""):
+            continue
+        rtag = (r.get("tag", "") or "").lower()
+        sub  = (r.get("title_sub", "") or "").lower()
+        # precision decroissante : tag exact (1 detection) > sous-chaine titre > entite seule
+        if rtag:
+            if rtag == tg: return r
+        elif sub:
+            if sub in tl: return r
+        else:
+            return r
+    return None
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def _json(self, code, obj):
+        self.send_response(code); self.send_header("Content-Type", "application/json")
+        self.end_headers(); self.wfile.write(json.dumps(obj).encode())
+    def _auth_ok(self, e):
+        tok = e.get("TRIAGE_TOKEN", "")
+        return (not tok) or self.headers.get("X-Triage-Token", "") == tok
+    def do_GET(self):
+        if self.path.startswith("/stats"):
+            self._json(200, load().get("stats", {})); return
+        if self.path.startswith("/fp"):
+            self._json(200, fp_active(time.time())); return
+        self.send_response(404); self.end_headers()
+    def do_DELETE(self):
+        e = env()
+        if not self._auth_ok(e): self.send_response(403); self.end_headers(); return
+        from urllib.parse import urlparse, parse_qs
+        ent = (parse_qs(urlparse(self.path).query).get("entity") or [""])[0]
+        lst = [r for r in load_fp() if r.get("entity") != ent]; save_fp(lst)
+        self._json(200, {"ok": True, "removed_entity": ent, "restant": len(lst)})
+    def do_POST(self):
+        e = env()
+        if not self._auth_ok(e):
+            self.send_response(403); self.end_headers(); return   # secret partage requis
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            payload = json.loads(self.rfile.read(n) or b"{}")
+        except Exception:
+            self.send_response(400); self.end_headers(); return
+        # --- gestion des FP dynamiques (ex: /soc/ marque un faux positif) ---
+        if self.path.startswith("/fp"):
+            ent = str(payload.get("entity", "")).strip()
+            if not ent: self._json(400, {"error": "champ 'entity' requis (ex: src_ip=1.2.3.4)"}); return
+            days = int(payload.get("ttl_days", e.get("FP_DEFAULT_TTL_DAYS", "30")))
+            now = time.time()
+            rtag = str(payload.get("tag", ""))[:60]
+            rule = {"entity": ent, "tag": rtag, "title_sub": str(payload.get("title_sub", "")),
+                    "until": now + days*86400, "by": str(payload.get("by", "?"))[:60]}
+            lst = [r for r in load_fp() if r.get("until", 0) > now
+                   and not (r.get("entity") == ent and (r.get("tag", "") or "") == rtag)]
+            lst.append(rule); save_fp(lst)
+            gelf("fp_add", ent, "-", 0, [rtag or rule["title_sub"] or "*"], f"soc_fp par {rule['by']} ttl={days}j scope={rtag or rule['title_sub'] or 'entite'}")
+            self._json(200, {"ok": True, "rule": rule, "actifs": len(lst)}); return
+        crit, noise = tiers()
+        ev = payload.get("event") or {}
+        f  = fields_of(payload)
+        title = ev.get("event_definition_title") or payload.get("event_definition_title","")
+        entity = entity_of(f, ev)
+        tier = classify(title, crit, noise)
+        now = time.time(); d = load()
+        # --- POLITIQUE QA (transverse SEAL) : bx-qa-seal-vm est un systeme de TEST.
+        # Ses alertes ne remontent JAMAIS par mail (console/Teams au pire). Teams
+        # reste cable en direct dans Graylog (firehose SOC) et /soc/ voit toujours
+        # l'evenement ; on coupe uniquement la voie MAIL du triage. PROD (bx-seal-omega)
+        # est inchange. seal_site est pose par Logstash (add_field), present a ~99,9%
+        # sur les fenetres de detection (10-15 min, cf. seal/docs/FAUX-POSITIFS.md) et
+        # injecte dans le group_by + field_spec de chaque def SEAL a group_by non vide
+        # (seal/detections/provision_detections.py l.338-350) -> present sur le payload
+        # ET sur le backlog : cle de routage fiable. AUCUNE exception (meme ALM-003
+        # intrusion : sur le site de test, c'est un essai, pas une effraction).
+        # Match sur seal_site (evenements a group_by) OU sur le TITRE : les detections
+        # SEAL "Flux interrompu" se declenchent sur une ABSENCE d'evenements (count=0),
+        # donc l'evenement ne porte PAS seal_site -- le site n'est que dans le titre
+        # (ex. "... sur site bx-qa-seal-vm"). Sans ce 2e test, 36% des mails etaient du
+        # bruit du systeme de TEST (audit 23/07/2026 : 213 mails/7j).
+        _qa_site = e.get("SEAL_QA_SITE", "bx-qa-seal-vm")
+        _qa_hit = "seal_site" if f.get("seal_site", "") == _qa_site else ("titre" if _qa_site and _qa_site in (title or "") else "")
+        if _qa_site and _qa_hit:
+            bump(d, "qa_console"); save(d)
+            gelf("qa_console", title, tier, 0, [_qa_hit + "=" + _qa_site],
+                 "site_test:" + _qa_site + " (via " + _qa_hit + ") -> console/Teams, mail supprime")
+            self.send_response(200); self.end_headers()
+            self.wfile.write(json.dumps({"decision": "qa_console", "tier": tier,
+                "score": 0, "reason": "qa_test:" + _qa_site}).encode())
+            return
+        # Correlation fil de l'eau : chaque alerte alimente TOUTES ses cles
+        # canoniques (identite/machine/IP/badge) des sa reception ; la kill-chain
+        # retient la cle la plus corroboree. Cross-source : une connexion console
+        # SEAL et une force brute Windows sur le meme compte se rejoignent enfin.
+        ckeys = corr_keys(f, ev, entity)
+        vel, corr_key, corr_hist = velocity_multi(
+            d, ckeys, title, now, int(e.get("KILLCHAIN_WINDOW", "1800")))
+        score, signals = score_alert(e, tier, f, ev, entity, vel)
+        bl = payload.get("backlog") or []
+        excerpt = ""
+        if bl and isinstance(bl[0], dict):
+            mm = bl[0].get("message") if isinstance(bl[0].get("message"), dict) else bl[0]
+            excerpt = (mm.get("message") if isinstance(mm, dict) else str(mm)) or ""
+        # Alertes correlees a afficher : les AUTRES types vus sur la meme cle dans la
+        # fenetre (la courante est deja le sujet du mail), de la plus recente a la
+        # plus ancienne. C'est le "pourquoi c'est un incident et pas une alerte".
+        corr_rows, _seen = [], {title}
+        for _t, _ts in reversed(corr_hist):
+            if _t in _seen: continue
+            _seen.add(_t)
+            corr_rows.append((time.strftime("%d/%m %H:%M", time.localtime(_ts)),
+                              re.sub(r"^OMNI\s*-\s*", "", str(_t))))
+            if len(corr_rows) >= 6: break
+        # Vrai volume agrege (pas la taille du backlog joint, plafonne par Graylog).
+        _cnt, _cnt_reel = real_count(ev, len(payload.get("backlog") or []))
+        ctx = {"titre":title,"entite":entity,"tier":tier,"score":score,"signaux":signals,
+               "tag":f.get("alert_tag",""),"site":f.get("fortigate_site","-"),"velocite":vel,
+               "corr_key":corr_key,"corr_rows":corr_rows,
+               # --- contexte SEAL (surete physique) : sans ces champs, une alerte
+               # d'intrusion physique arrivait sans dire NI ou NI quel badge.
+               "seal_site":f.get("seal_site",""),
+               "seal_zone":f.get("seal_zone",""),
+               "seal_porte":f.get("trigger_code","") or f.get("target_object_label","")
+                            or f.get("target_object_id",""),
+               "seal_badge":f.get("badge_number",""),
+               "seal_reev":f.get("REEV_CODE",""),
+               "seal_action":f.get("event_action",""),
+               "message":str(excerpt)[:600],
+               "desc":_analyst_desc(payload.get("event_definition_description","")),
+               "ts":str(ev.get("timestamp",""))[:19].replace("T"," "),
+               "priority":ev.get("priority",""), "replay":replay_url(ev),
+               "backlog":backlog_rows(payload),
+               # MITRE : si le pipeline n'a pas pose mitre_technique (detections M365
+               # legacy/appareil, VPN... sans alert_tag -> lookup non applique), on le
+               # RECONSTRUIT depuis le titre qui annonce deja "T1078.004" / "(T1098.005)".
+               # Sinon le badge ATT&CK manquait alors que le titre le promet (audit 13/08).
+               "mitre_tech":f.get("mitre_technique","") or (_TECH_RE.search(title).group(0) if _TECH_RE.search(title or "") else ""),
+               "mitre_name":f.get("mitre_technique_name",""),
+               "mitre_tac":f.get("mitre_tactic",""),
+               # Pays : les detections GEO (ueba_geo) portent le pays dans geo_new_*/
+               # geo_to_* et PAS dans *_ip_country_code -> sans ces fallbacks, deux
+               # detections DE PAYS n'affichaient aucun pays (audit 13/08/2026).
+               "country":_first(f,"src_ip_country_code","dest_ip_country_code",
+                                "geo_new_ip_country_code","geo_new_country",
+                                "geo_to_ip_country_code","remip_country_code"),
+               # IP / compte / hote : fallbacks multi-sources (Forti, Linux, Aruba, Entra,
+               # geo/VPN). 'remip'/'geo_new_ip'/'geo_to_ip' = IP etrangere reelle des
+               # alertes VPN/geo (sinon "VPN depuis l'etranger" n'affichait NI IP NI pays).
+               "src_ip":_first(f,"src_ip","srcip","client_ip","remote_ip","clientip",
+                               "geo_new_ip","geo_to_ip","geo_from_ip","remip"),
+               "dest_ip":_first(f,"dest_ip","dstip","dst_ip"),
+               "user":_first(f,"user","eset_username","upn","actor_login","identity","identity_console",
+                             "winlogbeat_winlog_event_data_TargetUserName","samaccountname","usr"),
+               # 'devname'/'dvchost' RETIRES du fallback hote : ce sont les noms de
+               # l'APPLIANCE FortiGate (ex. OMNITECH-BDX_FG120G), jamais le poste
+               # concerne -> "VPN depuis l'etranger" affichait le pare-feu comme
+               # 'Hote' (trompeur, audit 13/08/2026). Mieux vaut aucune ligne Hote.
+               "host":_first(f,"host","eset_hostname","entity_host","computer","hostname"),
+               "net":f.get("net_segment",""), "dest_port":_first(f,"dest_port","dstport","dport"),
+               "count":_cnt, "count_reel":_cnt_reel,
+               # Score de risque metier (pose par les robots UEBA/geo : risk_severity
+               # 'critique'/'eleve', risk_score 0-10). Sans LLM, un impossible travel
+               # 'critique' arrivait libelle "A VERIFIER 75/100" -> on remonte le vrai
+               # niveau (audit 13/08/2026).
+               "risk_sev":str(_first(f,"risk_severity") or "").lower(),
+               "risk_score":_first(f,"risk_score"),
+               # DNS (canal audit Windows DNS) : QUEL enregistrement / zone a change.
+               "dns_name":_first(f,"dns_name","query_name","qname"),
+               "dns_zone":f.get("dns_zone",""),
+               "dns_type":_first(f,"dns_query_type","query_type","qtype"),
+               # FortiGate IPS : la signature est dans 'attack' (ex. PHP.Malicious.Shell)
+               # -> sans ce fallback, ~93% des hits IPS s'affichaient SANS nom de menace
+               # (audit 13/08/2026). 'attack' place avant 'msg' (jamais le message brut).
+               "threat":_first(f,"eset_threat_name","virus","forticlient_virus","threat",
+                               "malware_name","attack_name","attack"),
+               "threat_type":_first(f,"eset_threat_type","threat_type","attack_type"),
+               # AV : fallbacks non-ESET (FortiClient/generique) -- fichier/processus/action.
+               "av_object":_first(f,"eset_object_uri","eset_target","filepath","filename","file",
+                                  "quarantinedfilepath","object","uri"),
+               "av_process":_first(f,"eset_processname","process","processname","proc","image"),
+               "av_action":_first(f,"eset_action_taken","eset_action","action","av_action","status","quarantine"),
+               "av_remediated":str(_first(f,"eset_threat_handled","remediated","quarantined","handled") or ""),
+               "ti":(str(f.get("src_ip_threat_indicated","")).lower()=="true"
+                     or str(f.get("dest_ip_threat_indicated","")).lower()=="true")}
+
+        mail_thr = int(e.get("MAIL_SCORE_THRESHOLD","80"))
+        # Sans LLM, la zone grise est CONSERVATRICE : ne maile que sur forte
+        # corroboration (actif critique + threat-intel + prio...). Le vrai tri fin
+        # de la zone grise = activer ANTHROPIC_API_KEY.
+        gray_thr = int(e.get("GRAY_SCORE_THRESHOLD","90"))
+        decision, reason = "drop", tier.lower()
+
+        fp = {x.strip() for x in e.get("TRIAGE_FP_ENTITIES","").split(",") if x.strip()}
+        dyn_rule = fp_match(fp_active(now), title, entity, f.get("alert_tag", ""))   # FP appris (/soc/, script...)
+        kth = int(e.get("KILLCHAIN_COUNT","4"))
+        want_mail = False
+        if entity in fp:                       # match EXACT (avant : sous-chaine ->
+            decision, reason = "drop", "fp_connu"  # .13 muait .130/.131 et pouvait tuer un CRITICAL)
+        elif vel >= kth and corr_key:
+            # corr_key exclut deja 'source=' (hote d'ORIGINE du log, present sur toutes
+            # les alertes de sante internes Disque/Backup/Rapport/Robot/Cert : elles
+            # retombaient toutes sur source=bx-it-graylog-vm et fabriquaient une fausse
+            # kill-chain -> mail force). On ne correle jamais sur 'source'. (audit 06/07/2026)
+            want_mail, reason = True, f"killchain_escalade(x{vel} types/{corr_key})"
+            # Incident correle reinjecte dans le SIEM : trace la kill-chain elle-meme
+            # (et pas seulement les alertes unitaires) -> chasse + tableau de bord.
+            corr_gelf(corr_key, vel, corr_hist, title, score)
+        elif tier == "CRITICAL":
+            want_mail, reason = True, "critical"   # CRITICAL jamais supprime par un FP appris
+        elif dyn_rule:
+            decision, reason = "drop", f"fp_soc({dyn_rule.get('by','?')})"
+        elif tier == "NOISE":
+            if score >= mail_thr: want_mail, reason = True, f"noise_escalade(score={score})"
+            else: decision, reason = "drop", f"noise(score={score})"
+        else:  # GRAY
+            rel, why = llm_relevant(e, ctx); reason = why
+            if rel is True: want_mail = True
+            elif rel is False: decision = "drop"
+            else:  # juge indisponible -> score, puis defaut fail-safe DOCUMENTE
+                if score >= gray_thr:
+                    want_mail, reason = True, f"{why}|score={score}"
+                elif why.startswith("llm_erreur") and e.get("OMNI_TRIAGE_GRAY_DEFAULT","drop").lower() == "mail":
+                    # Cle presente mais appel API en echec transitoire -> fail-open documente
+                    # (OMNI_TRIAGE_GRAY_DEFAULT=mail) pour ne PAS perdre une alerte grise faute
+                    # de juge. N'agit PAS quand la cle est absente (why=llm_absent) : aucun flood
+                    # tant que le LLM n'est pas active. Corrige une config jusqu'ici jamais lue.
+                    want_mail, reason = True, f"{why}|gray_default=mail"
+                else:
+                    decision, reason = "drop", f"{why}|score={score}<{gray_thr}"
+
+        win = int(e.get("TRIAGE_DEDUP_SECONDS","3600"))
+        if want_mail:
+            # Filet de securite dedup : si l'entite primaire est un 'source=' (collecteur,
+            # pas le sujet), on deduplique plutot sur la 1re cle de correlation (ckeys
+            # exclut deja 'source=' par construction) -> deux sujets distincts collectes
+            # par le meme hote ne s'ecrasent plus. Sinon comportement inchange.
+            key = "dedup:" + title + "|" + (ckeys[0] if entity.startswith("source=") and ckeys else entity)
+            if key in d and (now - d[key]) < win:
+                decision, reason = "dedup", reason + "+dedup"
+            else:
+                try:
+                    send_mail(e, ctx, reason); decision = "mail"; d[key] = now
+                except Exception as ex:
+                    decision, reason = "mail_echec", f"{reason}|smtp:{type(ex).__name__}"
+        # purge dedup expires : borne par win (sinon un TRIAGE_DEDUP_SECONDS > 24h etait
+        # ecrase par le plafond en dur -> re-mail premature). stats + save.
+        _ddl = max(win, 86400)
+        d = {k:v for k,v in d.items() if not (k.startswith("dedup:") and now - v > _ddl)}
+        # purge des compteurs de velocite (vel:<entite>) dont AUCUNE entree n'est dans la
+        # fenetre 7j -> evite la croissance non bornee de state.json (1 cle par entite vue).
+        _velmax = 7 * 86400
+        d = {k: v for k, v in d.items() if not (
+            k.startswith("vel:") and isinstance(v, list)
+            and not any(isinstance(x, (list, tuple)) and len(x) == 2
+                        and (now - (x[1] or 0)) < _velmax for x in v))}
+        bump(d, decision); save(d)
+        gelf(decision, title, tier, score, signals, reason)
+        self.send_response(200); self.end_headers()
+        self.wfile.write(json.dumps({"decision":decision,"tier":tier,"score":score,"reason":reason}).encode())
+
+if __name__ == "__main__":
+    HTTPServer(LISTEN, Handler).serve_forever()

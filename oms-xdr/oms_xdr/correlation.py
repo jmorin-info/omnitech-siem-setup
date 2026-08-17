@@ -58,8 +58,31 @@ class Correlator:
             data = yaml.safe_load(fh)
         self.signals: dict[str, dict] = data.get("signals", {})
         self.rules: dict[str, dict] = data.get("rules", {})
+        self.sessions_cfg: dict[str, dict] = data.get("sessions", {})
         self.gl = gl
         self.window = window_minutes
+        self._sessions: dict[str, dict] = {}
+
+    def _build_sessions(self) -> dict[str, dict]:
+        """Cartes de session user<->host depuis les logons (4624) pour les règles
+        cross-entité (`bridge: user_host`). Robuste : un échec => cartes vides."""
+        out: dict[str, dict] = {}
+        cfg = self.sessions_cfg.get("user_host")
+        if not cfg:
+            return out
+        try:
+            # fenêtre de session DÉDIÉE (un logon dure des heures) >> fenêtre détections
+            swin = int(cfg.get("window", self.window))
+            u2h = self.gl.pairs(cfg.get("query", ""), cfg.get("stream", ""),
+                                cfg["user_field"], cfg["host_field"], swin)
+        except Exception:
+            return out
+        h2u: dict[str, set[str]] = {}
+        for u, hosts in u2h.items():
+            for h in hosts:
+                h2u.setdefault(h, set()).add(u)
+        out["user_host"] = {"u2h": u2h, "h2u": h2u}
+        return out
 
     # ------------------------------------------------------------------
     def _eval_signal(self, sid: str) -> dict[str, int]:
@@ -125,6 +148,9 @@ class Correlator:
         if failed:  # ne pas masquer la dégradation : la rendre visible dans le SIEM
             self._emit_health(failed)
 
+        # cartes de session (1 requête) si au moins une règle utilise le pont cross-entité
+        self._sessions = self._build_sessions() if any(r.get("bridge") for r in self.rules.values()) else {}
+
         incidents: list[Incident] = []
         for rid, rule in self.rules.items():
             inc = self._eval_rule(rid, rule, fired)
@@ -145,6 +171,36 @@ class Correlator:
         # au moins un "any_of" si la liste est non vide
         if any_of and not any(fired.get(s) for s in any_of):
             return []
+
+        # --- PONT cross-entité user<->host : compte à risque (require_all, user-keyed)
+        #     + détection (any_of, host-keyed) sur un HÔTE de SA session (logon 4624) ---
+        if rule.get("bridge") == "user_host":
+            sess = self._sessions.get("user_host")
+            if not sess or not require_all or not any_of:
+                return []
+            user_sets = [set(fired[s]) for s in require_all if fired.get(s)]
+            users_common = set.intersection(*user_sets) if user_sets else set()
+            hosts_active: set[str] = set()
+            for s in any_of:
+                hosts_active |= set(fired.get(s, {}))
+            if not users_common or not hosts_active:
+                return []
+            u2h = sess["u2h"]
+            active = [s for s in (require_all + any_of) if fired.get(s)]
+            bridged: list[Incident] = []
+            for u in sorted(users_common):
+                matched = u2h.get(u, set()) & hosts_active
+                if not matched:
+                    continue
+                bridged.append(Incident(
+                    rule_id=rid, title=rule["title"], severity=rule["severity"],
+                    entities=[u] + sorted(matched), signals=active,
+                    mitre=rule.get("mitre", []), tactic=rule.get("tactic", []),
+                    evidence={"user": u, "hosts": sorted(matched),
+                              "user_signals": {s: fired[s].get(u) for s in require_all if fired.get(s)},
+                              "host_signals": {s: {h: fired[s][h] for h in sorted(matched) if h in fired[s]}
+                                               for s in any_of if fired.get(s)}}))
+            return bridged
 
         active_signals = [s for s in (require_all + any_of) if fired.get(s)]
 

@@ -66,8 +66,8 @@ ${if backlog}
 ${foreach backlog message}
 * ${message.timestamp} | hôte=${if message.fields.host}${message.fields.host}${else}${message.source}${end} | user=${if message.fields.user}${message.fields.user}${else}${message.fields.upn}${end} | src_ip=${if message.fields.src_ip}${message.fields.src_ip}${else}${if message.fields.entity_host}${message.fields.entity_host}${else}${message.fields.dest_ip}${end}${end} | segment=${if message.fields.net_segment}${message.fields.net_segment}${else}-${end} | action=${if message.fields.event_action}${message.fields.event_action}${else}${message.fields.alert_tag}${end} | tag=${message.fields.alert_tag}${if message.fields.event_id} | EventID=${message.fields.event_id}${end}${if message.fields.failure_reason} | cause=${message.fields.failure_reason}${end}${if message.fields.mitre_technique_name} | ATT&CK=${message.fields.mitre_tactic}/${message.fields.mitre_technique_name} (${message.fields.mitre_technique})${end}${if message.fields.risk_score} | risque=${message.fields.risk_score}/10${end}
   brut: ${message.message}
-${if message.fields.alert_explain}  → ${message.fields.alert_explain}
-${end}${if message.fields.alert_remediation}  ➜ À FAIRE : ${message.fields.alert_remediation}
+${if message.fields.alert_explain}  - ${message.fields.alert_explain}
+${end}${if message.fields.alert_remediation}  A FAIRE : ${message.fields.alert_remediation}
 ${end}${if message.fields.eset_severity}  [ESET] cible=${message.fields.eset_target} | action=${message.fields.eset_action} (${message.fields.eset_severity}) sur ${message.fields.eset_hostname}
   Detail: ${message.fields.eset_detail} | Remediation: isoler ${message.fields.eset_hostname}, scan complet ESET.
 ${end}${if message.fields.waf_vhost}  [WAF] ${message.fields.waf_vhost} ${message.fields.http_method} ${message.fields.http_url} -> ${message.fields.http_status} (ua ${message.fields.http_user_agent})
@@ -127,8 +127,8 @@ BODY_HTML="$(cat <<'EOF'
       <tr><td colspan="6" style="padding:2px 8px 7px;color:#868e96;font-size:11px;border-bottom:1px solid #eef1f4;word-break:break-all">${message.message}</td></tr>
       ${if message.fields.failure_reason}<tr><td colspan="6" style="padding:3px 8px;background:#fff9db;color:#7a5200;font-size:11.5px">&#9888; Cause de l'échec : <b>${message.fields.failure_reason}</b>${if message.fields.event_id} &mdash; EventID ${message.fields.event_id}${end}</td></tr>${end}
       ${if message.fields.mitre_technique_name}<tr><td colspan="6" style="padding:3px 8px;background:#edf2ff;color:#364fc7;font-size:11.5px">&#127919; ATT&amp;CK : ${message.fields.mitre_tactic} / <b>${message.fields.mitre_technique_name}</b> (${message.fields.mitre_technique})${if message.fields.risk_score} &mdash; risque <b>${message.fields.risk_score}/10</b>${end}</td></tr>${end}
-      ${if message.fields.alert_explain}<tr><td colspan="6" style="padding:3px 8px;background:#f1f3f5;color:#343a40;font-size:11.5px">&#128161; ${message.fields.alert_explain}</td></tr>${end}
-      ${if message.fields.alert_remediation}<tr><td colspan="6" style="padding:3px 8px;background:#ebfbee;color:#2b8a3e;font-size:11.5px">&#10145; <b>À faire :</b> ${message.fields.alert_remediation}</td></tr>${end}
+      ${if message.fields.alert_explain}<tr><td colspan="6" style="padding:3px 8px;background:#f1f3f5;color:#343a40;font-size:11.5px">${message.fields.alert_explain}</td></tr>${end}
+      ${if message.fields.alert_remediation}<tr><td colspan="6" style="padding:3px 8px;background:#ebfbee;color:#2b8a3e;font-size:11.5px"><b>À faire :</b> ${message.fields.alert_remediation}</td></tr>${end}
       ${if message.fields.eset_severity}<tr><td colspan="6" style="padding:4px 8px;background:#fff5f5;color:#862e2e;font-size:11.5px">ESET : cible <b>${message.fields.eset_target}</b> &mdash; action ${message.fields.eset_action} (${message.fields.eset_severity}) sur <b>${message.fields.eset_hostname}</b> &mdash; ${message.fields.eset_detail}. Remédiation : isoler le poste + scan complet.</td></tr>${end}
       ${if message.fields.waf_vhost}<tr><td colspan="6" style="padding:4px 8px;background:#fff9db;color:#7a5200;font-size:11.5px">WAF : ${message.fields.waf_vhost} ${message.fields.http_method} ${message.fields.http_url} -&gt; <b>${message.fields.http_status}</b> &mdash; ua ${message.fields.http_user_agent}. Remédiation : si exploit, bloquer l'IP (SOAR) + inspecter le vhost.</td></tr>${end}
       ${if message.fields.cert_days}<tr><td colspan="6" style="padding:4px 8px;background:#e7f5ff;color:#1864ab;font-size:11.5px">CERT : <b>${message.fields.cert_subject}</b> expire dans <b>${message.fields.cert_days} j</b> (le ${message.fields.cert_expiry}) &mdash; store ${message.fields.cert_store} sur ${message.fields.cert_machine}. Remédiation : renouveler / re-enroller via AD CS avant expiration.</td></tr>${end}
@@ -257,7 +257,7 @@ ensure_event() {
   local TITLE="$1" PRIO="$2" QUERY="$3" STREAMS="$4" GROUPBY="$5" SERIES="$6" COND="$7" WITHIN="$8" EVERY="$9"
   local GRACE="${10:-10}"
   local EXIST ID
-  EXIST="$(api_get "/events/definitions?per_page=100" | jq -r --arg t "${TITLE}" '(.event_definitions // .elements // [])[] | select(.title==$t) | .id')"
+  EXIST="$(event_def_id "${TITLE}")"
   if [[ -n "${EXIST}" ]]; then skip "evenement '${TITLE}' existe"; return 0; fi
   ID="$(jq -n --arg t "${TITLE}" --argjson p "${PRIO}" --arg q "${QUERY}" \
         --argjson st "${STREAMS}" --argjson gb "${GROUPBY}" --argjson se "${SERIES}" \
@@ -301,7 +301,11 @@ max_series()  { echo "[{\"id\":\"max($1)\",\"type\":\"max\",\"field\":\"$1\"}]";
 max_ge() { echo "{\"expression\":{\"expr\":\">=\",\"left\":{\"expr\":\"number-ref\",\"ref\":\"max($1)\"},\"right\":{\"expr\":\"number\",\"value\":$2}}}"; }
 
 # --- P3 : critiques -----------------------------------------------------------
-ensure_event "OMNI - Sabotage de l'audit (1102/4719/4794/104)" 3 \
+# Titre aligne sur la realite du pipeline (12) : winsec_critique = journal SECURITE
+# efface (1102/1104), DSRM (4794), SID-history (4765/66). Le 4719 (modif politique
+# audit) est demote en audit_config_change ; le 104 (journal Systeme) en
+# system_log_cleared -> tous deux HORS de ce mail critique (voir 12-graylog-pipelines).
+ensure_event "OMNI - Sabotage de l'audit (journal Sécurité effacé / DSRM / SID-history)" 3 \
   'alert_tag:winsec_critique' "[\"${ST_WINSEC}\",\"${ST_WINOTH}\"]" \
   '[]' '[]' "${NOCOND}" 5 1
 
@@ -351,12 +355,19 @@ ensure_event "OMNI - Suppressions massives de fichiers (ransomware?)" 3 \
 # Exclusions anti-faux-positifs : comptes machine (*$) + comptes de service
 # bruyants (ninjaone, ADSyncMSA) qui echouent en boucle = bruit, PAS du brute-force.
 ensure_event "OMNI - Force brute (>=10 échecs / compte / 10 min)" 3 \
-  'event_id:4625 AND logon_fail:1 AND NOT user:*$ AND NOT user:ninjaone AND NOT user:ADSyncMSA_*' "[\"${ST_WINSEC}\"]" \
+  'event_id:4625 AND logon_fail:1 AND NOT user:*$ AND NOT user:(ninjaone OR ADSyncMSA_* OR sealtoagrid OR Invité OR Guest)' "[\"${ST_WINSEC}\"]" \
   '["user"]' "${COUNT_SERIES}" "$(count_ge 10)" 10 2
 
 ensure_event "OMNI - Password spraying (>=8 comptes / IP / 10 min)" 3 \
   'event_id:4625 AND _exists_:src_ip AND NOT user:*$' "[\"${ST_WINSEC}\"]" \
   '["src_ip"]' "$(card_series user)" "$(card_ge user 8)" 10 2
+
+# Spray Kerberos (pre-auth 4771) : complete le spray 4625 (NTLM/interactif) par le
+# vecteur Kerberos. Calibre sur donnees reelles : max 1 utilisateur distinct / IP /
+# 10 min en fonctionnement normal -> seuil 6 = quasi zero FP. Comptes machine exclus.
+ensure_event "OMNI - Password spraying Kerberos (>=6 comptes / IP / 10 min)" 3 \
+  'event_id:4771 AND _exists_:winlogbeat_winlog_event_data_IpAddress AND NOT winlogbeat_winlog_event_data_TargetUserName:*$' "[\"${ST_WINSEC}\"]" \
+  '["winlogbeat_winlog_event_data_IpAddress"]' "$(card_series winlogbeat_winlog_event_data_TargetUserName)" "$(card_ge winlogbeat_winlog_event_data_TargetUserName 6)" 10 2
 
 ensure_event "OMNI - Modification d'un groupe privilégié" 3 \
   '_exists_:priv_group_label' "[\"${ST_WINSEC}\"]" \
@@ -378,8 +389,11 @@ ensure_event "OMNI - Defender : détection ou désactivation" 3 \
   'alert_tag:defender' "[\"${ST_WINOTH}\"]" \
   '[]' '[]' "${NOCOND}" 5 1
 
+# subtype:anomaly = attaques VOLUMETRIQUES DoS (udp_flood...) auto-mitigees par la
+# DoS-policy FortiGate = bruit perimetrique (2598/7j). On restreint aux MENACES
+# endpoint/exploitation : virus (AV) + ips (signatures RCE/botnet/webshell). 06/07/2026.
 ensure_event "OMNI - FortiGate : virus / IPS" 3 \
-  'alert_tag:fortigate_utm' "[\"${ST_FORTI}\"]" \
+  'alert_tag:fortigate_utm AND NOT subtype:anomaly' "[\"${ST_FORTI}\"]" \
   '[]' '[]' "${NOCOND}" 5 1
 
 ensure_event "OMNI - Silence Winlogbeat (0 log Windows / 15 min)" 3 \
@@ -392,13 +406,16 @@ ensure_event "OMNI - Silence Winlogbeat (0 log Windows / 15 min)" 3 \
 # condition PERSISTE tant que l'hote reste muet (sinon re-alerte chaque heure).
 if [[ -n "${ST_INT}" ]]; then
   ensure_event "OMNI - Hôte go-dark (collecte interrompue >26h)" 2 \
-    'sla_type:go_dark' "[\"${ST_INT}\"]" \
+    'sla_type:go_dark AND NOT dark_host:(*-LT* OR *-PC*)' "[\"${ST_INT}\"]" \
     '["dark_host"]' "${COUNT_SERIES}" "$(count_ge 1)" 90 60 360
 
   # --- UEBA / NDR (analytique comportementale, collecteurs 40-ueba-ndr.sh) ----
-  # Impossible travel : compte connecte depuis 2 lieux inconciliables -> P3.
-  ensure_event "OMNI - Impossible travel (compte multi-localisé)" 3 \
-    'event_source:ueba_geo AND alert_tag:impossible_travel' "[\"${ST_INT}\"]" \
+  # Connexion geographique anormale : FUSION de "nouveau pays" (first-seen) et
+  # "voyage impossible" (2 lieux inconciliables) - meme preoccupation (geo login
+  # anormal sur un compte), une seule alerte (audit 14/08/2026). Le playbook et le
+  # MITRE restent portes par l'alert_tag de chaque evenement (new_country/impossible_travel).
+  ensure_event "OMNI - Connexion géographique anormale (compte)" 3 \
+    'event_source:ueba_geo AND alert_tag:(impossible_travel OR new_country)' "[\"${ST_INT}\"]" \
     '["user"]' "${COUNT_SERIES}" "$(count_ge 1)" 60 30
   # Beaconing / C2 : flux externe a intervalle regulier -> P2 (a trier).
   ensure_event "OMNI - Beaconing / C2 suspect (NDR)" 2 \
@@ -423,13 +440,33 @@ if [[ -n "${ST_INT}" ]]; then
     'event_source:ndr_scan AND alert_tag:network_scan' "[\"${ST_INT}\"]" \
     '["entity_host"]' "${COUNT_SERIES}" "$(count_ge 1)" 90 30 720
   # Incident CRITIQUE : kill-chain multi-tactiques sur une entite -> P3.
-  ensure_event "OMNI - Incident critique (kill-chain corrélée)" 3 \
-    'event_source:incident AND incident_severity:critique' "[\"${ST_INT}\"]" \
-    '["incident_entity"]' "${COUNT_SERIES}" "$(count_ge 1)" 30 15
+  # DESACTIVEE le 17/07/2026 (audit F.3) - NE PAS REACTIVER SANS LIRE CECI.
+  # Cette definition interroge 'event_source:incident', produit par le moteur
+  # omni-incident-correlate. Ce moteur a ete desactive le 28/06/2026 (44-incidents.sh:19,
+  # anti double-comptage : le moteur d'incidents unique est desormais oms-xdr, qui emet
+  # 'event_source:xdr_incident'). Dernier document 'incident' indexe : 02/07/2026 20:48.
+  # Elle etait donc ENABLED avec 3 notifications tout en etant structurellement incapable
+  # de tirer : une FAUSSE ASSURANCE (un canal muet se lit comme un « RAS »).
+  # Pour la remplacer, c'est la decision RSSI F.4 (notifier 'event_source:xdr_incident
+  # AND severity:critical' via omni-alert-triage) - prerequis : traiter d'abord le faux
+  # positif LSASS permanent de BX-WDSMDT-IT, sinon le canal est noye.
+  # ensure_event "OMNI - Incident critique (kill-chain corrélée)" 3 \
+  #   'event_source:incident AND incident_severity:critique' "[\"${ST_INT}\"]" \
+  #   '["incident_entity"]' "${COUNT_SERIES}" "$(count_ge 1)" 30 15
   # Auto-supervision : un robot d'analyse en panne = detection aveugle -> P3.
   ensure_event "OMNI - Robot d'analyse en panne (auto-supervision)" 3 \
     'event_source:siem_health AND alert_tag:siem_job_fail' "[\"${ST_INT}\"]" \
     '["health_job"]' "${COUNT_SERIES}" "$(count_ge 1)" 60 30
+  # Veille de version (audit G.1) : une brique SIEM (Graylog/OpenSearch/Mongo) est
+  # gelee (apt-mark hold, choix d'exploitation) MAIS une version plus recente est
+  # publiee. Emis par omni-version-watch (tools/), event_source:siem_health. Le
+  # SEUIL D'AGE (age_days:>=7) transforme une info continue en DETTE DATEE : on ne
+  # sonne qu'apres 7 jours sans montee, pas chaque jour. Route vers Interne ->
+  # omni-alert-triage (regle "zero mail direct" du projet). P2 : posture, pas attaque.
+  # Sans cette def, la veille EMET mais personne n'est prevenu (constat recette 17/07).
+  ensure_event "OMNI - Version SIEM en retard (montee manuelle requise)" 2 \
+    'event_source:siem_health AND alert_tag:siem_update_available AND age_days:>=7' "[\"${ST_INT}\"]" \
+    '["health_component"]' "${COUNT_SERIES}" "$(count_ge 1)" 1440 720
 else warn "stream interne absent -> alertes go-dark / UEBA-NDR non posees"; fi
 
 # Correlation : >=10 echecs ET >=1 succes pour le MEME compte dans la fenetre
@@ -491,7 +528,7 @@ ensure_event "OMNI - Accès mémoire LSASS (vol de credentials)" 2 \
 
 # --- P2 : a examiner ----------------------------------------------------------
 ensure_event "OMNI - Tentative sur compte désactivé" 2 \
-  'failure_reason:compte_desactive' "[\"${ST_WINSEC}\"]" \
+  'failure_reason:compte_desactive AND NOT user:(Invité OR Guest)' "[\"${ST_WINSEC}\"]" \
   '[]' '[]' "${NOCOND}" 10 5
 
 ensure_event "OMNI - Compte verrouillé (4740)" 2 \
@@ -499,12 +536,15 @@ ensure_event "OMNI - Compte verrouillé (4740)" 2 \
   '[]' '[]' "${NOCOND}" 5 1
 
 ensure_event "OMNI - Compte créé dans le domaine (4720)" 2 \
-  'event_id:4720' "[\"${ST_WINSEC}\"]" \
+  'event_id:4720 AND NOT alert_tag:local_account_create' "[\"${ST_WINSEC}\"]" \
   '[]' '[]' "${NOCOND}" 5 1
 
+# Seuil >=1 par HOTE (l'allowlist 81 retire deja les injecteurs legitimes : debugger,
+# presse-papier RDP rdpclip->csrss, builds dev). Auparavant >=10/10min = seuil impossible
+# (8 events/30j) -> detection T1055 MORTE. 06/07/2026.
 ensure_event "OMNI - Injection de processus (Sysmon 8/25)" 2 \
   'alert_tag:sysmon_injection' "[\"${ST_SYSMON}\"]" \
-  '[]' '[]' "${NOCOND}" 5 1
+  '["host"]' "${COUNT_SERIES}" "$(count_ge 1)" 10 5
 
 ensure_event "OMNI - PowerShell suspect" 2 \
   'alert_tag:powershell_suspect' "[\"${ST_SYSMON}\",\"${ST_WINOTH}\"]" \
@@ -518,7 +558,7 @@ ensure_event "OMNI - Tâche planifiée créée (4698)" 2 \
   '["host","user"]' "${COUNT_SERIES}" "$(count_ge 1)" 60 60 60
 
 ensure_event "OMNI - Nouveau service installé (7045)" 2 \
-  'channel:System AND event_id:7045 AND NOT winlogbeat_winlog_event_data_ServiceName:(winlogbeat OR Sysmon64 OR Sysmon)' "[\"${ST_WINOTH}\"]" \
+  'channel:System AND event_id:7045 AND NOT winlogbeat_winlog_event_data_ServiceName:(winlogbeat OR Sysmon64 OR Sysmon OR *Google* OR *Chromium* OR *Intel* OR *VirtualBox* OR *Docker* OR *WSL* OR *Wazuh* OR *TeamViewer* OR *AnyDesk* OR *Claude* OR *Prisma* OR *edgeupdate*)' "[\"${ST_WINOTH}\"]" \
   '[]' '[]' "${NOCOND}" 10 5
 
 ensure_event "OMNI - Force brute portail VPN (>=30 échecs / IP / h)" 2 \
@@ -568,14 +608,20 @@ fi
 # ST_M365 garde par if -n comme dans le script). Cle = user -> grace par compte.
 # off_hours=oui est pose par le pipeline d'enrichissement (49) AVANT le routage final.
 # On vise 4624 (winsec) + signin reussi (m365). Backlog par compte, 1 notif / 60 min / compte.
+# DISCRIMINANT (mesure live 2026-06-30) : les ouvertures adm-* hors heures sont
+#   massivement des LogonType 4 (batch) = TACHES PLANIFIEES qui tournent sous un
+#   compte adm-, pas des sessions humaines. On exclut donc batch/service/network
+#   (logon_type_label pose par l'enrichissement) pour ne garder que les ouvertures
+#   reellement interactives (interactive/remote/unlock). Le M365 signin n'a pas de
+#   logon_type_label -> la negation le laisse passer (pas de champ = pas exclu).
 if [[ -n "${ST_M365}" ]]; then
   ensure_event "OMNI - Connexion compte admin (adm-*) hors heures ouvrées" 3 \
-    '(user:adm\-* OR user:ADM\-* OR user:*\\adm\-* OR user:*\\ADM\-*) AND off_hours:oui AND (event_id:4624 OR (m365_type:signin AND event_action:connexion_reussie))' \
+    '(user:adm\-* OR user:ADM\-* OR user:*\\adm\-* OR user:*\\ADM\-*) AND off_hours:oui AND ((event_id:4624 AND NOT logon_type_label:batch AND NOT logon_type_label:service AND NOT logon_type_label:network) OR (m365_type:signin AND event_action:connexion_reussie))' \
     "[\"${ST_WINSEC}\",\"${ST_M365}\"]" \
     '["user"]' "${COUNT_SERIES}" "$(count_ge 1)" 60 60
 else
   ensure_event "OMNI - Connexion compte admin (adm-*) hors heures ouvrées" 3 \
-    '(user:adm\-* OR user:ADM\-* OR user:*\\adm\-* OR user:*\\ADM\-*) AND off_hours:oui AND event_id:4624' \
+    '(user:adm\-* OR user:ADM\-* OR user:*\\adm\-* OR user:*\\ADM\-*) AND off_hours:oui AND event_id:4624 AND NOT logon_type_label:batch AND NOT logon_type_label:service AND NOT logon_type_label:network' \
     "[\"${ST_WINSEC}\"]" \
     '["user"]' "${COUNT_SERIES}" "$(count_ge 1)" 60 60
 fi
@@ -616,11 +662,10 @@ ensure_event "OMNI - Ajout au groupe Administrateurs LOCAL (4732)" 2 \
 ensure_event "OMNI - Création de compte LOCAL (4720 hors DC)" 2 \
   'alert_tag:local_account_create' "[\"${ST_WINSEC}\"]" \
   '["host"]' "${COUNT_SERIES}" "$(count_ge 1)" 30 10
-if [[ -n "${ST_INT}" ]]; then
-  ensure_event "OMNI - Nouveau pays pour un compte (first-seen)" 3 \
-    'event_source:ueba_geo AND alert_tag:new_country' "[\"${ST_INT}\"]" \
-    '["user"]' "${COUNT_SERIES}" "$(count_ge 1)" 60 30
-fi
+# NB : la detection "Nouveau pays" (new_country) est FUSIONNEE dans
+# "OMNI - Connexion géographique anormale (compte)" ci-dessus (alert_tag:new_country
+# couvert par sa query) - audit 14/08/2026. On ne cree plus de def dediee ; la def
+# "OMNI - Nouveau pays..." existante a ete DESACTIVEE en live (non re-creee ici).
 
 # ===== Alertes Lot 4 (detections AD/identite avancees, multi-agent) =====
 ensure_event "OMNI - Abus AD CS / certificats (ESC1-ESC8)" 3 \
@@ -657,15 +702,24 @@ ensure_event "OMNI - NPS : refus d'accès en masse (>=10 / compte / 15 min)" 3 \
 
 # ---------------------------------- 4. Rattacher TOUTES les notifications
 echo "==> [4] Synchronisation des notifications sur les definitions OMNI"
-W_P3="$(jq -n --arg e "${NOTIF_ID}" --arg t "${TEAMS_ID}" '[{notification_id:$e}] + (if $t != "" then [{notification_id:$t}] else [] end)')"
-W_P2="$(jq -n --arg e "${NOTIF_ID}" --arg t "${TEAMS_ID}" 'if $t != "" then [{notification_id:$t}] else [{notification_id:$e}] end')"
-api_get "/events/definitions?per_page=100" \
+# CIBLE = TRIAGE (webhook 8089, qui decide mail/drop/dedup + rend le mail pro) +
+# Teams SOC (firehose). L'email direct 'OMNI - Mail equipe IT' N'EST PLUS attache :
+# il doublonnait le triage (2 mails/alerte) ET le bypassait (des alertes NOISE
+# droppees par le triage arrivaient quand meme par la voie directe). Audit
+# 13/08/2026. $m (=email) ci-dessous le RETIRE s'il traine encore sur une def.
+TRIAGE_TITLE="OMNI - Triage (mail critique)"
+TRIAGE_ID="$(api_get "/events/notifications?per_page=100" | jq -r --arg t "${TRIAGE_TITLE}" '(.notifications // [])[] | select(.title==$t) | .id')"
+[[ -z "${TRIAGE_ID}" ]] && die "notif triage introuvable (lancer 38-alert-triage.sh d'abord)"
+W_ALL="$(jq -n --arg tr "${TRIAGE_ID}" --arg t "${TEAMS_ID}" '[{notification_id:$tr}] + (if $t != "" then [{notification_id:$t}] else [] end)')"
+all_event_defs \
   | jq -r '(.event_definitions // .elements // [])[] | select(.title|startswith("OMNI")) | .id' \
   | while read -r DID; do
       DEF="$(api_get "/events/definitions/${DID}")"
       P="$(echo "${DEF}" | jq -r '.priority')"
-      WANTED="${W_P2}"; GRACE=1800000
-      [[ "${P}" == "3" ]] && { WANTED="${W_P3}"; GRACE=600000; }
+      # Toutes priorites -> meme cible (triage+teams) : c'est le SERVICE de triage
+      # qui arbitre le mail selon ses propres tiers, plus la priorite Graylog.
+      WANTED="${W_ALL}"; GRACE=1800000
+      [[ "${P}" == "3" ]] && GRACE=600000
       # Conditions PERSISTANTES / RE-EMISES a chaque cycle (go-dark, UEBA/NDR :
       # le collecteur re-trouve le meme constat tant qu'il dure) -> anti-tempete
       # long (6h) sinon re-alerte a chaque passage.

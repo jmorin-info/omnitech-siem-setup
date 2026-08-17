@@ -11,6 +11,18 @@
 #  NB: valider les noms de champs FortiGate (subtype/status) au 1er run --once.
 # =====================================================================
 
+# ---- SESSIONS (pont cross-entité) ----------------------------------
+# Carte user<->host construite depuis les logons réussis (4624) pour corréler un
+# COMPTE à risque (signal user-keyed) avec une DÉTECTION sur SON poste (host-keyed).
+# Utilisée par les règles `bridge: user_host`. host_field/user_field = champs normalisés.
+sessions:
+  user_host:
+    stream: windows
+    query: 'event_id:4624 AND NOT account_class:machine AND NOT account_class:service'
+    user_field: user
+    host_field: host
+    window: 480   # 8h : capture les sessions de logon actives (vs fenêtre détections 5min)
+
 # ---- SIGNAUX -------------------------------------------------------
 # type: count_by  -> agrège par entity_field et déclenche si count >= threshold
 # type: presence  -> déclenche si >=1 message (l'alert_tag a déjà appliqué le seuil de détection)
@@ -35,7 +47,9 @@ signals:
     stream: windows
     query: 'event_id:4625 AND logon_fail:1 AND NOT account_class:machine AND NOT account_class:service'
     type: count_by
-    entity_field: user
+    # identity = compte canonique (minuscule, domaine/UPN normalisés) : join fiable
+    # avec S_LOGON_SUCCESS. Peuplé à 100% sur les logons humains (verifie 08/07).
+    entity_field: identity
     threshold: 10
 
   S_BRUTEFORCE_VPN:
@@ -43,15 +57,27 @@ signals:
     stream: fortigate
     query: 'subtype:"vpn" AND action:"ssl-login-fail"'
     type: count_by
+    # audit A.1 REPORTE : src_ip est vide sur les logs VPN Forti (remip = IP reelle du client), MAIS
+    # basculer ici seul casse la jointure de CR_RECON_TO_ACCESS (partenaire sur src_ip) -> a traiter
+    # avec l'alignement du partenaire, decision RSSI. Rayon operationnel actuel = 0 (0 incident).
     entity_field: src_ip
     threshold: 8
 
   S_LOGON_SUCCESS:
-    description: "Connexion réussie (4624) — corrélée à un brute force"
+    description: "Connexion réussie (4624) — corrélée à un brute force / sign-in M365"
     stream: windows
     query: 'event_id:4624 AND NOT account_class:machine AND NOT account_class:service'
     type: presence
-    entity_field: user
+    # identity (canonique) plutôt que user brut : corrige les ratés de join dus à la
+    # casse / au domaine / à l'UPN entre M365 et on-prem. 100% peuplé sur humains.
+    entity_field: identity
+
+  S_LOGON_SUCCESS_IP:
+    description: "Connexion réussie (4624) indexée par IP source — pour corréler un spray (IP) à un succès depuis la MÊME IP"
+    stream: windows
+    query: 'event_id:4624 AND _exists_:src_ip AND NOT account_class:machine AND NOT account_class:service'
+    type: presence
+    entity_field: src_ip
 
   S_NEW_ADMIN:
     description: "Ajout à un groupe privilégié (détection local_admin_add / 4728-4732-4756)"
@@ -138,6 +164,34 @@ signals:
     query: 'alert_tag:shadow_credentials'
     type: presence
     entity_field: user
+
+  # --- Nouvelles détections DC (07/2026) : tripwires haute-fidélité (volume ~0) ---
+  # entity_field: host (le DC source, toujours peuplé) — ces signaux alimentent des
+  # règles join_entity:false, l'entité ne sert qu'au reporting/dédup.
+  S_RBCD:
+    description: "RBCD : délégation contrainte basée ressource ajoutée (msDS-AllowedToActOnBehalfOfOtherIdentity)"
+    stream: ""
+    query: 'alert_tag:rbcd_delegation'
+    type: presence
+    entity_field: host
+  S_SPN_USER:
+    description: "SPN ajouté à un compte utilisateur (préparation kerberoast ciblé)"
+    stream: ""
+    query: 'alert_tag:spn_added_user'
+    type: presence
+    entity_field: host
+  S_ADMINSDHOLDER:
+    description: "ACL AdminSDHolder modifiée (persistance Tier-0)"
+    stream: ""
+    query: 'alert_tag:adminsdholder_acl'
+    type: presence
+    entity_field: host
+  S_ZEROLOGON:
+    description: "Zerologon suspecté : 4742 (changement mot de passe machine) par ANONYMOUS LOGON"
+    stream: ""
+    query: 'alert_tag:zerologon_suspect'
+    type: presence
+    entity_field: host
 
   S_LATERAL:
     description: "Mouvement latéral (compte -> N hôtes / WMI)"
@@ -248,7 +302,8 @@ signals:
     stream: m365
     query: 'event_source:m365 AND status_code:0 AND _exists_:src_ip_country_code AND NOT src_ip_country_code:(FR OR CA OR US OR SE OR NL OR IE OR DE OR GB) AND NOT user:no\-reply'
     type: count_by
-    entity_field: user
+    # identity (dérivée de l'UPN côté M365) : join fiable avec S_LOGON_SUCCESS on-prem.
+    entity_field: identity
     threshold: 1
 
   S_M365_DISTRIBUTED_ATTACK:
@@ -274,6 +329,98 @@ signals:
     query: 'alert_tag:(m365_role OR m365_app_credential_add OR m365_ca_change OR local_admin_add OR local_account_create OR dns_sensitive_change OR aruba_config_change OR ems_config_change)'
     type: presence
     entity_field: user
+
+  # --- Anomalie comportementale ML (oms-ml / IsolationForest) : feuille de CONFIRMATION ---
+  # Seule, une anomalie ML n'est PAS actionnable (~3150/7j). Sa valeur = CORROBORER une
+  # détection sur la même entité (cf. CR_ANOMALY_CONFIRMED_*). entity_field=entity (=hostname
+  # pour host, =compte pour account, posé par oms-ml).
+  S_ML_ANOMALY_HOST:
+    description: "Anomalie comportementale ML élevée sur un hôte (score >= 80)"
+    stream: internal
+    query: 'event_source:ml_anomaly AND entity_type:host AND ml_score:>=80'
+    type: presence
+    entity_field: entity
+  S_ML_ANOMALY_USER:
+    description: "Anomalie comportementale ML élevée sur un compte (score >= 80)"
+    stream: internal
+    query: 'event_source:ml_anomaly AND entity_type:account AND ml_score:>=80'
+    type: presence
+    entity_field: entity
+
+  # --- SEAL (surete physique : acces badge, alarmes, audit hyperviseur) -------
+  # Tripwires haute-fidelite calibres sur donnees reelles (QA). event_domain +
+  # seal_source_table normalises par les pipelines SEAL. Entites : actor_usercode/
+  # actor_login (operateur console) ou target_object_label (objet/porte/zone).
+  S_SEAL_MASTERKEY:
+    description: "SEAL : attribution d'un passe general (master key) sur un badge (T1098 physique)"
+    stream: seal_audit
+    query: 'event_domain:hypervisor_audit AND seal_source_table:TagMovements AND seal_MasterKeys:true'
+    type: presence
+    entity_field: actor_usercode
+  S_SEAL_ALARM_INHIBIT:
+    description: "SEAL : inhibition d'une alarme (precurseur insider, neutralisation detection physique)"
+    stream: seal_alarm
+    query: 'event_domain:alarm AND IS_INHIBITED:true'
+    type: presence
+    entity_field: target_object_label
+  S_SEAL_CONSOLE_BRUTE:
+    description: "SEAL : echecs repetes de connexion a la console hyperviseur (meme compte)"
+    stream: seal_audit
+    query: 'event_domain:hypervisor_audit AND event_action:ConnectionFailure'
+    type: count_by
+    entity_field: actor_login
+    threshold: 5
+  S_SEAL_ACCOUNT_CHANGE:
+    description: "SEAL : mouvement de compte/role operateur (creation, elevation, deverrouillage)"
+    stream: seal_audit
+    query: 'event_domain:hypervisor_audit AND seal_source_table:(AccountsMovements OR AccountRolesMovements OR ProfileRoleMovements)'
+    type: presence
+    entity_field: actor_usercode
+  S_SEAL_DOOR_DENY_BURST:
+    description: "SEAL : rafale de refus d'acces sur une meme porte (forcage/probing badge)"
+    stream: seal_access
+    query: 'event_domain:access AND event_outcome:deny'
+    type: count_by
+    entity_field: target_object_label
+    threshold: 8
+  S_SEAL_ADMIN_OFFHOURS:
+    description: "SEAL : connexion a la console d'administration hors heures ouvrees"
+    stream: seal_audit
+    query: 'event_domain:hypervisor_audit AND event_action:Connection AND operation_channel:SealAdmin AND off_hours:true'
+    type: presence
+    entity_field: actor_usercode
+
+  # --- XCO : signaux du pont d'identite SEAL x AD/Windows (keye identity_upn) ---
+  # entity_field: identity_upn = forme canonique (UPN minuscule) IDENTIQUE au champ
+  # `identity` cote Windows/M365 -> le join se fait sur la MEME valeur d'entite.
+  # PRE-REQUIS : identity_upn peuple par la lookup omni-seal-identity (matricule->UPN,
+  # regen-seal-identity.sh) + regle 14-seal-identity-upn.rule. Tant que le pont n'est
+  # pas cable, ces signaux renvoient un ensemble VIDE (identity_upn absent) et les
+  # regles XCO ne se declenchent pas (cf docs/CORRELATION-SEAL-AD.md).
+  S_SEAL_BADGE_IN:
+    description: "SEAL : badge-in accorde (presence physique averee sur un site), keye par UPN resolu"
+    stream: seal_access
+    query: 'event_domain:access AND event_outcome:grant AND _exists_:identity_upn'
+    type: presence
+    entity_field: identity_upn
+  S_SEAL_CONSOLE_LOGON:
+    description: "SEAL : connexion a la console hyperviseur (operateur), keye par UPN resolu"
+    stream: seal_audit
+    query: 'event_domain:hypervisor_audit AND event_action:Connection AND _exists_:identity_upn'
+    type: presence
+    entity_field: identity_upn
+
+  # --- Pont CONSOLE (FIABLE) : actor_login normalise en identity_console (login AD
+  # minuscule) = MEME forme canonique que `identity` cote Windows/M365. Contrairement
+  # au pont badge (identity_upn, quasi vide car matricule = champ libre), celui-ci
+  # JOINT reellement : retevenard/pgelard/jmorin... ont des logons Windows sur
+  # identity:<login> (verifie 15/07). Cle de correlation console x AD exploitable.
+  S_SEAL_CONSOLE_ID:
+    description: "SEAL : connexion console keyee par le compte AD normalise (identity_console)"
+    stream: seal_audit
+    query: 'event_domain:hypervisor_audit AND event_action:Connection AND _exists_:identity_console AND NOT _exists_:TEST_SIEM'
+    type: presence
+    entity_field: identity_console
 
 # ---- RÈGLES DE CORRÉLATION ----------------------------------------
 # require_all : tous les signaux présents pour la MÊME entité dans la fenêtre
@@ -339,17 +486,25 @@ rules:
     tactic: ["Persistence", "Privilege Escalation"]
 
   CR_AD_CREDENTIAL_THEFT:
-    title: "Vol d'identifiants Active Directory (Kerberoasting / DCSync)"
+    title: "Vol d'identifiants Active Directory (Kerberoasting / DCSync / SPN ciblé)"
     severity: critical
     join_entity: false
-    any_of: [S_KERBEROAST, S_DCSYNC]
+    any_of: [S_KERBEROAST, S_DCSYNC, S_SPN_USER]
     mitre: ["T1558.003", "T1003.006"]
     tactic: ["Credential Access"]
 
+  # NB honnêteté : S_PSSCRIPTBLOCK est keyé host, S_OUTBOUND_DENY_SPIKE keyé src_ip
+  # (espaces de nommage disjoints) -> ceci est une CO-OCCURRENCE temporelle globale,
+  # PAS un join même-hôte confirmé. Donc severity=high (à confirmer par l'analyste),
+  # pas critical : le critique reste réservé aux kill-chains à join réel (cf. design).
   CR_EXECUTION_C2:
-    title: "Exécution PowerShell offensive + flux sortants suspects (C2)"
-    severity: critical
-    join_entity: false
+    title: "PowerShell offensif ET pic de flux sortants dans la fenêtre (C2 possible — co-occurrence à confirmer)"
+    severity: high
+    # audit F.2 : join_entity false + espaces de nommage disjoints (host vs src_ip) faisait tirer
+    # ~19 incidents high/j via le churn de S_OUTBOUND_DENY_SPIKE (1,16 M docs/j) si S_PSSCRIPTBLOCK
+    # etait ranime. Passe a true -> exige une entite commune (absente aujourd'hui) : inerte et honnete,
+    # neutralise le flood. NE PAS ranimer S_PSSCRIPTBLOCK (F.1) sans donner ici un vrai join meme-hote.
+    join_entity: true
     require_all: [S_PSSCRIPTBLOCK]
     any_of: [S_OUTBOUND_DENY_SPIKE]
     mitre: ["T1059.001", "T1071"]
@@ -363,9 +518,12 @@ rules:
     mitre: ["T1046", "T1021"]
     tactic: ["Discovery", "Lateral Movement"]
 
+  # Mono-signal = simple re-label d'une détection FP-prone -> PAS critique (sinon
+  # faux-critiques). Le CRITIQUE est réservé aux kill-chains >=2 signaux
+  # (CR_CREDDUMP_PERSIST / CR_CREDDUMP_LATERAL escaladent LSASS+persistance/latéral).
   CR_LSASS_THEFT:
-    title: "Vol d'identifiants en mémoire (accès LSASS)"
-    severity: critical
+    title: "Accès mémoire LSASS isolé (à corréler — vol d'identifiants potentiel)"
+    severity: medium
     join_entity: false
     any_of: [S_LSASS]
     mitre: ["T1003.001"]
@@ -396,16 +554,32 @@ rules:
     tactic: ["Impact"]
 
   CR_AD_CERT_PERSIST:
-    title: "Persistance AD par certificat / shadow credentials (ESC, KeyCredentialLink)"
+    title: "Persistance AD par certificat / délégation / ACL (ESC, KeyCredentialLink, RBCD, AdminSDHolder)"
     severity: critical
     join_entity: false
-    any_of: [S_ADCS_ABUSE, S_SHADOW_CREDS]
-    mitre: ["T1649", "T1556.005"]
+    any_of: [S_ADCS_ABUSE, S_SHADOW_CREDS, S_RBCD, S_ADMINSDHOLDER]
+    mitre: ["T1649", "T1556.005", "T1098.005", "T1098"]
     tactic: ["Credential Access", "Persistence"]
+
+  CR_ZEROLOGON:
+    title: "Zerologon suspecté (CVE-2020-1472) : mot de passe de compte machine changé par ANONYMOUS LOGON"
+    severity: critical
+    join_entity: false
+    any_of: [S_ZEROLOGON]
+    mitre: ["T1210"]
+    tactic: ["Lateral Movement", "Privilege Escalation"]
+
+  CR_SPRAY_THEN_SUCCESS:
+    title: "Password spray SUIVI d'un succès depuis la même IP (compromission probable)"
+    severity: critical
+    join_entity: true
+    require_all: [S_SPRAY_WIN, S_LOGON_SUCCESS_IP]
+    mitre: ["T1110.003", "T1078"]
+    tactic: ["Credential Access", "Defense Evasion"]
 
   CR_DEFENSE_NEUTRALIZED:
     title: "Neutralisation des défenses (audit / Defender / service de sécurité)"
-    severity: high
+    severity: medium   # mono-signal re-label (winsec_critique/defender bruyants) -> escalade via kill-chain
     join_entity: false
     any_of: [S_AUDIT_TAMPER, S_DEFENSE_OFF]
     mitre: ["T1562.001", "T1562.002"]
@@ -413,7 +587,7 @@ rules:
 
   CR_LATERAL_MOVEMENT:
     title: "Mouvement latéral confirmé (compte sur plusieurs hôtes / WMI)"
-    severity: high
+    severity: medium   # mono-signal re-label -> CR_CREDUSE_ADMINSHARE/CREDDUMP_LATERAL portent le critique
     join_entity: false
     any_of: [S_LATERAL]
     mitre: ["T1021", "T1047"]
@@ -460,3 +634,133 @@ rules:
     any_of: [S_ADMINSHARE]
     mitre: ["T1003.001", "T1021.002"]
     tactic: ["Credential Access", "Lateral Movement"]
+
+  # --- Anomalie ML CONFIRMÉE par une détection (même entité) = signal corroboré, actionnable ---
+  CR_ANOMALY_CONFIRMED_HOST:
+    title: "Anomalie comportementale ML confirmée par une détection sur le même hôte"
+    severity: high
+    join_entity: true
+    require_all: [S_ML_ANOMALY_HOST]
+    any_of: [S_LSASS, S_PSSCRIPTBLOCK, S_PERSIST_SERVICE, S_PERSIST_TASK, S_PERSIST_AUTORUN, S_RANSOMWARE, S_DEFENSE_OFF, S_FORTICLIENT_MALWARE]
+    mitre: ["T1078"]
+    tactic: ["Defense Evasion"]
+  CR_ANOMALY_CONFIRMED_USER:
+    title: "Anomalie comportementale ML confirmée par une action sensible du même compte"
+    severity: high
+    join_entity: true
+    require_all: [S_ML_ANOMALY_USER]
+    any_of: [S_NEW_ADMIN, S_USER_CREATED, S_KERBEROAST, S_DCSYNC, S_PRIV_ACTION_USER, S_BRUTEFORCE_WIN]
+    mitre: ["T1078", "T1098"]
+    tactic: ["Privilege Escalation", "Persistence"]
+
+  # --- PONT cross-entité : compte à risque (UEBA) + menace sur SON poste (logon 4624) ---
+  CR_RISKY_USER_ENDPOINT_THREAT:
+    title: "Compte à risque + menace endpoint sur son poste (corrélation user↔host)"
+    severity: high
+    bridge: user_host
+    require_all: [S_UEBA_HIGH_USER]
+    any_of: [S_LSASS, S_FORTICLIENT_MALWARE, S_PSSCRIPTBLOCK, S_PERSIST_SERVICE, S_PERSIST_TASK, S_RANSOMWARE, S_DEFENSE_OFF]
+    mitre: ["T1078", "T1210"]
+    tactic: ["Lateral Movement", "Defense Evasion"]
+
+  # ============ SEAL — surete physique (badge / alarmes / audit) =============
+  # Incidents XDR unifies (narration LLM + playbook) au-dessus des detections
+  # Graylog SEAL. Mono-signal = re-label (severite mesuree) ; le CRITIQUE est
+  # reserve aux co-occurrences insider (inhibition + master key).
+  CR_SEAL_MASTERKEY_GRANT:
+    title: "SEAL : passe general (master key) attribue a un badge"
+    severity: high
+    join_entity: false
+    any_of: [S_SEAL_MASTERKEY]
+    mitre: ["T1098", "T1556"]
+    tactic: ["Persistence", "Privilege Escalation"]
+  CR_SEAL_ALARM_TAMPER:
+    title: "SEAL : inhibition d'alarme (neutralisation de la detection physique)"
+    severity: high
+    join_entity: false
+    any_of: [S_SEAL_ALARM_INHIBIT]
+    mitre: ["T1562"]
+    tactic: ["Defense Evasion"]
+  CR_SEAL_CONSOLE_ABUSE:
+    title: "SEAL : force brute sur la console hyperviseur (echecs repetes)"
+    severity: high
+    join_entity: false
+    any_of: [S_SEAL_CONSOLE_BRUTE]
+    mitre: ["T1110"]
+    tactic: ["Credential Access"]
+  # XCO FIABLE (pont console) : un compte qui se connecte a la console SEAL ET qui est
+  # brute-force dans le domaine Windows (meme compte) = compte AD potentiellement
+  # compromis utilise sur la console de surete physique. join_entity sur la MEME valeur
+  # (identity_console == identity, sAMAccountName minuscule). Contrairement aux XCO
+  # badge (identity_upn), ce pont JOINT reellement.
+  CR_XCO_CONSOLE_RISKY:
+    title: "Compte a risque AD connecte a la console SEAL (console x brute force Windows)"
+    severity: high
+    join_entity: true
+    require_all: [S_SEAL_CONSOLE_ID]
+    any_of: [S_BRUTEFORCE_WIN]
+    mitre: ["T1078", "T1210"]
+    tactic: ["Lateral Movement", "Defense Evasion"]
+  CR_SEAL_ACCOUNT_CHANGE:
+    title: "SEAL : mouvement de compte/role operateur (a valider)"
+    severity: medium
+    join_entity: false
+    any_of: [S_SEAL_ACCOUNT_CHANGE]
+    mitre: ["T1098", "T1136"]
+    tactic: ["Persistence"]
+  CR_SEAL_DOOR_FORCING:
+    title: "SEAL : rafale de refus d'acces sur une porte (forcage / probing)"
+    severity: medium
+    join_entity: false
+    any_of: [S_SEAL_DOOR_DENY_BURST]
+    mitre: ["T1078.004"]
+    tactic: ["Initial Access"]
+  # CO-OCCURRENCE insider (fenetre 15min) : neutraliser une alarme ET s'attribuer
+  # un passe general = preparation d'intrusion physique interne. join_entity:false
+  # car entites disjointes (zone d'alarme vs operateur) -> co-occurrence temporelle
+  # a confirmer par l'analyste, pas un join meme-entite. D'ou high (pas critical).
+  CR_SEAL_INSIDER_PREP:
+    title: "SEAL : inhibition d'alarme ET attribution de passe general dans la fenetre (preparation insider)"
+    severity: high
+    join_entity: false
+    require_all: [S_SEAL_ALARM_INHIBIT]
+    any_of: [S_SEAL_MASTERKEY]
+    mitre: ["T1562", "T1098"]
+    tactic: ["Defense Evasion", "Persistence"]
+
+  # ============ XCO — correlation croisee SEAL (physique) x AD/Windows =========
+  # Objectif (mission §7 XCO-001/002/003) : joindre un evenement physique SEAL au
+  # logon logique Windows/M365 de la MEME personne, via le pont d'identite
+  # identity_upn (badge -> matricule -> UPN, lookup omni-seal-identity + regle 14).
+  #
+  # ACTIVATION CONDITIONNELLE (honnetete) : ces regles ne se declenchent QUE
+  # lorsque identity_upn est peuple des DEUX cotes (SEAL via le lookup ; Windows/
+  # M365 via 13-identity-mirror). Aujourd'hui identity_matricule est tres peu
+  # peuple (~35 events) et identity_upn=0 -> les signaux XCO renvoient un ensemble
+  # vide et AUCUN incident XCO ne sort tant que le pont n'est pas alimente. Le join
+  # se fait sur la valeur d'entite (UPN canonique minuscule), commune a identity_upn
+  # (SEAL) et identity (Windows/M365). Cf docs/CORRELATION-SEAL-AD.md.
+
+  CR_XCO_IMPOSSIBLE_PRESENCE:
+    title: "XCO : presence impossible — badge-in physique SEAL + sign-in M365 etranger (meme identite)"
+    severity: critical
+    join_entity: true
+    require_all: [S_SEAL_BADGE_IN, S_M365_FOREIGN_SIGNIN]
+    mitre: ["T1078", "T1078.004"]
+    tactic: ["Initial Access", "Defense Evasion"]
+
+  # CR_XCO_CONSOLE_NO_BADGE : connexion a la console hyperviseur (zone securisee)
+  # SANS badge-in physique du meme identity_upn. LIMITE MOTEUR : la correlation ne
+  # sait pas exprimer une ABSENCE (pas d'anti-join). On approche donc l'intention en
+  # joignant la connexion console (S_SEAL_CONSOLE_LOGON) au logon Windows du meme
+  # identity_upn (S_LOGON_SUCCESS) : cela materialise une session console rattachee a
+  # une identite AD. Le controle "sans badge-in" reste a la charge de l'analyste (ou
+  # d'un futur enrichissement badged_in_today / anti-join). D'ou severity=high (a
+  # confirmer), pas critical. Ne sort que si identity_upn est peuple cote SEAL.
+  CR_XCO_CONSOLE_NO_BADGE:
+    title: "XCO : connexion console hyperviseur rattachee a une identite AD — badge physique a verifier"
+    severity: high
+    join_entity: true
+    require_all: [S_SEAL_CONSOLE_LOGON, S_LOGON_SUCCESS]
+    mitre: ["T1078", "T1219"]
+    tactic: ["Lateral Movement", "Defense Evasion"]

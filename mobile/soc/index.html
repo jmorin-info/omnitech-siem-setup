@@ -848,7 +848,7 @@ function logout(){fetch(API+"/logout",{method:"POST",credentials:"same-origin"})
 function start(){$("#login").style.display="none";$("#app").style.display="grid";
   document.documentElement.lang=LANG;applyI18n();updateLangBtn();
   const tt=$("#ptitle");if(tt)tt.textContent=(titles[LANG]||titles.fr).overview;setDesc("overview");
-  document.body.classList.add("firstload");loadAll();startLive();startRefresh();
+  document.body.classList.add("firstload");loadAll().then(()=>{try{deepLink();}catch(e){}});startLive();startRefresh();
   j("/guidance").then(r=>{GUIDANCE=r.guidance||{};}).catch(()=>{});}
 
 // nav
@@ -1911,14 +1911,23 @@ function renderDetRows(){
       <span class="sevtag sevtag-${c}">${sevLbl}</span>
       <span class="chip ${chipCls(c)}">${esc((x.source||"").toUpperCase())}</span>
       <span class="ttl">${nice(x.tag)}</span>${x.score?`<span class="mono" style="color:var(--${c=='critical'?'red':c=='high'?'amb':'cy'});margin-left:auto;font-weight:700">${x.score}</span>`:""}<span class="ts">${ago(x.ts)}</span></div>
-      <div class="meta">${esc(x.tech||"")}${x.tactic?" · "+esc(x.tactic):""}${who?" · 👤 "+esc(who):""}${GUIDANCE[x.tag]?`<a class="dgbtn" onclick="event.stopPropagation();toggleG('dg${i}')">${t("g_show")}</a>`:""}</div>
+      <div class="meta">${esc(x.tech||"")}${x.tactic?" · "+esc(x.tactic):""}${who?" · 👤 "+esc(who):""}${GUIDANCE[x.tag]?`<a class="dgbtn" onclick="event.stopPropagation();toggleG('dg${i}')">${t("g_show")}</a>`:""}${x.entity?`<a class="dgbtn" onclick="event.stopPropagation();markFP(${i})" title="${(LANG==="en")?'Mark false positive — mute non-critical mail (critical stays)':'Marquer faux positif — sourdine du mail non-critique (le critique reste)'}">FP</a>`:""}</div>
       <div id="dg${i}" class="gwrap" style="display:none">${guidanceBlock(x.tag)}</div></div>`;}).join(""):'<div class="empty">'+t("empty_det")+'</div>';}
+function markFP(i){var EN=LANG==="en";var x=DETV[i];if(!x||!x.entity){toastInfo(EN?"No entity to mute.":"Pas d'entité.");return;}
+  var who=((x.entity||"")+"").split("\\").pop();var det=nice(x.tag||"")||(EN?"this detection":"cette détection");
+  if(!confirm((EN?'Mark false positive: "':'Marquer faux positif : « ')+det+(EN?'" on ':' » sur ')+who+" ?\n"+(EN?"Only THIS detection's mail is muted (30 days). Critical / kill-chain alerts are never touched.":"Seul le mail de CETTE détection est mis en sourdine (30 jours). Les critiques / kill-chain ne sont jamais touchés.")))return;
+  fetch(API+"/fp",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({entity:x.entity,tag:x.tag||"",title_sub:""})}).then(r=>r.json()).then(r=>{
+    if(r&&r.ok!==false){toastOk((EN?"False positive recorded · ":"Faux positif enregistré · ")+det+" / "+who,{title:"FP"});}
+    else{toastInfo("FP : "+((r&&r.error)||"?"));}
+  }).catch(function(){toastInfo("FP");});}
 function applyDetSearch(){detQ=(($("#detSearch")||{}).value||"").toLowerCase().trim();renderDetRows();}
 function exportDetections(){const rows=DETV.length?DETV:DETI;if(!rows.length){toastInfo("Aucune détection à exporter pour ce filtre.");return;}const cols=["ts","sev","score","tag","tech","tactic","source","entity","msg"];
   const csv=[cols.join(",")].concat(rows.map(r=>cols.map(k=>'"'+((r[k]==null?"":r[k])+"").replace(/"/g,'""')+'"').join(","))).join("\n");
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));a.download="detections_omni_soc.csv";a.click();
   toastOk("Export CSV généré — "+rows.length.toLocaleString("fr")+" détection"+(rows.length>1?"s":"")+".",{title:"Export"});}
 function openDet(i){const x=DETV[i];if(!x||!x.entity)return;openEntity(x.entity,((x.entity||"")+"").split("\\").pop());}
+// deep-link depuis un mail : #e=<entite> -> ouvre directement le dossier 360
+function deepLink(){var h=location.hash||"";var m=h.match(/[#&]e=([^&]+)/);if(!m)return;try{var ent=decodeURIComponent(m[1]);if(ent)openEntity(ent,((ent||"")+"").split("\\").pop());}catch(e){}}
 var LEAK_CATS=[
   {id:"extortion",ic:"🏴‍☠️",lab:"Extorsion ransomware",sub:"sites de fuite (RansomLook)",kpi:"red",sev:"critical",vc:"red"},
   {id:"creds",ic:"🔑",lab:"Identifiants exposés",sub:"comptes / breaches (HIBP · Dehashed)",kpi:"amb",sev:"high",vc:"amb"},
@@ -2007,6 +2016,15 @@ function openCase(i){const x=CASES[i];if(!x)return;
       <button class="stb" onclick="caseAct('${x.id}','note',document.getElementById('caseNote').value)">Ajouter la note</button></div>`;
   $("#emodal").classList.add("on");}
 function caseAct(id,action,value){
+  // Qualification OBLIGATOIRE avant clôture : un cas clôturé sans disposition = label perdu
+  // pour le modèle ML de réduction des FP (oms-ml, bloqué faute de labels).
+  if(action==="status"&&value==="closed"){
+    var _cc=(CASES||[]).filter(function(c){return c.id===id;})[0];
+    if(!_cc||!_cc.disposition){
+      toastWarn((LANG==="en")?"Qualify the case (True / False positive) before closing — it trains the FP‑reduction model.":"Qualifie le cas (Vrai / Faux positif) avant de clôturer — ça entraîne le modèle de réduction des FP.",{title:(LANG==="en")?"Disposition required":"Qualification requise"});
+      return;
+    }
+  }
   var CASE_MSG={status:t("case_status"),disposition:t("case_disp"),assign:t("case_assign"),note:t("case_note")};
   fetch(API+"/case",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({id:id,action:action,value:value})})
