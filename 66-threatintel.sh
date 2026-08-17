@@ -21,7 +21,7 @@ echo "==> [1/5] Collecteur de feeds /usr/local/sbin/omni-ti-feeds"
 cat > /usr/local/sbin/omni-ti-feeds <<'PYEOF'
 #!/usr/bin/env python3
 """Telecharge les feeds IOC abuse.ch -> CSV lookups Graylog. Stdlib only."""
-import csv, io, os, urllib.request
+import csv, io, json, os, urllib.request
 from urllib.parse import urlparse
 LOOKUP = "/etc/graylog/lookup"
 
@@ -52,6 +52,31 @@ def feodo():
             out[row[1].strip()] = row[5].strip() or "C2"
     return out
 
+def threatfox():
+    """ThreatFox (abuse.ch) -> IP C2. Bien plus riche que Feodo (reduit). Cle GRATUITE
+    requise (compte auth.abuse.ch) dans THREATFOX_AUTH_KEY ; sans cle = ignore proprement."""
+    out = {}
+    key = os.environ.get("THREATFOX_AUTH_KEY", "").strip()
+    if not key:
+        print("threatfox: pas de cle (THREATFOX_AUTH_KEY) -> ignore (cle gratuite sur auth.abuse.ch)")
+        return out
+    try:
+        req = urllib.request.Request("https://threatfox-api.abuse.ch/api/v1/",
+            data=json.dumps({"query": "get_iocs", "days": 1}).encode(),
+            headers={"User-Agent": "omni-siem-ti/1.0", "Auth-Key": key,
+                     "Content-Type": "application/json"})
+        data = json.load(urllib.request.urlopen(req, timeout=60))
+    except Exception as e:
+        print("threatfox KO:", e); return out
+    if data.get("query_status") != "ok":
+        print("threatfox:", data.get("query_status")); return out
+    for ioc in (data.get("data") or []):
+        if ioc.get("ioc_type") == "ip:port":
+            ip = str(ioc.get("ioc", "")).split(":")[0].strip()
+            if ip:
+                out[ip] = (ioc.get("malware_printable") or ioc.get("malware") or "ThreatFox")
+    return out
+
 # Domaines d'INFRA PARTAGEE : le malware y vit a une URL/chemin precis, jamais "tout le
 # domaine". Un match DNS sur le domaine NU = 100% FP inexploitable (tout le monde interroge
 # github/drive.google/discord...). La detection de ces plateformes appartient a la couche
@@ -62,6 +87,19 @@ TI_SHARED_INFRA = {
     "objects.githubusercontent.com", "codeload.github.com", "gitlab.com", "bitbucket.org",
     "drive.google.com", "drive.usercontent.google.com", "docs.google.com",
     "storage.googleapis.com", "firebasestorage.googleapis.com",
+    # Grands fournisseurs a tres haute reputation : URLhaus les liste pour un ABUS
+    # ponctuel (redirection open-redirect google.com/url, page Sites/Firebase piegee).
+    # Le domaine NU (www.google.com, login.microsoftonline.com...) = 100% FP DNS. La
+    # detection de l'abus appartient a la couche URL/proxy. (FP www.google.com 8108
+    # events, constat Julien 06/07/2026.) endswith(".<d>") couvre tous les sous-domaines.
+    "google.com", "gstatic.com", "googleusercontent.com", "googleapis.com",
+    "youtube.com", "ytimg.com", "googlevideo.com", "google-analytics.com",
+    "microsoft.com", "microsoftonline.com", "office.com", "office365.com",
+    "live.com", "outlook.com", "windows.net", "windowsupdate.com", "azureedge.net",
+    "apple.com", "icloud.com", "cloudflare.com", "cloudflare.net", "cloudflareinsights.com",
+    "akamai.net", "akamaized.net", "fastly.net", "fbcdn.net", "facebook.com",
+    "cloudfront.net", "gvt1.com", "gvt2.com", "wikipedia.org", "mozilla.org", "mozilla.net",
+    "share.google", "g.co", "goo.gl", "google.fr", "bing.com", "linkedin.com", "licdn.com",
     "cdn.discordapp.com", "media.discordapp.net", "discord.com",
     "cdn.jsdelivr.net", "jsdelivr.net", "res.cloudinary.com",
     "dropbox.com", "dl.dropboxusercontent.com", "dropboxusercontent.com",
@@ -100,10 +138,12 @@ def urlhaus():
         print(f"urlhaus: {skipped} domaine(s) d'infra partagee exclus (detection -> couche URL, pas DNS)")
     return out
 
-c2 = feodo(); dom = urlhaus()
+c2 = feodo(); feodo_n = len(c2)
+tfox = threatfox(); c2.update(tfox)   # ThreatFox augmente/complete Feodo
+dom = urlhaus()
 if c2:  write_csv(f"{LOOKUP}/ti-c2-ip.csv", ["ip", "malware"], sorted(c2.items()))
 if dom: write_csv(f"{LOOKUP}/ti-mal-domain.csv", ["domain", "source"], sorted(dom.items()))
-print(f"IOC: {len(c2)} IP C2 (Feodo), {len(dom)} domaines (URLhaus)")
+print(f"IOC: {len(c2)} IP C2 (Feodo {feodo_n} + ThreatFox {len(tfox)}), {len(dom)} domaines (URLhaus)")
 PYEOF
 chmod 755 /usr/local/sbin/omni-ti-feeds
 # seed initial (sinon les lookups pointent vers des CSV absents)
@@ -113,12 +153,21 @@ chown root:graylog ${LOOKUP_DIR}/ti-*.csv 2>/dev/null || true
 /usr/local/sbin/omni-ti-feeds && ok "feeds telecharges" || warn "telechargement feeds KO (egress abuse.ch ?)"
 
 echo "==> [2/5] Timer quotidien (refresh 05:15)"
+# Cle GRATUITE ThreatFox (abuse.ch) - vide = ignore ; Feodo + URLhaus marchent sans cle.
+[[ -f /etc/default/omni-ti-feeds ]] || cat > /etc/default/omni-ti-feeds <<'EOF'
+# Cle GRATUITE ThreatFox (abuse.ch) : compte sur https://auth.abuse.ch puis coller la cle.
+# Vide = ThreatFox ignore proprement (Feodo + URLhaus continuent sans cle).
+THREATFOX_AUTH_KEY=
+EOF
+# 600 : ce fichier recevra une cle API -> root uniquement (aligne sur les autres env).
+chmod 600 /etc/default/omni-ti-feeds
 cat > /etc/systemd/system/omni-ti-feeds.service <<'EOF'
 [Unit]
 Description=OMNI - Refresh feeds threat intel (abuse.ch)
 After=network-online.target
 [Service]
 Type=oneshot
+EnvironmentFile=-/etc/default/omni-ti-feeds
 ExecStart=/usr/local/sbin/omni-ti-feeds
 EOF
 cat > /etc/systemd/system/omni-ti-feeds.timer <<'EOF'

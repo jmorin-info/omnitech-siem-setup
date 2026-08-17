@@ -2,9 +2,9 @@ alert_tag,technique,technique_name,tactic,severity,score
 lsass_access,T1003.001,LSASS Memory,Credential Access,critique,10
 dcsync,T1003.006,DCSync,Credential Access,critique,10
 kerberoasting,T1558.003,Kerberoasting,Credential Access,eleve,8
-sysmon_injection,T1055,Process Injection,Defense Evasion,critique,9
+sysmon_injection,T1055,Process Injection,Defense Evasion,moyen,5
 powershell_suspect,T1059.001,PowerShell,Execution,moyen,5
-threat_intel,T1071,Application Layer Protocol,Command and Control,eleve,7
+threat_intel,T1071,Application Layer Protocol,Command and Control,faible,3
 fortigate_utm,T1190,Exploit Public-Facing Application,Initial Access,eleve,6
 winsec_critique,T1562.002,Disable Windows Event Logging,Defense Evasion,critique,9
 vsphere_vm_destroy,T1485,Data Destruction,Impact,eleve,7
@@ -118,3 +118,18 @@ ip_spray_multisource,T1110.003,Spray d'identifiants multi-systeme (meme IP),Cred
 impossible_travel_xsrc,T1078.004,Voyage impossible (signin etranger + presence on-prem),Initial Access,critique,9
 host_go_dark,T1562.001,Impair Defenses: Disable or Modify Tools (source silencieuse),Defense Evasion,moyen,5
 vuln_kev,T1190,Exploit Public-Facing Application (CVE KEV exposee),Initial Access,eleve,8
+remote_access_software,T1219,"Logiciel acces distant non autorise","Command and Control",eleve,7
+protocol_tunneling,T1572,"Tunnel sortant ngrok/cloudflared","Command and Control",eleve,7
+mfa_fatigue,T1621,"MFA fatigue / push bombing","Credential Access",eleve,8
+client_exploitation,T1203,"Exploitation client (navigateur lance interpreteur)","Execution",critique,9
+legacy_auth_m365,T1078.004,"Auth legacy M365 (bypass MFA)","Initial Access",eleve,8
+cred_manager_theft,T1555.004,"Vol Credential Manager Windows","Credential Access",eleve,7
+secsoft_discovery,T1518.001,"Reconnaissance antivirus/EDR","Discovery",moyen,5
+autorun_persist,T1547.001,"Persistance autorun malveillant","Persistence",eleve,8
+vpn_malicious_ip,T1133,External Remote Services,Initial Access,critique,9
+rbcd_delegation,T1098.005,Resource-Based Constrained Delegation,Persistence,critique,9
+spn_added_user,T1558.003,SPN ajoute a un compte utilisateur,Credential Access,eleve,8
+adminsdholder_acl,T1098,Modification ACL AdminSDHolder,Persistence,critique,9
+zerologon_suspect,T1210,Zerologon (Netlogon) suspecte,Lateral Movement,critique,10
+account_renamed,T1098,Compte renomme,Persistence,moyen,6
+priv_account_enabled,T1098,Compte privilegie reactive,Persistence,eleve,7

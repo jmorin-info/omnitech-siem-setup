@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-version-watch - Veille de version de la stack SIEM. LECTURE SEULE.
+#
+#   POURQUOI. Graylog / OpenSearch / MongoDB sont volontairement GELES
+#   (apt-mark hold) : stack couplee par une matrice de compatibilite stricte, et
+#   precedent de corruption WiredTiger du 26/06. Ce gel est un CHOIX D'EXPLOITATION,
+#   pas un defaut : ce robot ne le retire jamais et n'installe RIEN. Il NOTIFIE.
+#   Le defaut reel qu'il comble : RIEN n'alertait quand une version sortait.
+#   Graylog 7.1.4 est sorti 11 jours avant qu'un humain le decouvre par une
+#   banniere de l'interface. La veille etait un trou, pas le gel.
+#
+#   SOURCE PRIMAIRE : apt-cache policy = AUTORITATIF (c'est ce qui s'installerait
+#   reellement, et c'est ce qui voit 7.1.5 la ou l'API Graylog ne voit que 7.1.4).
+#   CORROBORATION   : GET /api/system/notifications (type=outdated_version).
+#
+#   N'APPELLE JAMAIS apt-get update : apt-daily.timer le fait deja
+#   (APT::Periodic::Update-Package-Lists "1"). Un robot qui rafraichirait les
+#   listes masquerait justement la panne qu'il doit detecter. L'age de la liste
+#   apt est donc LU sur son mtime : si elle est perimee, la veille est AVEUGLE et
+#   le dit (alert_tag=siem_job_fail, tag deja alerte par 13-graylog-alerts.sh).
+#
+#   SORTIE : GELF event_source=siem_health -> canal deja route vers le stream
+#   Interne SIEM (90j) et exclu de M365 (365j). NE PAS changer cette valeur :
+#   une valeur non routee partirait en omni-m365/365j et serait invisible aux
+#   recherches cadrees sur le stream Interne.
+#   alert_tag=siem_update_available, champs health_component / version_installed
+#   / version_candidate / age_days.
+#
+#   AGE (age_days) = anciennete de la DETTE (jours depuis que le candidat est
+#   connu), persistee dans STATE_FILE, et non fraicheur de la liste apt. C'est ce
+#   qui permet une def a seuil J+7 : une dette datee, pas un spam quotidien.
+#   Au premier passage, la date de la notification Graylog outdated_version sert
+#   d'amorce -> la dette affiche son age reel, pas 0.
+#
+#   Lance par omni-version-watch.timer (quotidien). Sans config propre.
+#   Usage : omni-version-watch [--dry-run]
+# =============================================================================
+import base64
+import glob
+import json
+import os
+import re
+import ssl
+import subprocess
+import sys
+import time
+import urllib.request
+
+REPO = "/root/omnitech-siem-setup"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM = "bx-it-graylog-vm"
+STATE_FILE = "/var/lib/omni-version-watch/state.json"
+
+# Paquets de la stack couplee, ceux-la memes qui sont geles (apt-mark hold).
+COMPONENTS = ["graylog-server", "opensearch", "mongodb-org"]
+
+# Au-dela, la liste apt est perimee : apt-daily.timer est casse et la veille est
+# aveugle (elle comparerait des versions contre des donnees mortes).
+APT_LIST_MAX_AGE_DAYS = 7
+
+DRY = "--dry-run" in sys.argv[1:]
+
+
+def _bash_vars(keys):
+    # Certaines variables de 00-vars.env sont COMPOSEES (SIEM_FQDN=${SIEM_HOSTNAME}
+    # .${SIEM_DOMAIN}) -> on les fait developper par bash, comme le reste du depot.
+    q = "source " + REPO + "/00-vars.env 2>/dev/null; " + "; ".join(
+        'printf "%s\\n" "${' + k + ':-}"' for k in keys)
+    try:
+        out = subprocess.run(["bash", "-c", q], capture_output=True, text=True,
+                             timeout=10).stdout.splitlines()
+        return dict(zip(keys, out + [""] * len(keys)))
+    except Exception:
+        return {}
+
+
+_BV = _bash_vars(["SIEM_FQDN", "GRAYLOG_ADMIN_PASS", "API_CA"])
+GL_HOST = _BV.get("SIEM_FQDN") or "bx-it-graylog-vm.omnitech.security"
+GL_API = f"https://{GL_HOST}:9000/api"
+GL_CA = _BV.get("API_CA") or "/etc/graylog/certs/omnitech-rootca.crt"
+GL_PASS = _BV.get("GRAYLOG_ADMIN_PASS", "")
+
+
+def gelf(fields):
+    if DRY:
+        print("  [DRY] GELF " + json.dumps(fields, sort_keys=True))
+        return
+    base = {"version": "1.1", "host": SIEM,
+            "short_message": fields.get("short_message", "siem_health")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(
+            GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+
+def apt_policy(pkg):
+    """Installe vs Candidat, via apt-cache policy. LECTURE SEULE.
+    LC_ALL=C est IMPERATIF : en locale fr, apt-cache imprime 'Installe :' /
+    'Candidat :' et tout parseur cale sur 'Installed:' renvoie None en silence
+    -> la veille se croirait a jour. Piege paye une fois, pas deux."""
+    try:
+        env = dict(os.environ, LC_ALL="C", LANG="C")
+        p = subprocess.run(["apt-cache", "policy", pkg], capture_output=True,
+                           text=True, timeout=30, env=env)
+    except Exception:
+        return None, None
+    inst = cand = None
+    for line in p.stdout.splitlines():
+        m = re.match(r"\s*Installed:\s*(\S+)", line)
+        if m:
+            inst = m.group(1)
+        m = re.match(r"\s*Candidate:\s*(\S+)", line)
+        if m:
+            cand = m.group(1)
+    if inst in ("(none)", None) or cand in ("(none)", None):
+        return None, None
+    return inst, cand
+
+
+def newer(cand, inst):
+    """dpkg fait autorite sur l'ordre des versions : '7.1.10-1' > '7.1.9-1' est
+    faux en comparaison de chaines. On ne reimplemente pas ca a la main."""
+    try:
+        return subprocess.run(["dpkg", "--compare-versions", cand, "gt", inst],
+                              timeout=10).returncode == 0
+    except Exception:
+        return cand != inst
+
+
+def apt_list_age_days():
+    """Age de la liste apt = mtime du fichier Packages le plus recent.
+    On ne rafraichit PAS : c'est apt-daily.timer le proprietaire du geste."""
+    files = glob.glob("/var/lib/apt/lists/*Packages*")
+    if not files:
+        return None
+    return (time.time() - max(os.path.getmtime(f) for f in files)) / 86400.0
+
+
+def gl_notifications():
+    """Corroboration (best effort) : l'API Graylog signale outdated_version.
+    Non autoritative (elle voit 7.1.4 quand apt voit 7.1.5) et facultative :
+    si l'API est muette, la veille apt reste valable."""
+    try:
+        ctx = ssl.create_default_context(cafile=GL_CA)
+        req = urllib.request.Request(GL_API + "/system/notifications",
+                                     headers={"X-Requested-By": "omni-version-watch"})
+        tok = base64.b64encode(f"admin:{GL_PASS}".encode()).decode()
+        req.add_header("Authorization", "Basic " + tok)
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as r:
+            return json.load(r).get("notifications", []) or []
+    except Exception as e:
+        print("  [info] API Graylog injoignable (corroboration ignoree):", e)
+        return []
+
+
+def _parse_ts(ts):
+    try:
+        from datetime import datetime, timezone
+        return datetime.strptime(ts.replace("Z", "+0000"),
+                                 "%Y-%m-%dT%H:%M:%S.%f%z").timestamp()
+    except Exception:
+        return None
+
+
+def load_state():
+    try:
+        return json.load(open(STATE_FILE))
+    except Exception:
+        return {}
+
+
+def save_state(st):
+    if DRY:
+        return
+    try:
+        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+        tmp = STATE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(st, f, indent=1, sort_keys=True)
+        os.replace(tmp, STATE_FILE)
+    except Exception as e:
+        print("state KO:", e, file=sys.stderr)
+
+
+def main():
+    now = time.time()
+    state = load_state()
+    notifs = gl_notifications()
+    outdated = [n for n in notifs if n.get("type") == "outdated_version"]
+    # Amorce de la dette : la notification Graylog date le moment ou la plateforme
+    # a SU qu'elle etait en retard. Sans elle, un premier passage afficherait 0
+    # jour sur une dette de 11 jours et retarderait la def a seuil J+7 d'autant.
+    seed = None
+    if outdated:
+        seed = _parse_ts(outdated[0].get("timestamp") or "")
+
+    age_list = apt_list_age_days()
+    if age_list is None or age_list > APT_LIST_MAX_AGE_DAYS:
+        # La veille est AVEUGLE : on le dit sur le tag deja alerte (siem_job_fail),
+        # sinon le silence de ce robot serait pris pour "aucune version en retard".
+        msg = ("liste apt perimee (%.1f j) - apt-daily.timer ne rafraichit plus, "
+               "veille de version aveugle" % (age_list if age_list is not None else -1))
+        gelf({"event_source": "siem_health", "health_type": "job_fail",
+              "alert_tag": "siem_job_fail", "health_job": "omni-version-watch",
+              "health_reason": msg, "health_age_s": int((age_list or 0) * 86400),
+              "short_message": "ROBOT SIEM EN PANNE : omni-version-watch - " + msg})
+        print("  [PANNE] " + msg)
+
+    late, uptodate, unknown = [], [], []
+    for pkg in COMPONENTS:
+        inst, cand = apt_policy(pkg)
+        if not inst:
+            unknown.append(pkg)
+            print(f"  [?] {pkg}: version indeterminee (paquet absent ou apt muet)")
+            continue
+        if not newer(cand, inst):
+            uptodate.append(pkg)
+            print(f"  [OK] {pkg}: {inst} (a jour)")
+            continue
+
+        # Dette datee : first_seen est indexe par (paquet, candidat) -> un nouveau
+        # candidat repart a 0, une dette qui traine vieillit.
+        key = f"{pkg}|{cand}"
+        seen = state.get(key)
+        if not seen:
+            seen = now
+            if seed and pkg == "graylog-server":
+                seen = min(seen, seed)   # la notification Graylog ne concerne que Graylog
+            state[key] = seen
+        age_days = int((now - seen) / 86400)
+        late.append((pkg, inst, cand, age_days))
+        corrob = "oui" if (outdated and pkg == "graylog-server") else "non"
+        gelf({"event_source": "siem_health", "health_type": "update_available",
+              "alert_tag": "siem_update_available", "health_component": pkg,
+              "version_installed": inst, "version_candidate": cand,
+              "age_days": age_days, "health_corroboration": corrob,
+              "health_job": "omni-version-watch",
+              "short_message": (f"MAJ DISPONIBLE : {pkg} {inst} -> {cand} "
+                                f"(connue depuis {age_days} j, paquet gele : "
+                                f"montee MANUELLE en fenetre)")})
+        print(f"  [MAJ] {pkg}: {inst} -> {cand} (dette {age_days} j, corroboration={corrob})")
+
+    # Purge des dettes resolues : sans ca, state.json garderait la trace d'un
+    # candidat installe depuis longtemps et fausserait un futur age.
+    for k in [k for k in state if k.split("|")[0] not in [p[0] for p in late]]:
+        state.pop(k, None)
+    save_state(state)
+
+    gelf({"event_source": "siem_health", "health_type": "version_summary",
+          "health_job": "omni-version-watch",
+          "health_late": len(late), "health_ok": len(uptodate),
+          "health_total": len(COMPONENTS),
+          "apt_list_age_days": round(age_list, 1) if age_list is not None else -1,
+          "short_message": (f"Veille de version SIEM : {len(late)}/{len(COMPONENTS)} "
+                            f"composants en retard")})
+    print(f"[version-watch] {len(late)} en retard, {len(uptodate)} a jour, "
+          f"{len(unknown)} indetermines (liste apt : "
+          f"{'%.1f j' % age_list if age_list is not None else 'introuvable'})")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-version-watch KO:", e, file=sys.stderr)
+        sys.exit(1)

@@ -1,0 +1,32 @@
+// =============================================================================
+// 10-seal-access.rule - Normalisation SEAL "Acces physique" -> contrat D4
+//
+// PRINCIPE (corrige apres validation) : la NORMALISATION D4 est portee par la
+// VUE SQL vw_SealEvents_SIEM (elle produit deja event_action, event_outcome,
+// badge_number, identity_matricule, target_object_id/label/type, timestamp UTC).
+// Le pipeline n'AJOUTE que ce que le SQL ne fait pas : event_category, le
+// placeholder identity_upn (resolu SIEM-side), un repli event_action, et la
+// tracabilite. Il ne RE-MAPPE PAS les champs deja produits par la vue (sinon il
+// les ecraserait par du vide).
+//
+// Champs GELF fournis par la vue (= noms de colonnes vue) :
+//   event_source, event_domain, timestamp, EVEN_ID, EVEN_GROUP_ID,
+//   EVEN_LIFESTAGE, REACHED_LIFESTATUS, event_action_raw, REEV_CODE,
+//   event_action, event_outcome, badge_number, key_ring_sn, identity_matricule,
+//   target_object_id, target_object_label, target_object_type, site, WatermarkBig.
+// Syntaxe pipeline Graylog : pas de ternaire.
+// =============================================================================
+rule "omni-seal-access-normalize"
+when
+  to_string($message.event_domain) == "access"
+then
+  set_field("event_source", "seal");
+  set_field("event_category", "physical_access");
+  // identity_upn : non present en QA (resolu SIEM-side, cf D0/RECON 9.3)
+  set_field("identity_upn", "");
+  // Repli event_action si l'evenement n'a pas d'alarme correlee (REEV absent) :
+  // on retombe sur la description anonymisee.
+  set_field("event_action", to_string($message.event_action, to_string($message.event_action_raw)));
+  // Tracabilite (diagnostic)
+  set_field("seal_watermark", to_string($message.WatermarkBig));
+end

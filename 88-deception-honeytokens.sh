@@ -59,8 +59,10 @@ echo "==> [1/5] Registre de leurres -> lookup 'omni-deception' (CSV key->type, r
 # Filtre les commentaires/lignes vides : CSVFileDataAdapter rejette tout le fichier
 # si une ligne n'a pas 2 colonnes (piege connu, cf 81-fp-allowlist.sh).
 grep -vE '^[[:space:]]*(#|$)' lookups/deception-decoys.csv > "${LOOKUP_DIR}/deception-decoys.csv"
-chmod 644 "${LOOKUP_DIR}/deception-decoys.csv"
+# 640 root:graylog : graylog lit (via le groupe) mais un interne ne peut PAS enumerer
+# les leurres (sinon il les evite -> deception inutile). Audit P2.
 chown root:graylog "${LOOKUP_DIR}/deception-decoys.csv" 2>/dev/null || true
+chmod 640 "${LOOKUP_DIR}/deception-decoys.csv"
 ok "deception-decoys.csv deploye dans ${LOOKUP_DIR}/ ($(grep -vcE '^[[:space:]]*(#|$)' lookups/deception-decoys.csv) lignes hors en-tete)"
 ensure_lookup "deception" "OMNI Deception (cle -> type de leurre)" "deception-decoys.csv" "key" "type"
 

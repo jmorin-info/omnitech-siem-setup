@@ -1,0 +1,8 @@
+[Unit]
+Description=OMNI SIEM - veille de version de la stack (lecture seule, n'installe rien)
+After=graylog-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-version-watch
+Nice=15

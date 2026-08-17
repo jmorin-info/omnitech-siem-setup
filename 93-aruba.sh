@@ -72,6 +72,9 @@ ensure_lookup "aruba-switch" "OMNI Aruba IP -> nom" "aruba-switches.csv" "ip" "n
 install -m 644 lookups/net-segments.csv "${LOOKUP_DIR}/net-segments.csv"
 chown root:graylog "${LOOKUP_DIR}/net-segments.csv" 2>/dev/null || true
 ensure_lookup "net-segment" "OMNI octet -> segment reseau" "net-segments.csv" "octet" "segment"
+# Purge du cache : recharge immediatement le CSV (sinon reload differe au check_interval
+# de l'adapter -> piege "echec silencieux" si on ajoute un VLAN et qu'on teste tout de suite).
+"${CURL[@]}" -X POST "${API}/system/lookup/tables/omni-net-segment/purge" >/dev/null 2>&1 || true
 
 echo "==> [3/5] Pipeline 'OMNI - Aruba' (base + parsing enrichi + detections)"
 # --- STAGE 0 : base + parsing (toutes gardes independantes des mutations du stage) -
@@ -166,12 +169,13 @@ when to_string($message.event_source)=="aruba"
      OR contains(to_string($message.message),"authentication accepted",true) )
 then set_field("alert_tag","aruba_admin_login"); set_field("event_action","login_admin_switch"); end
 EOF
-# STP / boucle reseau (Blocked by STP, loop protect) = boucle ou rogue device.
+# Boucle reseau reelle = loop protect / Loop detected. "Blocked by STP" est l'etat
+# NORMAL d'un lien redondant mis en blocage par le spanning-tree (permanent, pas un
+# incident) -> retire (100% du volume etait "Blocked by STP", 0 vraie boucle, 06/07/2026).
 ensure_rule "omni-aruba-10-stploop" <<'EOF'
 rule "omni-aruba-10-stploop"
 when to_string($message.event_source)=="aruba"
-  AND ( contains(to_string($message.message),"Blocked by STP",true)
-     OR contains(to_string($message.message),"loop protect",true)
+  AND ( contains(to_string($message.message),"loop protect",true)
      OR contains(to_string($message.message),"Loop detected",true)
      OR contains(to_string($message.message),"loop-protect",true) )
 then set_field("alert_tag","aruba_stp_loop"); set_field("event_action","boucle_stp_switch"); end

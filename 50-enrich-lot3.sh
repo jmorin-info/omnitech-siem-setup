@@ -35,7 +35,7 @@ cat > /usr/local/sbin/omni-ndr-exfil <<'NDREOF'
 #   Emet GELF event_source=ndr_exfil, alert_tag=data_exfil (MITRE T1048).
 # Lance par timer horaire. Config 00-vars.env : EXFIL_* + SOAR_WHITELIST.
 # =============================================================================
-import json, os, re, sys, urllib.request
+import ipaddress, json, os, re, sys, urllib.request
 
 OS_URL   = "http://127.0.0.1:9200"
 GELF_URL = "http://127.0.0.1:12201/gelf"
@@ -58,10 +58,35 @@ THRESHOLD = int(float(ENV.get("EXFIL_BYTES_GB", "1")) * (1024 ** 3))  # seuil oc
 TOP_PAIRS = int(ENV.get("EXFIL_TOP", "50"))                      # nb de couples examines
 # Destinations connues a ne JAMAIS flaguer (CDN/SaaS/backup/IP entreprise).
 # Reutilise SOAR_WHITELIST + un EXFIL_ALLOW_DEST dedie (CSV d'IP/prefixes).
+# Supporte les prefixes CIDR (ex. 188.244.109.0/24 = plage backup Cheops) en plus
+# des IP exactes -> un egress backup dont l'IP varie dans une plage reste couvert.
 ALLOW = set()
 for v in (ENV.get("SOAR_WHITELIST", ""), ENV.get("EXFIL_ALLOW_DEST", "")):
     ALLOW.update(x.strip() for x in v.split(",") if x.strip())
 ALLOW_SRC = set(x.strip() for x in ENV.get("EXFIL_ALLOW_SRC", "").split(",") if x.strip())
+
+def _split_cidr(entries):
+    exact, nets = set(), []
+    for e in entries:
+        if "/" in e:
+            try: nets.append(ipaddress.ip_network(e, strict=False))
+            except ValueError: exact.add(e)
+        else:
+            exact.add(e)
+    return exact, nets
+_ALLOW_IP, _ALLOW_NET = _split_cidr(ALLOW)
+_ALLOWSRC_IP, _ALLOWSRC_NET = _split_cidr(ALLOW_SRC)
+
+def _allowed(ip, exact, nets):
+    if ip in exact:
+        return True
+    if nets:
+        try:
+            a = ipaddress.ip_address(ip)
+            return any(a in n for n in nets)
+        except ValueError:
+            return False
+    return False
 
 def es(body):
     req = urllib.request.Request(f"{OS_URL}/omni-fortigate_*/_search",
@@ -108,8 +133,8 @@ def main():
         sent = int(b["vol"]["value"])
         if sent < THRESHOLD:
             break                       # tries desc : plus rien au-dessus du seuil
-        if dst in ALLOW or src in ALLOW_SRC:
-            continue                    # destination/source legitime connue
+        if _allowed(dst, _ALLOW_IP, _ALLOW_NET) or _allowed(src, _ALLOWSRC_IP, _ALLOWSRC_NET):
+            continue                    # destination/source legitime connue (IP ou plage CIDR)
         sessions = b["doc_count"]
         gb = round(sent / (1024 ** 3), 2)
         found += 1
@@ -160,8 +185,10 @@ cat > /usr/local/sbin/omni-ueba-geo-newcountry <<'NDREOF'
 #   event_action:connexion_reussie) ; fortigate remip_country_code/remip
 #   (subtype:vpn, tunneltype ssl*, user reel, exclut remip_country_code=N/A).
 # =============================================================================
-import json, os, re, sys, urllib.request
+import json, os, re, sys, time, urllib.request
 from datetime import datetime, timezone
+
+GEO_STATE = "/var/lib/omni-ueba/geo-newcountry-emitted.json"  # dedup 1/compte/jour
 
 OS_URL   = "http://127.0.0.1:9200"
 GELF_URL = "http://127.0.0.1:12201/gelf"
@@ -179,6 +206,27 @@ ENV = load_env()
 RECENT_H     = int(ENV.get("UEBA_NEWGEO_RECENT_H", "24"))
 BASELINE_D   = int(ENV.get("UEBA_NEWGEO_BASELINE_D", "30"))
 MIN_BASELINE = int(ENV.get("UEBA_NEWGEO_MIN_BASELINE", "3"))
+GEO_TTL      = int(ENV.get("UEBA_GEO_DEDUP_S", "86400"))  # 1 alerte / compte / 24h
+
+def dedup_ok(user):
+    """Emet au plus 1 alerte 'nouveau pays' / compte / jour (anti-spam)."""
+    if os.environ.get("UEBA_DRY"):
+        return True
+    now = time.time()
+    try:
+        st = json.load(open(GEO_STATE))
+    except Exception:
+        st = {}
+    if now - st.get(user, 0) < GEO_TTL:
+        return False
+    st[user] = now
+    st = {u: t for u, t in st.items() if now - t < GEO_TTL}
+    try:
+        os.makedirs(os.path.dirname(GEO_STATE), exist_ok=True)
+        tmp = GEO_STATE + ".tmp"; json.dump(st, open(tmp, "w")); os.replace(tmp, GEO_STATE)
+    except Exception as e:
+        print("geo dedup state KO:", e, file=sys.stderr)
+    return True
 
 def es(path, body):
     req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
@@ -265,12 +313,13 @@ def main():
     merge(baseline, country_map(VPN_Q, baseline_gte, baseline_lt,
                                 "remip_country_code", "remip_city_name", "remip", "VPN"))
 
-    # --- RECENT : pays vus dans les dernieres RECENT_H heures
+    # --- RECENT : pays vus dans les dernieres RECENT_H heures.
+    # On N'ALERTE QUE sur M365 (residentiel) : la sortie SSL-VPN geolocalise au
+    # hasard -> 99% des FP (audit 13/08/2026). Les pays VPN restent en BASELINE
+    # (comptent comme "deja vus", suppriment d'autant plus de FP).
     recent = {}
     merge(recent, country_map(M365_Q, recent_gte, "now",
                               "src_country", "src_city", "src_ip", "M365"))
-    merge(recent, country_map(VPN_Q, recent_gte, "now",
-                              "remip_country_code", "remip_city_name", "remip", "VPN"))
 
     found = 0
     for user, rctrys in recent.items():
@@ -281,6 +330,8 @@ def main():
             continue
         new_countries = [c for c in rctrys if c not in known]
         if not new_countries:
+            continue
+        if not dedup_ok(user):           # 1 alerte / compte / jour
             continue
         for c in sorted(new_countries):
             info = rctrys[c]
@@ -327,12 +378,25 @@ install -m 644 "${CSV}" /etc/graylog/lookup/mitre-attack.csv
 chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true
 
 echo "==> [2/5] Regles de detection"
+# Allowlist de comptes d'ADMINISTRATION GPP (gerent les GPO -> lisent Groups.xml
+# legitimement en volume). Pilotee par 00-vars.env (GPP_ADMIN_ALLOW, separee par ,).
+# Vide = seuls les comptes machine sont exclus. Chaque compte -> clause '!= "compte"'.
+GPP_ADMIN_EXCL=""
+for _a in $(printf '%s' "${GPP_ADMIN_ALLOW:-}" | tr ',' ' '); do
+  [[ -n "${_a}" ]] && GPP_ADMIN_EXCL+="  AND lowercase(to_string(\$message.${WD}_SubjectUserName)) != \"$(printf '%s' "${_a}" | tr 'A-Z' 'a-z')\"
+"
+done
 ensure_rule "omni-l3-10-gpp-creds" <<EOF
 rule "omni-l3-10-gpp-creds"
 when
   to_string(\$message.winlogbeat_winlog_event_id) == "5145"
   AND contains(lowercase(to_string(\$message.${WD}_ShareName)), "sysvol")
-  AND ( contains(lowercase(to_string(\$message.${WD}_RelativeTargetName)), "groups.xml")
+  // Comptes MACHINE (SubjectUserName finissant par \$) : lisent Groups.xml et consorts
+  // a CHAQUE traitement GPO (boot + refresh 90 min) = comportement legitime, PAS T1552.006.
+  // Un vrai vol de creds GPP se fait sous un compte HUMAIN/service (Get-GPPPassword, montage
+  // manuel de \\\\dom\\SYSVOL). Sans ce filtre : 1784 events/7j de bruit (constat 06/07/2026).
+  AND ! ends_with(to_string(\$message.${WD}_SubjectUserName), "\$")
+${GPP_ADMIN_EXCL}  AND ( contains(lowercase(to_string(\$message.${WD}_RelativeTargetName)), "groups.xml")
      OR contains(lowercase(to_string(\$message.${WD}_RelativeTargetName)), "scheduledtasks.xml")
      OR contains(lowercase(to_string(\$message.${WD}_RelativeTargetName)), "services.xml")
      OR contains(lowercase(to_string(\$message.${WD}_RelativeTargetName)), "datasources.xml") )

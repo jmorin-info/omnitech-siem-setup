@@ -132,5 +132,14 @@ fi
 # Repertoire de sauvegarde (sur sdb/home : separe physiquement des donnees sda)
 mkdir -p "${BACKUP_DIR}"
 
+# Durcissement du magasin de certificats Graylog (cree au bootstrap TLS manuel,
+# cf README section TLS). 750 root:graylog : seul le service lit, personne
+# d'autre ne traverse. Conditionnel : ne fait rien tant que le bootstrap n'a
+# pas eu lieu. (Audit 02/07/2026 : etait en 775.)
+if [[ -d /etc/graylog/certs ]]; then
+  chgrp graylog /etc/graylog/certs 2>/dev/null || true
+  chmod 750 /etc/graylog/certs
+fi
+
 echo
 echo "=== 01-base.sh termine. Verifier 'chronyc sources' (PDC en ^*) puis lancer 02-mongodb.sh ==="

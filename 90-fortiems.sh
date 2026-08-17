@@ -153,6 +153,13 @@ when
      OR contains(to_string($message.message),"virus",true)
      OR contains(to_string($message.message),"infected",true)
      OR contains(to_string($message.message),"quarantin",true) )
+  // BRUIT ecarte (audit 13/08/2026 : 28 faux "Malware CRITIQUE") : les messages
+  // d'AFFECTATION DE TAG ("Endpoint ... assigned the tag: Antivirus" contient
+  // "virus") et les workers de gestion EMS (ems-tagworker/ems-kaworker) sont des
+  // operations d'administration, PAS des detections antivirus.
+  AND NOT contains(to_string($message.message),"assigned the tag",true)
+  AND NOT contains(to_string($message.message),"ems-tagworker",true)
+  AND NOT contains(to_string($message.message),"ems-kaworker",true)
 then
   set_field("alert_tag","forticlient_malware");
   set_field("event_action","malware_endpoint");
