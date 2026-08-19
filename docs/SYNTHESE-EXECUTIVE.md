@@ -1,66 +1,66 @@
-# Synthèse exécutive — SIEM OMNITECH Security
+# Executive summary — OMNITECH Security SIEM
 
-*Document d'1 page pour la direction / DSI — 12/06/2026 — Classification : interne*
+*1-page document for management / IT department — 06/12/2026 — Classification: internal*
 
-## En une phrase
+## In one sentence
 
-OMNITECH Security dispose d'un **SIEM (centre de supervision de sécurité)**
-opérationnel qui collecte, corrèle et surveille en temps réel les journaux de
-l'ensemble du système d'information, détecte automatiquement les attaques et
-les pannes, et alerte l'équipe IT — le tout documenté et aligné ISO 27001.
+OMNITECH Security operates an **operational SIEM (security operations center)**
+that collects, correlates and monitors in real time the logs of the
+entire information system, automatically detects attacks and
+failures, and alerts the IT team — all documented and aligned with ISO 27001.
 
-## Ce qui est couvert
+## What is covered
 
-| Domaine | Surveillé |
+| Domain | Monitored |
 |---|---|
-| **Active Directory / Windows** | authentifications, comptes, privilèges, exécutions (serveurs + postes) |
-| **Microsoft 365 / Entra** | connexions, partages, transferts mail, rôles, **comptes à risque (Entra ID Protection)** |
-| **Réseau (FortiGate ×3)** | trafic, antivirus/IPS, web, VPN, **attribution IP→machine (DHCP)** |
-| **Endpoint / EDR (ESET)** | détections antivirus poste & serveur |
-| **WAF applicatif (BunkerWeb)** | filtrage HTTP, blocages, scans applicatifs |
-| **Coffre de mots de passe (Vaultwarden)** | échecs d'auth, accès admin |
-| **Virtualisation (vSphere)** | accès, cycle de vie des machines |
-| **Sauvegardes (Veeam)** | succès / échecs des jobs |
-| **Le SIEM lui-même** | collecte, sauvegarde, capacité, **intégrité prouvable des journaux** (auto-surveillance) |
+| **Active Directory / Windows** | authentications, accounts, privileges, executions (servers + workstations) |
+| **Microsoft 365 / Entra** | sign-ins, shares, mail forwarding, roles, **risky accounts (Entra ID Protection)** |
+| **Network (FortiGate ×3)** | traffic, antivirus/IPS, web, VPN, **IP→machine attribution (DHCP)** |
+| **Endpoint / EDR (ESET)** | workstation & server antivirus detections |
+| **Application WAF (BunkerWeb)** | HTTP filtering, blocks, application scans |
+| **Password vault (Vaultwarden)** | auth failures, admin access |
+| **Virtualization (vSphere)** | access, machine lifecycle |
+| **Backups (Veeam)** | job success / failure |
+| **The SIEM itself** | collection, backup, capacity, **provable log integrity** (self-monitoring) |
 
-## Valeur démontrée (première semaine)
+## Demonstrated value (first week)
 
-- **Attaque VPN bloquée** : une campagne d'attaque par mot de passe depuis
-  Internet (10 000+ tentatives, verrouillage de comptes) a été détectée et
-  stoppée par durcissement, sans impact sur les utilisateurs.
-- **Panne de sauvegarde critique révélée** : le coffre-fort de mots de passe
-  n'était plus sauvegardé depuis 3 jours — invisible jusqu'au SIEM.
-- **Compte de service défaillant identifié** (cause d'une tempête d'alertes).
+- **VPN attack blocked**: a password attack campaign from
+  the Internet (10,000+ attempts, account lockouts) was detected and
+  stopped by hardening, with no impact on users.
+- **Critical backup failure revealed**: the password vault
+  had not been backed up for 3 days — invisible until the SIEM.
+- **Failing service account identified** (cause of an alert storm).
 
-## Dispositif
+## Setup
 
-- **88 définitions** (87 détections + 1 système) automatiques (attaques identité, ransomware,
-  cloud, réseau, intrusion interne) + **réponse automatisée** (blocage d'IP).
-- **Notifications** mail + Microsoft Teams, avec engagement de traitement.
-- **Tableau de bord** unique en 24 pages pour le pilotage.
-- **Résilience** : sauvegarde quotidienne chiffrée et externalisée, plan de
-  reconstruction (reprise ≤ 4 h), garde-fous de capacité.
-- **Authentification** des administrateurs par compte AD nominatif (LDAPS).
+- **88 definitions** (87 detections + 1 system), automatic (identity attacks, ransomware,
+  cloud, network, internal intrusion) + **automated response** (IP blocking).
+- **Notifications** by email + Microsoft Teams, with a handling commitment.
+- **Single dashboard** across 24 pages for oversight.
+- **Resilience**: daily encrypted and offsite backup, rebuild
+  plan (recovery ≤ 4 h), capacity guardrails.
+- **Authentication** of administrators via named AD accounts (LDAPS).
 
-## Conformité ISO 27001:2022
+## ISO 27001:2022 compliance
 
-Couvre les mesures A.8.15 (journalisation **+ intégrité prouvable des journaux**),
-A.8.16 (surveillance), A.5.25 (évaluation des événements), A.8.13 (sauvegarde),
-A.5.33 (protection des enregistrements), A.5.28 (preuves / valeur probante),
-A.8.9 (gestion de configuration), **A.8.2 (accès privilégiés — rôle lecture seule),
-A.8.24 (chiffrement au repos — **réalisé**), A.5.7 (renseignement sur les menaces —
-couverture MITRE ATT&CK 44 techniques)**.
-Dossier documentaire complet : politique, standard, procédure, dossier
-d'architecture, registre de conformité, plan de continuité.
+Covers the measures A.8.15 (logging **+ provable log integrity**),
+A.8.16 (monitoring), A.5.25 (assessment of events), A.8.13 (backup),
+A.5.33 (protection of records), A.5.28 (evidence / evidential value),
+A.8.9 (configuration management), **A.8.2 (privileged access — read-only role),
+A.8.24 (encryption at rest — **completed**), A.5.7 (threat intelligence —
+MITRE ATT&CK coverage 44 techniques)**.
+Complete documentary set: policy, standard, procedure, architecture
+dossier, compliance register, continuity plan.
 
-## Points d'attention soumis à la DSI
+## Points for the IT department's attention
 
-1. **Valider et signer** la politique de supervision (POL).
-2. Planifier le **test annuel de restauration** (exigence A.8.13).
-3. Réparer la sauvegarde du serveur de coffre-fort (action technique en cours).
+1. **Validate and sign** the monitoring policy (POL).
+2. Schedule the **annual restore test** (A.8.13 requirement).
+3. Fix the backup of the vault server (technical action in progress).
 
-## Coût / maintien
+## Cost / upkeep
 
-Solution **open source** (Graylog/OpenSearch), entièrement scriptée
-(reproductible), exploitée par l'équipe IT via des revues quotidiennes,
-hebdomadaires et mensuelles documentées. Aucun coût de licence.
+**Open source** solution (Graylog/OpenSearch), fully scripted
+(reproducible), operated by the IT team via documented daily,
+weekly and monthly reviews. No license cost.

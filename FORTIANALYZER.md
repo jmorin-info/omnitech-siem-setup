@@ -1,39 +1,39 @@
-# FortiAnalyzer → Graylog — procédure complète
+# FortiAnalyzer → Graylog — full procedure
 
-Objectif : le FAZ (10.33.80.253) forwarde les logs FortiGate vers Graylog
-(10.33.220.10:1514). Côté Graylog **tout est déjà prêt et vérifié** :
-inputs syslog TCP+UDP 1514 RUNNING, pare-feu nftables ouvert pour
-10.33.80.253 uniquement, pipeline `OMNI - FortiGate` (parsing key=value,
+Objective: the FAZ (10.33.80.253) forwards FortiGate logs to Graylog
+(10.33.220.10:1514). On the Graylog side **everything is already ready and verified**:
+syslog TCP+UDP 1514 inputs RUNNING, nftables firewall opened for
+10.33.80.253 only, `OMNI - FortiGate` pipeline (key=value parsing,
 `srcip→src_ip`, GeoIP, tag `alert_tag:fortigate_utm`), stream + index
-`omni-fortigate` (90 j), dashboard `OMNI - FortiGate`, alerte
-`OMNI - FortiGate : virus / IPS`.
+`omni-fortigate` (90 d), `OMNI - FortiGate` dashboard, alert
+`OMNI - FortiGate: virus / IPS`.
 
-## 1. Configuration côté FAZ (GUI)
+## 1. Configuration on the FAZ side (GUI)
 
-*System Settings > Advanced > Log Forwarding > Create New* :
+*System Settings > Advanced > Log Forwarding > Create New*:
 
-| Champ | Valeur |
+| Field | Value |
 |---|---|
 | Status | Enabled |
 | Remote Server Type | **Syslog** |
 | Server FQDN/IP | `10.33.220.10` |
 | Port | `1514` |
-| Reliable Connection | **ON** (= TCP ; OFF = UDP, accepté aussi mais sans garantie) |
+| Reliable Connection | **ON** (= TCP; OFF = UDP, also accepted but without guarantee) |
 | Sending Frequency | Real-time |
-| Log Forwarding Filters | voir ci-dessous |
+| Log Forwarding Filters | see below |
 
-**Filtres recommandés** (le FAZ reste le lac réseau exhaustif ; on n'envoie à
-Graylog que ce qui sert à la corrélation — sinon le trafic `accept` noie tout) :
-- Device : le(s) FortiGate
-- Log filters (OR) :
+**Recommended filters** (the FAZ remains the exhaustive network lake; we only send to
+Graylog what is useful for correlation — otherwise `accept` traffic drowns everything):
+- Device: the FortiGate(s)
+- Log filters (OR):
   - `level` ≥ `warning`
-  - `subtype` = `vpn` (toutes connexions SSL-VPN / IPsec)
-  - `subtype` = `admin` ou `system` (actions d'admin sur le FW)
-  - `logid` des échecs d'authentification (event/user)
-  - UTM : `virus`, `ips`, `webfilter` (blocages), `application`
-- Exclure : `type=traffic action=accept` (volumétrie sans valeur SIEM).
+  - `subtype` = `vpn` (all SSL-VPN / IPsec connections)
+  - `subtype` = `admin` or `system` (admin actions on the FW)
+  - `logid` of authentication failures (event/user)
+  - UTM: `virus`, `ips`, `webfilter` (blocks), `application`
+- Exclude: `type=traffic action=accept` (volume with no SIEM value).
 
-## 2. Équivalent CLI FAZ
+## 2. FAZ CLI equivalent
 
 ```
 config system log-forward
@@ -62,50 +62,50 @@ config system log-forward
 end
 ```
 
-## 3. Vérification (sur la VM Graylog)
+## 3. Verification (on the Graylog VM)
 
 ```bash
 cd ~/omnitech-siem-setup && source 00-vars.env && source lib-graylog.sh
-# 1. Paquets qui arrivent ?
+# 1. Are packets arriving?
 tcpdump -ni any host 10.33.80.253 and port 1514 -c 5
-# 2. Input qui compte ?
+# 2. Is the input counting?
 api_get /system/metrics/namespace/org.graylog2.inputs | \
   jq -r '.metrics[] | select(.full_name|test("Syslog.*incomingMessages")) | "\(.full_name): \(.metric.count)"'
-# 3. Messages parses ? (event_source pose par le pipeline)
+# 3. Messages parsed? (event_source set by the pipeline)
 curl -s "127.0.0.1:9200/omni-fortigate_*/_search?size=3" \
   -H 'Content-Type: application/json' -d '{"sort":[{"timestamp":"desc"}]}' | \
   jq '.hits.hits[]._source | {timestamp, host, src_ip, dest_ip, action, app, alert_tag}'
 ```
-Puis console : dashboard **OMNI - FortiGate** doit se peupler.
+Then console: the **OMNI - FortiGate** dashboard must populate.
 
 ## 4. Notes
 
-- Le pipeline se déclenche sur la présence de `devname=` dans le message :
-  format syslog FortiGate/FAZ natif (key=value), aucun extracteur à créer.
-- Si vous préférez le format **CEF** côté FAZ : créer l'input *CEF TCP* port
-  5555 dans Graylog (System > Inputs), ouvrir 5555/tcp dans
-  `06-firewall.sh` pour 10.33.80.253, et adapter le routage du stream
-  `OMNI - FortiGate` (ajouter une règle sur l'input CEF). Le syslog 1514
-  reste le chemin le plus simple et déjà testé.
-- Horodatage : en production le FAZ met l'heure réelle dans l'en-tête syslog ;
-  les messages apparaissent immédiatement dans les recherches relatives
-  (le test manuel d'aujourd'hui semblait « invisible » uniquement parce que
-  son timestamp artisanal était dans le futur).
+- The pipeline triggers on the presence of `devname=` in the message:
+  native FortiGate/FAZ syslog format (key=value), no extractor to create.
+- If you prefer the **CEF** format on the FAZ side: create the *CEF TCP* input port
+  5555 in Graylog (System > Inputs), open 5555/tcp in
+  `06-firewall.sh` for 10.33.80.253, and adapt the routing of the
+  `OMNI - FortiGate` stream (add a rule on the CEF input). Syslog 1514
+  remains the simplest path and is already tested.
+- Timestamping: in production the FAZ puts the real time in the syslog header;
+  messages appear immediately in relative searches
+  (today's manual test seemed "invisible" only because
+  its hand-crafted timestamp was in the future).
 
 ---
 
-# REVISION (11/06) — il manque toute la telemetrie UTM
+# REVISION (11/06) — all the UTM telemetry is missing
 
-## Constat (mesure sur 2 h de flux reel)
-- traffic : 1 013 419 (95 %)  | event : 52 976 | **utm : 1 465 (uniquement `voip`)**
-- **Aucun virus / ips / webfilter / dns / app-ctrl** ne remonte.
+## Finding (measured over 2 h of real traffic)
+- traffic: 1,013,419 (95%)  | event: 52,976 | **utm: 1,465 (only `voip`)**
+- **No virus / ips / webfilter / dns / app-ctrl** is coming through.
 
-=> Ce n'est PAS le FAZ ni Graylog : le **FortiGate ne logge pas ses profils de
-securite**. Sans ca, le SIEM est aveugle sur les menaces reseau (malware bloque,
-intrusions IPS, C2 via DNS, navigation interdite). C'est le trou le plus grave.
+=> This is NOT the FAZ or Graylog: the **FortiGate does not log its security
+profiles**. Without that, the SIEM is blind to network threats (blocked malware,
+IPS intrusions, C2 via DNS, forbidden browsing). This is the most serious hole.
 
-## 1. Cote FortiGate — activer le logging UTM (le vrai correctif)
-Sur CHAQUE policy sortante qui doit etre inspectee :
+## 1. FortiGate side — enable UTM logging (the real fix)
+On EVERY outbound policy that must be inspected:
 ```
 config firewall policy
   edit <id>
@@ -120,7 +120,7 @@ config firewall policy
   next
 end
 ```
-Puis s'assurer que chaque profil ECRIT des logs :
+Then make sure each profile WRITES logs:
 ```
 config antivirus profile
   edit "default"
@@ -149,13 +149,13 @@ config dnsfilter profile
   next
 end
 ```
-(IPS : les signatures loggent par defaut ; verifier `config ips sensor` -> action
-log enable sur les filtres.)
+(IPS: signatures log by default; check `config ips sensor` -> action
+log enable on the filters.)
 
-## 2. Cote FAZ — filtre de forwarding revise (garder tout le pertinent)
-Logique OR : on garde event (vpn/user/admin/system), utm (toutes signatures),
-anomaly (DoS), trafic bloque, et tout ce qui est >= warning. Seul le trafic
-`accept`/`notice` verbeux est jete.
+## 2. FAZ side — revised forwarding filter (keep everything relevant)
+OR logic: we keep event (vpn/user/admin/system), utm (all signatures),
+anomaly (DoS), blocked traffic, and anything >= warning. Only verbose
+`accept`/`notice` traffic is dropped.
 ```
 config system log-forward
   edit 1
@@ -191,14 +191,14 @@ config system log-forward
   next
 end
 ```
-Option : ajouter `subtype = local` (trafic local-in/out vers le FortiGate =
-acces admin) si tu veux tracer l'administration du firewall.
+Option: add `subtype = local` (local-in/out traffic to the FortiGate =
+admin access) if you want to trace administration of the firewall.
 
-## 3. Verification (sur le SIEM, ~5 min apres)
+## 3. Verification (on the SIEM, ~5 min later)
 ```bash
 curl -s "127.0.0.1:9200/omni-fortigate_*/_search?size=0" -H 'Content-Type: application/json' \
  -d '{"query":{"bool":{"must":[{"term":{"type":"utm"}},{"range":{"timestamp":{"gte":"now-15m"}}}]}},
       "aggs":{"x":{"terms":{"field":"subtype","size":15}}}}' | jq -r '.aggregations.x.buckets[]|"\(.doc_count)\t\(.key)"'
 ```
-Tu dois voir apparaitre virus / ips / webfilter / dns / app-ctrl. Le dashboard
-page "Reseau" se peuplera alors en detections UTM reelles.
+You should see virus / ips / webfilter / dns / app-ctrl appear. The "Network"
+dashboard page will then populate with real UTM detections.

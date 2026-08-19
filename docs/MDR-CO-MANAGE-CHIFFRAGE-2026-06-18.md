@@ -1,220 +1,221 @@
-# MDR co-managé — chiffrage & décision (couverture nuit/week-end + threat-intel)
+# Co-managed MDR — pricing & decision (night/weekend coverage + threat-intel)
 
-**OMNITECH SECURITY — 2026-06-18 — destiné à : Julien Morin (RSSI/dev)**
-**Décision amont :** retenir un **MDR co-managé** pour combler les 3 gaps *irréductibles* du build interne
-(SOC humain 24/7, threat-intel/dark-web, garantie cyber). Voir `docs/REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md`.
-**Portée de ce doc :** cadrer le périmètre, le modèle, comparer le marché 2026, chiffrer, et lister les
-critères de bascule + questions d'appel d'offres.
+**OMNITECH SECURITY — 2026-06-18 — intended for: Julien Morin (CISO/dev)**
+**Upstream decision:** adopt a **co-managed MDR** to close the 3 *irreducible* gaps of the internal build
+(24/7 human SOC, threat-intel/dark-web, cyber warranty). See `docs/REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md`.
+**Scope of this doc:** frame the perimeter, the model, benchmark the 2026 market, price it, and list the
+switch criteria + RFP questions.
 
-> ⚠️ **Fiabilité des chiffres.** Les prix MDR sont quasi tous **sur devis** ; les fourchettes ci-dessous
-> proviennent de benchmarks publics 2026 (sources en fin de doc) et d'**estimations explicitement signalées
-> `[EST]`**. Aucun n'est un devis OMNITECH. Taux retenu : 1 USD ≈ 0,93 €.
+> **Reliability of the figures.** MDR prices are almost all **quote-based**; the ranges below
+> come from public 2026 benchmarks (sources at the end of the doc) and from **estimates explicitly flagged
+> `[EST]`**. None is an OMNITECH quote. Rate used: 1 USD ≈ €0.93.
 
 ---
 
 ## TL;DR
 
-- **Le périmètre rationnel n'est PAS un MDR full-stack** (qui doublonnerait ton SIEM/EDR déjà mûrs) mais une
-  **augmentation de SOC co-managée** : couverture **nuit + week-end + jours fériés**, l'équipe interne gardant
-  la main en journée ouvrée et **restant propriétaire de la politique de détection**, + un volet
-  **CTI/dark-web**.
-- **Choisir un prestataire *technology-agnostic* (BYO-SIEM/EDR)** qui consomme tes alertes Graylog et ta
-  télémétrie ESET **par API**, surtout pas un MDR « plateforme-native » qui impose son agent. **Conséquence
-  contre-intuitive : Bitdefender MDR — la référence que tu voulais reproduire — est éliminé** (agent
-  GravityZone obligatoire, pas d'EDR tiers, SOC hors UE).
-- **Privilégier un acteur souverain FR/UE** (Orange Cyberdefense SecNumCloud, Advens, Intrinsec, Sekoia) —
-  cohérent avec ton choix « local d'abord » pour le LLM et avec la sous-traitance ISO (A.5.19–A.5.23).
-- **Chiffrage de planification** : option ciblée nuit/WE co-managée ≈ **35 000 – 80 000 €/an** `[EST]` ;
-  + CTI/dark-web ≈ **10 000 – 40 000 €/an** `[EST]`. À comparer à un MDR **full 24/7** ≈ **60 000 – 140 000 €/an**
-  `[EST]` et à un **24/7 interne réel** (~5-6 ETP) ≈ **400 000 – 550 000 €/an** `[EST]`.
-- **Verdict : le co-managé nuit/WE est économiquement rationnel** (un ordre de grandeur sous le 24/7 interne,
-  plus soutenable qu'une astreinte maison). **Mais n'attends PAS un rabais proportionnel** « parce qu'on ne
-  prend que les nuits » : le SOC du prestataire tourne 24/7 de toute façon, l'onboarding et la télémétrie sont
-  complets — négocie un *palier co-managé/augmentation* explicite.
+- **The rational perimeter is NOT a full-stack MDR** (which would duplicate your already mature SIEM/EDR) but a
+  **co-managed SOC augmentation**: **night + weekend + public holiday** coverage, with the internal team keeping
+  the lead during business hours and **remaining owner of the detection policy**, + a
+  **CTI/dark-web** component.
+- **Choose a *technology-agnostic* provider (BYO-SIEM/EDR)** that consumes your Graylog alerts and your ESET
+  telemetry **via API**, definitely not a "platform-native" MDR that imposes its agent. **Counter-intuitive
+  consequence: Bitdefender MDR — the reference you wanted to reproduce — is eliminated** (GravityZone
+  agent mandatory, no third-party EDR, non-EU SOC).
+- **Favor a sovereign FR/EU player** (Orange Cyberdefense SecNumCloud, Advens, Intrinsec, Sekoia) —
+  consistent with your "local-first" choice for the LLM and with ISO subcontracting (A.5.19–A.5.23).
+- **Planning pricing**: targeted co-managed night/WE option ≈ **€35,000 – €80,000/yr** `[EST]`;
+  + CTI/dark-web ≈ **€10,000 – €40,000/yr** `[EST]`. To be compared with a **full 24/7** MDR ≈ **€60,000 – €140,000/yr**
+  `[EST]` and with a **real in-house 24/7** (~5-6 FTE) ≈ **€400,000 – €550,000/yr** `[EST]`.
+- **Verdict: co-managed night/WE is economically rational** (an order of magnitude below in-house 24/7,
+  more sustainable than a home-grown on-call rotation). **But don't expect a proportional discount**
+  "because we only take nights": the provider's SOC runs 24/7 anyway, onboarding and telemetry are
+  complete — negotiate an explicit *co-managed/augmentation tier*.
 
 ---
 
-## 1. Périmètre retenu
+## 1. Retained perimeter
 
-**Ce qu'on achète :**
-- **Couverture temporelle** : nuits (≈ 19h–8h), week-ends, jours fériés — soit les ~128 h/semaine où l'équipe
-  interne n'est pas opérationnelle (sur 168 h). Surveillance, triage, et **réponse de 1er niveau** (selon
-  mandat) sur les alertes critiques.
-- **Threat-intel / dark-web monitoring** : veille sur fuites de credentials OMNITECH, exposition de domaines/
-  marques, mentions sur forums/markets, IOC contextualisés réinjectables dans Graylog/SOAR.
-- **Astreinte d'escalade** : un contact joignable < 30 min sur incident critique nocturne (équivalent maison
-  des « Pre-Approved Actions » + SAM de Bitdefender).
+**What we buy:**
+- **Time coverage**: nights (≈ 7pm–8am), weekends, public holidays — i.e. the ~128 h/week when the internal
+  team is not operational (out of 168 h). Monitoring, triage, and **first-level response** (per
+  mandate) on critical alerts.
+- **Threat-intel / dark-web monitoring**: watch for OMNITECH credential leaks, domain/brand exposure,
+  mentions on forums/markets, contextualized IOCs re-injectable into Graylog/SOAR.
+- **Escalation on-call**: a contact reachable < 30 min on a critical nighttime incident (home-grown
+  equivalent of Bitdefender's "Pre-Approved Actions" + SAM).
 
-**Ce qu'on n'achète PAS** (déjà couvert par le build interne, cf. revue) :
-- Le moteur de détection (pipelines Graylog, 74 règles MITRE, UEBA/NDR, corrélation d'incidents).
-- Le SOAR de blocage FortiGate (`omni-soar`), le reporting, les dashboards SOC.
-- L'EDR (ESET) — conservé comme source de télémétrie ; on ne remplace pas l'agent.
+**What we do NOT buy** (already covered by the internal build, cf. review):
+- The detection engine (Graylog pipelines, 74 MITRE rules, UEBA/NDR, incident correlation).
+- The FortiGate blocking SOAR (`omni-soar`), reporting, SOC dashboards.
+- The EDR (ESET) — kept as a telemetry source; we do not replace the agent.
 
-**Principe directeur (co-managé, pas externalisé) :** OMNITECH **reste propriétaire** de la politique de
-détection et de la décision d'action ; le prestataire **opère les heures creuses** et **enrichit** (CTI),
-sans imposer son stack ni reprendre la gouvernance. Modèle « your internal security team remains the primary
-owner of your policy configuration » (formulation co-managée standard du marché).
+**Guiding principle (co-managed, not outsourced):** OMNITECH **remains owner** of the detection policy and
+of the action decision; the provider **operates the off-hours** and **enriches** (CTI), without imposing its
+stack or taking over governance. "Your internal security team remains the primary owner of your policy
+configuration" model (standard market co-managed wording).
 
 ---
 
-## 2. Modèle co-managé : RACI, articulation technique, réversibilité
+## 2. Co-managed model: RACI, technical articulation, reversibility
 
-**RACI synthétique :**
+**Synthetic RACI:**
 
-| Activité | Interne (jour ouvré) | Prestataire (nuit/WE) |
+| Activity | Internal (business hours) | Provider (night/WE) |
 |---|---|---|
-| Politique & règles de détection | **R/A** (propriétaire) | C (propose des améliorations) |
+| Detection policy & rules | **R/A** (owner) | C (proposes improvements) |
 | Tuning, exceptions, allowlists | **R/A** | C |
-| Triage des alertes (heures ouvrées) | **R/A** | I |
-| Triage + investigation (nuit/WE) | I | **R** (A reste interne) |
-| Réponse réversible (isolation/blocage) | **R/A** | **R** sur actions pré-approuvées, sinon escalade |
+| Alert triage (business hours) | **R/A** | I |
+| Triage + investigation (night/WE) | I | **R** (A stays internal) |
+| Reversible response (isolation/blocking) | **R/A** | **R** on pre-approved actions, else escalation |
 | Threat-intel / dark-web | C | **R/A** |
-| Décision d'action destructrice | **A** (human-in-the-loop interne) | escalade obligatoire |
-| Conformité ISO / preuves | **R/A** | C (fournit logs d'intervention) |
+| Destructive action decision | **A** (internal human-in-the-loop) | mandatory escalation |
+| ISO compliance / evidence | **R/A** | C (provides intervention logs) |
 
-**Articulation avec le SIEM/EDR existants — le critère technique n°1 :**
-- **Modèle souhaité (BYO)** : le prestataire **consomme** tes flux — alertes/événements Graylog (API REST,
-  webhook, ou export Syslog/CEF) + télémétrie ESET — et travaille **dans** ta console ou sa surcouche
-  (type ReliaQuest GreyMatter / Binary Defense), **sans réingestion forcée** dans son propre SIEM.
-- **Modèle à éviter** : le MDR plateforme-native qui exige **son** agent (Bitdefender = GravityZone
-  obligatoire, pas d'EDR tiers) → re-déploiement parc, double agent, perte de la valeur du build, lock-in.
-- **Point de coût caché** : si le prestataire **réingère** tes logs dans son SIEM, la facturation **au volume**
-  s'applique (≈ 0,50–2,00 $/Go au-delà d'un socle). Or tu produis **~25 Go/jour (~750 Go/mois)** → à cadrer
-  impérativement (filtrer ce qui part, ou rester en modèle « le presta lit Graylog »).
+**Articulation with the existing SIEM/EDR — the #1 technical criterion:**
+- **Desired model (BYO)**: the provider **consumes** your feeds — Graylog alerts/events (REST API,
+  webhook, or Syslog/CEF export) + ESET telemetry — and works **within** your console or its overlay
+  (ReliaQuest GreyMatter / Binary Defense type), **without forced re-ingestion** into its own SIEM.
+- **Model to avoid**: the platform-native MDR that requires **its** agent (Bitdefender = GravityZone
+  mandatory, no third-party EDR) → fleet re-deployment, dual agent, loss of the build's value, lock-in.
+- **Hidden cost point**: if the provider **re-ingests** your logs into its SIEM, **volume-based** billing
+  applies (≈ $0.50–2.00/GB above a baseline). Now you produce **~25 GB/day (~750 GB/month)** → to be
+  scoped imperatively (filter what leaves, or stay in the "the provider reads Graylog" model).
 
-**Réversibilité (exigence contractuelle) :** données et règles restent chez toi (Graylog est le point de
-vérité) ; clause de sortie avec restitution/destruction des données, pas de dépendance à un agent propriétaire,
-préavis raisonnable. C'est précisément l'avantage du co-managé BYO sur le MDR plateforme.
+**Reversibility (contractual requirement):** data and rules stay with you (Graylog is the source of
+truth); exit clause with return/destruction of data, no dependency on a proprietary agent, reasonable
+notice. This is precisely the advantage of BYO co-managed over platform MDR.
 
 ---
 
-## 3. Options marché (2026)
+## 3. Market options (2026)
 
-| Fournisseur | Tarification (indicative) | Co-managé réel / BYO-SIEM-EDR | Intégration stack tiers (Graylog/ESET) | Localisation données |
+| Provider | Pricing (indicative) | Real co-managed / BYO-SIEM-EDR | Third-party stack integration (Graylog/ESET) | Data location |
 |---|---|---|---|---|
-| **Bitdefender MDR / MDR PLUS** | Sur devis ; 2 paliers. MTTD 24 min (MITRE 2024), SLA notif ≤30 min. Garantie jusqu'à **1 M$ mais ≥1000 endpoints** (→ **OMNITECH non éligible**) | ❌ « Co-Managed » marketing mais **agent GravityZone obligatoire, pas d'EDR tiers** | ❌ Faible (impose son agent) | ❌ SOC San Antonio / Bucarest / Singapour — **pas de garantie résidence UE** |
-| **Arctic Wolf MDR** | $8–25/endpoint/mois (base) ; SMB effectif $25–40/user/mois ; entrée ~44 k$/an (≤100 users), deal médian ~96 k$/an | ◐ Concierge Security Team, modèle « tes outils + notre SOC » | ◐ Connecteurs SIEM/EDR larges | ❌/◐ US-centric (option UE à vérifier) |
-| **Sophos MDR** | $7–17/endpoint/mois (base) ; effectif $15–25/user/mois avec serveurs + Intercept X + packs | ◐ Supporte télémétrie tierce (« MDR Complete ») mais pousse son EDR | ◐ Intègre EDR/SIEM tiers via packs | ◐ Région UE disponible (à confirmer) |
-| **Orange Cyberdefense** (FR) | Sur devis | ✅ SOC managé / MDR / XDR, modèle co-managé | ✅ Agnostique, fort en intégration | ✅ **SecNumCloud** (Cloud Avenue SecNum qualifié ANSSI, juil. 2025) |
-| **Advens / ITrust** (FR) | Sur devis | ✅ Acteurs revendiquant l'**autonomie stratégique** totale | ✅ Agnostique | ✅ FR souverain |
-| **Intrinsec** (FR) | Sur devis | ✅ **SOC externalisé 24/7**, experts certifiés ANSSI, SIEM/SOAR | ✅ Agnostique (CTI réputée) | ✅ FR |
-| **Sekoia.io** (FR/UE) | Sur devis (plateforme + MDR partenaires) | ✅ Plateforme SOC/XDR ouverte, 900+ règles, 24/7 | ✅ **Conçue pour ingérer des sources tierces** | ✅ UE |
-| **ReliaQuest / Binary Defense / Huntress** (US) | Sur devis | ✅ **BYO-SIEM/EDR** explicite (surcouche au-dessus de l'existant) | ✅ API-first, portabilité des données | ❌ US (sauf option UE) |
+| **Bitdefender MDR / MDR PLUS** | Quote-based; 2 tiers. MTTD 24 min (MITRE 2024), notif SLA ≤30 min. Warranty up to **$1M but ≥1000 endpoints** (→ **OMNITECH not eligible**) | "Co-Managed" marketing but **GravityZone agent mandatory, no third-party EDR** | Weak (imposes its agent) | SOC San Antonio / Bucharest / Singapore — **no EU residency guarantee** |
+| **Arctic Wolf MDR** | $8–25/endpoint/month (base); effective SMB $25–40/user/month; entry ~$44k/yr (≤100 users), median deal ~$96k/yr | Concierge Security Team, "your tools + our SOC" model | Broad SIEM/EDR connectors | US-centric (EU option to verify) |
+| **Sophos MDR** | $7–17/endpoint/month (base); effective $15–25/user/month with servers + Intercept X + packs | Supports third-party telemetry ("MDR Complete") but pushes its EDR | Integrates third-party EDR/SIEM via packs | EU region available (to confirm) |
+| **Orange Cyberdefense** (FR) | Quote-based | SOC managed / MDR / XDR, co-managed model | Agnostic, strong in integration | **SecNumCloud** (Cloud Avenue SecNum ANSSI-qualified, Jul. 2025) |
+| **Advens / ITrust** (FR) | Quote-based | Players claiming full **strategic autonomy** | Agnostic | FR sovereign |
+| **Intrinsec** (FR) | Quote-based | **Outsourced 24/7 SOC**, ANSSI-certified experts, SIEM/SOAR | Agnostic (reputed CTI) | FR |
+| **Sekoia.io** (FR/EU) | Quote-based (platform + partner MDR) | Open SOC/XDR platform, 900+ rules, 24/7 | **Designed to ingest third-party sources** | EU |
+| **ReliaQuest / Binary Defense / Huntress** (US) | Quote-based | Explicit **BYO-SIEM/EDR** (overlay above the existing) | API-first, data portability | US (except EU option) |
 
-**Lecture :** pour OMNITECH (souveraineté + conserver Graylog/ESET), le **quadrant gagnant = acteurs FR/UE
-agnostiques** (Orange Cyberdefense, Advens, Intrinsec, Sekoia). Les BYO US (ReliaQuest/Binary Defense) sont
-techniquement excellents mais perdent sur la souveraineté. Bitdefender est **disqualifié** par le lock-in agent
-et la localisation — paradoxe assumé : on reproduit sa *techno* en interne, on ne prend pas son *service*.
+**Reading:** for OMNITECH (sovereignty + keeping Graylog/ESET), the **winning quadrant = agnostic FR/EU
+players** (Orange Cyberdefense, Advens, Intrinsec, Sekoia). The US BYO players (ReliaQuest/Binary Defense)
+are technically excellent but lose on sovereignty. Bitdefender is **disqualified** by agent lock-in and
+location — assumed paradox: we reproduce its *tech* in-house, we don't take its *service*.
 
 ---
 
-## 4. Chiffrage
+## 4. Pricing
 
-**Base de dimensionnement OMNITECH :** ~**150 postes** + ~**90 VMs/serveurs** + 3 sites. Multiplicateur serveur
-courant **1,5–2,5×** le tarif poste (les serveurs tournent 24/7, génèrent plus de télémétrie). « Endpoint-
-équivalents » ≈ 150 + (90 × ~2) ≈ **~330**.
+**OMNITECH sizing base:** ~**150 workstations** + ~**90 VMs/servers** + 3 sites. Common server
+multiplier **1.5–2.5×** the workstation price (servers run 24/7, generate more telemetry). "Endpoint-
+equivalents" ≈ 150 + (90 × ~2) ≈ **~330**.
 
-| Scénario | Hypothèses | Coût annuel `[EST]` |
+| Scenario | Assumptions | Annual cost `[EST]` |
 |---|---|---|
-| **A. MDR full 24/7** (référence haute) | 150 postes @ 10–25 $/mois + 90 serveurs @ 50–100 $/mois | **~60 000 – 140 000 €/an** |
-| **B. Co-managé ciblé nuit/WE + escalade** (option retenue) | ~40–70 % d'un full (le SOC tourne 24/7, onboarding complet ; pas de rabais proportionnel) | **~35 000 – 80 000 €/an** |
-| **C. CTI / dark-web** (autonome ou bundle) | brand/credential/domain monitoring → CTI complète | **~10 000 – 40 000 €/an** |
-| **B + C combinés** (cible OMNITECH) | souvent bundle partiel chez les FR | **~45 000 – 100 000 €/an** |
-| **D. 24/7 interne réel** (anti-modèle) | 5–6 ETP analystes SOC, coût chargé ~80–110 k€/ETP | **~400 000 – 550 000 €/an** |
-| **E. Astreinte interne légère** (compromis bancal) | 3–4 pers. en rotation + primes d'astreinte | **~60 000 – 120 000 €/an** mais réponse dégradée + risque burnout/key-person |
+| **A. Full 24/7 MDR** (high reference) | 150 workstations @ $10–25/month + 90 servers @ $50–100/month | **~€60,000 – €140,000/yr** |
+| **B. Targeted co-managed night/WE + escalation** (retained option) | ~40–70% of a full (the SOC runs 24/7, complete onboarding; no proportional discount) | **~€35,000 – €80,000/yr** |
+| **C. CTI / dark-web** (standalone or bundle) | brand/credential/domain monitoring → full CTI | **~€10,000 – €40,000/yr** |
+| **B + C combined** (OMNITECH target) | often a partial bundle at the FR players | **~€45,000 – €100,000/yr** |
+| **D. Real in-house 24/7** (anti-model) | 5–6 SOC analyst FTE, loaded cost ~€80–110k/FTE | **~€400,000 – €550,000/yr** |
+| **E. Light in-house on-call** (shaky compromise) | 3–4 people in rotation + on-call premiums | **~€60,000 – €120,000/yr** but degraded response + burnout/key-person risk |
 
-**Pièges de facturation à neutraliser en RFP :**
-1. **Volume de logs** : ~750 Go/mois — exiger un modèle « lecture de Graylog » ou un socle Go inclus généreux,
-   sinon surfacturation 0,50–2,00 $/Go.
-2. **Serveurs** : 90 VMs au multiplicateur 2–2,5× peuvent **doubler** la facture vs un comptage « par poste ».
-3. **Add-ons** : rétention >90 j, awareness, IR retainer, onboarding → vérifier ce qui est inclus.
-4. **Engagement** : remises 1 an vs 3 ans (attention à la réversibilité si lock-in).
-
----
-
-## 5. Build-only vs co-managé : ce que le co-managé ajoute *réellement*
-
-Le build interne couvre déjà **75–85 % de la techno** MXDR (cf. revue). Le co-managé n'ajoute pas de techno —
-il ajoute **3 choses non-reproductibles en interne à coût raisonnable** :
-
-1. **Des yeux humains la nuit/WE.** L'alternative (scénario D) coûte **5–10×** plus cher pour un vrai 24/7
-   staffé ; l'astreinte légère (E) est moins chère mais **dégradée** (latence, fatigue, et surtout
-   **aggrave le risque key-person** — l'inverse de ce qu'on vient de corriger avec le P0 git).
-2. **Threat-intel/dark-web** que tu ne peux pas produire seul (pas de Bitdefender Labs / pas d'équipe CTI).
-3. **Un transfert de risque** (et, chez certains, une garantie cyber — mais réservée aux gros parcs ;
-   OMNITECH à 150 postes n'atteint pas les seuils des garanties 1 M$).
-
-**Coût d'opportunité :** chaque euro mis dans un MDR *full-stack* qui doublonne Graylog/ESET est gaspillé.
-La dépense n'est justifiée **que** sur le delta (nuit/WE + CTI). D'où le périmètre §1.
+**Billing traps to neutralize in the RFP:**
+1. **Log volume**: ~750 GB/month — require a "reading from Graylog" model or a generous included GB baseline,
+   otherwise 0.50–2.00 $/GB overbilling.
+2. **Servers**: 90 VMs at a 2–2.5× multiplier can **double** the bill vs a "per workstation" count.
+3. **Add-ons**: retention >90 d, awareness, IR retainer, onboarding → check what is included.
+4. **Commitment**: 1-year vs 3-year discounts (mind reversibility if lock-in).
 
 ---
 
-## 6. Conformité & souveraineté
+## 5. Build-only vs co-managed: what co-managed *actually* adds
 
-- **RGPD / localisation** : les logs contiennent des données personnelles (logins, IP, UPN M365). Exiger
-  **traitement et stockage en UE**, DPA signé, liste des sous-traitants ultérieurs, pas de transfert hors UE
-  sans garanties. → favorise nettement les acteurs **FR/UE** ; **disqualifie** un SOC US/hors-UE sans option
-  de résidence (Bitdefender tel quel).
-- **SecNumCloud / ANSSI** : si l'analyse de risque l'exige (ou exigence client/assurance), viser un hébergement
-  **SecNumCloud** (Orange Cloud Avenue SecNum qualifié juil. 2025) — « impermeabilité aux lois extra-UE ».
-- **ISO 27001:2022 — sous-traitance** : la mission relève de **A.5.19–A.5.23** (relations fournisseurs,
-  sécurité dans les accords, gestion de la chaîne d'appro, surveillance des services fournisseurs, sécurité
-  cloud). Pour l'**audit Stage 2 (nov. 2026)** : contrat + DPA + SLA + clauses de réversibilité + **revue
-  périodique du prestataire** (preuve attendue). Le co-managé bien tracé devient une **preuve** de A.5.7
-  (threat-intel) et A.8.16 (surveillance 24/7), pas un trou.
-- **Clauses contractuelles clés** : SLA de notification (< 30 min critique), périmètre exact des actions
-  autorisées la nuit (réversibles uniquement, escalade pour le destructif — aligné ANSSI R9), propriété et
-  **réversibilité des données/règles**, droit d'audit, localisation, sous-traitants, plan de sortie.
+The internal build already covers **75–85% of the MXDR tech** (cf. review). Co-managed adds no tech —
+it adds **3 things not reproducible in-house at reasonable cost**:
+
+1. **Human eyes at night/WE.** The alternative (scenario D) costs **5–10×** more for a real staffed
+   24/7; the light on-call (E) is cheaper but **degraded** (latency, fatigue, and above all
+   **worsens the key-person risk** — the opposite of what we just fixed with the git P0).
+2. **Threat-intel/dark-web** that you cannot produce alone (no Bitdefender Labs / no CTI team).
+3. **A risk transfer** (and, at some providers, a cyber warranty — but reserved for large fleets;
+   OMNITECH at 150 workstations does not reach the thresholds of $1M warranties).
+
+**Opportunity cost:** every euro put into a *full-stack* MDR that duplicates Graylog/ESET is wasted.
+The spend is justified **only** on the delta (night/WE + CTI). Hence the §1 perimeter.
 
 ---
 
-## 7. Recommandation, critères de bascule, questions RFP
+## 6. Compliance & sovereignty
 
-**Recommandation :**
-1. Lancer un **RFP restreint** auprès de **3–4 acteurs FR/UE agnostiques** : **Orange Cyberdefense, Advens,
-   Intrinsec, Sekoia** (+ éventuellement un BYO US comme étalon de prix : ReliaQuest/Binary Defense).
-2. Périmètre RFP = **co-managé nuit/WE + CTI/dark-web** (scénario B+C), **BYO-SIEM/EDR** (lecture de Graylog +
-   ESET, pas de réingestion forcée), réversibilité forte.
-3. Budget de cadrage : **~45 000 – 100 000 €/an** `[EST]`, à confirmer par devis. Exclure d'emblée le MDR
-   full-stack et tout fournisseur exigeant son agent.
+- **GDPR / location**: logs contain personal data (logins, IPs, M365 UPNs). Require **processing and
+  storage in the EU**, signed DPA, list of further subprocessors, no transfer outside the EU without
+  guarantees. → clearly favors **FR/EU** players; **disqualifies** a US/non-EU SOC without a residency
+  option (Bitdefender as-is).
+- **SecNumCloud / ANSSI**: if the risk analysis requires it (or a client/insurance requirement), aim for
+  **SecNumCloud** hosting (Orange Cloud Avenue SecNum qualified Jul. 2025) — "imperviousness to extra-EU laws."
+- **ISO 27001:2022 — subcontracting**: the mission falls under **A.5.19–A.5.23** (supplier relationships,
+  security in agreements, supply-chain management, monitoring of supplier services, cloud security).
+  For the **Stage 2 audit (Nov. 2026)**: contract + DPA + SLA + reversibility clauses + **periodic
+  review of the provider** (expected evidence). A well-tracked co-managed setup becomes **evidence** of
+  A.5.7 (threat-intel) and A.8.16 (24/7 monitoring), not a gap.
+- **Key contractual clauses**: notification SLA (< 30 min critical), exact scope of authorized nighttime
+  actions (reversible only, escalation for the destructive — aligned with ANSSI R9), ownership and
+  **reversibility of data/rules**, right to audit, location, subprocessors, exit plan.
 
-**Critères de déclenchement (quand signer) :**
-- Incident(s) nocturne(s)/week-end **détecté(s) trop tard** dans l'exploitation réelle (mesure MTTD hors heures
-  ouvrées) ; **ou**
-- Exigence **client/assurance/audit** d'un SOC 24/7 ; **ou**
-- Impossibilité RH d'assurer une astreinte interne soutenable (le scénario E confirmé intenable).
-*À défaut, rester en build-only + alerting (l'amélioration des notifications réduit déjà le risque de rater un
-signal) et réévaluer après 6 mois d'exploitation.*
+---
 
-**Questions ouvertes pour l'appel d'offres :**
-- Consommez-vous **nos** alertes Graylog / notre EDR ESET **par API**, ou imposez-vous votre stack/agent ?
-- Tarification **exacte** : par poste, par serveur (multiplicateur ?), au volume de logs (socle Go inclus ?) ?
-- Modèle **nuit/WE** : palier dédié, ou prix d'un 24/7 plein ? Remise réelle pour couverture partielle ?
-- **Localisation** des données et des analystes ? SecNumCloud disponible ?
-- Périmètre des **actions autonomes** la nuit ? Process d'escalade < 30 min ?
-- **CTI/dark-web** : inclus ou option ? Quelles sources, quel reporting réinjectable dans Graylog/SOAR ?
-- **Réversibilité** : restitution/destruction des données, préavis, plan de sortie ?
+## 7. Recommendation, switch criteria, RFP questions
+
+**Recommendation:**
+1. Launch a **restricted RFP** to **3–4 agnostic FR/EU players**: **Orange Cyberdefense, Advens,
+   Intrinsec, Sekoia** (+ possibly a US BYO as a price benchmark: ReliaQuest/Binary Defense).
+2. RFP perimeter = **co-managed night/WE + CTI/dark-web** (scenario B+C), **BYO-SIEM/EDR** (reading from
+   Graylog + ESET, no forced re-ingestion), strong reversibility.
+3. Framing budget: **~€45,000 – €100,000/yr** `[EST]`, to be confirmed by quote. Rule out from the start
+   the full-stack MDR and any provider requiring its agent.
+
+**Trigger criteria (when to sign):**
+- Nighttime/weekend incident(s) **detected too late** in real operations (measure of after-hours MTTD);
+  **or**
+- **Client/insurance/audit** requirement for a 24/7 SOC; **or**
+- HR inability to sustain an in-house on-call rotation (scenario E confirmed untenable).
+*Failing that, stay in build-only + alerting (the improved notifications already reduce the risk of
+missing a signal) and reassess after 6 months of operation.*
+
+**Open questions for the RFP:**
+- Do you consume **our** Graylog alerts / our ESET EDR **via API**, or do you impose your stack/agent?
+- **Exact** pricing: per workstation, per server (multiplier?), by log volume (included GB baseline?)?
+- **Night/WE** model: dedicated tier, or the price of a full 24/7? Real discount for partial coverage?
+- **Location** of the data and the analysts? SecNumCloud available?
+- Scope of **autonomous actions** at night? Escalation process < 30 min?
+- **CTI/dark-web**: included or option? Which sources, what reporting re-injectable into Graylog/SOAR?
+- **Reversibility**: return/destruction of data, notice, exit plan?
 
 ---
 
 ## Caveats
 
-- **Aucun prix ici n'est un devis OMNITECH.** Les `[EST]` sont des fourchettes de planification dérivées de
-  benchmarks publics 2026 et d'hypothèses de dimensionnement (multiplicateur serveur, volume de logs) ; l'écart
-  réel peut être large. **Sortir 2–3 devis avant tout budget engagé.**
-- Les **prix FR/UE sont opaques** (devis only) : la comparaison souveraine se fait sur le modèle et la
-  conformité, pas (encore) sur le prix affiché.
-- La **garantie cyber** (1 M$ Bitdefender) ne s'applique qu'aux gros parcs (≥1000 endpoints) — **non
-  pertinente** pour OMNITECH ; le transfert de risque passe plutôt par une **assurance cyber** classique.
-- Le marché MDR évolue vite (consolidation, BYO en hausse) : revérifier offres/résidence au moment du RFP.
+- **No price here is an OMNITECH quote.** The `[EST]` are planning ranges derived from public 2026
+  benchmarks and sizing assumptions (server multiplier, log volume); the real gap can be wide. **Get 2–3
+  quotes before any committed budget.**
+- **FR/EU prices are opaque** (quote only): the sovereign comparison is done on model and compliance,
+  not (yet) on the displayed price.
+- The **cyber warranty** ($1M Bitdefender) only applies to large fleets (≥1000 endpoints) — **not
+  relevant** for OMNITECH; the risk transfer rather goes through a classic **cyber insurance**.
+- The MDR market moves fast (consolidation, BYO on the rise): re-verify offers/residency at the time of
+  the RFP.
 
 ## Sources
 - [MDR Cost 2026 (mdrcost.com)](https://mdrcost.com/) · [MDR Providers — pricing](https://mdrproviders.io/pricing) · [MDR pricing 2026 (learn)](https://mdrproviders.io/learn/mdr-pricing)
 - [Bitdefender MDR review 2026 (mdrproviders.io)](https://mdrproviders.io/providers/bitdefender-mdr) · [Bitdefender Managed Services](https://www.bitdefender.com/en-us/business/services/managed-services)
 - [Arctic Wolf MDR](https://arcticwolf.com/solutions/managed-detection-and-response/) · [Sophos MDR review 2026 (zerometric)](https://zerometric.net/review/sophos-mdr/) · [UnderDefense — MDR pricing](https://underdefense.com/mdr-pricing/)
 - [Co-managed security services (SonicWall)](https://www.sonicwall.com/glossary/comanaged-security-services) · [Huntress — MDR/EDR vendors 2026](https://www.huntress.com/cybersecurity-insights/managed-detection-response-vendors)
-- [MSSP souverains (Journal du Net)](https://www.journaldunet.com/cybersecurite/1541445-mssp-souverains-qui-sont-ils/) · [SOC managés France 2026 (SOC Monitor)](https://soc-monitor.com/acteurs/soc-manages-france/) · [Intrinsec — SOC 24/7](https://www.intrinsec.com/en/soc-securite-operationnelle/) · [Sekoia.io](https://www.sekoia.io/en/homepage/) · [Orange — souveraineté/SecNumCloud](https://www.orange.com/en/whats-up/european-digital-sovereignty-orange-steps-face-growing-threats)
+- [Sovereign MSSP (Journal du Net)](https://www.journaldunet.com/cybersecurite/1541445-mssp-souverains-qui-sont-ils/) · [Managed SOCs France 2026 (SOC Monitor)](https://soc-monitor.com/acteurs/soc-manages-france/) · [Intrinsec — SOC 24/7](https://www.intrinsec.com/en/soc-securite-operationnelle/) · [Sekoia.io](https://www.sekoia.io/en/homepage/) · [Orange — sovereignty/SecNumCloud](https://www.orange.com/en/whats-up/european-digital-sovereignty-orange-steps-face-growing-threats)
 
 ---
-*Document de chiffrage/décision — à verser au dossier (REG_016) et à lier au registre des fournisseurs /
-analyse de risque pour l'audit ISO 27001 Stage 2 (nov. 2026).*
+*Pricing/decision document — to be filed in the dossier (REG_016) and linked to the supplier register /
+risk analysis for the ISO 27001 Stage 2 audit (Nov. 2026).*

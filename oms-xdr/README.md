@@ -1,51 +1,51 @@
-# OMS-XDR — Couche XDR de corrélation/réponse au-dessus de Graylog
+# OMS-XDR — Correlation/response XDR layer on top of Graylog
 
-Surcouche qui transforme le Graylog d'OMNITECH (10.33.220.10) en plateforme
-de **détection corrélée + remédiation guidée + réponse**, sur le modèle
-fonctionnel d'un MXDR du marché, sans dépendance à un SOC externe.
+An overlay that turns OMNITECH's Graylog (10.33.220.10) into a platform for
+**correlated detection + guided remediation + response**, on the functional
+model of a market MXDR, with no dependency on an external SOC.
 
-> ⚠️ **État intégré (18/06/2026) — voir [`docs/INTEGRATION-OMNITECH.md`](docs/INTEGRATION-OMNITECH.md).**
-> Le déploiement réel sur la VM SIEM diffère du design d'origine décrit plus bas :
-> **lecture via OpenSearch local** (pas l'API REST), **réinjection GELF HTTP 12201**
-> (input existant, pas un 12222 dédié), **LLM `qwen2.5:3b` local**, **blocage FortiGate
-> délégué au feed `omni-soar`** (pas d'API FortiOS directe). Token Graylog non requis.
+> ⚠️ **Integrated state (18/06/2026) — see [`docs/INTEGRATION-OMNITECH.md`](docs/INTEGRATION-OMNITECH.md).**
+> The actual deployment on the SIEM VM differs from the original design described below:
+> **read via local OpenSearch** (not the REST API), **GELF HTTP reinjection on 12201**
+> (existing input, not a dedicated 12222), **local `qwen2.5:3b` LLM**, **FortiGate blocking
+> delegated to the `omni-soar` feed** (no direct FortiOS API). Graylog token not required.
 
 ---
 
-## 1. Ce que fait Bitdefender MXDR — et comment on le reproduit
+## 1. What Bitdefender MXDR does — and how we reproduce it
 
-Bitdefender MXDR = bundle **GravityZone Defense XDR** (capteurs endpoint /
-identité / réseau / productivité) + service **MDR** (SOC 24/7, *Pre-approved
-Actions*). Le moteur de corrélation et de réinjection repose d'ailleurs sur
-**Streams & Pipelines** — la terminologie Graylog : reproduire ces fonctions
-sur ton SIEM est donc parfaitement aligné.
+Bitdefender MXDR = the **GravityZone Defense XDR** bundle (endpoint /
+identity / network / productivity sensors) + the **MDR** service (24/7 SOC, *Pre-approved
+Actions*). The correlation and reinjection engine actually relies on
+**Streams & Pipelines** — Graylog terminology: reproducing these functions
+on your SIEM is therefore perfectly aligned.
 
-| Capacité MXDR | Équivalent OMS-XDR (auto-hébergé) | État |
+| MXDR capability | OMS-XDR equivalent (self-hosted) | Status |
 |---|---|---|
-| Capteurs multi-domaines (endpoint, réseau, identité, productivité) | FortiAnalyzer→Graylog (réseau/FW), Winlogbeat (Windows/identité), Sysmon (planifié), ESET EDR, FortiClient, + **netscan** (découverte réseau) | Existant + ajout netscan |
-| Corrélation cross-domaine → incidents | `correlation.py` + `rules.yaml` (signaux atomiques → chaînes d'attaque par entité) | **Livré** |
-| Mapping MITRE ATT&CK | techniques/tactiques portées par chaque règle | **Livré** |
-| Network Attack Defense (scan, brute force, latéral) | signaux FortiGate IPS + `netscan` (delta de ports) | **Livré** |
-| Threat intel / enrichissement | lookup tables Graylog (abuse.ch/OTX/MISP) à brancher | À brancher |
-| Détection comportementale / anomalies | seuils par entité aujourd'hui ; anomalies stats à ajouter | Partiel |
-| Triage analyste / lisibilité (résumé IA) | `enrich.py` via **Ollama/Mistral 7B** (narration FR) | **Livré** |
-| Remédiation guidée | `remediation.py` (playbooks par technique, spécifiques OMNITECH) | **Livré** |
-| Pre-approved Actions (isoler hôte, neutraliser compte) | `responder.py` (FortiGate / AD / NinjaOne) — **dry-run par défaut** | **Livré** |
-| SOC 24/7 humain | non reproductible en interne — compensé par notification Teams + timers | N/A |
-| Reporting | dashboards Graylog sur le stream « OMS-XDR Incidents » | À construire |
+| Multi-domain sensors (endpoint, network, identity, productivity) | FortiAnalyzer→Graylog (network/FW), Winlogbeat (Windows/identity), Sysmon (planned), ESET EDR, FortiClient, + **netscan** (network discovery) | Existing + netscan added |
+| Cross-domain correlation → incidents | `correlation.py` + `rules.yaml` (atomic signals → attack chains per entity) | **Delivered** |
+| MITRE ATT&CK mapping | techniques/tactics carried by each rule | **Delivered** |
+| Network Attack Defense (scan, brute force, lateral) | FortiGate IPS signals + `netscan` (port delta) | **Delivered** |
+| Threat intel / enrichment | Graylog lookup tables (abuse.ch/OTX/MISP) to be wired in | To be wired |
+| Behavioral detection / anomalies | per-entity thresholds today; statistical anomalies to be added | Partial |
+| Analyst triage / readability (AI summary) | `enrich.py` via **Ollama/Mistral 7B** (FR narration) | **Delivered** |
+| Guided remediation | `remediation.py` (per-technique playbooks, OMNITECH-specific) | **Delivered** |
+| Pre-approved Actions (isolate host, neutralize account) | `responder.py` (FortiGate / AD / NinjaOne) — **dry-run by default** | **Delivered** |
+| Human 24/7 SOC | not reproducible in-house — compensated by Teams notification + timers | N/A |
+| Reporting | Graylog dashboards on the "OMS-XDR Incidents" stream | To be built |
 
-Différence assumée : pas d'analystes humains 24/7. La valeur reproductible est
-la **corrélation + l'enrichissement + la remédiation outillée**, sous contrôle RSSI.
+Accepted difference: no human analysts 24/7. The reproducible value is
+**correlation + enrichment + tooled remediation**, under CISO control.
 
 ---
 
 ## 2. Architecture
 
 ```
- Sources                Graylog (SIEM)            OMS-XDR (cette couche)
+ Sources                Graylog (SIEM)            OMS-XDR (this layer)
  ───────                ──────────────            ──────────────────────
  FortiAnalyzer ─CEF1514─┐
- Winlogbeat   ─────────►│  streams + pipelines ──► correlation.py (signaux→règles)
+ Winlogbeat   ─────────►│  streams + pipelines ──► correlation.py (signals→rules)
  Sysmon/NinjaOne ──────►│                              │
  oms-netscan ──GELF────►│                              ├─► enrich.py (Ollama)
                         │                              ├─► remediation.py (playbooks)
@@ -53,11 +53,11 @@ la **corrélation + l'enrichissement + la remédiation outillée**, sous contrô
                         │   stream "OMS-XDR Incidents"  └─► Teams (Power Automate)
 ```
 
-Choix d'architecture : **pas de plugin Java Graylog**. L'API plugin 6.x est
-instable entre versions et ne permet ni l'orchestration de réponse ni
-l'appel LLM. Une couche externe découplée (interrogation REST + réinjection
-GELF) est plus robuste, versionnable et testable — et survit aux montées de
-version Graylog.
+Architecture choice: **no Graylog Java plugin**. The 6.x plugin API is
+unstable between versions and allows neither response orchestration nor
+LLM calls. A decoupled external layer (REST query + GELF
+reinjection) is more robust, versionable and testable — and survives Graylog
+version upgrades.
 
 ---
 
@@ -77,16 +77,16 @@ python3 -m venv /opt/oms-xdr/.venv
 sudo apt install -y nmap jq        # netscan + setup
 ```
 
-Renseigner `/etc/oms-xdr/oms-xdr.env` (idéalement injection depuis Vaultwarden).
-Le token Graylog s'utilise en Basic `token:token`.
+Fill in `/etc/oms-xdr/oms-xdr.env` (ideally injected from Vaultwarden).
+The Graylog token is used in Basic `token:token`.
 
 ```bash
-# Provisionner l'input GELF + le stream incidents
+# Provision the GELF input + the incidents stream
 export OMS_GRAYLOG_TOKEN=********
-bash deploy/setup_graylog.sh        # reporter les stream IDs dans config.yaml
+bash deploy/setup_graylog.sh        # copy the stream IDs into config.yaml
 ```
 
-Activer les timers :
+Enable the timers:
 
 ```bash
 sudo cp deploy/*.service deploy/*.timer /etc/systemd/system/
@@ -94,7 +94,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now oms-xdr.timer oms-netscan-quick.timer oms-netscan-full.timer
 ```
 
-Test manuel :
+Manual test:
 
 ```bash
 sudo -u oms-xdr OMS_GRAYLOG_TOKEN=$OMS_GRAYLOG_TOKEN \
@@ -103,32 +103,31 @@ sudo -u oms-xdr OMS_GRAYLOG_TOKEN=$OMS_GRAYLOG_TOKEN \
 
 ---
 
-## 4. Sécurité de la réponse automatique
+## 4. Automatic response safety
 
-`response.dry_run: true` par défaut : **aucune** action sur l'infra. Les actions
-sont seulement journalisées comme recommandations et écrites dans l'incident.
-Pour activer le containment réel, basculer `dry_run: false` **et** le flag
-`auto_*` ciblé. Recommandation : démarrer en dry-run 2–3 semaines, valider le
-taux de faux positifs sur le stream incidents, puis activer sélectivement
-`auto_block_fortigate` avant les actions AD/endpoint.
+`response.dry_run: true` by default: **no** action on the infra. Actions
+are only logged as recommendations and written into the incident.
+To enable real containment, flip `dry_run: false` **and** the targeted
+`auto_*` flag. Recommendation: start in dry-run for 2–3 weeks, validate the
+false-positive rate on the incidents stream, then selectively enable
+`auto_block_fortigate` before the AD/endpoint actions.
 
 ---
 
-## 5. Périmètre de scan — cadrage légal/ISO
+## 5. Scan scope — legal/ISO framing
 
-`netscan` ne balaie que les réseaux **internes OMNITECH** déclarés dans
-`netscan.targets`. À aligner sur le plan d'adressage réel (Oméga/Ivry/Lançon)
-et à tracer dans le SMSI (REG_016) comme activité de découverte d'actifs
-(rattachable A.5.9 inventaire, A.8.8 gestion des vulnérabilités).
+`netscan` only sweeps the **internal OMNITECH** networks declared in
+`netscan.targets`. To be aligned with the real addressing plan (Oméga/Ivry/Lançon)
+and traced in the ISMS (REG_016) as an asset-discovery activity
+(mappable to A.5.9 inventory, A.8.8 vulnerability management).
 
 ---
 
 ## 6. Roadmap
 
-1. **Threat intel** : lookup tables Graylog (abuse.ch, OTX) → signal `S_C2_IOC`.
-2. **Sysmon** : déploiement NinjaOne → signaux process/réseau fins (T1055, T1003).
-3. **Anomalies** : baseline EWMA par entité (volumes 4625/flux) au lieu de seuils fixes.
-4. **Vuln correlation** : croiser netscan ↔ POL_018 (matrice CVSS) pour prioriser.
-5. **Dashboard** « OMS-XDR Incidents » + rapport hebdo planifié.
-6. **Runbooks AD signés** (WinRM/NinjaOne) pour `disable_ad_account`/`force_pwd_reset`.
-```
+1. **Threat intel**: Graylog lookup tables (abuse.ch, OTX) → `S_C2_IOC` signal.
+2. **Sysmon**: NinjaOne deployment → fine-grained process/network signals (T1055, T1003).
+3. **Anomalies**: per-entity EWMA baseline (4625 volumes/flows) instead of fixed thresholds.
+4. **Vuln correlation**: cross netscan ↔ POL_018 (CVSS matrix) to prioritize.
+5. **Dashboard** "OMS-XDR Incidents" + scheduled weekly report.
+6. **Signed AD runbooks** (WinRM/NinjaOne) for `disable_ad_account`/`force_pwd_reset`.

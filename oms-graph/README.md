@@ -1,59 +1,59 @@
-# oms-graph — Jumeau d'attaque / analyse d'exposition (OMNI Sentinel, Pilier 2)
+# oms-graph — Attack twin / exposure analysis (OMNI Sentinel, Pillar 2)
 
-Reconstruit **passivement** (sans sonde AD, depuis la télémétrie de logons déjà
-collectée par le SIEM) un graphe d'**exposition** de l'environnement OMNITECH, et le
-met au service de la **défense** : prioriser le durcissement et **pré-positionner les
-leurres** (Pilier 1 / déception).
+**Passively** reconstructs (without an AD probe, from the logon telemetry already
+collected by the SIEM) an **exposure** graph of the OMNITECH environment, and puts
+it in the service of **defence**: prioritising hardening and **pre-positioning
+decoys** (Pillar 1 / deception).
 
-## Modèle
-Deux arêtes dérivées des journaux Windows :
-- **HasSession** (`compte → hôte`) : EID 4624, LogonType 2/10/11 (console/RDP/cached) —
-  *les identifiants du compte sont exposés sur cet hôte*.
-- **AdminTo** (`compte → hôte`) : EID 4672 (privilèges spéciaux) — *le compte est
-  administrateur de cet hôte*.
+## Model
+Two edges derived from Windows logs:
+- **HasSession** (`account → host`): EID 4624, LogonType 2/10/11 (console/RDP/cached) —
+  *the account's credentials are exposed on this host*.
+- **AdminTo** (`account → host`): EID 4672 (special privileges) — *the account is
+  administrator of this host*.
 
-Graphe de **propagation de compromission** : contrôler un hôte ⇒ moissonner les comptes
-qui y ont une session ; contrôler un compte ⇒ contrôler les hôtes qu'il administre.
+**Compromise-propagation** graph: control a host ⇒ harvest the accounts
+that have a session on it; control an account ⇒ control the hosts it administers.
 
-## Calculs
-- **Exposition des joyaux** : quels pieds-à-terre atteignent chaque joyau (DC, SIEM,
-  Veeam, PKI, fichiers, vSphere) et en combien de sauts.
-- **Chokepoints** : comptes/hôtes sur le plus de chemins → où durcir / poser un leurre.
-- **Rayon de souffle** : si X compromis, combien d'hôtes/joyaux deviennent atteignables.
-- **Points uniques** : comptes de gestion (RMM/sync) admin partout → PAM + tiering.
-- **Recommandations de leurres** : où poser un leurre (88) pour intercepter le plus de
-  chemins, avec marquage « déjà couvert » via le registre `omni-deception`.
+## Computations
+- **Crown-jewel exposure**: which footholds reach each jewel (DC, SIEM,
+  Veeam, PKI, files, vSphere) and in how many hops.
+- **Chokepoints**: accounts/hosts on the most paths → where to harden / place a decoy.
+- **Blast radius**: if X is compromised, how many hosts/jewels become reachable.
+- **Single points**: management accounts (RMM/sync) admin everywhere → PAM + tiering.
+- **Decoy recommendations**: where to place a decoy (88) to intercept the most
+  paths, with "already covered" tagging via the `omni-deception` register.
 
-## Anti-bruit (mesuré)
-Comptes machine (`*$`), système et virtuels (DWM/UMFD/MSSQL$/IUSR…) exclus ; comptes de
-gestion ubiquitaires (admin de > N hôtes) sortis des chemins latéraux et rapportés à part
-(sinon ils relient tout à tout).
+## Noise reduction (measured)
+Machine accounts (`*$`), system and virtual accounts (DWM/UMFD/MSSQL$/IUSR…) excluded;
+ubiquitous management accounts (admin of > N hosts) removed from lateral paths and reported
+separately (otherwise they link everything to everything).
 
 ## Usage
 ```
 oms-graph analyze [--window 14d] [--top N] [--push]
 ```
-Sans `--push` : affiche + écrit l'artefact JSON (`/var/lib/omni-mobile/attack-graph.json`,
-lu par la console SOC). Avec `--push` : réinjecte les chemins en GELF
-(`event_source=attack_path`, **informationnel, sans alert_tag** — c'est une posture, pas
-une alerte). Lecture **passive** ; n'exécute **aucune** action sur le SI.
+Without `--push`: displays + writes the JSON artefact (`/var/lib/omni-mobile/attack-graph.json`,
+read by the SOC console). With `--push`: re-injects the paths in GELF
+(`event_source=attack_path`, **informational, no alert_tag** — this is a posture, not
+an alert). **Passive** read; performs **no** action on the IS.
 
-Déploiement : `89-attack-graph.sh` (venv + config `/etc/oms-graph` + timers +
-routage vers « OMNI - Interne SIEM »).
+Deployment: `89-attack-graph.sh` (venv + `/etc/oms-graph` config + timers +
+routing to "OMNI - Interne SIEM").
 
-## Pilier 3 — Réponse graduée (`respond`)
+## Pillar 3 — Graduated response (`respond`)
 ```
 oms-graph respond [--simulate ENTITE] [--push] [--execute]
 ```
-Compose un **leurre déclenché** (Pilier 1) avec le **contexte du jumeau** (Pilier 2) →
-un **plan de réponse gradé** (critique/élevé/modéré). `--simulate <hôte|compte>` =
-tabletop (compromission hypothétique). `--push` = audit GELF `event_source=sentinel_response`.
-`--execute` = approbation d'exécution.
+Composes a **triggered decoy** (Pillar 1) with the **twin's context** (Pillar 2) →
+a **graded response plan** (critical/high/moderate). `--simulate <host|account>` =
+tabletop (hypothetical compromise). `--push` = GELF audit `event_source=sentinel_response`.
+`--execute` = execution approval.
 
-**Garde-fous (par construction)** : DRY-RUN par défaut. Exécution réelle seulement si
+**Safeguards (by design)**: DRY-RUN by default. Real execution only if
 `response.dry_run=false` + `auto_<action>=true` + env **`OMNI_SENTINEL_ARM=1`** +
-`--execute` (quadruple verrou). **Périmètre** : seules les actions sur l'infra OMNITECH
-propre sont armables (isolation NinjaOne, blocage FortiGate via feed omni-soar) ; les
-actions **identitaires (AD) restent toujours en recommandation** ; toute cible
-**co-managée** (invissys) est forcée en dry-run. Le timer `oms-graph-respond` grade +
-audite **sans jamais exécuter** (pas de `--execute`) — l'exécution est **manuelle et approuvée**.
+`--execute` (quadruple lock). **Scope**: only actions on OMNITECH's own
+infrastructure are armable (NinjaOne isolation, FortiGate blocking via the omni-soar feed);
+**identity (AD) actions always remain recommendations only**; any
+**co-managed** target (invissys) is forced into dry-run. The `oms-graph-respond` timer grades +
+audits **without ever executing** (no `--execute`) — execution is **manual and approved**.

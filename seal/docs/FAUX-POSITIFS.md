@@ -1,146 +1,146 @@
-# SEAL — faux positifs et angles morts (revue du 16/07/2026)
+# SEAL — false positives and blind spots (review of 16/07/2026)
 
-Revue menée sur **7 jours de collecte réelle** (995 k accès, 717 k alarmes, 5,4 k audit)
-et recoupée en SQL sur les vues sources. Elle a révélé autant de **faux négatifs**
-(détections incapables de se déclencher) que de faux positifs.
+Review conducted on **7 days of real collection** (995 k accesses, 717 k alarms, 5.4 k audit)
+and cross-checked in SQL against the source views. It revealed as many **false negatives**
+(detections unable to trigger) as false positives.
 
-## Résumé
+## Summary
 
-| Règle | Constat | Correctif |
+| Rule | Finding | Fix |
 |-------|---------|-----------|
-| **ALM-001** | **Morte** : `IS_INHIBITED` (bit) n'atteint jamais Graylog | vue SQL en varchar + requête tolérante |
-| **ALM-004** | **Morte** : `IS_INTEMPESTIVE` est une *date*, pas un booléen | `_exists_:IS_INTEMPESTIVE` |
-| **ALM-001/003/004** | Regroupement sur `target_object_label` (vide à 100 % dans l'index) | `trigger_code` (99,40 %) + `seal_site` |
-| **ACC-006** | Regroupement sur un champ vide (0,00 % dans l'index) → alerte « refus sur UNE porte » déclenchée par 5 portes différentes | `target_object_id` (99,44 %) + `seal_site` |
-| **ACC-007** | Idem + entité vide sur les événements hors badge | `+ _exists_:badge_number` |
-| **EVT-002** | 76 alertes/7 j, **100 % faux positifs** | **parquée** + remplacée par DQ-001 |
+| **ALM-001** | **Dead**: `IS_INHIBITED` (bit) never reaches Graylog | SQL view in varchar + tolerant query |
+| **ALM-004** | **Dead**: `IS_INTEMPESTIVE` is a *date*, not a boolean | `_exists_:IS_INTEMPESTIVE` |
+| **ALM-001/003/004** | Grouping on `target_object_label` (100% empty in the index) | `trigger_code` (99.40%) + `seal_site` |
+| **ACC-006** | Grouping on an empty field (0.00% in the index) → alert "denial on ONE door" triggered by 5 different doors | `target_object_id` (99.44%) + `seal_site` |
+| **ACC-007** | Same + empty entity on the non-badge events | `+ _exists_:badge_number` |
+| **EVT-002** | 76 alerts/7 d, **100% false positives** | **parked** + replaced by DQ-001 |
 
-## Le piège central : les colonnes `bit` sont perdues
+## The central pitfall: `bit` columns are lost
 
-`IS_INHIBITED` est renseignée sur **703 641 lignes / 703 641** en base. Elle est
-présente sur **0 document** dans l'index.
+`IS_INHIBITED` is populated on **703,641 rows / 703,641** in the database. It is
+present on **0 documents** in the index.
 
-Cause : Logstash convertit `bit` → booléen, et son output GELF **n'émet pas les
-champs valant `false`**. Le champ n'atteint jamais Graylog. La détection ALM-001
-(inhibition d'alarme, T1562.001) interrogeait donc `IS_INHIBITED:true` sur un
-champ inexistant : **structurellement incapable de se déclencher**, tout en
-apparaissant verte et active dans la console. Même mécanisme sur `IS_PRIORITY`.
+Cause: Logstash converts `bit` → boolean, and its GELF output **does not emit the
+fields valued `false`**. The field never reaches Graylog. The ALM-001 detection
+(alarm inhibition, T1562.001) was therefore querying `IS_INHIBITED:true` on a
+nonexistent field: **structurally unable to trigger**, while
+appearing green and active in the console. Same mechanism on `IS_PRIORITY`.
 
-Les colonnes `varchar` passent — c'est pourquoi `off_hours`, qui vaut la *chaîne*
-`'true'`/`'false'`, fonctionne depuis le début.
+The `varchar` columns pass through — which is why `off_hours`, which holds the *string*
+`'true'`/`'false'`, has worked from the start.
 
-> **Règle à retenir : ne jamais exposer une colonne `bit` à une vue SIEM.**
-> La caster en varchar (`'true'`/`'false'`). Vérification :
+> **Rule to remember: never expose a `bit` column to a SIEM view.**
+> Cast it to varchar (`'true'`/`'false'`). Verification:
 > ```sql
 > SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-> WHERE TABLE_NAME LIKE 'vw_Seal%' AND DATA_TYPE = 'bit';   -- doit être vide
+> WHERE TABLE_NAME LIKE 'vw_Seal%' AND DATA_TYPE = 'bit';   -- must be empty
 > ```
 
-Correctif : `/tmp/sql/01_fix_bit_columns.sql` (= `seal/sql/03_vw_SealAlarms_SIEM.sql`),
-à jouer sur **QA et OMEGA**.
+Fix: `/tmp/sql/01_fix_bit_columns.sql` (= `seal/sql/03_vw_SealAlarms_SIEM.sql`),
+to be run on **QA and OMEGA**.
 
-## Le deuxième piège : regrouper sur un champ non peuplé
+## The second pitfall: grouping on an unpopulated field
 
-Graylog ne signale pas un `group_by` sur un champ absent : il range tout dans un
-bucket unique **`(Empty Value)`**. Visible dans les alertes réelles :
+Graylog does not flag a `group_by` on an absent field: it puts everything into a
+single **`(Empty Value)`** bucket. Visible in the real alerts:
 `ACC-006 ... : (Empty Value)`.
 
-Taux de remplissage mesurés. **Deux populations différentes**, à ne pas confondre :
-la vue SQL décrit la base QA ; l'index décrit ce qui est réellement collecté (très
-majoritairement OMEGA). Un champ peut être renseigné dans l'une et absent de
-l'autre — c'est le cas de `target_object_label`.
+Measured fill rates. **Two different populations**, not to be confused:
+the SQL view describes the QA database; the index describes what is actually collected (very
+largely OMEGA). A field may be populated in one and absent from
+the other — this is the case of `target_object_label`.
 
-| Champ | Vue SQL (QA) | Index (tous sites) | Verdict |
+| Field | SQL view (QA) | Index (all sites) | Verdict |
 |-------|--------------|--------------------|---------|
-| `target_object_label` | 8,5 % (81 918 / 961 303) | **0,00 %** (1 / 997 481) | inutilisable |
-| `target_object_id` | 99,5 % (956 154 / 961 303) | **99,44 %** (991 930 / 997 481) | clé des accès |
-| `trigger_code` *(alarmes)* | 100 % (703 641 / 703 641) | **99,40 %** (715 015 / 719 303) | clé des alarmes, et **lisible** |
-| `badge_number` | 0,04 % (399 / 961 303) | 0,13 % (1 328 / 997 481) | garde `_exists_` obligatoire |
-| `identity_matricule` | 0,009 % (87 / 961 303) | 0,01 % (74 / 997 481) | pont badge→AD vide |
+| `target_object_label` | 8.5% (81,918 / 961,303) | **0.00%** (1 / 997,481) | unusable |
+| `target_object_id` | 99.5% (956,154 / 961,303) | **99.44%** (991,930 / 997,481) | access key |
+| `trigger_code` *(alarms)* | 100% (703,641 / 703,641) | **99.40%** (715,015 / 719,303) | alarm key, and **readable** |
+| `badge_number` | 0.04% (399 / 961,303) | 0.13% (1,328 / 997,481) | mandatory `_exists_` guard |
+| `identity_matricule` | 0.009% (87 / 961,303) | 0.01% (74 / 997,481) | badge→AD bridge empty |
 
-> **Piège de mesure** (rencontré, corrigé le 16/07) : par défaut OpenSearch plafonne
-> `hits.total` à **10 000**, alors que les agrégations comptent juste. Rapporter un
-> `exists` à ce total plafonné produit des pourcentages faux — jusqu'à dépasser
-> 100 %. Toujours interroger avec `"track_total_hits": true`.
+> **Measurement pitfall** (encountered, fixed on 16/07): by default OpenSearch caps
+> `hits.total` at **10,000**, whereas the aggregations count exactly. Comparing an
+> `exists` against this capped total produces wrong percentages — even exceeding
+> 100%. Always query with `"track_total_hits": true`.
 
-### `seal_site` : sain pour la détection, trompeur en historique
+### `seal_site`: sound for detection, misleading in history
 
-| Fenêtre | Présence de `seal_site` (accès) |
+| Window | Presence of `seal_site` (accesses) |
 |---------|-------------------------------|
-| 24 dernières heures | **99,91 %** |
-| 7 derniers jours | 98,80 % |
-| Tout l'historique | **3,63 %** |
+| Last 24 hours | **99.91%** |
+| Last 7 days | 98.80% |
+| All history | **3.63%** |
 
-Le champ est posé par Logstash (`add_field`) : le backfill historique, antérieur,
-ne le porte pas. Les détections travaillent sur des fenêtres de 10 à 15 minutes,
-donc sur une couverture proche de 100 % — regrouper par `seal_site` est sûr. En
-revanche, **toute analyse rétrospective par site sur l'historique est faussée** :
-96 % des événements anciens n'ont pas de site.
+The field is set by Logstash (`add_field`): the historical backfill, being earlier,
+does not carry it. The detections work on windows of 10 to 15 minutes,
+therefore on a coverage close to 100% — grouping by `seal_site` is safe. On the
+other hand, **any retrospective analysis by site over the history is skewed**:
+96% of the old events have no site.
 
-`trigger_code` porte les libellés réels : `ENTREE PRINCIPALE`, `LECT COURSIVE R+1`,
-`PORTAIL OMEGA`. Les alertes d'alarme nomment désormais le lieu.
+`trigger_code` carries the real labels: `ENTREE PRINCIPALE`, `LECT COURSIVE R+1`,
+`PORTAIL OMEGA`. The alarm alerts now name the location.
 
-Conséquence concrète d'ACC-006 avant correctif : **toutes** les portes des **deux**
-sites tombaient dans le même bucket. Cinq refus sur cinq portes différentes
-déclenchaient « accès refusés répétés sur *une* porte » — et l'alerte ne disait pas
-laquelle. Faux positif sur le fond *et* sur la forme.
+Concrete consequence of ACC-006 before the fix: **all** the doors of **both**
+sites fell into the same bucket. Five denials on five different doors
+triggered "repeated denied accesses on *one* door" — and the alert did not say
+which one. False positive both in substance *and* in form.
 
-## EVT-002 : la règle qui mesurait autre chose que ce qu'elle disait
+## EVT-002: the rule that measured something other than what it claimed
 
-`EVT-002` (« badge inconnu/non enrôlé présenté ») testait
-`NOT _exists_:identity_matricule`. Or `identity_matricule` n'est renseigné que sur
-**87 lignes / 961 303** (0,009 %). La règle ne mesurait donc pas l'inconnu d'un
-badge mais **le remplissage du pont badge → AD** : tout badge légitime remontait
-« inconnu ». 76 alertes en 7 jours sur 39 badges, 100 % de faux positifs.
+`EVT-002` ("unknown/unenrolled badge presented") tested
+`NOT _exists_:identity_matricule`. But `identity_matricule` is only populated on
+**87 rows / 961,303** (0.009%). The rule therefore did not measure the unknown status of a
+badge but **the fill rate of the badge → AD bridge**: any legitimate badge came back
+as "unknown". 76 alerts in 7 days on 39 badges, 100% false positives.
 
-Aucun réglage de seuil ne corrige cela. **Mais la cause n'est pas celle que
-j'avais annoncée** : j'ai d'abord écrit qu'il manquait dans SEAL un identifiant
-rattachable à l'annuaire, et que c'était donc une décision de gouvernance. C'est
-**faux**. La colonne `milf.BADGES.MATRICULE` existe, et les vues la récupèrent
-bien (`b.MATRICULE AS identity_matricule`). Mesure du 16/07 sur
-`vw_SealIdentity_SIEM` :
+No threshold tuning corrects this. **But the cause is not the one I had
+announced**: I first wrote that SEAL lacked an identifier
+attachable to the directory, and that it was therefore a governance decision. That is
+**false**. The `milf.BADGES.MATRICULE` column exists, and the views do retrieve it
+correctly (`b.MATRICULE AS identity_matricule`). Measurement of 16/07 on
+`vw_SealIdentity_SIEM`:
 
-| Site | Porteurs | Avec matricule | Avec badge |
+| Site | Holders | With matricule | With badge |
 |------|---------:|---------------:|-----------:|
-| **OMEGA (production)** | 443 | **187 (42,2 %)** | 439 (99,1 %) |
-| QA | 98 | 19 (19,4 %) | 61 (62,2 %) |
+| **OMEGA (production)** | 443 | **187 (42.2%)** | 439 (99.1%) |
+| QA | 98 | 19 (19.4%) | 61 (62.2%) |
 
-Le pont fonctionne donc pour **deux badges sur cinq** en production. `EVT-002`
-se déclenchait sur les 58 % restants — des porteurs légitimes dont le matricule
-n'a simplement pas été saisi. C'est un **remplissage de référentiel**, pas une
-impossibilité technique : le taux monte dès que la saisie est complétée côté
-gestion des badges.
+The bridge therefore works for **two badges out of five** in production. `EVT-002`
+was triggering on the remaining 58% — legitimate holders whose matricule
+simply was not entered. This is a **reference-data fill issue**, not a technical
+impossibility: the rate rises as soon as the entry is completed on the
+badge management side.
 
-D'où le choix : parquer `EVT-002` et **mesurer** le taux avec `DQ-001` au lieu
-d'alerter dessus.
+Hence the choice: park `EVT-002` and **measure** the rate with `DQ-001` instead of
+alerting on it.
 
-Réactivation, une fois le pont peuplé :
+Reactivation, once the bridge is populated:
 ```bash
 seal/detections/provision_detections.py --apply --enable-parked
 ```
 
-## Volumétrie après correctif (simulée sur les 7 jours réels)
+## Volumetry after fix (simulated on the 7 real days)
 
-| Règle | Alertes / 7 j | Entités |
+| Rule | Alerts / 7 d | Entities |
 |-------|---------------|---------|
-| ACC-006 | 10 | 2 portes |
+| ACC-006 | 10 | 2 doors |
 | ACC-007 | 15 | 11 badges |
-| ALM-003 | 0 | aucune effraction sur la période |
-| ALM-004 | 0 | aucun flood sur la période |
+| ALM-003 | 0 | no break-in over the period |
+| ALM-004 | 0 | no flood over the period |
 | DQ-001 | 4 | 1 site |
-| EVT-002 *(avant)* | **203** | 43 badges |
+| EVT-002 *(before)* | **203** | 43 badges |
 
-## Ce qui reste un angle mort assumé
+## What remains an accepted blind spot
 
-- **Acquittement des alarmes** : `ACK_EVEN_ID` n'est renseigné que sur **6 lignes /
-  703 641**. Le SLA ne mesure donc pas « alarme non *acquittée* » mais « alarme
-  restée *ouverte* » (dernier statut `LIV`). C'est exploitable, mais il faut le
-  dire : la dimension acquittement n'existe pas dans la donnée.
-- **Pont badge → AD** : renseigné à **42 % en production** (187/443 porteurs).
-  Ni impossible, ni cassé : à compléter par la saisie. Voir EVT-002.
-- **`IS_INHIBITED` vaut `false` partout** : aucune alarme n'a jamais été inhibée.
-  Le correctif ne déclenchera donc rien aujourd'hui — il garantit qu'une
-  inhibition **future** sera vue.
-- **88 % du flux « accès » est technique** (`SEM97`, perte de connexion lecteur,
-  `event_outcome:na`) : sans incidence sur les détections (filtrées sur
-  grant/deny), mais cela gonfle le stream et les tableaux de bord.
+- **Alarm acknowledgment**: `ACK_EVEN_ID` is only populated on **6 rows /
+  703,641**. The SLA therefore does not measure "unacknowledged alarm" but "alarm
+  left *open*" (last status `LIV`). This is usable, but it must be
+  stated: the acknowledgment dimension does not exist in the data.
+- **Badge → AD bridge**: populated at **42% in production** (187/443 holders).
+  Neither impossible nor broken: to be completed by data entry. See EVT-002.
+- **`IS_INHIBITED` is `false` everywhere**: no alarm has ever been inhibited.
+  The fix will therefore trigger nothing today — it guarantees that a
+  **future** inhibition will be seen.
+- **88% of the "access" flow is technical** (`SEM97`, reader connection loss,
+  `event_outcome:na`): no impact on the detections (filtered on
+  grant/deny), but it inflates the stream and the dashboards.

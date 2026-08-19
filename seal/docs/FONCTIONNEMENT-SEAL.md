@@ -1,116 +1,116 @@
-# Fonctionnement de SEAL — hyperviseur de sûreté physique
+# How SEAL works — physical security hypervisor
 
-**OMNITECH SECURITY — document d'analyse technique**
-**Version 2 — 16/07/2026** (v1 corrigée : voir [§0](#0-ce-qui-change-depuis-la-v1))
-Destination : support à la rédaction de la documentation ISO 27001 du contrôle
-d'accès (A.5.15 contrôle d'accès, A.5.16 gestion des identités, A.5.18 droits
-d'accès, A.7.1 à A.7.4 sécurité physique).
+**OMNITECH SECURITY — technical analysis document**
+**Version 2 — 16/07/2026** (v1 corrected: see [§0](#0-what-changes-since-v1))
+Intended use: support for drafting the ISO 27001 documentation for access
+control (A.5.15 access control, A.5.16 identity management, A.5.18 access
+rights, A.7.1 to A.7.4 physical security).
 
-Base d'analyse : extraction du **modèle complet de la base SEAL de production**
-(`BX-SEAL-OMEGA`, 16/07/2026) — **358 tables**, 1 255 vues, relations, volumes, et
-contenu des tables de paramétrage. Complétée par 1,7 M d'événements réellement
-collectés dans le SIEM.
+Analysis basis: extraction of the **complete model of the production SEAL database**
+(`BX-SEAL-OMEGA`, 16/07/2026) — **358 tables**, 1,255 views, relationships, volumes, and
+the content of the configuration tables. Supplemented by 1.7 M events actually
+collected in the SIEM.
 
 ---
 
-## 0. Ce qui change depuis la v1
+## 0. What changes since v1
 
-La v1 avait été écrite sans accès à la base (le compte de service ne voit que
-5 vues). L'extraction de la structure réelle **contredit trois de ses conclusions**.
-Elles sont corrigées ici.
+v1 had been written without access to the database (the service account only sees
+5 views). The extraction of the real structure **contradicts three of its conclusions**.
+They are corrected here.
 
-| Point | v1 (déduit) | v2 (mesuré) |
+| Point | v1 (inferred) | v2 (measured) |
 |---|---|---|
-| **Pont badge → AD** | « la donnée n'existe pas, c'est une dette de gouvernance » | **Faux.** `milf.BADGES` contient une colonne `MATRICULE` sur **443 badges**, reliée aux fiches par `SEAL_ID`. La donnée existe : elle n'est simplement pas exposée au SIEM. |
-| **Topologie des zones** | hiérarchie « parent → enfant » avec libellé et classe | **Faux.** La table n'a que 4 colonnes et utilise un `hierarchyid` SQL Server. Aucun libellé, aucune classe. Mon script de vue zone était bâti sur une hypothèse erronée. |
-| **Restrictions horaires** | « SEAL sait gérer des semaines types » | **Vrai en théorie, inutilisé en pratique** : il n'existe que **2 semaines types** — `Toujours` et `Jamais`. |
+| **Badge → AD bridge** | "the data does not exist, it is a governance debt" | **False.** `milf.BADGES` contains a `MATRICULE` column on **443 badges**, linked to the records by `SEAL_ID`. The data exists: it is simply not exposed to the SIEM. |
+| **Zone topology** | "parent → child" hierarchy with label and class | **False.** The table has only 4 columns and uses a SQL Server `hierarchyid`. No label, no class. My zone view script was built on a wrong assumption. |
+| **Time restrictions** | "SEAL can manage typical weeks" | **True in theory, unused in practice**: there are only **2 typical weeks** — `Toujours` and `Jamais`. |
 
-C'est la raison d'être de l'extraction : trois affirmations plausibles, trois
-démentis. Le reste de la v1 est confirmé.
+This is the raison d'être of the extraction: three plausible assertions, three
+refutations. The rest of v1 is confirmed.
 
 ---
 
-## Sommaire
+## Contents
 
 1. [Architecture](#1-architecture)
-2. [Le modèle du contrôle d'accès](#2-le-modèle-du-contrôle-daccès)
-3. [Identités et badges](#3-identités-et-badges)
-4. [Administration : comptes, profils, traçabilité](#4-administration--comptes-profils-traçabilité)
-5. [Zones et topologie](#5-zones-et-topologie)
-6. [Le second système d'accès : ENIQ / DOMBOX](#6-le-second-système-daccès--eniq--dombox)
-7. [Le vocabulaire des événements](#7-le-vocabulaire-des-événements)
-8. [Constats pour l'ISO 27001](#8-constats-pour-liso-27001)
-9. [Ce qui reste à établir](#9-ce-qui-reste-à-établir)
+2. [The access control model](#2-the-access-control-model)
+3. [Identities and badges](#3-identities-and-badges)
+4. [Administration: accounts, profiles, traceability](#4-administration-accounts-profiles-traceability)
+5. [Zones and topology](#5-zones-and-topology)
+6. [The second access system: ENIQ / DOMBOX](#6-the-second-access-system-eniq--dombox)
+7. [The event vocabulary](#7-the-event-vocabulary)
+8. [Findings for ISO 27001](#8-findings-for-iso-27001)
+9. [What remains to be established](#9-what-remains-to-be-established)
 
 ---
 
 ## 1. Architecture
 
-SEAL est l'hyperviseur de sûreté physique d'OMNITECH : contrôle d'accès (badges,
-portes, lecteurs), détection d'intrusion (capteurs, secteurs, mise en service),
-interface vidéo, et supervision du matériel.
+SEAL is OMNITECH's physical security hypervisor: access control (badges,
+doors, readers), intrusion detection (sensors, sectors, arming),
+video interface, and hardware supervision.
 
-**Deux instances**, bases SQL Server autonomes, sans référentiel commun :
+**Two instances**, standalone SQL Server databases, without a common repository:
 
-| Site | Machine | Rôle |
+| Site | Machine | Role |
 |---|---|---|
-| QA | `bx-qa-seal-vm` | recette |
-| Production | `bx-seal-omega` | exploitation |
+| QA | `bx-qa-seal-vm` | acceptance |
+| Production | `bx-seal-omega` | operations |
 
-**Chaîne de terrain** : les **UTL/ULS** (unités de traitement locales) portent
-l'intelligence : elles décident des accès localement, à partir d'une copie des
-droits qui leur est descendue, et remontent leurs événements au serveur. Le
-serveur SEAL n'est donc pas dans le chemin de décision — une porte continue de
-fonctionner s'il tombe.
+**Field chain**: the **UTL/ULS** (local processing units) carry
+the intelligence: they decide accesses locally, from a copy of the
+rights pushed down to them, and report their events to the server. The
+SEAL server is therefore not in the decision path — a door keeps
+working if it goes down.
 
-Cette architecture est visible dans le modèle : `AccessControl.Deployments` (40
-déploiements), `dbo.ULS_STATS` (état, versions, clés, capacité), `dbo.ACTION`
-(file d'actions à descendre), `dbo.ULS_KEYS` (9 clés cryptographiques), et
-`dbo.DROITS_ATOMIQUES_EFFECTIFS` — la table des droits **calculés** qui alimente
-les contrôleurs.
+This architecture is visible in the model: `AccessControl.Deployments` (40
+deployments), `dbo.ULS_STATS` (state, versions, keys, capacity), `dbo.ACTION`
+(queue of actions to push down), `dbo.ULS_KEYS` (9 cryptographic keys), and
+`dbo.DROITS_ATOMIQUES_EFFECTIFS` — the table of **computed** rights that feeds
+the controllers.
 
-### Ordres de grandeur (production, 16/07/2026)
+### Orders of magnitude (production, 16/07/2026)
 
-| Objet | Volume |
+| Object | Volume |
 |---|--:|
-| Objets physiques (`Objet_Fiche`) | **932** |
-| Portes déployées (`AccessControl.DeployedDoors`) | **165** |
-| Fiches / porteurs (`FICHE`) | **443** |
-| Badges Millefeuille (`milf.BADGES`) | **443** |
-| Droits saisis (`DROIT`) | **493** |
-| Droits effectifs calculés (`DROITS_ATOMIQUES_EFFECTIFS`) | **1 903** |
-| Conflits de droits (`DROITS_ATOMIQUES_CONFLITS`) | **32** |
-| Groupes de badges (`GROUPEFICHE`) | **57** |
-| Comptes console (`UTILISATEUR`) | **59** |
-| Profils console (`T_PROFILS`) | **14** |
-| Permissions DOMBOX (`ENIQ_INTERFACE_PERMISSIONS`) | **4 169** |
-| Événements historisés (`EVENEMENTS_HIST`) | 504 792 |
-| Alarmes historisées (`ALARMES_HIST`) | 285 598 |
-| Passages (`T_PASSAGES`) | 45 623 |
+| Physical objects (`Objet_Fiche`) | **932** |
+| Deployed doors (`AccessControl.DeployedDoors`) | **165** |
+| Records / holders (`FICHE`) | **443** |
+| Millefeuille badges (`milf.BADGES`) | **443** |
+| Rights entered (`DROIT`) | **493** |
+| Effective rights computed (`DROITS_ATOMIQUES_EFFECTIFS`) | **1,903** |
+| Rights conflicts (`DROITS_ATOMIQUES_CONFLITS`) | **32** |
+| Badge groups (`GROUPEFICHE`) | **57** |
+| Console accounts (`UTILISATEUR`) | **59** |
+| Console profiles (`T_PROFILS`) | **14** |
+| DOMBOX permissions (`ENIQ_INTERFACE_PERMISSIONS`) | **4,169** |
+| Historized events (`EVENEMENTS_HIST`) | 504,792 |
+| Historized alarms (`ALARMES_HIST`) | 285,598 |
+| Passages (`T_PASSAGES`) | 45,623 |
 
 ---
 
-## 2. Le modèle du contrôle d'accès
+## 2. The access control model
 
-### 2.1 Le squelette réel
+### 2.1 The real skeleton
 
 ```
     FICHE (443)                                    Objet_Fiche (932)
-   « le porteur »                                « portes, lecteurs, UTL… »
+   "the holder"                                 "doors, readers, UTL…"
         │                                                │
         ├──── LIENFICHEGROUPE (608) ────► GROUPEFICHE (57)
-        │     LIENFICHEGROUPE_ENABLE          « groupe de badges »
-        │     (dates + heures d'activation)    porte les règles d'usage :
-        │                                      maître-clés, immunités APB/APT,
-        │                                      mode escorte, semaine type
+        │     LIENFICHEGROUPE_ENABLE          "badge group"
+        │     (dates + activation hours)      carries the usage rules:
+        │                                      master keys, APB/APT immunities,
+        │                                      escort mode, typical week
         │                                                │
         └──────────────► DROIT (493) ◄──────────────────┘
-                    fiche × porte × semaine type
-                    × date début / date fin
+                    record × door × typical week
+                    × start date / end date
                                 │
-                                ▼  (calcul)
-              DROITS_ATOMIQUES_EFFECTIFS (1 903)
-        le droit RÉEL, descendu dans les contrôleurs :
+                                ▼  (computation)
+              DROITS_ATOMIQUES_EFFECTIFS (1,903)
+        the REAL right, pushed down into the controllers:
         FICH_ID, PORT_ID, SEM_TYPE_ID, NUMPHYS, JOURS_FERIES,
         MAITRE_CLES, IMMUN_DBLBDG, MODE_ESCORTE, IMMUN_APB,
         IMMUN_APT, VIP_OTIS, ENTREE, SORTIE, CODE_PIN_UTL
@@ -118,77 +118,77 @@ les contrôleurs.
                     DROITS_ATOMIQUES_CONFLITS (32)
 ```
 
-**Distinction essentielle pour la documentation** : SEAL sépare le droit **saisi**
-(`DROIT`, ce qu'un gestionnaire a demandé) du droit **effectif**
-(`DROITS_ATOMIQUES_EFFECTIFS`, ce que le contrôleur applique réellement, après
-fusion des droits directs, des droits hérités des groupes, et arbitrage des
-conflits). C'est le second qui fait foi. Une revue des droits ISO doit porter sur
-lui — et sur les **32 conflits** détectés.
+**Essential distinction for the documentation**: SEAL separates the **entered** right
+(`DROIT`, what a manager requested) from the **effective** right
+(`DROITS_ATOMIQUES_EFFECTIFS`, what the controller actually applies, after
+merging direct rights, rights inherited from groups, and arbitration of
+conflicts). It is the latter that is authoritative. An ISO rights review must focus on
+it — and on the **32 conflicts** detected.
 
-Le système matérialise même les conflits dans une table dédiée
-(`DROITS_ATOMIQUES_CONFLITS`, avec les colonnes `ON_MAITRE_CLES`, `ON_IMMUN_APB`,
-`ON_MODE_ESCORTE`…) : il sait dire *sur quel attribut* deux sources de droit se
-contredisent. C'est un point fort à valoriser.
+The system even materializes the conflicts in a dedicated table
+(`DROITS_ATOMIQUES_CONFLITS`, with the columns `ON_MAITRE_CLES`, `ON_IMMUN_APB`,
+`ON_MODE_ESCORTE`…): it can say *on which attribute* two sources of a right
+contradict each other. This is a strength to highlight.
 
-### 2.2 Les dimensions du droit
+### 2.2 The dimensions of a right
 
-Chaque droit effectif porte :
+Each effective right carries:
 
-| Dimension | Colonne | Enjeu ISO |
+| Dimension | Column | ISO stake |
 |---|---|---|
-| Qui | `FICH_ID` / `NUMPHYS` | A.5.16 |
-| Où | `PORT_ID` | A.5.15 |
-| Quand (semaine) | `SEM_TYPE_ID` | A.5.15 |
-| Quand (dates) | `DROI_APPLI_DATE_DEB/FIN`, `ENTREE`/`SORTIE` | A.5.18 |
-| Jours fériés | `JOURS_FERIES` | A.5.15 |
-| **Passe général** | `MAITRE_CLES` | **privilège élevé** |
-| Anti-pass-back | `IMMUN_APB` | dérogation |
-| Anti-timeback | `IMMUN_APT` | dérogation |
-| Double badgeage | `IMMUN_DBLBDG` | dérogation |
-| Mode escorte | `MODE_ESCORTE` | A.7.2 visiteurs |
-| Code PIN | `CODE_PIN_UTL` | second facteur |
+| Who | `FICH_ID` / `NUMPHYS` | A.5.16 |
+| Where | `PORT_ID` | A.5.15 |
+| When (week) | `SEM_TYPE_ID` | A.5.15 |
+| When (dates) | `DROI_APPLI_DATE_DEB/FIN`, `ENTREE`/`SORTIE` | A.5.18 |
+| Public holidays | `JOURS_FERIES` | A.5.15 |
+| **Master pass** | `MAITRE_CLES` | **high privilege** |
+| Anti-pass-back | `IMMUN_APB` | exception |
+| Anti-timeback | `IMMUN_APT` | exception |
+| Double badging | `IMMUN_DBLBDG` | exception |
+| Escort mode | `MODE_ESCORTE` | A.7.2 visitors |
+| PIN code | `CODE_PIN_UTL` | second factor |
 
-### 2.3 Le temps : une capacité réelle, non utilisée
+### 2.3 Time: a real capability, unused
 
 ```
-dbo.SEMAINE_TYPE     →  2 lignes : « Toujours », « Jamais »
-dbo.JOUR_TYPE        →  2 lignes : « Tout au long du jour », « A aucun moment »
-dbo.TRANCHE_HORAIRE  →  8 lignes
+dbo.SEMAINE_TYPE     →  2 rows: "Toujours", "Jamais"
+dbo.JOUR_TYPE        →  2 rows: "Tout au long du jour", "A aucun moment"
+dbo.TRANCHE_HORAIRE  →  8 rows
 ```
 
-SEAL sait modéliser des semaines types, des jours types et des tranches horaires.
-**Aucune restriction horaire réelle n'est configurée** : les deux seules semaines
-types sont les deux extrêmes. Un droit est donc « toujours valable » ou « jamais ».
+SEAL can model typical weeks, typical days and time slots.
+**No real time restriction is configured**: the only two typical
+weeks are the two extremes. A right is therefore "always valid" or "never".
 
-Conséquence directe : **le contrôle d'accès d'OMNITECH n'applique aucune
-restriction temporelle**. Le champ `off_hours` calculé dans le SIEM est une
-information *observée* (l'accès a eu lieu hors heures ouvrées), pas une règle
-*appliquée* par SEAL. C'est un écart à documenter — ou une décision à assumer
-explicitement.
+Direct consequence: **OMNITECH's access control applies no
+time restriction**. The `off_hours` field computed in the SIEM is
+*observed* information (the access occurred outside working hours), not a rule
+*applied* by SEAL. This is a gap to document — or a decision to own
+explicitly.
 
 ---
 
-## 3. Identités et badges
+## 3. Identities and badges
 
-### 3.1 Deux modules superposés
+### 3.1 Two superimposed modules
 
-SEAL gère les porteurs à deux niveaux :
+SEAL manages holders at two levels:
 
-- **`dbo.FICHE` (443)** — le noyau : `FICH_NUM`, `FICH_STATUT` (VAL/ANN),
-  `FICH_DATCREATION`, `IS_ANONYMOUS`, `MOTIF_ANNULATION`. Les attributs métier
-  sont en champs personnalisables (`CHAMP_FICHE` 88 définitions →
-  `DETAIL_FICHE` 18 605 valeurs, dont la photo `DFIC_VAL_PHOTO`).
-- **`milf.BADGES` (443)** — le module **Millefeuille** : le badge « physique »
-  et administratif, avec un modèle bien plus riche.
+- **`dbo.FICHE` (443)** — the core: `FICH_NUM`, `FICH_STATUT` (VAL/ANN),
+  `FICH_DATCREATION`, `IS_ANONYMOUS`, `MOTIF_ANNULATION`. The business attributes
+  are in customizable fields (`CHAMP_FICHE` 88 definitions →
+  `DETAIL_FICHE` 18,605 values, including the photo `DFIC_VAL_PHOTO`).
+- **`milf.BADGES` (443)** — the **Millefeuille** module: the "physical"
+  and administrative badge, with a much richer model.
 
-Les deux sont reliés par `milf.BADGES.SEAL_ID → dbo.FICHE.FICH_ID`.
+The two are linked by `milf.BADGES.SEAL_ID → dbo.FICHE.FICH_ID`.
 
-### 3.2 `milf.BADGES` contient le matricule — correction majeure
+### 3.2 `milf.BADGES` contains the matricule — major correction
 
-`milf.BADGES` porte, entre autres :
+`milf.BADGES` carries, among others:
 
 ```
-MATRICULE varchar(32)        ← l'identifiant attendu
+MATRICULE varchar(32)        ← the expected identifier
 BADGE_NUMBER / PHYSICAL_NUMBER / SERIAL_NUMBER / ALTERNATE_BADGE_NUMBER
 LAST_NAME / FIRST_NAME / BIRTH_DATE / PHOTO / QR_CODE
 STATUS / ACCESS_FROM / ACCESS_TO / CANCELED / CANCELATION_REASON
@@ -199,392 +199,392 @@ SECURITY_TRAINING_VALIDITY_END
 AUTHORIZATION_ATEX_EXPIRATION / _NH3_ / _ZSAR_ / _N1_N2_ / _HARBOUR_AGENT_
 ```
 
-**Deux conséquences importantes.**
+**Two important consequences.**
 
-1. **Le pont badge → AD n'est ni impossible, ni cassé : le référentiel est à
-   moitié rempli.** Mesuré le 16/07 sur `vw_SealIdentity_SIEM` :
+1. **The badge → AD bridge is neither impossible nor broken: the reference data is
+   half filled.** Measured on 16/07 on `vw_SealIdentity_SIEM`:
 
-   | Site | Porteurs | Avec `MATRICULE` | Avec `badge_number` |
+   | Site | Holders | With `MATRICULE` | With `badge_number` |
    |------|---------:|-----------------:|--------------------:|
-   | **OMEGA (production)** | 443 | **187 (42,2 %)** | 439 (99,1 %) |
-   | QA | 98 | 19 (19,4 %) | 61 (62,2 %) |
+   | **OMEGA (production)** | 443 | **187 (42.2%)** | 439 (99.1%) |
+   | QA | 98 | 19 (19.4%) | 61 (62.2%) |
 
-   Deux conclusions antérieures étaient **fausses**, et il faut le dire :
-   - « il manque un identifiant rattachable à l'annuaire, c'est de la
-     gouvernance » → **faux** : `MATRICULE` existe sur 443 badges ;
-   - « la vue exposée au SIEM ne va pas chercher le matricule » → **faux
-     également** : `05_vw_SealIdentity_SIEM.sql` et `02_vw_SealEvents_SIEM.sql`
-     font bien `b.MATRICULE AS identity_matricule`.
+   Two earlier conclusions were **false**, and it must be said:
+   - "an identifier attachable to the directory is missing, it is a
+     governance matter" → **false**: `MATRICULE` exists on 443 badges;
+   - "the view exposed to the SIEM does not fetch the matricule" → **also
+     false**: `05_vw_SealIdentity_SIEM.sql` and `02_vw_SealEvents_SIEM.sql`
+     do perform `b.MATRICULE AS identity_matricule`.
 
-   Le fait réel : **le matricule n'est saisi que pour 42 % des porteurs** en
-   production. Le pont fonctionne donc pour deux badges sur cinq. Ce n'est ni un
-   correctif technique, ni une impossibilité — c'est un **remplissage de
-   référentiel** (saisie), qui relève de la gestion des badges.
+   The real fact: **the matricule is only entered for 42% of the holders** in
+   production. The bridge therefore works for two badges out of five. This is neither a
+   technical fix nor an impossibility — it is a **reference-data
+   fill** (data entry), which falls under badge management.
 
-   Conséquence sur la détection : `EVT-002` (« badge inconnu ») se déclenchait sur
-   les 58 % restants, tous légitimes — d'où son parcage et son remplacement par
-   `DQ-001`, qui mesure et suit ce taux au lieu d'alerter dessus. Dès que le taux
-   de remplissage sera significatif, `EVT-002` se réactive en une commande.
+   Consequence for detection: `EVT-002` ("unknown badge") was triggering on
+   the remaining 58%, all legitimate — hence its parking and its replacement by
+   `DQ-001`, which measures and tracks this rate instead of alerting on it. As soon as the
+   fill rate is significant, `EVT-002` is reactivated with a single command.
 
-2. **SEAL porte des données d'habilitation métier** : visite médicale, formation
-   sécurité, habilitations ATEX / NH3 / ZSAR / N1-N2, agent portuaire, avec leurs
-   dates d'expiration. Ce n'est pas un simple contrôle d'accès : c'est un
-   référentiel d'habilitations. À citer dans le périmètre du SMSI.
+2. **SEAL carries business authorization data**: medical checkup, security
+   training, ATEX / NH3 / ZSAR / N1-N2 authorizations, harbour agent, with their
+   expiration dates. This is not a mere access control: it is an
+   authorization repository. To be mentioned in the ISMS scope.
 
-> `milf.LinkTagBadge` (lien badge ↔ tag) est **vide (0 ligne)**. Le lien entre les
-> deux modules passe donc par `SEAL_ID`, pas par cette table.
+> `milf.LinkTagBadge` (badge ↔ tag link) is **empty (0 rows)**. The link between the
+> two modules therefore goes through `SEAL_ID`, not through this table.
 
-### 3.3 Cycle de vie
+### 3.3 Life cycle
 
-`FICH_STATUT` : `VAL` (valide) / `ANN` (annulé), avec `MOTIF_ANNULATION` et
-`DESCRIPTION_ANNULATION`. Côté Millefeuille : `CREATED` → `PRINTED` → `ENCODED` →
-`DELIVERED` → `RENEWED` (avec `RENEW_COUNTER`) → `CANCELED`.
+`FICH_STATUT`: `VAL` (valid) / `ANN` (canceled), with `MOTIF_ANNULATION` and
+`DESCRIPTION_ANNULATION`. On the Millefeuille side: `CREATED` → `PRINTED` → `ENCODED` →
+`DELIVERED` → `RENEWED` (with `RENEW_COUNTER`) → `CANCELED`.
 
-Le passage `ANN → VAL` (réactivation d'un badge retiré) est possible et surveillé
-par le SIEM (détection ACC-004). La procédure devrait l'interdire.
+The transition `ANN → VAL` (reactivation of a withdrawn badge) is possible and monitored
+by the SIEM (detection ACC-004). The procedure should forbid it.
 
-### 3.4 La synchronisation LDAP existe et n'est pas utilisée
+### 3.4 LDAP synchronization exists and is not used
 
 ```
-dbo.SYNCHRO_LDAP           → 0 ligne
-dbo.SYNCHRO_LDAP_OBJET     → 0 ligne
-dbo.SYNCHRO_LDAP_HISTORY   → 0 ligne
-dbo.LDAP_PRE_SYNCHRO_TABLE → 0 ligne
+dbo.SYNCHRO_LDAP           → 0 rows
+dbo.SYNCHRO_LDAP_OBJET     → 0 rows
+dbo.SYNCHRO_LDAP_HISTORY   → 0 rows
+dbo.LDAP_PRE_SYNCHRO_TABLE → 0 rows
 ```
 
-Pourtant `CHAMP_FICHE` possède les colonnes `CFIC_LDAP_ATTRIBUT`,
-`CFIC_LDAP_ATTRIBUT_WAY`, `CFIC_LDAP_MUST_CREATE`, et il existe un profil
-« Profil par défaut import LDAP ». **La capacité de synchroniser SEAL avec
-l'annuaire est installée mais inexploitée.** C'est probablement le vrai levier
-pour fiabiliser le lien identité ↔ badge, et pour aligner les départs.
+Yet `CHAMP_FICHE` has the columns `CFIC_LDAP_ATTRIBUT`,
+`CFIC_LDAP_ATTRIBUT_WAY`, `CFIC_LDAP_MUST_CREATE`, and there is a
+"Profil par défaut import LDAP" profile. **The capability to synchronize SEAL with
+the directory is installed but unused.** It is probably the real lever
+to make the identity ↔ badge link reliable, and to align departures.
 
 ---
 
-## 4. Administration : comptes, profils, traçabilité
+## 4. Administration: accounts, profiles, traceability
 
-### 4.1 Les 14 profils réels
+### 4.1 The 14 real profiles
 
-| ID | Profil | Admin | Exclu Admin | Exclu Exploit. | Exclu API |
+| ID | Profile | Admin | Admin excl. | Ops excl. | API excl. |
 |---|---|---|---|---|---|
-| 1 | **ADMINISTRATEURS** | **oui** | non | non | non |
-| 3 | Opérateurs vidéo | non | non | non | oui |
-| 4 | Relecteurs vidéo | non | non | non | oui |
-| 5 | GESTIONNAIRES DE BADGES | non | oui | non | oui |
-| 7 | UTILISATEUR STANDARD | non | oui | non | oui |
-| 8 | CLÉS DES ULS | non | oui | non | **non** |
-| 9 | OPERATEUR ALARME *(« En test »)* | non | oui | non | oui |
-| 10 | Sonorisation | non | oui | oui | oui |
-| 11 | DFS#TRS#GRP#MAGIC1 *(« DR Saran gestion badge »)* | non | oui | non | oui |
-| 14 | Profil par défaut import LDAP | non | oui | oui | oui |
-| 15 | UTILISATEUR AVEC API | non | oui | non | **non** |
-| 16 | SEAL To Agrid | non | oui | oui | **non** |
-| 17 | **TESTGBE** | non | oui | non | oui |
-| 18 | **PGE Test droit sur éqpt** | non | oui | non | oui |
+| 1 | **ADMINISTRATEURS** | **yes** | no | no | no |
+| 3 | Opérateurs vidéo | no | no | no | yes |
+| 4 | Relecteurs vidéo | no | no | no | yes |
+| 5 | GESTIONNAIRES DE BADGES | no | yes | no | yes |
+| 7 | UTILISATEUR STANDARD | no | yes | no | yes |
+| 8 | CLÉS DES ULS | no | yes | no | **no** |
+| 9 | OPERATEUR ALARME *("En test")* | no | yes | no | yes |
+| 10 | Sonorisation | no | yes | yes | yes |
+| 11 | DFS#TRS#GRP#MAGIC1 *("DR Saran gestion badge")* | no | yes | no | yes |
+| 14 | Profil par défaut import LDAP | no | yes | yes | yes |
+| 15 | UTILISATEUR AVEC API | no | yes | no | **no** |
+| 16 | SEAL To Agrid | no | yes | yes | **no** |
+| 17 | **TESTGBE** | no | yes | no | yes |
+| 18 | **PGE Test droit sur éqpt** | no | yes | no | yes |
 
-Trois observations pour la revue des droits (A.5.18) :
+Three observations for the rights review (A.5.18):
 
-- **Deux profils de test en production** : `TESTGBE` (17) et `PGE Test droit sur
-  éqpt` (18). Le second a été créé le 26/06/2026 et modifié cinq fois le jour même.
-- Un profil au nom non parlant : `DFS#TRS#GRP#MAGIC1`.
-- Un profil marqué « En test » : `OPERATEUR ALARME` (9).
+- **Two test profiles in production**: `TESTGBE` (17) and `PGE Test droit sur
+  éqpt` (18). The second was created on 26/06/2026 and modified five times the same day.
+- A profile with an unclear name: `DFS#TRS#GRP#MAGIC1`.
+- A profile marked "En test": `OPERATEUR ALARME` (9).
 
-Le modèle de droits console est : `UTILISATEUR` → `PRO_ID` (profil) →
-`T_FONC_PROFIL` (105 associations) → `FONCTIONNALITES` (**219** fonctionnalités
-atomiques). Des surcharges par utilisateur existent (`FONC_UTIL`, 404 lignes) —
-donc **un compte peut avoir des droits hors de son profil** : la revue ne peut pas
-se limiter aux profils.
+The console rights model is: `UTILISATEUR` → `PRO_ID` (profile) →
+`T_FONC_PROFIL` (105 associations) → `FONCTIONNALITES` (**219** atomic
+functionalities). Per-user overrides exist (`FONC_UTIL`, 404 rows) —
+so **an account may have rights outside its profile**: the review cannot
+be limited to the profiles.
 
-`ALLOWED_PROFILE_SWITCHES` : 2 bascules autorisées (1 → 18, 8 → 9). Un
-administrateur peut basculer vers le profil de test 18.
+`ALLOWED_PROFILE_SWITCHES`: 2 authorized switches (1 → 18, 8 → 9). An
+administrator can switch to test profile 18.
 
-### 4.2 Le stockage des mots de passe console
+### 4.2 Storage of console passwords
 
-`dbo.UTILISATEUR` (59 comptes) contient **à la fois** :
+`dbo.UTILISATEUR` (59 accounts) contains **both**:
 
 ```
-UTI_PASSW      varchar(50)  NOT NULL   ← champ mot de passe en clair (héritage)
-UTI_SEED       varbinary(32)           ← sel
-UTI_HASH_PASS  varbinary(32)           ← empreinte
+UTI_PASSW      varchar(50)  NOT NULL   ← cleartext password field (legacy)
+UTI_SEED       varbinary(32)           ← salt
+UTI_HASH_PASS  varbinary(32)           ← hash
 PASS_HASH_ALGO varchar(50)
 ```
 
-La colonne `UTI_PASSW` est **NOT NULL** : elle contient forcément quelque chose sur
-les 59 comptes. C'est un héritage classique (ancienne authentification) qui devrait
-être vide ou neutralisé. **Contenu non lu** (interdit par le contrat d'interface) —
-mais l'existence même de cette colonne mérite une question à l'éditeur, et une
-vérification. `UTILISATEUR_PASSWORD_HISTORY` (15 lignes) stocke, elle, sel + hash.
+The `UTI_PASSW` column is **NOT NULL**: it necessarily contains something on
+the 59 accounts. It is a classic legacy (old authentication) that should
+be empty or neutralized. **Content not read** (forbidden by the interface contract) —
+but the very existence of this column deserves a question to the vendor, and a
+verification. `UTILISATEUR_PASSWORD_HISTORY` (15 rows) does store salt + hash.
 
-Le modèle gère par ailleurs correctement : `UTI_IS_LOCKEDOUT`,
-`UTI_FAILED_PASSWORD_ATTEMPT_COUNT` (+ fenêtre), `UTI_MUST_RENEW_PWD`,
+The model also correctly handles: `UTI_IS_LOCKEDOUT`,
+`UTI_FAILED_PASSWORD_ATTEMPT_COUNT` (+ window), `UTI_MUST_RENEW_PWD`,
 `UTI_LAST_PASSWORD_CHANGED_DATE`, `NO_PASSWORD_EXPIRATION`, `IS_WINDOWS_ACCOUNT`,
-`DATE_DEBUT`/`DATE_FIN`. Les mécanismes attendus existent.
+`DATE_DEBUT`/`DATE_FIN`. The expected mechanisms exist.
 
-### 4.3 La traçabilité : native et granulaire
+### 4.3 Traceability: native and granular
 
-Le schéma `Audit` compte 15 tables de mouvements. Chacune conserve l'**avant et
-l'après** (`*Old` / `New*`), le compte auteur, le canal et l'horodatage local + UTC.
+The `Audit` schema has 15 movement tables. Each keeps the **before and
+after** (`*Old` / `New*`), the authoring account, the channel and the local + UTC timestamp.
 
-`Audit.AccountsMovements` trace jusqu'aux bascules de privilège :
+`Audit.AccountsMovements` traces down to the privilege switches:
 `OldIsAdmin`/`NewIsAdmin`, `OldCanAccessExternalApi`/`New…`,
 `OldCanAccessSealAdministration`/`New…`, `OldCanAccessSealExploitation`/`New…`,
 `OldIsLock`/`NewIsLock`, `OldMustRenewPassword`/`New…`.
 
-`Audit.LogDownload` trace les **exports de journaux** (qui, quand, quel volume,
-quelle borne temporelle) — rare, et précieux pour A.5.28.
+`Audit.LogDownload` traces the **log exports** (who, when, what volume,
+what time bound) — rare, and valuable for A.5.28.
 
-`Audit.AccessControlPermissionMovements` (225) trace chaque changement de droit :
-tag, groupe, porte, groupe de portes, dates avant/après, semaine type avant/après.
+`Audit.AccessControlPermissionMovements` (225) traces each right change:
+tag, group, door, door group, before/after dates, before/after typical week.
 
-**C'est le point fort du système.** À valoriser tel quel dans le SMSI.
+**This is the system's strength.** To be highlighted as-is in the ISMS.
 
-> Un second journal, `dbo.TRACES` (**499 971 lignes** : module, sous-module,
-> utilisateur, description), existe et **n'est pas collecté par le SIEM**. À
-> examiner : il peut contenir des actions non couvertes par le schéma `Audit`.
+> A second log, `dbo.TRACES` (**499,971 rows**: module, submodule,
+> user, description), exists and is **not collected by the SIEM**. To
+> be examined: it may contain actions not covered by the `Audit` schema.
 
-### 4.4 La main courante est vide
+### 4.4 The logbook is empty
 
-`dbo.MAIN_COURANTE` : **0 ligne**. `dbo.VACATIONS` : 1 178 vacations d'opérateur.
+`dbo.MAIN_COURANTE`: **0 rows**. `dbo.VACATIONS`: 1,178 operator shifts.
 
-Les opérateurs ouvrent donc des vacations, mais **ne consignent rien**. Combiné à
-l'acquittement d'alarme quasi inexistant (6 lignes sur 703 641), cela signifie :
-**aucune trace de l'action humaine sur les événements de sûreté**. C'est l'écart le
-plus structurant du dossier (A.5.24 / A.5.25).
+Operators therefore open shifts, but **record nothing**. Combined with
+the almost nonexistent alarm acknowledgment (6 rows out of 703,641), this means:
+**no trace of human action on the security events**. This is the most
+structuring gap of the dossier (A.5.24 / A.5.25).
 
 ---
 
-## 5. Zones et topologie
+## 5. Zones and topology
 
-### 5.1 La structure réelle (et pourquoi ma v1 se trompait)
+### 5.1 The real structure (and why my v1 was wrong)
 
 ```sql
-Hypervision.ObjectsHierarchicalCatalog   -- 49 lignes
-    NodeHierarchyId   hierarchyid   -- clé primaire : le CHEMIN dans l'arbre
+Hypervision.ObjectsHierarchicalCatalog   -- 49 rows
+    NodeHierarchyId   hierarchyid   -- primary key: the PATH in the tree
     NodeId            bigint
-    NodeObjectId      numeric       -- l'objet porté par le nœud
-    NodeObjectType    varchar(50)   -- son type
+    NodeObjectId      numeric       -- the object carried by the node
+    NodeObjectType    varchar(50)   -- its type
 ```
 
-Quatre colonnes. **Pas de `ParentNodeId`, pas de `NodeLabel`, pas de `NodeClass`.**
-La hiérarchie est portée par le type `hierarchyid` de SQL Server : la parenté se
-lit avec `.GetAncestor()`, `.IsDescendantOf()`, `.GetLevel()` — pas par une
-jointure sur un identifiant parent.
+Four columns. **No `ParentNodeId`, no `NodeLabel`, no `NodeClass`.**
+The hierarchy is carried by SQL Server's `hierarchyid` type: the parentage is
+read with `.GetAncestor()`, `.IsDescendantOf()`, `.GetLevel()` — not by a
+join on a parent identifier.
 
-C'est pourquoi ma vue `07_vw_SealZone_SIEM.sql` était bâtie sur du sable : elle
-supposait un modèle parent/enfant classique. **Elle est à réécrire**, et le
-garde-fou du lanceur (`<-- ajuster`) a joué son rôle : il vous a empêché de
-déployer une vue fausse.
+This is why my `07_vw_SealZone_SIEM.sql` view was built on sand: it
+assumed a classic parent/child model. **It must be rewritten**, and the
+launcher's safeguard (`<-- adjust`) played its role: it prevented you from
+deploying a wrong view.
 
-### 5.2 Les bonnes pistes
+### 5.2 The right leads
 
-L'éditeur fournit ses propres outils, qu'il vaut mieux utiliser que réinventer :
+The vendor provides its own tools, which are better used than reinvented:
 
-| Objet | Ce qu'il donne |
+| Object | What it gives |
 |---|---|
-| `Hypervision.fn_GetObjectsCatalogPath` | **le chemin d'un nœud** — exactement le `ZONE_PATH` recherché |
-| `Hypervision.fn_GetObjectCatalogSubTree` | le sous-arbre d'un nœud |
-| `Hypervision.View_ObjectsHierarchicalCatalogNodeDetails` | les détails d'un nœud (libellés) |
-| `dbo.POS_OBJECTS_IN_ZONES_CACHE` (54) | **objet → zone**, déjà calculé (`SOURCE_ID` → `TARGET_ID`) |
-| `dbo.POS_ZONES_IN_ZONES_CACHE` (1) | zone → sous-zone, avec niveau relatif |
-| `dbo.MAP_ITEMS_FLAT` (149) | `OBJECT_ID` → `PARENT_ID` aplati |
+| `Hypervision.fn_GetObjectsCatalogPath` | **a node's path** — exactly the `ZONE_PATH` sought |
+| `Hypervision.fn_GetObjectCatalogSubTree` | a node's subtree |
+| `Hypervision.View_ObjectsHierarchicalCatalogNodeDetails` | a node's details (labels) |
+| `dbo.POS_OBJECTS_IN_ZONES_CACHE` (54) | **object → zone**, already computed (`SOURCE_ID` → `TARGET_ID`) |
+| `dbo.POS_ZONES_IN_ZONES_CACHE` (1) | zone → subzone, with relative level |
+| `dbo.MAP_ITEMS_FLAT` (149) | `OBJECT_ID` → `PARENT_ID` flattened |
 | `dbo.ObjectsNodesTree` (16) | `NodeId`, `ParentNodeId`, `NodeName`, `SealObjectId` |
-| `dbo.pk_GetZonesForObjectFromCache` | procédure éditeur : les zones d'un objet |
+| `dbo.pk_GetZonesForObjectFromCache` | vendor procedure: the zones of an object |
 
-`POS_OBJECTS_IN_ZONES_CACHE` (54 lignes) est la piste la plus directe : c'est le
-cache objet → zone que SEAL utilise déjà pour ses plans. À confronter aux **165
-portes déployées** : 54 associations ne couvriront pas tout le parc.
+`POS_OBJECTS_IN_ZONES_CACHE` (54 rows) is the most direct lead: it is the
+object → zone cache that SEAL already uses for its maps. To be compared to the **165
+deployed doors**: 54 associations will not cover the whole fleet.
 
-### 5.3 Une autre voie, plus riche : `T_PASSAGES`
+### 5.3 Another, richer path: `T_PASSAGES`
 
 ```
-dbo.T_PASSAGES   -- 45 623 lignes
+dbo.T_PASSAGES   -- 45,623 rows
     PASS_ID, FICH_ID, NUM_PHYS, CONT_ID, PASS_DATE_PASSAGE,
     PASS_VALIDE, REFU_ID, ZONE_OBFI_ID, ZONE_IN_OUT, EVEN_ID, REEV_CODE
 ```
 
-Cette table relie **le passage, la fiche (le porteur), la zone et le sens
-(entrée/sortie)** — et fait le lien avec l'événement (`EVEN_ID`). C'est
-structurellement une meilleure source que `EVENEMENTS` pour répondre à « qui est
-allé où, dans quel sens » : l'identité et la zone y sont déjà résolues.
+This table links **the passage, the record (the holder), the zone and the direction
+(entry/exit)** — and makes the link with the event (`EVEN_ID`). It is
+structurally a better source than `EVENEMENTS` to answer "who went
+where, in which direction": identity and zone are already resolved there.
 
-Elle n'est pas exposée au SIEM aujourd'hui. **C'est sans doute la piste la plus
-rentable** — elle résout d'un coup le lien identité *et* le lien zone.
+It is not exposed to the SIEM today. **This is probably the most
+profitable lead** — it resolves at once the identity link *and* the zone link.
 
 ---
 
-## 6. Le second système d'accès : ENIQ / DOMBOX
+## 6. The second access system: ENIQ / DOMBOX
 
-Le schéma `ENIQ` décrit un contrôle d'accès **parallèle**, à base de cylindres
-électroniques autonomes (DOMBOX / OSS) :
+The `ENIQ` schema describes a **parallel** access control, based on standalone
+electronic cylinders (DOMBOX / OSS):
 
-| Table | Lignes |
+| Table | Rows |
 |---|--:|
-| `ENIQ_INTERFACE_PERMISSIONS` | **4 169** |
+| `ENIQ_INTERFACE_PERMISSIONS` | **4,169** |
 | `ENIQ_INTERFACE_DEVICES` | 42 |
 | `ENIQ_INTERFACE_WEEKS` | 32 |
 | `ENIQ_INTERFACE_HOLIDAYS` | 22 |
 | `ENIQ_INTERFACE_DEVICES_COUPLED` | 63 |
 | `ENIQ_INTERFACE_PERMISSIONS_OSS` | 0 |
 
-**4 169 permissions** y sont définies — soit plus du double des 1 903 droits
-effectifs du contrôle d'accès câblé. Ces cylindres fonctionnent **hors ligne** : ils
-portent leurs droits en mémoire, sont synchronisés par lots, et leurs événements
-ne remontent qu'à la synchronisation suivante (`LAST_EVENT_ID`,
-`DOMBOX: Perte d'évènements`, `DOMBOX: décalage d'horloge` dans le référentiel).
+**4,169 permissions** are defined there — more than double the 1,903 effective
+rights of the wired access control. These cylinders operate **offline**: they
+carry their rights in memory, are synchronized in batches, and their events
+only report at the next synchronization (`LAST_EVENT_ID`,
+`DOMBOX: Perte d'évènements`, `DOMBOX: décalage d'horloge` in the reference data).
 
-**Ce périmètre n'est ni collecté par le SIEM, ni couvert par la documentation en
-cours.** Il faut décider s'il entre dans le périmètre du SMSI. Les permissions
-ENIQ portent d'ailleurs leurs propres conflits (`WEEK_TEMPLATE_CONFLICT`,
+**This perimeter is neither collected by the SIEM nor covered by the ongoing
+documentation.** It must be decided whether it falls within the ISMS scope. The
+ENIQ permissions moreover carry their own conflicts (`WEEK_TEMPLATE_CONFLICT`,
 `HOLIDAYS_CONFLICT`, `MASTER_KEY_CONFLICT`, `HAS_CONFLICTS`).
 
-À noter aussi : `dbo.TAG_KEYRING_ASSOCIATION` et `AGRID_*` (armoires à clés
-Traka/Agrid) — encore un autre mode d'accès physique (clés mécaniques gérées).
+Also of note: `dbo.TAG_KEYRING_ASSOCIATION` and `AGRID_*` (Traka/Agrid key
+cabinets) — yet another physical access mode (managed mechanical keys).
 
 ---
 
-## 7. Le vocabulaire des événements
+## 7. The event vocabulary
 
-`dbo.REF_EVENEMENT` : **150 codes sur OMEGA** (177 sur QA, **197 en union**). C'est
-le dictionnaire complet de ce que SEAL sait dire.
+`dbo.REF_EVENEMENT`: **150 codes on OMEGA** (177 on QA, **197 in union**). It is
+the complete dictionary of what SEAL can say.
 
-La table est plus riche qu'un simple libellé — chaque code porte :
+The table is richer than a simple label — each code carries:
 
-| Colonne | Rôle |
+| Column | Role |
 |---|---|
-| `REEV_DFLT_SEVERITY` | sévérité par défaut (0 à 901) |
-| `REEV_AL_USER_DESCRIPTION_PATTERN` | gabarit de la phrase d'alarme |
-| `REEV_EVEN_USER_DESCRIPTION_PATTERN` / `_END` | gabarit début / fin d'événement |
-| `REEV_INTEMPESTIVEOCCUR` / `MAXEVENT` / `PERIOD` | **seuils anti-flood par code** |
-| `REEV_TRANSTYPE`, `REEV_DELAYTRANSFERT` | politique de transfert |
+| `REEV_DFLT_SEVERITY` | default severity (0 to 901) |
+| `REEV_AL_USER_DESCRIPTION_PATTERN` | alarm sentence template |
+| `REEV_EVEN_USER_DESCRIPTION_PATTERN` / `_END` | event start / end template |
+| `REEV_INTEMPESTIVEOCCUR` / `MAXEVENT` / `PERIOD` | **anti-flood thresholds per code** |
+| `REEV_TRANSTYPE`, `REEV_DELAYTRANSFERT` | transfer policy |
 
-Les gabarits révèlent la sémantique : `Refus de [AccessBy] sur [OriginLabel], badge
-interdit sur cette ULS. [UserComment]`. Les variables `[AccessBy]`, `[OriginLabel]`,
-`[UserComment]` sont substituées à l'exécution — c'est ainsi que SEAL fabrique ses
-descriptions lisibles.
+The templates reveal the semantics: `Refus de [AccessBy] sur [OriginLabel], badge
+interdit sur cette ULS. [UserComment]`. The variables `[AccessBy]`, `[OriginLabel]`,
+`[UserComment]` are substituted at runtime — this is how SEAL builds its
+readable descriptions.
 
-**Le paramétrage anti-flood est uniforme** : presque tous les codes ont
-`INTEMPESTIVEOCCUR = 60`, `MAXEVENT = 1000`, `PERIOD = 1` — c'est-à-dire les valeurs
-par défaut. Seul `SEM542` (centrale intrusion déconnectée) est réglé finement
-(10/10/6). Autrement dit : **la qualification « intempestive » n'est pas paramétrée
-pour le parc**.
+**The anti-flood configuration is uniform**: almost all the codes have
+`INTEMPESTIVEOCCUR = 60`, `MAXEVENT = 1000`, `PERIOD = 1` — that is, the default
+values. Only `SEM542` (intrusion panel disconnected) is finely tuned
+(10/10/6). In other words: **the "spurious" qualification is not configured
+for the fleet**.
 
-Répartition des 197 codes (union des deux sites) :
+Breakdown of the 197 codes (union of both sites):
 
-| Famille | Codes |
+| Family | Codes |
 |---|--:|
-| Matériel — lecteurs, modules, UTL, capteurs | 54 |
-| Porte — état physique et commandes | 36 |
-| Intrusion, sabotage, agression | 28 |
-| Accès usager — autorisation et refus | 25 |
-| Mise en service / hors service (secteurs) | 13 |
-| Vidéo et détection | 5 |
-| Véhicules et boucles | 2 |
-| Console et administration | 2 |
-| Système et supervision | 2 |
-| Divers (boutons, DOMBOX, LoRa…) | 30 |
+| Hardware — readers, modules, UTL, sensors | 54 |
+| Door — physical state and commands | 36 |
+| Intrusion, sabotage, assault | 28 |
+| User access — authorization and denial | 25 |
+| Arming / disarming (sectors) | 13 |
+| Video and detection | 5 |
+| Vehicles and loops | 2 |
+| Console and administration | 2 |
+| System and supervision | 2 |
+| Miscellaneous (buttons, DOMBOX, LoRa…) | 30 |
 
-Les **25 codes de refus** décrivent toutes les conditions de la décision : badge
-interdit sur l'ULS, hors semaine type (de l'usager *ou* de la porte), hors
-calendrier, usager non valide à cette date, anti-pass-back, zone pleine (compteur
-global ou individuel), code PIN incorrect, usager « brûlé » (trop d'essais), badge
-représenté trop tôt, séquence de badgeage incorrecte, porte bloquée, jour férié.
+The **25 denial codes** describe all the conditions of the decision: badge
+forbidden on the ULS, outside the typical week (of the user *or* of the door), outside
+the calendar, user not valid on this date, anti-pass-back, zone full (global
+counter or individual), incorrect PIN code, "burned" user (too many attempts), badge
+re-presented too soon, incorrect badging sequence, blocked door, public holiday.
 
-Le référentiel complet (code → libellé) est fourni en CSV, annexable tel quel.
+The complete reference data (code → label) is provided as CSV, attachable as-is.
 
 ---
 
-## 8. Constats pour l'ISO 27001
+## 8. Findings for ISO 27001
 
-Chiffrés, vérifiables, classés par gravité.
+Quantified, verifiable, classified by severity.
 
-### 8.1 Aucune trace de l'action humaine (A.5.24, A.5.25)
+### 8.1 No trace of human action (A.5.24, A.5.25)
 
-- Main courante : **0 ligne**.
-- Acquittement d'alarme : **6 lignes sur 703 641**.
-- Vacations ouvertes : 1 178.
+- Logbook: **0 rows**.
+- Alarm acknowledgment: **6 rows out of 703,641**.
+- Shifts opened: 1,178.
 
-Les opérateurs prennent leur poste mais ne consignent rien et n'acquittent rien.
-**Il est impossible de démontrer qu'une alarme a été traitée, ni par qui.** Aucun
-correctif technique ne comble cela : c'est une pratique d'exploitation.
+Operators therefore take up their post but record nothing and acknowledge nothing.
+**It is impossible to demonstrate that an alarm was handled, or by whom.** No
+technical fix fills this gap: it is an operational practice.
 
-### 8.2 Aucune restriction horaire (A.5.15)
+### 8.2 No time restriction (A.5.15)
 
-2 semaines types : `Toujours`, `Jamais`. Le contrôle d'accès est binaire. À
-documenter comme décision assumée, ou à corriger.
+2 typical weeks: `Toujours`, `Jamais`. Access control is binary. To be
+documented as an owned decision, or to be corrected.
 
-### 8.3 Un périmètre entier hors radar (A.5.15, A.8.16)
+### 8.3 An entire perimeter off the radar (A.5.15, A.8.16)
 
-4 169 permissions sur cylindres DOMBOX/ENIQ, non supervisées, non documentées.
-Décision de périmètre à prendre.
+4,169 permissions on DOMBOX/ENIQ cylinders, unsupervised, undocumented.
+A scope decision to be made.
 
-### 8.4 Des comptes et profils de test en production (A.5.18)
+### 8.4 Test accounts and profiles in production (A.5.18)
 
-Profils `TESTGBE`, `PGE Test droit sur éqpt`, `OPERATEUR ALARME (En test)` ;
-comptes `TESTGBE`, `seal_server_app_test`. Une revue s'impose.
+Profiles `TESTGBE`, `PGE Test droit sur éqpt`, `OPERATEUR ALARME (En test)`;
+accounts `TESTGBE`, `seal_server_app_test`. A review is required.
 
-### 8.5 Le lien identité ↔ badge n'est pas exploité (A.5.16, A.5.18)
+### 8.5 The identity ↔ badge link is not exploited (A.5.16, A.5.18)
 
-Le matricule existe (`milf.BADGES.MATRICULE`, 443 badges) mais n'est pas exposé au
-SIEM ; la synchronisation LDAP est installée mais vide. **Corrigeable** — voir §9.
+The matricule exists (`milf.BADGES.MATRICULE`, 443 badges) but is not exposed to the
+SIEM; LDAP synchronization is installed but empty. **Fixable** — see §9.
 
 ### 8.6 `UTI_PASSW varchar(50) NOT NULL` (A.5.17)
 
-Une colonne « mot de passe » en clair coexiste avec le sel et l'empreinte, sur
-59 comptes. Contenu non lu. À éclaircir avec l'éditeur.
+A cleartext "password" column coexists with the salt and the hash, on
+59 accounts. Content not read. To be clarified with the vendor.
 
-### 8.7 Ce qui fonctionne bien — à valoriser
+### 8.7 What works well — to highlight
 
-- **Traçabilité d'administration native** : 15 tables de mouvements, avant/après
-  sur chaque changement, imputable à un compte, une IP et un canal.
-- **Modèle de droits complet** : validité, semaine type, anti-pass-back,
-  anti-timeback, mode escorte, passes généraux, code PIN, jours fériés.
-- **Détection native des conflits de droits** (32 conflits identifiés, avec
-  l'attribut en cause).
-- **Séparation droit saisi / droit effectif** : le système sait dire ce qui est
-  réellement appliqué.
-- **Export de journaux tracé** (`Audit.LogDownload`).
-- **Référentiel d'habilitations métier** (médical, ATEX, NH3, ZSAR, formation).
-- **Supervision externalisée** : le SIEM surveille en continu les gestes sensibles
-  (passe général, réactivation de badge, inhibition d'alarme, export de journaux),
-  ce qui apporte une **séparation des tâches** entre exploitant sûreté et SOC.
+- **Native administration traceability**: 15 movement tables, before/after
+  on each change, attributable to an account, an IP and a channel.
+- **Complete rights model**: validity, typical week, anti-pass-back,
+  anti-timeback, escort mode, master passes, PIN code, public holidays.
+- **Native detection of rights conflicts** (32 conflicts identified, with
+  the attribute at fault).
+- **Separation of entered right / effective right**: the system can say what is
+  actually applied.
+- **Traced log export** (`Audit.LogDownload`).
+- **Business authorization repository** (medical, ATEX, NH3, ZSAR, training).
+- **Externalized supervision**: the SIEM continuously monitors the sensitive actions
+  (master pass, badge reactivation, alarm inhibition, log export),
+  which provides a **separation of duties** between the security operator and the SOC.
 
 ---
 
-## 9. Ce qui reste à établir
+## 9. What remains to be established
 
-Trois questions, une requête chacune. Script fourni : `06_recon_complements.sql`.
+Three questions, one query each. Script provided: `06_recon_complements.sql`.
 
-1. **Taux de remplissage du matricule** — décide si le pont badge → AD est
-   immédiat ou s'il faut d'abord peupler la donnée.
+1. **Matricule fill rate** — decides whether the badge → AD bridge is
+   immediate or whether the data must first be populated.
    ```sql
    SELECT COUNT(*) AS badges, COUNT(MATRICULE) AS avec_matricule,
           COUNT(SEAL_ID) AS relies_a_une_fiche
    FROM milf.BADGES WHERE MILF_STATUS <> 'ANN';
    ```
-2. **Couverture du cache de zones** — décide de la faisabilité du `seal_zone`.
+2. **Zone cache coverage** — decides the feasibility of the `seal_zone`.
    ```sql
    SELECT COUNT(*) AS objets_dans_une_zone,
           COUNT(DISTINCT TARGET_ID) AS zones
    FROM dbo.POS_OBJECTS_IN_ZONES_CACHE;
    ```
-3. **`T_PASSAGES` : la piste courte** — si `ZONE_OBFI_ID` et `FICH_ID` sont bien
-   remplis, cette table résout identité *et* zone d'un coup.
+3. **`T_PASSAGES`: the short lead** — if `ZONE_OBFI_ID` and `FICH_ID` are well
+   filled, this table resolves identity *and* zone at once.
    ```sql
    SELECT COUNT(*) AS passages, COUNT(FICH_ID) AS avec_fiche,
           COUNT(ZONE_OBFI_ID) AS avec_zone, COUNT(NULLIF(ZONE_IN_OUT,'')) AS avec_sens
    FROM dbo.T_PASSAGES;
    ```
 
-Utile en complément : la **documentation éditeur** (manuel d'administration), pour
-confirmer la sémantique de `MODE_ESCORTE`, des immunités, et du lien
-`milf.BADGES` ↔ `FICHE`.
+Useful as a complement: the **vendor documentation** (administration manual), to
+confirm the semantics of `MODE_ESCORTE`, of the immunities, and of the
+`milf.BADGES` ↔ `FICHE` link.
 
 ---
 
-## Annexe — traçabilité de l'analyse
+## Appendix — analysis traceability
 
-Toutes les valeurs proviennent de `05_recon_fonctionnel.sql` exécuté sur
-`BX-SEAL-OMEGA` le **16/07/2026 à 09:28** (métadonnées + tables de paramétrage
-uniquement — aucune donnée personnelle lue), et des mesures SIEM du même jour.
-La base est vivante : les volumes bougent, les ordres de grandeur et les ratios
-non. Les chiffres SQL décrivent **OMEGA** ; les taux de remplissage cités en v1
-décrivaient **QA** — les deux parcs diffèrent, ne pas les confondre.
+All the values come from `05_recon_fonctionnel.sql` run on
+`BX-SEAL-OMEGA` on **16/07/2026 at 09:28** (metadata + configuration tables
+only — no personal data read), and from the SIEM measurements of the same day.
+The database is live: the volumes move, the orders of magnitude and the ratios
+do not. The SQL figures describe **OMEGA**; the fill rates cited in v1
+described **QA** — the two sites differ, do not confuse them.

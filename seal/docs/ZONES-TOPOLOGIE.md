@@ -1,77 +1,77 @@
-# Zones physiques SEAL — résolution topologique
+# SEAL physical zones — topological resolution
 
-Objectif : rattacher chaque événement (accès, alarme, audit) à la **zone physique**
-de l'objet concerné (porte, caméra) pour permettre la répartition et l'alerting
-**par zone** — au-delà du seul site.
+Objective: attach each event (access, alarm, audit) to the **physical zone**
+of the object concerned (door, camera) to enable distribution and alerting
+**per zone** — beyond the site alone.
 
-## État des lieux (vérifié sur la collecte réelle)
+## Current situation (verified on the real collection)
 
-| Domaine | `target_object_id` (OBFI_ID) présent | Remarque |
+| Domain | `target_object_id` (OBFI_ID) present | Remark |
 |---------|--------------------------------------|----------|
-| access  | **99,4 %** (976 k / 982 k) | la porte = OBFI_ID → fort potentiel |
-| alarm   | 0,65 % (4,6 k / 713 k) | seules les alarmes *localisées* (intrusion, porte) |
-| audit   | 44 events | opérations de config sur objets/zones |
+| access  | **99.4%** (976 k / 982 k) | the door = OBFI_ID → strong potential |
+| alarm   | 0.65% (4.6 k / 713 k) | only *localized* alarms (intrusion, door) |
+| audit   | 44 events | config operations on objects/zones |
 
-- Le champ `site` des vues est **NULL** : la hiérarchie topologique
-  (`ObjectsHierarchicalCatalog`, ~77 nœuds Porte/Capteur/**GroupeZone**) n'est pas
-  jointe. La recon a montré que `NodeObjectId ≠ Objet_Fiche.OBJ_ID` (0 match).
-- Le domaine **audit** expose déjà des objets de type `GroupeZone` et des libellés
-  « Secteur Formation 1 » → la notion de zone **existe** dans SEAL ; il reste à
-  relier chaque objet à sa zone via la hiérarchie.
-- Le compte de service `svc_graylog_seal` **ne peut pas** lire la table de
-  hiérarchie (verrouillée aux vues par `90_provision`) → l'établissement du lien
-  est une **étape opérateur** (compte admin).
+- The `site` field of the views is **NULL**: the topological hierarchy
+  (`ObjectsHierarchicalCatalog`, ~77 Door/Sensor/**ZoneGroup** nodes) is not
+  joined. Recon showed that `NodeObjectId ≠ Objet_Fiche.OBJ_ID` (0 match).
+- The **audit** domain already exposes objects of type `GroupeZone` and labels
+  such as "Secteur Formation 1" → the notion of zone **exists** in SEAL; it remains to
+  link each object to its zone via the hierarchy.
+- The `svc_graylog_seal` service account **cannot** read the hierarchy
+  table (locked to the views by `90_provision`) → establishing the link
+  is an **operator step** (admin account).
 
-## Architecture retenue
+## Chosen architecture
 
 ```
-ObjectsHierarchicalCatalog  (hiérarchie SEAL, admin)
-        │  07_recon_topology.sql   → confirmer NodeObjectId = OBFI_ID + classe ZONE
+ObjectsHierarchicalCatalog  (SEAL hierarchy, admin)
+        │  07_recon_topology.sql   → confirm NodeObjectId = OBFI_ID + ZONE class
         ▼
 dbo.vw_SealZone_SIEM   (OBFI_ID → ZONE_LABEL / ZONE_PATH)     [07_, GRANT svc]
-        │  regen_zone_lookup.sh    (multi-site, clé seal_site:OBFI_ID)
+        │  regen_zone_lookup.sh    (multi-site, key seal_site:OBFI_ID)
         ▼
-/etc/graylog/lookup/omni-seal-zone.csv   →  lookup Graylog  omni-seal-zone
-        │  16-seal-zone.rule       (stage terminal des 3 pipelines)
+/etc/graylog/lookup/omni-seal-zone.csv   →  Graylog lookup  omni-seal-zone
+        │  16-seal-zone.rule       (terminal stage of the 3 pipelines)
         ▼
-seal_zone  posé sur les événements  →  widgets « par zone » + détection ZON-001
+seal_zone  set on the events  →  "per zone" widgets + detection ZON-001
 ```
 
-**Clé composite `seal_site:OBFI_ID`** : un OBFI_ID peut collisionner entre sites
-(QA porte 285 ≠ OMEGA porte 285) ; la règle et le regen préfixent par `seal_site`.
+**Composite key `seal_site:OBFI_ID`**: an OBFI_ID can collide between sites
+(QA door 285 ≠ OMEGA door 285); the rule and the regen prefix by `seal_site`.
 
-## Ce qui est DÉJÀ en place (SIEM, testé)
+## What is ALREADY in place (SIEM, tested)
 
-- Lookup `omni-seal-zone` (adapter csvfile + cache + table) — provisionné.
-- Règle pipeline `16-seal-zone.rule` (stage terminal des 3 pipelines) — compile,
-  **enrichissement validé E2E** (injection OBFI_ID 285 → `seal_zone` posé via la
-  clé composite ; normalisation du flottant `0.285e3` → `285` par `to_long`).
-- Widgets « Accès par zone » et « Refus par zone » (dashboard *Vue multi-site*).
-- Détection `ZON-001` (rafale de refus concentrée dans une zone).
+- Lookup `omni-seal-zone` (csvfile adapter + cache + table) — provisioned.
+- Pipeline rule `16-seal-zone.rule` (terminal stage of the 3 pipelines) — compiles,
+  **enrichment validated E2E** (injection of OBFI_ID 285 → `seal_zone` set via the
+  composite key; normalization of the float `0.285e3` → `285` by `to_long`).
+- Widgets "Access per zone" and "Denials per zone" (*Multi-site view* dashboard).
+- Detection `ZON-001` (burst of denials concentrated in a zone).
 
-Tout cela est **inerte** tant que le CSV est vide : aucun `seal_zone` posé, aucun
-faux positif. L'activation ne demande que de peupler le CSV (étapes opérateur).
+All of this is **inert** as long as the CSV is empty: no `seal_zone` set, no
+false positive. Activation only requires populating the CSV (operator steps).
 
-## Étapes OPÉRATEUR (compte admin SQL)
+## OPERATOR steps (admin SQL account)
 
-1. **Recon** : exécuter `seal/sql/07_recon_topology.sql`, relever les 4 points de
-   l'étape 6 (schéma/table réels, noms de colonnes, jointure `NodeObjectId = OBFI_ID`,
-   valeur de `NodeClass` identifiant une zone).
-2. **Vue** : ajuster `seal/sql/07_vw_SealZone_SIEM.sql` avec ces 4 points, puis
-   l'exécuter (crée `dbo.vw_SealZone_SIEM` + `GRANT SELECT` au service). À répéter
-   sur **chaque** SEAL (QA + OMEGA).
-3. **Peupler le lookup** (côté SIEM) :
+1. **Recon**: run `seal/sql/07_recon_topology.sql`, note the 4 points of
+   step 6 (real schema/table, column names, join `NodeObjectId = OBFI_ID`,
+   value of `NodeClass` identifying a zone).
+2. **View**: adjust `seal/sql/07_vw_SealZone_SIEM.sql` with these 4 points, then
+   run it (creates `dbo.vw_SealZone_SIEM` + `GRANT SELECT` to the service). To be repeated
+   on **each** SEAL (QA + OMEGA).
+3. **Populate the lookup** (SIEM side):
    ```bash
    set -a; source /root/omnitech-siem-setup/00-vars.env; set +a
    /root/omnitech-siem-setup/seal/graylog/regen_zone_lookup.sh
    ```
-   (à mettre en cron nocturne, comme `regen_reev_lookup.sh`.)
+   (to be put in a nightly cron, like `regen_reev_lookup.sh`.)
 
-Dès le CSV peuplé, `seal_zone` apparaît sur les nouveaux événements (les widgets et
-`ZON-001` se remplissent). Pour re-décorer l'historique : non nécessaire au SOC
-(l'analyse par zone porte sur le flux courant) ; sinon re-backfill Logstash.
+As soon as the CSV is populated, `seal_zone` appears on the new events (the widgets and
+`ZON-001` fill up). To re-decorate history: not necessary for the SOC
+(zone analysis concerns the current flow); otherwise re-backfill with Logstash.
 
-## Découvrir les zones d'un autre parc
+## Discovering the zones of another site
 
-`event_domain:audit AND target_object_type:GroupeZone` (libellés de zones) et
-`event_domain:access AND _exists_:target_object_id` (portes à rattacher).
+`event_domain:audit AND target_object_type:GroupeZone` (zone labels) and
+`event_domain:access AND _exists_:target_object_id` (doors to attach).

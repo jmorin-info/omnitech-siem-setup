@@ -1,42 +1,42 @@
-# SOAR — Playbooks de réponse automatisée (OMNITECH SIEM)
+# SOAR — Automated response playbooks (OMNITECH SIEM)
 
-> Cadrage du chantier « SOAR avancé » · 2026-06-14
-> État : PB-01 en production. PB-02→05 **conçus, en attente de l'API NinjaOne**
-> (accès à activer côté tenant, compte Owner — l'intégration se fera dès réception).
+> Scoping of the "advanced SOAR" workstream · 2026-06-14
+> Status: PB-01 in production. PB-02→05 **designed, pending the NinjaOne API**
+> (access to be enabled on the tenant side, Owner account — the integration will be done upon receipt).
 
-## Architecture (existant)
-Service `omni-soar` (`/usr/local/sbin/omni-soar`) : HTTP local `127.0.0.1:8088`.
-Une notification Graylog HTTP POST → action → garde-fous → état → effet.
-- État : `/var/lib/omni-soar/blocklist.json`. Effet : `/var/www/siem-kit/soar/blocklist.txt` (threat feed servi par nginx, consommé par le FortiGate).
-- **Garde-fous déjà en place (à conserver pour TOUT nouveau playbook) :** jamais d'IP RFC1918 / loopback / link-local / réservée, jamais la **whitelist**, seuil de hits, **cap** (taille max), **TTL** (expiration auto). Toute action est tracée en GELF (`event_source:siem_soar`).
+## Architecture (existing)
+`omni-soar` service (`/usr/local/sbin/omni-soar`): local HTTP `127.0.0.1:8088`.
+A Graylog HTTP POST notification → action → safeguards → state → effect.
+- State: `/var/lib/omni-soar/blocklist.json`. Effect: `/var/www/siem-kit/soar/blocklist.txt` (threat feed served by nginx, consumed by the FortiGate).
+- **Safeguards already in place (to keep for ANY new playbook):** never an RFC1918 / loopback / link-local / reserved IP, never the **whitelist**, hit threshold, **cap** (max size), **TTL** (auto expiration). Every action is traced in GELF (`event_source:siem_soar`).
 
-## Catalogue des playbooks
+## Playbook catalog
 
-| # | Playbook | Déclencheur (alert_tag) | Action | Dépendance | Statut |
+| # | Playbook | Trigger (alert_tag) | Action | Dependency | Status |
 |---|---|---|---|---|---|
-| **PB-01** | Bloquer IP attaquante | Force brute VPN, password spraying | Ajout au threat feed FortiGate (TTL) | FortiGate (fait) | ✅ **PROD** |
-| **PB-02** | Isoler un hôte compromis | `ransomware_indicator`, `lsass_access`, `lateral_movement` (confirmé) | NinjaOne : isolation réseau du device | **API NinjaOne** | 🟡 conçu |
-| **PB-03** | Désactiver un compte | `canary`, `impossible_travel`, `dcsync` (confirmé) | Désactivation compte AD (script NinjaOne sur DC, ou LDAP) | **API NinjaOne** (ou LDAPS) | 🟡 conçu |
-| **PB-04** | Ouvrir un ticket | Toute alerte P3 (mail tier) | Création d'un incident avec contexte (identité, hôte, MITRE) | **API ticketing NinjaOne** | 🟡 conçu |
-| **PB-05** | Enrichir IOC | `threat_intel`, IP/domaine externes | Enrichissement TI + retro-hunt | MISP/feed (optionnel) | 🟡 conçu |
+| **PB-01** | Block attacking IP | VPN brute force, password spraying | Add to FortiGate threat feed (TTL) | FortiGate (done) | ✅ **PROD** |
+| **PB-02** | Isolate a compromised host | `ransomware_indicator`, `lsass_access`, `lateral_movement` (confirmed) | NinjaOne: network isolation of the device | **NinjaOne API** | 🟡 designed |
+| **PB-03** | Disable an account | `canary`, `impossible_travel`, `dcsync` (confirmed) | AD account disable (NinjaOne script on DC, or LDAP) | **NinjaOne API** (or LDAPS) | 🟡 designed |
+| **PB-04** | Open a ticket | Any P3 alert (email tier) | Create an incident with context (identity, host, MITRE) | **NinjaOne ticketing API** | 🟡 designed |
+| **PB-05** | Enrich IOC | `threat_intel`, external IP/domain | TI enrichment + retro-hunt | MISP/feed (optional) | 🟡 designed |
 
-## Conception détaillée (PB-02 → PB-04)
-Chaque playbook = un nouvel endpoint du service `omni-soar` (`/isolate`, `/disable`, `/ticket`), appelé par une notification Graylog dédiée, avec les **mêmes garde-fous renforcés** :
+## Detailed design (PB-02 → PB-04)
+Each playbook = a new endpoint of the `omni-soar` service (`/isolate`, `/disable`, `/ticket`), called by a dedicated Graylog notification, with the **same reinforced safeguards**:
 
-- **PB-02 Isoler hôte** — `POST /isolate {host}`.
-  - Garde-fous CRITIQUES : **jamais** un contrôleur de domaine, le SIEM, l'hyperviseur, un serveur d'infra (whitelist de **rôles d'hôte** à définir) ; `risk_score >= 12` requis ; **réversible** (dé-isolation auto après TTL ou manuelle) ; option **confirmation manuelle** (tier « propose, n'exécute pas » pour les actions destructrices).
-  - NinjaOne : endpoint *device isolation* (API `https://eu.ninjarmm.com/api/v2/...`, scope *management*).
-- **PB-03 Désactiver compte** — `POST /disable {identity}` (s'appuie sur le champ **`identity`** unifié posé par `58`).
-  - Garde-fous : **jamais** un compte *break-glass*/service/admin critique (whitelist de comptes) ; réversible (réactivation tracée) ; journalisé.
-  - Mécanisme : script NinjaOne `Disable-ADAccount` sur un DC, ou bind LDAPS dédié (compte de service à privilèges minimaux : *Account Operators* restreint).
-- **PB-04 Ticket** — `POST /ticket {event}` → ticket pré-rempli (titre = alerte, corps = identité + hôte + technique MITRE + lien Graylog). Sert de file d'incidents (pallie l'absence de case-management en OSS).
+- **PB-02 Isolate host** — `POST /isolate {host}`.
+  - CRITICAL safeguards: **never** a domain controller, the SIEM, the hypervisor, an infra server (whitelist of **host roles** to be defined); `risk_score >= 12` required; **reversible** (auto de-isolation after TTL or manual); **manual confirmation** option (tier "proposes, does not execute" for destructive actions).
+  - NinjaOne: *device isolation* endpoint (API `https://eu.ninjarmm.com/api/v2/...`, scope *management*).
+- **PB-03 Disable account** — `POST /disable {identity}` (relies on the unified **`identity`** field set by `58`).
+  - Safeguards: **never** a *break-glass*/service/critical admin account (whitelist of accounts); reversible (traced reactivation); logged.
+  - Mechanism: NinjaOne `Disable-ADAccount` script on a DC, or dedicated LDAPS bind (service account with minimal privileges: restricted *Account Operators*).
+- **PB-04 Ticket** — `POST /ticket {event}` → pre-filled ticket (title = alert, body = identity + host + MITRE technique + Graylog link). Serves as an incident queue (compensates for the absence of case management in OSS).
 
-## Prérequis côté client (à fournir avant intégration)
-1. 🔑 **API NinjaOne** : `client_id` + `client_secret` (OAuth2), scopes *management* (PB-02/03) et *ticketing* (PB-04). Région EU (`eu.ninjarmm.com`). → stocker dans `00-vars.env` (chmod 600) façon `FORTI_DHCP_TOKEN`.
-2. **Whitelist de rôles d'hôte** à ne JAMAIS isoler (DC, SIEM, hyperviseurs, NAS, cœur réseau).
-3. **Whitelist de comptes** à ne JAMAIS désactiver (break-glass, comptes de service critiques).
+## Client-side prerequisites (to provide before integration)
+1. 🔑 **NinjaOne API**: `client_id` + `client_secret` (OAuth2), scopes *management* (PB-02/03) and *ticketing* (PB-04). EU region (`eu.ninjarmm.com`). → store in `00-vars.env` (chmod 600) in the manner of `FORTI_DHCP_TOKEN`.
+2. **Whitelist of host roles** to NEVER isolate (DC, SIEM, hypervisors, NAS, network core).
+3. **Whitelist of accounts** to NEVER disable (break-glass, critical service accounts).
 
-## Validation (avant mise en prod de chaque playbook)
-Mode **dry-run** d'abord (`SOAR_DRYRUN=1` : le service logge l'action sans l'exécuter), sur un hôte/compte de TEST, puis bascule. Tester explicitement qu'une cible whitelistée / RFC1918 est **refusée**. Tenir un journal des déclenchements (utile ISO A.5.25/5.26).
+## Validation (before production rollout of each playbook)
+**Dry-run** mode first (`SOAR_DRYRUN=1`: the service logs the action without executing it), on a TEST host/account, then switch over. Explicitly test that a whitelisted / RFC1918 target is **refused**. Keep a log of triggers (useful for ISO A.5.25/5.26).
 
-> Dès que l'API NinjaOne est disponible : implémentation des endpoints `/isolate`, `/disable`, `/ticket` dans `omni-soar` + notifications + garde-fous, en dry-run puis prod.
+> As soon as the NinjaOne API is available: implementation of the `/isolate`, `/disable`, `/ticket` endpoints in `omni-soar` + notifications + safeguards, in dry-run then prod.

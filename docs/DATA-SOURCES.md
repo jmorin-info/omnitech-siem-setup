@@ -59,8 +59,8 @@ itself a security event. Thresholds are configured in `WATCHDOG_SOURCES` and cov
 
 ## Integration notes
 
-Source-specific setup is documented per source: Veeam ([FR-VEEAM.md](FR-VEEAM.md)),
-Microsoft 365 / Entra ([FR-M365.md](FR-M365.md), [ENTRA-SETUP.md](ENTRA-SETUP.md)),
-vSphere ([FR-VSPHERE.md](FR-VSPHERE.md)), FortiGate via FortiAnalyzer
-([FR-FORTIANALYZER.md](FR-FORTIANALYZER.md)), LDAPS ([LDAPS.md](LDAPS.md)), plus the overall
+Source-specific setup is documented per source: Veeam ([../VEEAM.md](../VEEAM.md)),
+Microsoft 365 / Entra ([../M365.md](../M365.md), [ENTRA-SETUP.md](ENTRA-SETUP.md)),
+vSphere ([../VSPHERE.md](../VSPHERE.md)), FortiGate via FortiAnalyzer
+([../FORTIANALYZER.md](../FORTIANALYZER.md)), LDAPS ([LDAPS.md](LDAPS.md)), plus the overall
 [INTEGRATION-SOURCES.md](INTEGRATION-SOURCES.md) and [INVENTAIRE-SOURCES.md](INVENTAIRE-SOURCES.md).

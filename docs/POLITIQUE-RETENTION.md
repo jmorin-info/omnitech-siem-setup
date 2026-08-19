@@ -1,96 +1,95 @@
-# Politique de rétention des journaux - OMNITECH Security (SIEM Graylog)
+# Log Retention Policy - OMNITECH Security (Graylog SIEM)
 
-Référence ISO/IEC 27001:2022 — A.8.15 (Journalisation), A.8.16 (Surveillance),
-A.8.17 (Synchronisation des horloges). Approche **risk-based** : la durée est
-adaptée à la valeur sécurité/forensic de chaque source, dans la limite du
-stockage disponible.
+ISO/IEC 27001:2022 reference — A.8.15 (Logging), A.8.16 (Monitoring),
+A.8.17 (Clock synchronization). **Risk-based** approach: the duration is
+adapted to the security/forensic value of each source, within the limit of
+available storage.
 
-> Revue : 2026-06-14 — à valider et dater par le RSSI.
+> Review: 2026-06-14 — to be validated and dated by the CISO.
 
-## Durées de conservation (en ligne, consultable)
+## Retention periods (online, searchable)
 
-Chaque source dispose d'un **index set dédié** (préfixe `omni-*`) avec rotation
-journalière (`P1D`) et rétention exprimée en nombre d'index (1 index = 1 jour).
-La rétention « supprime » (delete) les index une fois la fenêtre dépassée.
+Each source has a **dedicated index set** (prefix `omni-*`) with daily rotation
+(`P1D`) and retention expressed as a number of indices (1 index = 1 day).
+Retention "deletes" the indices once the window has been exceeded.
 
-| Source                          | Index set        | Durée  | Justification                                                            |
-|---------------------------------|------------------|--------|-------------------------------------------------------------------------|
-| Windows Security (AD)           | `omni-winsec`    | 180 j  | Dossier sécurité : authentification, comptes, privilèges, PKI (6 mois)  |
-| Sysmon (endpoint)               | `omni-sysmon`    | 90 j   | Détections, chasse, processus/réseau (hors bruit registre) ; gros volume — 90 j sous contrainte de capacité (cf. note capacité) |
-| Windows autres (Veeam, ADCS…)   | `omni-winother`  | 90 j   | Sauvegardes Veeam, PKI/ADCS, services système ; 90 j sous contrainte de capacité |
-| Microsoft 365 / Entra           | `omni-m365`      | 365 j  | Connexions cloud, partages, rôles, audit Entra ID (collecté en GELF)    |
-| vSphere                         | `omni-vsphere`   | 180 j  | Accès hyperviseur, suppressions de VM (6 mois)                          |
-| ESET PROTECT (EDR/AV)           | `omni-eset`      | 180 j  | Détections poste/serveur, valeur forensique élevée (syslog JSON) (6 mois) |
-| FortiGate (pare-feu)            | `omni-fortigate` | 180 j  | Trafic volumineux : 6 mois de fenêtre forensic (relevé à 180 j le 14/08 pour la profondeur d'investigation d'intrusion) |
-|                                 |                  |        | sécurité (deny/UTM/VPN) restent corrélables sur toute la fenêtre        |
-| BunkerWeb (WAF)                 | `omni-bunkerweb` | 90 j   | Logs HTTP/WAF à fort volume ; 90 j couvrent le besoin d'investigation   |
-| Vaultwarden (coffre MDP)        | `omni-vaultwarden` | 90 j | Coffre de mots de passe : échecs d'auth, accès admin. **Index dédié** pour éviter que le volume/rejeu n'évince les events internes du SIEM |
-| FortiManager (admin/config)     | `omni-fortimanager` | 90 j | Journaux d'administration/configuration FAZ (changements, accès admin). **Index dédié** (créé par `63`). 90 j sous contrainte de capacité (à relever si besoin de traçabilité longue) |
-| Interne SIEM (UEBA/ML/santé)    | `omni-interne`   | 90 j   | Événements réinjectés : scores UEBA/ML, SLA de collecte, santé robots, incidents XDR. 90 j couvrent l'analyse de tendance et l'entraînement ML (fenêtres ≤ 7 j). **Index dédié** (créé par `79`) |
+| Source                          | Index set        | Duration | Justification                                                            |
+|---------------------------------|------------------|----------|-------------------------------------------------------------------------|
+| Windows Security (AD)           | `omni-winsec`    | 180 d    | Security file: authentication, accounts, privileges, PKI (6 months)     |
+| Sysmon (endpoint)               | `omni-sysmon`    | 90 d     | Detections, hunting, process/network (excluding registry noise); large volume — 90 d under capacity constraint (see capacity note) |
+| Windows other (Veeam, ADCS…)    | `omni-winother`  | 90 d     | Veeam backups, PKI/ADCS, system services; 90 d under capacity constraint |
+| Microsoft 365 / Entra           | `omni-m365`      | 365 d    | Cloud sign-ins, shares, roles, Entra ID audit (collected in GELF)       |
+| vSphere                         | `omni-vsphere`   | 180 d    | Hypervisor access, VM deletions (6 months)                              |
+| ESET PROTECT (EDR/AV)           | `omni-eset`      | 180 d    | Workstation/server detections, high forensic value (syslog JSON) (6 months) |
+| FortiGate (firewall)            | `omni-fortigate` | 180 d    | High-volume traffic: 6-month forensic window (raised to 180 d on 14/08 for intrusion investigation depth) |
+|                                 |                  |          | security events (deny/UTM/VPN) remain correlatable across the whole window |
+| BunkerWeb (WAF)                 | `omni-bunkerweb` | 90 d     | High-volume HTTP/WAF logs; 90 d covers the investigation need           |
+| Vaultwarden (password vault)    | `omni-vaultwarden` | 90 d   | Password vault: auth failures, admin access. **Dedicated index** to prevent volume/replay from evicting the SIEM's internal events |
+| FortiManager (admin/config)     | `omni-fortimanager` | 90 d  | FAZ administration/configuration logs (changes, admin access). **Dedicated index** (created by `63`). 90 d under capacity constraint (to be raised if long-term traceability is needed) |
+| SIEM internal (UEBA/ML/health)  | `omni-interne`   | 90 d     | Re-injected events: UEBA/ML scores, collection SLA, robot health, XDR incidents. 90 d covers trend analysis and ML training (windows ≤ 7 d). **Dedicated index** (created by `79`) |
 
-Sources annexes :
-- **NPS / RADIUS** : champs mappés et index prêts côté SIEM, mais la collecte
-  n'est **pas encore activée côté client** (aucun volume à ce jour).
-- **Télémétrie interne SIEM** (stream « OMNI - Interne SIEM » : santé collecte,
-  disk-guard, contrôle de certificats) : conservée dans l'index set Graylog par
-  défaut, rétention courte (gestion opérationnelle, pas de valeur d'audit long
-  terme).
+Ancillary sources:
+- **NPS / RADIUS**: fields mapped and index ready on the SIEM side, but
+  collection is **not yet enabled on the client side** (no volume to date).
+- **SIEM internal telemetry** (stream "OMNI - Interne SIEM": collection health,
+  disk-guard, certificate monitoring): kept in the default Graylog index set,
+  short retention (operational management, no long-term audit value).
 
-## Événements explicitement EXCLUS (risque accepté, faible valeur / fort volume)
+## Events explicitly EXCLUDED (accepted risk, low value / high volume)
 
-La réduction de bruit est appliquée **au stage 30 du pipeline, APRÈS toute
-détection** (script 41-retention-iso.sh) : elle ne casse aucune règle de
-détection, elle évite seulement de stocker durablement des événements à fort
-volume et faible valeur.
+Noise reduction is applied **at pipeline stage 30, AFTER all detection**
+(script 41-retention-iso.sh): it breaks no detection rule, it only avoids
+durably storing high-volume, low-value events.
 
-| Source           | Event                              | Motif                                                                                                       |
+| Source           | Event                              | Reason                                                                                                       |
 |------------------|------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| Sysmon           | EID 12 (RegistryEvent add/delete)  | ~62 % du volume Sysmon, bruit ; la persistance registre reste couverte par l'EID 13 (Value Set), conservé   |
-| Windows Security | 4673 (Sensitive Privilege Use)     | Très volumineux, quasi-100 % bénin (services système)                                                        |
-| Windows Security | 4627 (Group Membership)            | Redondant avec 4624 (déjà conservé)                                                                          |
+| Sysmon           | EID 12 (RegistryEvent add/delete)  | ~62% of Sysmon volume, noise; registry persistence remains covered by EID 13 (Value Set), which is retained  |
+| Windows Security | 4673 (Sensitive Privilege Use)     | Very high volume, almost 100% benign (system services)                                                       |
+| Windows Security | 4627 (Group Membership)            | Redundant with 4624 (already retained)                                                                        |
 
-Conservés volontairement malgré leur volume : **4662** (requis pour la détection
-DCSync) et **4688** (traçabilité de création de processus).
+Deliberately retained despite their volume: **4662** (required for DCSync
+detection) and **4688** (process creation traceability).
 
-## Intégrité & protection (A.8.15)
-- Index OpenSearch en écriture seule (pas de modification a posteriori).
-- Détection d'effacement de journaux (1102 / 4719 / 1100 / 104) -> alerte.
-- Sauvegarde quotidienne de la configuration ; horloges synchronisées (NTP).
-- Accès SIEM restreint (LDAPS, groupe AD dédié).
-- Horodatage normalisé à la source de l'événement (ex. FortiGate : champ
-  `eventtime`), garantissant l'ordre chronologique réel en forensic.
+## Integrity & protection (A.8.15)
+- OpenSearch indices are write-only (no after-the-fact modification).
+- Log-clearing detection (1102 / 4719 / 1100 / 104) -> alert.
+- Daily configuration backup; clocks synchronized (NTP).
+- SIEM access restricted (LDAPS, dedicated AD group).
+- Timestamp normalized at the event source (e.g. FortiGate: `eventtime`
+  field), guaranteeing the real chronological order in forensics.
 
-## Justification des durées (contrainte de capacité — A.8.15 risk-based)
-Les durées ci-dessus résultent d'un arbitrage **risque × capacité disque** vérifié
-le 14/08/2026. Une rétention uniforme de 365 j sur toutes les sources sécurité
-demanderait **~9 To** — au-delà du disque `/data` de 7,3 To — donc irréaliste. Le
-choix retenu : conservation la plus longue pour les sources à **plus forte valeur
-de traçabilité et plus faible volume** (M365/Entra 365 j, SEAL 365-730 j), palier
-**intermédiaire 180 j** pour les sources sécurité à volume moyen (Windows Security,
-ESET, vSphere, FortiGate — 6 mois de fenêtre forensic), et **90 j** pour les sources
-à très fort volume ou faible valeur unitaire (Sysmon, Windows autres, WAF/BunkerWeb,
-Vaultwarden, DHCP, interne SIEM). Projection à rétention pleine : **~5,3 To ≈ 72 %**
-du disque (réplicas = 0, mono-nœud), sous le seuil d'alerte de 80 %. Toute extension
-d'une source à volume élevé (ex. Sysmon → 180 j) doit être validée par un recalcul
-de capacité pour ne pas franchir le seuil de purge d'urgence (88 %).
+## Justification of durations (capacity constraint — A.8.15 risk-based)
+The durations above result from a **risk × disk capacity** trade-off verified
+on 2026-08-14. A uniform 365-d retention on all security sources would require
+**~9 TB** — beyond the 7.3 TB `/data` disk — hence unrealistic. The chosen
+approach: longest retention for the sources with the **highest traceability
+value and lowest volume** (M365/Entra 365 d, SEAL 365-730 d), an
+**intermediate 180-d tier** for medium-volume security sources (Windows Security,
+ESET, vSphere, FortiGate — 6-month forensic window), and **90 d** for very
+high-volume or low unit-value sources (Sysmon, Windows other, WAF/BunkerWeb,
+Vaultwarden, DHCP, SIEM internal). Projection at full retention: **~5.3 TB ≈ 72%**
+of the disk (replicas = 0, single node), below the 80% alert threshold. Any
+extension of a high-volume source (e.g. Sysmon → 180 d) must be validated by a
+capacity recalculation so as not to cross the emergency purge threshold (88%).
 
-## Garde-fou de capacité (disk-guard)
-Disque **/data dédié, 7,3 To**. Le service `omni-disk-guard` (32-disk-guard.sh,
-timer systemd toutes les 6 h) constitue le filet de sécurité ultime, au-delà de
-la rétention nominale ci-dessus :
+## Capacity safeguard (disk-guard)
+Dedicated **/data disk, 7.3 TB**. The `omni-disk-guard` service (32-disk-guard.sh,
+systemd timer every 6 h) is the ultimate safety net, beyond the nominal
+retention above:
 
-| Seuil d'occupation /data | Action                                                                                          |
-|--------------------------|-------------------------------------------------------------------------------------------------|
-| < 80 %                   | Rien : la rétention normale supprime les index à J+rétention                                     |
-| ≥ 80 %                   | Alerte (GELF -> mail « Disque SIEM >80% ») — revoir le plan de rétention                         |
-| ≥ 88 %                   | **Purge d'urgence** : suppression des index `omni-*` les plus ANCIENS (jamais l'index actif d'un flux) jusqu'à repasser sous **82 %**, + alerte |
+| /data occupancy threshold | Action                                                                                          |
+|---------------------------|-------------------------------------------------------------------------------------------------|
+| < 80%                     | Nothing: normal retention deletes indices at D+retention                                          |
+| ≥ 80%                     | Alert (GELF -> "SIEM disk >80%" email) — review the retention plan                               |
+| ≥ 88%                     | **Emergency purge**: deletion of the OLDEST `omni-*` indices (never a stream's active index) until dropping back below **82%**, + alert |
 
-Ce mécanisme s'interpose AVANT les watermarks OpenSearch (95 % = indices passés
-en lecture seule = collecte stoppée). Revue mensuelle du Go/jour réel (cf.
-supervision de la collecte). Au volume actuel, /data est occupé à ~2 % (147 Go).
+This mechanism intervenes BEFORE the OpenSearch watermarks (95% = indices
+switched to read-only = collection stopped). Monthly review of the actual
+GB/day (see collection supervision). At the current volume, /data is ~2%
+occupied (147 GB).
 
 ---
 
-_Document généré et maintenu par 41-retention-iso.sh — à valider et dater par le
-RSSI. Voir aussi : POL-SUPERVISION-JOURNALISATION.md, INVENTAIRE-SOURCES.md,
+_Document generated and maintained by 41-retention-iso.sh — to be validated and
+dated by the CISO. See also: POL-SUPERVISION-JOURNALISATION.md, INVENTAIRE-SOURCES.md,
 ISO27001-MAPPING.md._

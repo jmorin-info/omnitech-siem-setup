@@ -12,7 +12,7 @@ variant exists for DR / staging (`docker/`).
   - Debian-family OS, `systemd`, `jq`, `curl`, Python 3 (stdlib only for the custom code).
 - Network reachability from the log sources (Beats/TLS 5044, Syslog 1514–1520, GELF 12201/12202).
 - Credentials/secrets populated in `00-vars.env` (root, `600`) from
-  [SECRETS.example.md](FR-SECRETS.example.md) — nothing secret is committed.
+  [SECRETS.example.md](../SECRETS.example.md) — nothing secret is committed.
 
 ## Provisioning order
 
@@ -60,7 +60,7 @@ helpers in `lib-graylog.sh`).
 
 To rebuild from source onto a fresh host, follow
 [PRA-RECONSTRUCTION-SIEM.md](PRA-RECONSTRUCTION-SIEM.md): provision the base stack (00–09),
-restore MongoDB + the OpenSearch snapshot ([FR-RESTORE.md](FR-RESTORE.md)), then re-run the
+restore MongoDB + the OpenSearch snapshot ([../RESTORE.md](../RESTORE.md)), then re-run the
 model/detection/robot scripts. Because provisioning is idempotent, re-running the full suite
 on an existing node reconciles drift rather than duplicating objects.
 

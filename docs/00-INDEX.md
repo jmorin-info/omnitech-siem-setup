@@ -27,7 +27,7 @@ traceability. It is authoritative for audit purposes.
 **Architecture &amp; sources**
 - [DOSSIER-ARCHITECTURE-SIEM.md](DOSSIER-ARCHITECTURE-SIEM.md) — full architecture dossier
 - [INTEGRATION-SOURCES.md](INTEGRATION-SOURCES.md) · [INVENTAIRE-SOURCES.md](INVENTAIRE-SOURCES.md) — source integration &amp; inventory
-- [FR-CONTEXT.md](FR-CONTEXT.md) — project context &amp; history
+- [../CONTEXT.md](../CONTEXT.md) — project context &amp; history
 
 **Detection &amp; response**
 - [REGISTRE-DETECTIONS.md](REGISTRE-DETECTIONS.md) — detection registry
@@ -43,7 +43,7 @@ traceability. It is authoritative for audit purposes.
 - [POLITIQUE-RETENTION.md](POLITIQUE-RETENTION.md) — retention policy
 - [GUIDE-DEPANNAGE.md](GUIDE-DEPANNAGE.md) — troubleshooting
 - [PROCEDURE-CHIFFREMENT-REPOS.md](PROCEDURE-CHIFFREMENT-REPOS.md) — volume encryption
-- [FR-RESTORE.md](FR-RESTORE.md) — restore procedure
+- [../RESTORE.md](../RESTORE.md) — restore procedure
 
 **Compliance &amp; governance (ISO/IEC 27001)**
 - [ISO27001-MAPPING.md](ISO27001-MAPPING.md) · [REGISTRE-CONFORMITE-ISO27001.md](REGISTRE-CONFORMITE-ISO27001.md) — control mapping &amp; register
@@ -54,7 +54,7 @@ traceability. It is authoritative for audit purposes.
 - `EVIDENCE-AUDIT-*.md` — dated audit evidence packs
 
 **Source-specific integration notes**
-- [FR-VEEAM.md](FR-VEEAM.md) · [FR-M365.md](FR-M365.md) · [FR-VSPHERE.md](FR-VSPHERE.md) · [FR-FORTIANALYZER.md](FR-FORTIANALYZER.md) · [ENTRA-SETUP.md](ENTRA-SETUP.md) · [LDAPS.md](LDAPS.md)
+- [../VEEAM.md](../VEEAM.md) · [../M365.md](../M365.md) · [../VSPHERE.md](../VSPHERE.md) · [../FORTIANALYZER.md](../FORTIANALYZER.md) · [ENTRA-SETUP.md](ENTRA-SETUP.md) · [LDAPS.md](LDAPS.md)
 
 **Governance &amp; misc**
 - [SYNTHESE-EXECUTIVE.md](SYNTHESE-EXECUTIVE.md) — executive summary

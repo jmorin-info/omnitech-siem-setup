@@ -1,117 +1,117 @@
-# PRA — Plan de reconstruction du SIEM sur un nouveau serveur
+# PRA — SIEM reconstruction plan on a new server
 
-*Version 1.0 — 12/06/2026 — Classification : interne — Réf ISO A.8.13, A.5.30*
+*Version 1.0 — 12/06/2026 — Classification: internal — ISO ref A.8.13, A.5.30*
 
-Ce document décrit la **remise en service du SIEM sur un serveur de
-remplacement** en cas de perte de la VM `bx-it-graylog-vm`. Il complète la
-procédure technique détaillée `RESTORE.md` (commandes exactes) par le cadre
-de continuité : objectifs, scénarios, rôles, validation.
+This document describes the **recommissioning of the SIEM on a replacement
+server** in the event of loss of the `bx-it-graylog-vm` VM. It complements the
+detailed technical procedure `RESTORE.md` (exact commands) with the continuity
+framework: objectives, scenarios, roles, validation.
 
-## 1. Objectifs de continuité
+## 1. Continuity objectives
 
-| Indicateur | Valeur cible | Justification |
+| Indicator | Target value | Rationale |
 |---|---|---|
-| **RTO** (reprise de la collecte) | ≤ 4 h | après mise à disposition d'une VM conforme |
-| **RPO config** (perte de configuration) | ≤ 24 h | sauvegarde quotidienne 03:15 |
-| **RPO logs** (perte d'historique) | jusqu'à la dernière rétention | les **journaux ne sont pas sauvegardés** (choix assumé : volume) — seule la configuration l'est |
+| **RTO** (collection resumption) | ≤ 4 h | after a compliant VM is made available |
+| **RPO config** (configuration loss) | ≤ 24 h | daily backup at 03:15 |
+| **RPO logs** (history loss) | up to the last retention | **logs are not backed up** (deliberate choice: volume) — only the configuration is |
 
-**Conséquence clé** : après reconstruction, toute la chaîne de collecte, les
-détections, dashboards et alertes reprennent à l'identique ; l'historique des
-logs antérieurs est perdu mais la collecte temps réel redémarre immédiatement
-(les agents/forwarders pointent sur le même FQDN/IP).
+**Key consequence**: after reconstruction, the entire collection chain,
+detections, dashboards and alerts resume identically; the history of prior logs
+is lost but real-time collection restarts immediately (agents/forwarders point
+to the same FQDN/IP).
 
-## 2. Pré-requis disponibles en permanence (à vérifier maintenant)
+## 2. Prerequisites permanently available (to verify now)
 
-| Élément | Emplacement | Vérifié |
+| Item | Location | Verified |
 |---|---|---|
-| Archives de config chiffrées (14 j) | `\\10.33.50.5\Public\SIEM\omni-siem-config_*.tar.gz.enc` | rotation OK |
-| **Passphrase de déchiffrement** | Coffre-fort (`BACKUP_PASSPHRASE`) | ⚠️ À DÉPOSER AU COFFRE |
-| Mot de passe `admin` local de secours | Coffre-fort | ✅ |
-| Identifiants `svc_siem` (SMB) | Coffre-fort | ✅ |
-| Procédure technique | `RESTORE.md` (inclus dans l'archive) | ✅ |
-| Réservation IP/DNS `10.33.220.10` / FQDN | DNS interne + /etc/hosts | ✅ |
-| **Clé HMAC d'intégrité** `/etc/graylog/omni-integrity.key` | Coffre-fort + hors-bande | ⚠️ sans elle, la chaîne d'intégrité passée n'est plus **vérifiable** (perte de valeur probante) |
-| **Passphrase de secours LUKS `/data`** + **sauvegarde chiffrée du header** (header **inline** ; `omni-luks-header-*.img.enc`) | Passphrase → Coffre-fort ; header → SMB `/SIEM/luks/` (+ inclus dans le backup config chiffré quotidien) | ⚠️ sans la **passphrase**, `/data` est irrécupérable si le TPM/carte mère change ; le header inline est **sauvegardé/restaurable** (`luksHeaderRestore`) |
+| Encrypted config archives (14 d) | `\\10.33.50.5\Public\SIEM\omni-siem-config_*.tar.gz.enc` | rotation OK |
+| **Decryption passphrase** | Vault (`BACKUP_PASSPHRASE`) | ⚠️ TO BE DEPOSITED IN THE VAULT |
+| Local emergency `admin` password | Vault | ✅ |
+| `svc_siem` credentials (SMB) | Vault | ✅ |
+| Technical procedure | `RESTORE.md` (included in the archive) | ✅ |
+| IP/DNS reservation `10.33.220.10` / FQDN | Internal DNS + /etc/hosts | ✅ |
+| **Integrity HMAC key** `/etc/graylog/omni-integrity.key` | Vault + out-of-band | ⚠️ without it, the past integrity chain can no longer be **verified** (loss of evidentiary value) |
+| **LUKS emergency passphrase for `/data`** + **encrypted header backup** (header **inline**; `omni-luks-header-*.img.enc`) | Passphrase → Vault; header → SMB `/SIEM/luks/` (+ included in the daily encrypted config backup) | ⚠️ without the **passphrase**, `/data` is unrecoverable if the TPM/motherboard changes; the inline header is **backed up/restorable** (`luksHeaderRestore`) |
 
-> Sans la passphrase de sauvegarde, les archives sont **irrécupérables**.
-> Idem pour la **clé HMAC d'intégrité** (vérification de l'audit-trail) et la
-> **passphrase/header LUKS** (déchiffrement de `/data` sur nouveau matériel — le
-> TPM est lié à la carte mère, ré-enrôlement requis au remplacement). Ces 4 secrets
-> sont les points de défaillance unique du PRA : présence au coffre vérifiée à
-> chaque revue trimestrielle.
+> Without the backup passphrase, the archives are **unrecoverable**.
+> The same applies to the **integrity HMAC key** (audit-trail verification) and the
+> **LUKS passphrase/header** (decryption of `/data` on new hardware — the
+> TPM is bound to the motherboard, re-enrolment required upon replacement). These 4 secrets
+> are the single points of failure of the PRA: presence in the vault verified at
+> each quarterly review.
 
-## 3. Scénarios et déclenchement
+## 3. Scenarios and triggering
 
-| Scénario | Réponse |
+| Scenario | Response |
 |---|---|
-| VM corrompue / disque système perdu, `/data` intact | Reconstruire l'OS + pile, restaurer la config, **re-pointer `/data`** (logs conservés) |
-| Perte totale (VM + données) | Reconstruction complète, logs repartent de zéro |
-| Indisponibilité temporaire (service planté) | Pas de PRA : `systemctl restart` ; cf. PRO §4 |
+| Corrupted VM / lost system disk, `/data` intact | Rebuild the OS + stack, restore the config, **re-point `/data`** (logs retained) |
+| Total loss (VM + data) | Full reconstruction, logs start from zero |
+| Temporary unavailability (crashed service) | No PRA: `systemctl restart`; see PRO §4 |
 
-Déclenchement : décision de l'**Admin SIEM** (incident d'exploitation) ou de
-la **DSI** (sinistre majeur). Prévenir l'équipe IT (les alertes vont cesser
-pendant la bascule).
+Triggering: decision of the **SIEM Admin** (operational incident) or the
+**IT department** (major disaster). Notify the IT team (alerts will cease
+during the switchover).
 
-## 4. Procédure de reconstruction (résumé — détail dans RESTORE.md)
+## 4. Reconstruction procedure (summary — details in RESTORE.md)
 
-1. **Provisionner** une VM Debian 12+, **même hostname/IP** (`bx-it-graylog-vm`
-   / 10.33.220.10), VLAN 220, disque data sur `/data`.
-2. **Installer la pile** aux versions de référence (DOSSIER §2 : Graylog
+1. **Provision** a Debian 12+ VM, **same hostname/IP** (`bx-it-graylog-vm`
+   / 10.33.220.10), VLAN 220, data disk on `/data`.
+2. **Install the stack** at the reference versions (DOSSIER §2: Graylog
    7.1.3, OpenSearch 2.19.5, MongoDB 8.0.24, nginx) + `cifs-utils`.
-3. **Récupérer et déchiffrer** la dernière archive depuis le partage SMB
-   (compte `svc_siem`, passphrase du coffre).
-4. **Restaurer** : fichiers `/etc` (graylog, opensearch, nginx, systemd),
-   `/usr/local/sbin`, kit `/kit`, IaC `~/omnitech-siem-setup`, puis
-   `mongorestore` de la base `graylog` (gestion de l'auth Mongo : RESTORE §4).
-5. **Démarrer** mongod → opensearch → graylog-server → nginx ; réactiver les
-   timers `omni-*`.
-6. **Vérifier** (cf. §5).
+3. **Retrieve and decrypt** the latest archive from the SMB share
+   (`svc_siem` account, vault passphrase).
+4. **Restore**: `/etc` files (graylog, opensearch, nginx, systemd),
+   `/usr/local/sbin`, `/kit` kit, IaC `~/omnitech-siem-setup`, then
+   `mongorestore` of the `graylog` database (Mongo auth handling: RESTORE §4).
+5. **Start** mongod → opensearch → graylog-server → nginx; re-enable the
+   `omni-*` timers.
+6. **Verify** (see §5).
 
-## 5. Validation post-reconstruction (checklist)
+## 5. Post-reconstruction validation (checklist)
 
-- [ ] Console accessible en HTTPS, login AD (LDAPS) **et** `admin` local OK.
-- [ ] Inputs à l'écoute : `ss -tlnp | grep -E "5044|1514|1516|12201"`.
-- [ ] Les agents Winlogbeat se reconnectent (recherche `source:*` < 5 min).
-- [ ] FAZ et vSphere émettent (streams FortiGate / vSphere alimentés).
-- [ ] Collecteurs M365 : timers actifs, dernier run OK.
-- [ ] 88 définitions d'événements présentes et **activées**.
-- [ ] Dashboard « OMNI - SOC » s'affiche (24 pages).
-- [ ] Sauvegarde : `bash 30-backup-config.sh` réussit (dépôt SMB).
-- [ ] Une notification de test arrive par mail **et** Teams.
-- [ ] `/data` : indices présents (si conservés) ou recréés ; rétentions OK.
+- [ ] Console accessible over HTTPS, AD login (LDAPS) **and** local `admin` OK.
+- [ ] Inputs listening: `ss -tlnp | grep -E "5044|1514|1516|12201"`.
+- [ ] Winlogbeat agents reconnect (search `source:*` < 5 min).
+- [ ] FAZ and vSphere emitting (FortiGate / vSphere streams populated).
+- [ ] M365 collectors: timers active, last run OK.
+- [ ] 88 event definitions present and **enabled**.
+- [ ] "OMNI - SOC" dashboard displays (24 pages).
+- [ ] Backup: `bash 30-backup-config.sh` succeeds (SMB deposit).
+- [ ] A test notification arrives by email **and** Teams.
+- [ ] `/data`: indices present (if retained) or recreated; retentions OK.
 
-## 6. Bascule et communication
+## 6. Switchover and communication
 
-- Pendant la reconstruction, **aucune alerte n'est émise** : surveiller
-  manuellement les points critiques (AD, VPN) via les consoles natives
-  (FortiGate, Entra) jusqu'au rétablissement.
-- À la fin : informer l'équipe IT du rétablissement ; consigner l'incident
-  et le temps de reprise réel (mesure du RTO) dans le registre d'incidents.
+- During reconstruction, **no alert is emitted**: manually monitor the
+  critical points (AD, VPN) via the native consoles
+  (FortiGate, Entra) until restoration.
+- At the end: inform the IT team of the restoration; record the incident
+  and the actual recovery time (RTO measurement) in the incident register.
 
-## 7. Maintien en condition du PRA
+## 7. PRA maintenance in operational condition
 
-| Action | Fréquence |
+| Action | Frequency |
 |---|---|
-| **Vérification de restaurabilité de l'archive** (déchiffrement + intégrité tar + présence dump Mongo/`server.conf`) | **Automatique, à chaque backup** (`30-backup-config.sh` §3b ; échec → GELF `siem_backup echec` + archive non expédiée) |
-| Vérifier la présence des 14 archives sur le partage | Mensuelle (PRO §2) |
-| Vérifier la passphrase et les secrets au coffre | Trimestrielle |
-| **Test de restauration réel sur VM jetable** | ≥ 1×/an (exigence A.8.13) |
-| Mettre à jour les versions de référence (DOSSIER §2) | À chaque montée de version |
+| **Archive restorability verification** (decryption + tar integrity + presence of Mongo dump/`server.conf`) | **Automatic, at each backup** (`30-backup-config.sh` §3b; failure → GELF `siem_backup echec` + archive not shipped) |
+| Verify the presence of the 14 archives on the share | Monthly (PRO §2) |
+| Verify the passphrase and secrets in the vault | Quarterly |
+| **Real restoration test on a disposable VM** | ≥ 1×/year (A.8.13 requirement) |
+| Update the reference versions (DOSSIER §2) | At each version upgrade |
 
-Un PRA non testé n'est pas un PRA : le test annuel est **obligatoire** et son
-compte-rendu est conservé comme preuve d'audit.
+An untested PRA is not a PRA: the annual test is **mandatory** and its
+report is retained as audit evidence.
 
-## 8. Journal des tests de restauration
+## 8. Restoration test log
 
-| Date | Type | Périmètre | Résultat | Preuve |
+| Date | Type | Scope | Result | Evidence |
 |---|---|---|---|---|
-| **2026-06-22** | **Restaurabilité de la sauvegarde** (non destructif, hors-ligne) | Dernière archive `omni-siem-config_2026-06-22.tar.gz.enc` : déchiffrement AES-256 (passphrase coffre), intégrité `tar` et **complétude du contenu** | **PASS** | Déchiffrement OK (255 Mo) ; archive valide **18 044 entrées** ; **65 collections Mongo** (`mongodump/graylog/`) dont `streams`, `dashboards`, `event_definitions`, `inputs`, `users`, **`pipeline_processor_pipelines` + `pipeline_processor_rules` + `_pipelines_streams`** (toute la logique de détection + connexions), `event_notifications`, `grok_patterns`, `scheduler_*` ; `etc/graylog/server.conf`, `lookups`, `etc/opensearch` présents. Scratch **effacé (`shred`)**. |
+| **2026-06-22** | **Backup restorability** (non-destructive, offline) | Latest archive `omni-siem-config_2026-06-22.tar.gz.enc`: AES-256 decryption (vault passphrase), `tar` integrity and **content completeness** | **PASS** | Decryption OK (255 MB); valid archive **18,044 entries**; **65 Mongo collections** (`mongodump/graylog/`) including `streams`, `dashboards`, `event_definitions`, `inputs`, `users`, **`pipeline_processor_pipelines` + `pipeline_processor_rules` + `_pipelines_streams`** (all detection logic + connections), `event_notifications`, `grok_patterns`, `scheduler_*`; `etc/graylog/server.conf`, `lookups`, `etc/opensearch` present. Scratch **wiped (`shred`)**. |
 
-> **Portée du test du 22/06** : il valide la **chaîne de sauvegarde** (existence,
-> déchiffrabilité, intégrité, complétude de la config) — soit les modes de
-> défaillance les plus fréquents (archive corrompue, passphrase erronée,
-> collection manquante). Il **ne remplace pas** le **test de reconstruction
-> complet sur VM jetable** (§7, exigence A.8.13 annuelle), qui valide en plus la
-> ré-installation de la pile et la reprise de collecte — **toujours à planifier**
-> (infra VM requise). Constat utile : les règles de pipeline sont bien sauvegardées
-> sous `pipeline_processor_*` (et non `pipeline_processing_*`).
+> **Scope of the 22/06 test**: it validates the **backup chain** (existence,
+> decryptability, integrity, config completeness) — that is, the most frequent
+> failure modes (corrupted archive, wrong passphrase, missing collection). It
+> **does not replace** the **full reconstruction test on a disposable VM**
+> (§7, annual A.8.13 requirement), which additionally validates the
+> reinstallation of the stack and the resumption of collection — **still to be
+> scheduled** (VM infra required). Useful finding: pipeline rules are indeed backed up
+> under `pipeline_processor_*` (and not `pipeline_processing_*`).

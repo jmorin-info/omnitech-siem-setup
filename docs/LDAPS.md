@@ -1,102 +1,102 @@
-# LDAPS — Authentification Active Directory sur la console Graylog
+# LDAPS — Active Directory authentication on the Graylog console
 
-*Objectif : comptes nominatifs AD pour la console (traçabilité ISO A.5.16/A.8.5),
-le compte local `admin` ne servant plus que de secours.*
+*Goal: named AD accounts for the console (traceability ISO A.5.16/A.8.5),
+with the local `admin` account serving only as a fallback.*
 
-## 0. Choix retenus (12/06/2026)
+## 0. Chosen options (12/06/2026)
 
-- Compte de liaison : **`svc_siem`** (réutilisé — utilisateur standard,
-  également utilisé pour le dépôt des sauvegardes).
-- Compte de test / référence admin : **`adm-jmorin`**.
-- DC cible : **bx-ad-01-it-vm.omnitech.security (10.33.50.250)**.
-- Pré-requis pare-feu : règle FortiGate **425** (Réseau ELK → DC) doit
-  inclure le service **LDAPS-GC** (636/3269) — `append service "LDAPS-GC"`.
-- **Accès restreint aux membres du groupe « Admins du domaine »** (filtre
-  LDAP `memberOf` récursif) : un compte AD hors groupe ne peut pas
-  s'authentifier du tout.
-- Rôle attribué automatiquement : **Admin** (population déjà restreinte).
-- Compte local `admin` conservé en secours (coffre).
+- Bind account: **`svc_siem`** (reused — standard user,
+  also used for the backup deposit).
+- Test / admin reference account: **`adm-jmorin`**.
+- Target DC: **bx-ad-01-it-vm.omnitech.security (10.33.50.250)**.
+- Firewall prerequisite: FortiGate rule **425** (ELK network → DC) must
+  include the **LDAPS-GC** service (636/3269) — `append service "LDAPS-GC"`.
+- **Access restricted to members of the "Admins du domaine" group** (recursive
+  `memberOf` LDAP filter): an AD account outside the group cannot
+  authenticate at all.
+- Automatically assigned role: **Admin** (population already restricted).
+- Local `admin` account kept as fallback (vault).
 
-> **ÉTAT : OPÉRATIONNEL (12/06/2026).** Backend « Active Directory OMNITECH »
-> actif (LDAPS 636, certificat vérifié par la Root CA interne). DN du groupe
-> confirmé par LDAP : `CN=Admins du domaine,OU=Comptes_Service,OU=_Support,
-> OU=Entreprise,DC=omnitech,DC=security`. Filtre testé : adm-jmorin (admin)
-> admis, svc_siem (non-admin) rejeté. Règle FortiGate 425 : LDAPS-GC ajouté.
+> **STATUS: OPERATIONAL (12/06/2026).** "Active Directory OMNITECH" backend
+> active (LDAPS 636, certificate verified by the internal Root CA). Group DN
+> confirmed via LDAP: `CN=Admins du domaine,OU=Comptes_Service,OU=_Support,
+> OU=Entreprise,DC=omnitech,DC=security`. Filter tested: adm-jmorin (admin)
+> admitted, svc_siem (non-admin) rejected. FortiGate rule 425: LDAPS-GC added.
 
-## 1. Pré-requis (côté AD — 5 minutes)
+## 1. Prerequisites (AD side — 5 minutes)
 
-1. **Compte de liaison** (lecture seule, jamais interactif) :
-   **`svc_siem`** — compte de service du domaine déjà existant (réutilisé,
-   il sert aussi au dépôt des sauvegardes), mot de passe fort, « le mot de
-   passe n'expire pas », aucune appartenance privilégiée. Le bind se fait au
-   format UPN : `svc_siem@omnitech.security`.
-2. **LDAPS actif sur les DC** : avec AD CS + auto-enrollment c'est déjà le
-   cas en général. Vérification depuis le SIEM (contre le DC réellement
-   ciblé) :
+1. **Bind account** (read-only, never interactive):
+   **`svc_siem`** — existing domain service account (reused,
+   it is also used for the backup deposit), strong password, "password
+   never expires", no privileged membership. The bind is done in
+   UPN format: `svc_siem@omnitech.security`.
+2. **LDAPS active on the DCs**: with AD CS + auto-enrollment this is usually already
+   the case. Verification from the SIEM (against the DC actually
+   targeted):
    ```bash
    echo | openssl s_client -connect bx-ad-01-it-vm.omnitech.security:636 \
      -CAfile /etc/graylog/certs/omnitech-rootca.crt 2>/dev/null | grep "Verify return"
-   # attendu : Verify return code: 0 (ok)   <- confirmé en prod (14/06/2026)
+   # expected: Verify return code: 0 (ok)   <- confirmed in prod (14/06/2026)
    ```
-   (La JVM de Graylog fait déjà confiance à la Root CA via `cacerts-omni.jks`.)
-3. Règle FortiGate **425** (Réseau ELK → DC) : ajouter le service
-   **LDAPS-GC** (TCP 636 + Global Catalog 3269) — `append service "LDAPS-GC"`.
-   La règle n'ouvrait au départ que web+ping ; le service LDAPS-GC a bien été
-   ajouté (cf. section 0).
+   (The Graylog JVM already trusts the Root CA via `cacerts-omni.jks`.)
+3. FortiGate rule **425** (ELK network → DC): add the
+   **LDAPS-GC** service (TCP 636 + Global Catalog 3269) — `append service "LDAPS-GC"`.
+   The rule initially opened only web+ping; the LDAPS-GC service was indeed
+   added (see section 0).
 
-## 2. Mise en place (côté SIEM)
+## 2. Setup (SIEM side)
 
 ```bash
-# 1. renseigner les variables dans 00-vars.env :
+# 1. fill in the variables in 00-vars.env:
 LDAP_HOST='bx-ad-01-it-vm.omnitech.security'
-LDAP_BIND_DN='svc_siem@omnitech.security'          # bind au format UPN
+LDAP_BIND_DN='svc_siem@omnitech.security'          # bind in UPN format
 LDAP_BIND_PASS='********'
 LDAP_REQUIRED_GROUP_DN='CN=Admins du domaine,OU=Comptes_Service,OU=_Support,OU=Entreprise,DC=omnitech,DC=security'
-# (optionnels avec valeurs par défaut : LDAP_PORT=636, LDAP_SEARCH_BASE=DC=omnitech,DC=security)
+# (optional, with default values: LDAP_PORT=636, LDAP_SEARCH_BASE=DC=omnitech,DC=security)
 
-# 2. executer :
+# 2. run:
 bash /root/omnitech-siem-setup/33-ldaps-auth.sh
 ```
 
-Le script crée le backend « Active Directory OMNITECH » (Active Directory,
-LDAPS :636, `transport_security=tls`, `verify_certificates=true`), applique
-le filtre LDAP restrictif (cf. section 3), attribue le rôle par défaut
-**Admin**, puis l'ACTIVE. Le script est **idempotent** (rejoue sans casser un
-backend déjà créé). Il vérifie d'abord le certificat LDAPS contre la Root CA
-interne ; s'il est injoignable, il avertit mais continue (Graylog refusera
-simplement les connexions tant que ce n'est pas corrigé).
+The script creates the "Active Directory OMNITECH" backend (Active Directory,
+LDAPS :636, `transport_security=tls`, `verify_certificates=true`), applies
+the restrictive LDAP filter (see section 3), assigns the default role
+**Admin**, then ACTIVATES it. The script is **idempotent** (replays without breaking an
+already-created backend). It first verifies the LDAPS certificate against the internal
+Root CA; if it is unreachable, it warns but continues (Graylog will simply
+refuse connections until it is fixed).
 
-## 3. Fonctionnement et attribution des rôles
+## 3. Behavior and role assignment
 
-- **Accès restreint par filtre LDAP** : le `user_search_pattern` du backend
-  n'autorise QUE les membres (récursifs) du groupe « Admins du domaine ».
-  Un compte AD hors de ce groupe est invisible au backend et **ne peut pas
-  s'authentifier du tout** :
+- **Access restricted by LDAP filter**: the backend's `user_search_pattern`
+  allows ONLY (recursive) members of the "Admins du domaine" group.
+  An AD account outside this group is invisible to the backend and **cannot
+  authenticate at all**:
   ```
   (&(objectClass=user)
     (|(sAMAccountName={0})(userPrincipalName={0}))
     (memberOf:1.2.840.113556.1.4.1941:=CN=Admins du domaine,OU=Comptes_Service,OU=_Support,OU=Entreprise,DC=omnitech,DC=security))
   ```
-  Le OID `1.2.840.113556.1.4.1941` (LDAP_MATCHING_RULE_IN_CHAIN) rend
-  l'appartenance **récursive** (groupes imbriqués pris en compte).
-- La population étant déjà restreinte aux administrateurs du domaine, le
-  backend attribue **directement le rôle `Admin`** (`default_roles`) à la
-  première connexion — pas de promotion manuelle à faire.
-  > En édition Open Source il n'existe pas de team sync (mapping rôle ⇄ groupe
-  > AD) ; le choix « filtre group-restricted + rôle Admin par défaut » est la
-  > façon d'obtenir un accès admin réservé sans Enterprise.
-- Connexion avec `sAMAccountName` (ou UPN) + mot de passe AD ; le nom complet
-  affiché vient de `displayName`.
-- Le compte local `admin` reste actif en secours (si l'AD est indisponible,
-  la console reste administrable) — mot de passe au coffre.
+  The OID `1.2.840.113556.1.4.1941` (LDAP_MATCHING_RULE_IN_CHAIN) makes
+  membership **recursive** (nested groups taken into account).
+- Since the population is already restricted to domain administrators, the
+  backend assigns the **`Admin` role directly** (`default_roles`) on the
+  first login — no manual promotion to do.
+  > In the Open Source edition there is no team sync (role ⇄ AD group mapping);
+  > the choice "group-restricted filter + default Admin role" is the
+  > way to obtain reserved admin access without Enterprise.
+- Login with `sAMAccountName` (or UPN) + AD password; the displayed full
+  name comes from `displayName`.
+- The local `admin` account remains active as a fallback (if AD is unavailable,
+  the console stays administrable) — password in the vault.
 
-## 4. Retour arrière
+## 4. Rollback
 
-System → Authentication → désactiver le backend (l'authentification locale
-reprend seule), ou via API : `POST /system/authentication/services/configuration`
-avec `{"active_backend": null}`.
+System → Authentication → disable the backend (local authentication
+resumes on its own), or via the API: `POST /system/authentication/services/configuration`
+with `{"active_backend": null}`.
 
 ---
-*Dernière revue : 14/06/2026 — faits vérifiés contre `33-ldaps-auth.sh`,
-`00-vars.env` et le backend actif (API Graylog). Backend OPÉRATIONNEL,
-certificat LDAPS vérifié (`Verify return code: 0`).*
+*Last review: 14/06/2026 — facts verified against `33-ldaps-auth.sh`,
+`00-vars.env` and the active backend (Graylog API). Backend OPERATIONAL,
+LDAPS certificate verified (`Verify return code: 0`).*

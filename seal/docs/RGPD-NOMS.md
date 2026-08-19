@@ -1,92 +1,92 @@
-# RGPD-NOMS.md — Exposition nominative des porteurs de badge (opt-in par site)
+# RGPD-NOMS.md — Named exposure of badge holders (opt-in per site)
 
-Note de gouvernance. Autorite technique : `CONTRACT.md` (D1 minimisation).
-Objet du present document : encadrer la SEULE derogation prevue a D1, a savoir
-l'ajout du nom/prenom du porteur de badge dans le flux SIEM, via la vue
-`dbo.vw_SealIdentity_Nominatif` (`seal/sql/05b_vw_SealIdentity_Nominatif.sql`).
+Governance note. Technical authority: `CONTRACT.md` (D1 minimization).
+Purpose of the present document: to frame the ONLY exception planned for D1, namely
+adding the badge holder's surname/first name to the SIEM flow, via the
+`dbo.vw_SealIdentity_Nominatif` view (`seal/sql/05b_vw_SealIdentity_Nominatif.sql`).
 
-## 1. Etat par defaut : pseudonyme, pas de nom
+## 1. Default state: pseudonym, not name
 
-Par defaut, aucune vue SEAL n'expose de nom. L'identite est portee par le
-`identity_matricule` (via `vw_SealIdentity_SIEM`), voire par le seul
-`badge_number`. C'est un choix de MINIMISATION : le SIEM sait correler et
-alerter sans stocker en continu qui est physiquement derriere chaque badge.
-Ce mode reste le mode recommande et ne demande aucune formalite.
+By default, no SEAL view exposes a name. The identity is carried by the
+`identity_matricule` (via `vw_SealIdentity_SIEM`), or even by the sole
+`badge_number`. This is a MINIMIZATION choice: the SIEM can correlate and
+alert without continuously storing who is physically behind each badge.
+This mode remains the recommended one and requires no formality.
 
-## 2. Le risque a bien peser avant d'activer les noms
+## 2. The risk to weigh carefully before enabling names
 
-Ajouter le nom au flux d'acces et d'alarmes transforme le SIEM en base de
-SURVEILLANCE NOMINATIVE des deplacements et horaires des salaries :
+Adding the name to the access and alarm flow turns the SIEM into a NAMED
+SURVEILLANCE database of employees' movements and schedules:
 
-- traitement a risque eleve (donnees de presence/mouvement rattachees a des
-  personnes identifiees, sur la duree de retention SEAL : 12 a 24 mois selon
-  le stream) ;
-- finalite securite facilement detournable en controle managerial si l'acces
-  n'est pas cloisonne ;
-- effet cumulatif : correle aux autres sources SIEM, le nom devient un
-  tracage transversal de l'activite de l'employe.
+- high-risk processing (presence/movement data linked to identified
+  persons, over the SEAL retention period: 12 to 24 months depending on
+  the stream);
+- a security purpose easily diverted into managerial monitoring if access
+  is not compartmentalized;
+- cumulative effect: correlated with the other SIEM sources, the name becomes
+  cross-cutting tracking of the employee's activity.
 
-C'est pourquoi la vue nominative est LIVREE MAIS DESACTIVEE : sa simple
-presence dans le depot ne l'active pas ; il faut un acte de deploiement ET un
-GRANT explicites, par site.
+This is why the named view is DELIVERED BUT DISABLED: its mere
+presence in the repository does not activate it; it requires an explicit
+deployment act AND an explicit GRANT, per site.
 
-## 3. Alternative proportionnee (recommandee par defaut)
+## 3. Proportionate alternative (recommended by default)
 
-Dans la plupart des cas, on n'a pas besoin du nom en continu : on en a besoin
-PONCTUELLEMENT, lors d'une investigation. La demarche proportionnee est donc :
+In most cases, the name is not needed continuously: it is needed
+OCCASIONALLY, during an investigation. The proportionate approach is therefore:
 
-- conserver dans le SIEM le pseudonyme (matricule / badge) uniquement ;
-- resoudre `matricule -> nom` A LA DEMANDE au moment d'une investigation
-  legitime (requete ciblee cote annuaire / RH ou cote base SEAL), par une
-  personne habilitee et avec tracabilite de la consultation ;
-- ne jamais materialiser le nom dans les index SIEM.
+- keep only the pseudonym (matricule / badge) in the SIEM;
+- resolve `matricule -> name` ON DEMAND at the time of a legitimate
+  investigation (targeted query on the directory / HR side or on the SEAL
+  database side), by an authorized person and with traceability of the consultation;
+- never materialize the name in the SIEM indices.
 
-Cette voie satisfait le besoin d'enquete tout en gardant le stock de donnees
-minimise. Elle doit etre preferee tant qu'un besoin recurrent et documente ne
-justifie pas le stockage nominatif permanent.
+This path satisfies the investigation need while keeping the data store
+minimized. It must be preferred as long as a recurring and documented need does
+not justify permanent named storage.
 
-## 4. Procedure d'activation, PAR SITE
+## 4. Activation procedure, PER SITE
 
-Le choix se fait naturellement par SEAL : chaque serveur a ses propres vues.
-Activer les noms sur un site n'engage que ce site ; les autres restent
-pseudonymises. Pour un site donne, activer UNIQUEMENT apres avoir coche
-l'integralite de la checklist ci-dessous.
+The choice is made naturally by SEAL: each server has its own views.
+Enabling names on one site commits only that site; the others remain
+pseudonymized. For a given site, enable ONLY after checking off the
+entirety of the checklist below.
 
-Checklist d'activation (site : __________, date : __________) :
+Activation checklist (site: __________, date: __________):
 
-- [ ] AIPD (analyse d'impact) realisee pour ce traitement et ce site.
-- [ ] Base legale identifiee et documentee (finalite securite, proportionnalite,
-      duree de conservation dediee justifiee).
-- [ ] Accord formel DPO + RSSI (trace ecrite conservee).
-- [ ] Information prealable du CSE et des salaries concernes (affichage /
-      note de service / mise a jour du registre des traitements).
-- [ ] Acces au dashboard / stream nominatif RESTREINT aux seuls habilites
-      (role dedie cote Graylog, pas d'acces analystes standard).
-- [ ] Journalisation des acces au contenu nominatif activee et revue
-      periodiquement.
-- [ ] Retention dediee decidee pour la donnee nominative (au plus courte
-      possible ; ne pas heriter par defaut des 12/24 mois du flux).
-- [ ] Point de reversibilite prevu (comment revenir au mode pseudonyme).
+- [ ] DPIA (impact assessment) carried out for this processing and this site.
+- [ ] Legal basis identified and documented (security purpose, proportionality,
+      dedicated justified retention period).
+- [ ] Formal DPO + CISO agreement (written record kept).
+- [ ] Prior information of the works council and the employees concerned (posting /
+      service memo / update of the register of processing activities).
+- [ ] Access to the named dashboard / stream RESTRICTED to authorized persons only
+      (dedicated role on the Graylog side, no standard analyst access).
+- [ ] Logging of access to the named content enabled and reviewed
+      periodically.
+- [ ] Dedicated retention decided for the named data (as short as
+      possible; do not inherit the flow's 12/24 months by default).
+- [ ] Reversibility point planned (how to return to pseudonym mode).
 
-Mise en oeuvre technique une fois la checklist validee :
+Technical implementation once the checklist is validated:
 
-1. Deployer `05b_vw_SealIdentity_Nominatif.sql` sur CE SEAL (en plus, ou a la
-   place, de `05_vw_SealIdentity_SIEM.sql`).
-2. Ajouter DELIBEREMENT le droit de lecture au compte de service, par ex. :
+1. Deploy `05b_vw_SealIdentity_Nominatif.sql` on THIS SEAL (in addition to, or in
+   place of, `05_vw_SealIdentity_SIEM.sql`).
+2. DELIBERATELY add read permission to the service account, e.g.:
    `GRANT SELECT ON OBJECT::dbo.vw_SealIdentity_Nominatif TO svc_graylog_seal;`
-   (non pose par `90_provision.sql`, qui reste au strict minimum par defaut).
-3. Cote SIEM : mapper le champ `identity_name` vers un champ DEDIE, l'affecter
-   a un dashboard/stream a acces restreint, et NE PAS le diffuser dans les
-   alertes/mails de triage generaux.
+   (not set by `90_provision.sql`, which stays at the strict minimum by default).
+3. On the SIEM side: map the `identity_name` field to a DEDICATED field, assign it
+   to a dashboard/stream with restricted access, and DO NOT broadcast it in
+   general triage alerts/emails.
 
-## 5. Coherence avec le CONTRACT
+## 5. Consistency with the CONTRACT
 
-- `CONTRACT.md` D1 reste la regle par defaut : les vues SIEM standards
-  n'exposent pas les noms. Le present document ne modifie pas D1 ; il decrit la
-  seule exception gouvernee et la maniere de l'activer sans l'etendre.
-- Le champ ajoute est nomme `identity_name`, coherent avec la famille
-  `identity_matricule` / `identity_upn` de D4. Meme en nominatif, le perimetre
-  reste borne : uniquement le nom d'usage ; toutes les autres PII de
-  `milf.BADGES` (PHOTO, BIRTH_*, ADDRESS, etc.) demeurent EXCLUES.
-- Desactivation par defaut = le comportement de reference. L'activation est un
-  evenement de gouvernance trace, reversible, et local a un site.
+- `CONTRACT.md` D1 remains the default rule: the standard SIEM views
+  do not expose names. The present document does not modify D1; it describes the
+  only governed exception and how to activate it without extending it.
+- The field added is named `identity_name`, consistent with the
+  `identity_matricule` / `identity_upn` family of D4. Even in named mode, the scope
+  remains bounded: only the usual name; all the other PII in
+  `milf.BADGES` (PHOTO, BIRTH_*, ADDRESS, etc.) remain EXCLUDED.
+- Disabled by default = the reference behavior. Activation is a
+  traced governance event, reversible, and local to a site.

@@ -1,155 +1,155 @@
-# Volet Windows / Active Directory — étapes exactes
+# Windows / Active Directory component — exact steps
 
-Tout ce qui se passe côté **DC (BX-AD-01-IT-VM / 10.33.50.250)** et côté
-**postes/serveurs**. Ordre conseillé : 1 → 5, en pilote d'abord.
+Everything that happens on the **DC (BX-AD-01-IT-VM / 10.33.50.250)** side and on the
+**workstations/servers** side. Suggested order: 1 → 5, in pilot first.
 
-> **⭐ Voie recommandée (12/06) : `Install-OmniSiem-NinjaOne.ps1`** — script
-> UNIQUE et definitif pour NinjaOne (SYSTEM, 64 bits, planification
-> quotidienne). Il REMPLACE `Deploy-SiemAgents-NinjaOne.ps1` +
-> `Set-OmniAudit-NinjaOne.ps1` : Root CA (TOFU), politique d'audit, Sysmon,
-> Winlogbeat (restart seulement si la conf change), canal « Veeam Backup »
-> ajouté automatiquement sur le serveur Veeam, et vérification de santé
-> (test output 5044 + scan des erreurs de canal). Résumé [OK]/[KO] par
-> composant, exit 1 si un composant est KO (visible dans NinjaOne).
-> Les sections GPO/NETLOGON ci-dessous restent valables comme voie alternative
-> sans NinjaOne.
+> **⭐ Recommended path (12/06): `Install-OmniSiem-NinjaOne.ps1`** — the
+> SINGLE and definitive script for NinjaOne (SYSTEM, 64-bit, daily
+> scheduling). It REPLACES `Deploy-SiemAgents-NinjaOne.ps1` +
+> `Set-OmniAudit-NinjaOne.ps1`: Root CA (TOFU), audit policy, Sysmon,
+> Winlogbeat (restart only if the config changes), "Veeam Backup" channel
+> added automatically on the Veeam server, and health check
+> (test output 5044 + scan of channel errors). [OK]/[KO] summary per
+> component, exit 1 if a component is KO (visible in NinjaOne).
+> The GPO/NETLOGON sections below remain valid as an alternative path
+> without NinjaOne.
 
-## 0. Préparer le point de distribution (1 fois, sur le DC)
+## 0. Prepare the distribution point (once, on the DC)
 
 ```powershell
-# Sur BX-AD-01-IT-VM, en admin du domaine :
+# On BX-AD-01-IT-VM, as domain admin:
 $d = "C:\Windows\SYSVOL\sysvol\omnitech.security\scripts\SIEM"   # = NETLOGON\SIEM
 New-Item -ItemType Directory -Path $d -Force
-# Y déposer :
+# Place there:
 #  - Sysmon64.exe                  <- https://live.sysinternals.com/Sysmon64.exe
-#  - sysmonconfig-omnitech.xml     <- ce kit
+#  - sysmonconfig-omnitech.xml     <- this kit
 #  - winlogbeat-oss-8.17.4-windows-x86_64.zip
 #       <- https://artifacts.elastic.co/downloads/beats/winlogbeat/
-#          !! version OSS obligatoire (la standard refuse une sortie non-Elastic)
-#  - winlogbeat.yml                <- ce kit (vérifier le FQDN du SIEM dedans)
-#  - omnitech-rootca.pem           <- export Base64 de la Root CA :
-#       Sur BX-PKI2022 : certutil -ca.cert C:\temp\rootca.cer
-#       puis renommer .cer (déjà en Base64 ? sinon : certutil -encode rootca.cer omnitech-rootca.pem)
+#          !! OSS version mandatory (the standard one refuses a non-Elastic output)
+#  - winlogbeat.yml                <- this kit (check the SIEM FQDN inside it)
+#  - omnitech-rootca.pem           <- Base64 export of the Root CA:
+#       On BX-PKI2022: certutil -ca.cert C:\temp\rootca.cer
+#       then rename .cer (already Base64? otherwise: certutil -encode rootca.cer omnitech-rootca.pem)
 ```
-NETLOGON est répliqué sur les deux DC et lisible par les comptes ordinateurs :
-parfait pour un déploiement sans Internet.
+NETLOGON is replicated on both DCs and readable by the computer accounts:
+perfect for a deployment without Internet.
 
-## 1. GPO d'audit (sur le DC)
+## 1. Audit GPO (on the DC)
 
 ```powershell
 cd <kit>\windows
-# Lie par défaut à omnitech.security/Entreprise + Domain Controllers :
+# Links by default to omnitech.security/Entreprise + Domain Controllers:
 .\Deploy-AuditGPO.ps1
 ```
-Ce que la GPO applique : la stratégie d'audit avancée du CSV (4624/4625, 4688,
-4768/4769/4776, gestion des comptes, 4662/5136, USB/Removable Storage, NPS,
-Certification Services pour la PKI, 1102…), la **ligne de commande dans les
-4688**, le **PowerShell Script Block + Module Logging**, un journal Security de
-**2 Go**, et le forçage de la stratégie avancée (SCENoApplyLegacyAuditPolicy).
+What the GPO applies: the advanced audit policy from the CSV (4624/4625, 4688,
+4768/4769/4776, account management, 4662/5136, USB/Removable Storage, NPS,
+Certification Services for the PKI, 1102…), the **command line in the
+4688s**, the **PowerShell Script Block + Module Logging**, a Security log of
+**2 GB**, and the enforcement of the advanced policy (SCENoApplyLegacyAuditPolicy).
 
-Vérification sur un client pilote :
+Verification on a pilot client:
 ```cmd
 gpupdate /force
 auditpol /get /category:*
-wevtutil gl Security        :: maxSize doit afficher 2147483648
+wevtutil gl Security        :: maxSize must show 2147483648
 ```
 
-Notes DC : les sous-catégories *DS Access/DS Changes* ne produisent des
-événements **que** sur les contrôleurs de domaine — la détection DCSync (4662)
-fonctionne avec la SACL par défaut de la partition. Les 5136 exhaustifs
-peuvent demander un élargissement de SACL (optionnel, plus tard).
+DC notes: the *DS Access/DS Changes* subcategories produce events
+**only** on domain controllers — DCSync detection (4662)
+works with the partition's default SACL. Exhaustive 5136s
+may require a SACL expansion (optional, later).
 
-## 2. Déploiement Sysmon + Winlogbeat sur TOUT le domaine
+## 2. Sysmon + Winlogbeat deployment across the WHOLE domain
 
-### Option A (recommandée) : GPO, depuis l'AD — `Deploy-AgentsGPO.ps1`
+### Option A (recommended): GPO, from AD — `Deploy-AgentsGPO.ps1`
 
 ```powershell
 cd <kit>\windows
-# Lie par défaut à omnitech.security/Entreprise :
+# Links by default to omnitech.security/Entreprise:
 .\Deploy-AgentsGPO.ps1
 ```
 
-La GPO `OMNI-SIEM-Agents` pousse une **tâche planifiée SYSTEM** sur chaque
-machine (au boot +5 min, + tous les jours 12h00 avec délai aléatoire 0-2 h)
-qui exécute `\\omnitech.security\NETLOGON\SIEM\Deploy-SysmonWinlogbeat.ps1`.
-Comme ce script est idempotent, la GPO sert aussi de canal de **maintenance** :
-remplacer `winlogbeat.yml` ou `sysmonconfig-omnitech.xml` dans NETLOGON\SIEM
-suffit, le parc converge en moins de 24 h.
+The `OMNI-SIEM-Agents` GPO pushes a **SYSTEM scheduled task** to each
+machine (at boot +5 min, + every day at 12:00 with random delay 0-2 h)
+which runs `\\omnitech.security\NETLOGON\SIEM\Deploy-SysmonWinlogbeat.ps1`.
+Since this script is idempotent, the GPO also serves as a **maintenance** channel:
+replacing `winlogbeat.yml` or `sysmonconfig-omnitech.xml` in NETLOGON\SIEM
+is enough, the fleet converges in under 24 h.
 
-Suivi du déploiement (sur le SIEM) : compter les hôtes qui remontent —
-recherche Graylog `streams:OMNI - Sysmon`, agrégation sur `host`, ou
-dashboard *OMNI - Windows Securite*.
+Deployment tracking (on the SIEM): count the hosts that report in —
+Graylog search `streams:OMNI - Sysmon`, aggregation on `host`, or
+the *OMNI - Windows Securite* dashboard.
 
-### IMPORTANT si tu déploies par NinjaOne (et non par GPO)
+### IMPORTANT if you deploy via NinjaOne (and not via GPO)
 
-La GPO `OMNI-AUDIT-Baseline` ne s'applique **pas** aux postes pilotés par
-NinjaOne hors du périmètre GPO → ils envoient Sysmon/PowerShell mais **0
-événement Security** (Windows n'audite presque rien par défaut). Pousse alors
-la politique d'audit **en local** avec un 2ᵉ script NinjaOne :
+The `OMNI-AUDIT-Baseline` GPO does **not** apply to workstations managed by
+NinjaOne outside the GPO scope → they send Sysmon/PowerShell but **0
+Security event** (Windows audits almost nothing by default). In that case, push
+the audit policy **locally** with a 2nd NinjaOne script:
 
-`Set-OmniAudit-NinjaOne.ps1` (SYSTEM, 64 bits, quotidien) applique exactement
-la même baseline que la GPO (auditpol /restore + cmdline 4688 + ScriptBlock
-4104 + SCENoApplyLegacyAuditPolicy + journal Security 2 Go). Idempotent, la
-baseline CSV est embarquée dans le script (aucune dépendance réseau).
-Vérification sur le poste : `auditpol /get /category:*` puis, après quelques
-minutes, l'hôte remonte les 4624/4625/4688 dans Graylog (page *Identité AD*).
+`Set-OmniAudit-NinjaOne.ps1` (SYSTEM, 64-bit, daily) applies exactly
+the same baseline as the GPO (auditpol /restore + 4688 cmdline + ScriptBlock
+4104 + SCENoApplyLegacyAuditPolicy + 2 GB Security log). Idempotent, the
+CSV baseline is embedded in the script (no network dependency).
+Verification on the workstation: `auditpol /get /category:*` then, after a few
+minutes, the host reports the 4624/4625/4688 in Graylog (*AD Identity* page).
 
-À enchaîner avec `Deploy-SiemAgents-NinjaOne.ps1` : deux scripts NinjaOne
-distincts (agents + audit), ou appelle l'audit en fin du script agents.
+To be chained with `Deploy-SiemAgents-NinjaOne.ps1`: two distinct NinjaOne
+scripts (agents + audit), or call the audit at the end of the agents script.
 
-### Option B : NinjaOne (parc hors domaine, VIP, rattrapage)
+### Option B: NinjaOne (non-domain fleet, VIPs, catch-up)
 
-Dans NinjaOne : *Administration > Scripting* → nouveau script PowerShell,
-coller `Deploy-SysmonWinlogbeat.ps1`, exécution **SYSTEM**, 64 bits.
-L'affecter en tâche planifiée (ex. quotidienne) sur les groupes
-PILOTE puis PRODUCTION_POSTES / PRODUCTION_SERVEURS — il est idempotent :
-il installe, met à jour la config, ou ne fait rien si tout est conforme.
-Les deux canaux peuvent coexister sans conflit (même script, même source).
+In NinjaOne: *Administration > Scripting* → new PowerShell script,
+paste `Deploy-SysmonWinlogbeat.ps1`, execution as **SYSTEM**, 64-bit.
+Assign it as a scheduled task (e.g. daily) on the
+PILOT then PRODUCTION_POSTES / PRODUCTION_SERVEURS groups — it is idempotent:
+it installs, updates the config, or does nothing if everything is compliant.
+The two channels can coexist without conflict (same script, same source).
 
-Cibler aussi les serveurs sensibles : **BX-AD02, WSUS, PKI (BX-PKI2022),
-NPS, serveurs de fichiers** — le DC1 ayant déjà Winlogbeat, le script le
-mettra simplement au niveau (même conf pour tout le monde).
+Also target the sensitive servers: **BX-AD02, WSUS, PKI (BX-PKI2022),
+NPS, file servers** — since DC1 already has Winlogbeat, the script will
+simply bring it up to level (same conf for everyone).
 
-Vérification sur un poste :
+Verification on a workstation:
 ```powershell
 Get-Service Sysmon64, winlogbeat
 Get-WinEvent -LogName "Microsoft-Windows-Sysmon/Operational" -MaxEvents 3
 Get-Content "C:\ProgramData\winlogbeat\logs\winlogbeat*" -Tail 20   # "Connection to backoff(...) established"
 ```
 
-## 3. Côté FortiAnalyzer (10.33.80.253)
+## 3. On the FortiAnalyzer side (10.33.80.253)
 
-*System Settings > Advanced > Log Forwarding > Create New* :
-mode **Forwarding**, serveur `10.33.220.10`, protocole **syslog** port `1514`
-(ou **CEF** port `5555` → alors créer l'input CEF dans Graylog : System >
-Inputs > CEF TCP). Ajouter des **filtres** : event severity ≥ warning,
-sous-types auth/admin/vpn/ips/av/local-in — le trafic *accept* verbeux reste
-dans le FAZ (c'est lui le lac réseau, Graylog fait la corrélation).
+*System Settings > Advanced > Log Forwarding > Create New*:
+mode **Forwarding**, server `10.33.220.10`, protocol **syslog** port `1514`
+(or **CEF** port `5555` → then create the CEF input in Graylog: System >
+Inputs > CEF TCP). Add **filters**: event severity ≥ warning,
+auth/admin/vpn/ips/av/local-in subtypes — the verbose *accept* traffic stays
+in the FAZ (it is the network lake, Graylog does the correlation).
 
-## 4. DNS (sur le DC)
+## 4. DNS (on the DC)
 
 ```powershell
 Add-DnsServerResourceRecordA -ZoneName "omnitech.security" -Name "bx-it-graylog-vm" -IPv4Address "10.33.220.10" -CreatePtr
 ```
 
-## 5. Ce que produisent les clients (modèle de données entrant)
+## 5. What the clients produce (incoming data model)
 
-| Canal Windows collecté | EventID clés | Usage détection |
+| Collected Windows channel | Key EventIDs | Detection use |
 |---|---|---|
-| Security | 4624/4625/4634/4648/4740 | auth, bruteforce, latéralisation |
+| Security | 4624/4625/4634/4648/4740 | auth, bruteforce, lateralization |
 | Security | 4768/4769/4771/4776 | Kerberos, Kerberoasting, NTLM |
-| Security | 4720-4756 | cycle de vie comptes/groupes |
-| Security | 4662/5136 | DCSync, modifs AD |
-| Security | 4688 (+cmdline), 4697/4698, 7045 | exécution, services, tâches |
-| Security | 1102, 4719 | effacement journal, sabotage audit |
-| Sysmon | 1, 3, 6, 7, 8, 10, 11, 12-14, 17-21, 22, 25 | process+hash, réseau, LSASS, persistance, DNS |
-| PowerShell/Operational | 4103, 4104 | script blocks malveillants |
-| Defender/Operational | 1116/1117, 5001/5007 | détections, désactivation AV |
-| System | 104, 7045, 6008… | services, arrêts anormaux |
+| Security | 4720-4756 | account/group lifecycle |
+| Security | 4662/5136 | DCSync, AD changes |
+| Security | 4688 (+cmdline), 4697/4698, 7045 | execution, services, tasks |
+| Security | 1102, 4719 | log clearing, audit sabotage |
+| Sysmon | 1, 3, 6, 7, 8, 10, 11, 12-14, 17-21, 22, 25 | process+hash, network, LSASS, persistence, DNS |
+| PowerShell/Operational | 4103, 4104 | malicious script blocks |
+| Defender/Operational | 1116/1117, 5001/5007 | detections, AV disabling |
+| System | 104, 7045, 6008… | services, abnormal shutdowns |
 
-Les pipelines Graylog (script 12) normalisent ensuite vers : `event_id`,
+The Graylog pipelines (script 12) then normalize to: `event_id`,
 `event_source`, `event_action`, `event_category`, `user`, `host`, `src_ip`,
 `dest_ip`, `dest_port`, `process_name`, `process_path`, `command_line`,
 `parent_process`, `dns_query`, `logon_type_label`, `failure_reason`,
-`priv_group_label`, `alert_tag` — ce sont ces champs qu'utilisent les
-détections (script 13) et les dashboards (script 14).
+`priv_group_label`, `alert_tag` — these are the fields used by the
+detections (script 13) and the dashboards (script 14).
