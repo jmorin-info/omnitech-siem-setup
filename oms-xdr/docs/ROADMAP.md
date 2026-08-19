@@ -1,46 +1,46 @@
-# ROADMAP OMS-XDR — tâches actionnables
+# OMS-XDR ROADMAP — actionable tasks
 
-Chaque tâche est autonome et testable. Respecter les conventions de `BRIEF.md`
-(français en sortie, dry-run par défaut, détection pilotée par `rules.yaml`,
-un test par ajout).
+Each task is self-contained and testable. Follow the conventions in `BRIEF.md`
+(French output, dry-run by default, detection driven by `rules.yaml`,
+one test per addition).
 
-## T1 — Runbooks AD signés (priorité haute)
-Rendre `responder._disable_ad_account` / `_force_pwd_reset` réellement exécutables.
-- Implémenter un appel NinjaOne (script PowerShell signé) ou WinRM vers `10.33.50.250`.
-- PowerShell : `Disable-ADAccount` / `Set-ADAccountPassword -Reset` + `Revoke-AzureADUserAllRefreshToken` (Entra).
-- Garder le double verrou `dry_run`/`auto_disable_ad_account`.
-- Tester l'échec d'API (compte introuvable, droits insuffisants) sans crash.
-- **DoD** : test mockant l'appel + log WARNING tracé.
+## T1 — Signed AD runbooks (high priority)
+Make `responder._disable_ad_account` / `_force_pwd_reset` actually executable.
+- Implement a NinjaOne call (signed PowerShell script) or WinRM to `10.33.50.250`.
+- PowerShell: `Disable-ADAccount` / `Set-ADAccountPassword -Reset` + `Revoke-AzureADUserAllRefreshToken` (Entra).
+- Keep the `dry_run`/`auto_disable_ad_account` double lock.
+- Test API failure (account not found, insufficient rights) without crashing.
+- **DoD**: test mocking the call + WARNING log recorded.
 
 ## T2 — Threat intelligence
-Nouveau signal `S_C2_IOC` croisant les flux sortants FortiGate avec des IOC.
-- Créer/alimenter une lookup table Graylog (abuse.ch Feodo, OTX) — script de sync dans `deploy/`.
-- Pipeline rule Graylog taguant `threat_intel:true` sur match.
-- Ajouter `S_C2_IOC` dans `rules.yaml` + l'intégrer à `CR_EXECUTION_C2` (any_of).
-- **DoD** : test de corrélation avec IOC simulé.
+New `S_C2_IOC` signal cross-referencing outbound FortiGate flows with IOCs.
+- Create/populate a Graylog lookup table (abuse.ch Feodo, OTX) — sync script in `deploy/`.
+- Graylog pipeline rule tagging `threat_intel:true` on match.
+- Add `S_C2_IOC` to `rules.yaml` + integrate it into `CR_EXECUTION_C2` (any_of).
+- **DoD**: correlation test with a simulated IOC.
 
-## T3 — Signaux Sysmon
-Une fois Sysmon déployé via NinjaOne :
-- Signaux : `S_PROC_INJECTION` (Sysmon 8/10, T1055), `S_LSASS_ACCESS` (Sysmon 10 sur lsass, T1003.001), `S_SUSP_PARENT_CHILD` (office→cmd/powershell).
-- Nouvelle règle `CR_ENDPOINT_COMPROMISE` reliant injection + accès LSASS.
-- **DoD** : règles + tests + entrées MITRE_CONTEXT dans `remediation.py`.
+## T3 — Sysmon signals
+Once Sysmon is deployed via NinjaOne:
+- Signals: `S_PROC_INJECTION` (Sysmon 8/10, T1055), `S_LSASS_ACCESS` (Sysmon 10 on lsass, T1003.001), `S_SUSP_PARENT_CHILD` (office→cmd/powershell).
+- New `CR_ENDPOINT_COMPROMISE` rule linking injection + LSASS access.
+- **DoD**: rules + tests + MITRE_CONTEXT entries in `remediation.py`.
 
-## T4 — Détection d'anomalies (EWMA)
-Remplacer les seuils fixes par une baseline adaptative par entité.
-- Stocker moyennes/écarts mobiles dans `state_dir` (EWMA, α≈0.3).
-- Déclencher si valeur > moyenne + k·σ (k configurable).
-- Conserver un mode `static`/`ewma` par signal dans `rules.yaml`.
-- **DoD** : module `anomaly.py` + tests sur séries synthétiques.
+## T4 — Anomaly detection (EWMA)
+Replace fixed thresholds with an adaptive per-entity baseline.
+- Store moving averages/deviations in `state_dir` (EWMA, α≈0.3).
+- Trigger if value > mean + k·σ (k configurable).
+- Keep a `static`/`ewma` mode per signal in `rules.yaml`.
+- **DoD**: `anomaly.py` module + tests on synthetic series.
 
-## T5 — Corrélation vulnérabilités
-Croiser les ports découverts par `netscan` avec la matrice CVSS (POL_018).
-- Mapper service/port → CVE connues (source : Graylog lookup ou fichier local).
-- Prioriser les deltas `new_open_port` exposant un service vulnérable.
-- **DoD** : signal `S_VULN_EXPOSED` + test.
+## T5 — Vulnerability correlation
+Cross-reference the ports discovered by `netscan` with the CVSS matrix (POL_018).
+- Map service/port → known CVEs (source: Graylog lookup or local file).
+- Prioritise `new_open_port` deltas exposing a vulnerable service.
+- **DoD**: `S_VULN_EXPOSED` signal + test.
 
 ## T6 — Dashboard & reporting
-- Provisionner via API un dashboard « OMS-XDR Incidents » (widgets : incidents par sévérité,
-  top techniques MITRE, top entités) — script dans `deploy/`.
-- Rapport hebdomadaire (HTML/PDF) des incidents — réutiliser le pipeline docx SEAL
+- Provision via API an "OMS-XDR Incidents" dashboard (widgets: incidents by severity,
+  top MITRE techniques, top entities) — script in `deploy/`.
+- Weekly report (HTML/PDF) of incidents — reuse the SEAL docx pipeline
   (navy #004469, orange #F68D2E, taupe #837274, Arial).
-- **DoD** : script de provisionnement + exemple de rapport généré.
+- **DoD**: provisioning script + example generated report.

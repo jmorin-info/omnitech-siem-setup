@@ -1,63 +1,63 @@
-# Console SOC « OMNI SOC » — Guide
+# SOC console "OMNI SOC" — Guide
 
-Console web + PWA mobile pour le pilotage du SIEM/XDR OMNITECH. **VPN-only**,
-authentification AD (déléguée à Graylog/LDAPS). Construite sur le backend
-`omni-mobile-api` (lecture OpenSearch, stdlib + pywebpush) servi par nginx.
-Interface premium (glassmorphism, glow, micro-interactions), accessible au clavier.
+Web console + mobile PWA for operating the OMNITECH SIEM/XDR. **VPN-only**,
+AD authentication (delegated to Graylog/LDAPS). Built on the
+`omni-mobile-api` backend (OpenSearch read, stdlib + pywebpush) served by nginx.
+Premium interface (glassmorphism, glow, micro-interactions), keyboard accessible.
 
-## Accès
-- **Console desktop** : `https://bx-it-graylog-vm.omnitech.security/soc/`
-- **App mobile (PWA)** : `https://bx-it-graylog-vm.omnitech.security/m/` → *Partager → Sur l'écran d'accueil* (installable, web-push).
-- Connexion : **compte AD** (les mêmes identifiants que la console Graylog).
-- Raccourcis : **Ctrl/Cmd + K** = palette (navigation + **recherche d'entité**) ; **?** = aide & raccourcis ; **Échap** = fermer ; **Entrée/Espace** = activer l'élément ciblé.
+## Access
+- **Desktop console**: `https://bx-it-graylog-vm.omnitech.security/soc/`
+- **Mobile app (PWA)**: `https://bx-it-graylog-vm.omnitech.security/m/` → *Share → Add to Home Screen* (installable, web-push).
+- Login: **AD account** (the same credentials as the Graylog console).
+- Shortcuts: **Ctrl/Cmd + K** = palette (navigation + **entity search**); **?** = help & shortcuts; **Esc** = close; **Enter/Space** = activate the focused element.
 
 ## Pages (desktop)
-| Page | Contenu |
+| Page | Content |
 |---|---|
-| **Vue d'ensemble** | KPI **avec tendance** (▲/▼ % vs période précédente), courbe détections 24 h, donut tactiques ATT&CK, top détections/sources, **Anomalies ML** + **Risque UEBA** (vrais scores), flux temps réel (SSE), origines géographiques |
-| **Incidents** | File de **cas** (oms-xdr) : statut, assignation, notes ; **disposition Vrai/Faux positif** → alimente le modèle ML de réduction de FP |
-| **Détections** | Liste **filtrable** (tactique/source) + **recherche libre** + **export CSV** ; sévérité réelle (`risk_severity`) + score de risque ; clic → Entité-360 |
-| **Matrice ATT&CK** | Heatmap tactiques × techniques, colorée par activité réelle (7 j), cellules cliquables (drill) |
-| **Graphe d'attaque** | Graphe entités ↔ techniques **filtrable** (tactique, seuil de volume, centrage d'entité) |
-| **Fuites & Dark Web** | Synthèse par catégorie (extorsion/identifiants/GitHub), RansomLook/HIBP/Dehashed, état « aucune fuite » rassurant |
-| **Santé & Collecte** | État cluster, **robots d'auto-supervision** (X/Y), **couverture de collecte (SLA)** + **hôtes go-dark**, fraîcheur par source |
-| **Rapport** | Synthèse exécutive imprimable (PDF) : KPI, couverture, **posture opérationnelle (robots/SLA)**, **entités à risque ML & UEBA**, incidents, sources |
-| **Entité-360** (volet) | Fiche d'une entité : **score ML + score UEBA**, tactiques, techniques ATT&CK, événements récents (pagination « charger plus ») |
+| **Overview** | KPIs **with trend** (▲/▼ % vs previous period), 24 h detections curve, ATT&CK tactics donut, top detections/sources, **ML Anomalies** + **UEBA Risk** (real scores), real-time feed (SSE), geographic origins |
+| **Incidents** | Queue of **cases** (oms-xdr): status, assignment, notes; **True/False positive disposition** → feeds the FP-reduction ML model |
+| **Detections** | **Filterable** list (tactic/source) + **free search** + **CSV export**; real severity (`risk_severity`) + risk score; click → Entity-360 |
+| **ATT&CK Matrix** | Tactics × techniques heatmap, colored by real activity (7 d), clickable cells (drill) |
+| **Attack graph** | Entities ↔ techniques graph, **filterable** (tactic, volume threshold, entity centering) |
+| **Leaks & Dark Web** | Summary by category (extortion/credentials/GitHub), RansomLook/HIBP/Dehashed, reassuring "no leak" state |
+| **Health & Collection** | Cluster status, **self-supervision robots** (X/Y), **collection coverage (SLA)** + **go-dark hosts**, freshness per source |
+| **Report** | Printable executive summary (PDF): KPIs, coverage, **operational posture (robots/SLA)**, **ML & UEBA at-risk entities**, incidents, sources |
+| **Entity-360** (panel) | An entity's sheet: **ML score + UEBA score**, tactics, ATT&CK techniques, recent events ("load more" pagination) |
 
-## Couche ML (oms-ml)
-La console surface les scores du paquet **`oms-ml`** (sklearn local, cf. `oms-ml/README.md`) :
-- **Anomalie non-supervisée** (IsolationForest) par entité → `ml_score` réinjecté en GELF (`event_source=ml_anomaly`), visible sur la Vue d'ensemble et l'Entité-360.
-- **Réduction de faux positifs supervisée** : entraînée à partir de la **disposition VP/FP** posée par les analystes à la clôture des cas (boucle fermée).
-- Les événements internes (`ueba_score`, `collecte_sla`, `siem_health`, `xdr_incident`, `ml_anomaly`) sont écrits dans l'index set **`omni-interne`** (cf. `79-interne-indexset.sh`) — sans quoi la console (qui lit `omni-*`) ne les verrait pas.
+## ML layer (oms-ml)
+The console surfaces the scores from the **`oms-ml`** package (local sklearn, cf. `oms-ml/README.md`):
+- **Unsupervised anomaly** (IsolationForest) per entity → `ml_score` reinjected as GELF (`event_source=ml_anomaly`), visible on the Overview and Entity-360.
+- **Supervised false-positive reduction**: trained from the **TP/FP disposition** set by analysts at case closure (closed loop).
+- Internal events (`ueba_score`, `collecte_sla`, `siem_health`, `xdr_incident`, `ml_anomaly`) are written to the **`omni-interne`** index set (cf. `79-interne-indexset.sh`) — without which the console (which reads `omni-*`) would not see them.
 
-## Ergonomie & UX
-- **Toasts** : retour non bloquant sur les actions (cas qualifié, export, session expirée, erreur réseau).
-- **Aide (?)** : raccourcis clavier, rôle de chaque page, glossaire des signaux (ML, UEBA, sévérité, go-dark, KEV).
-- **Densité** : bascule confortable/compact (persistée).
-- **Chargement** : squelettes au premier affichage, pastille « Mis à jour il y a Xs », **cadence de rafraîchissement** réglable (30 s / 60 s / pause).
-- **Accessibilité** : navigation et modales opérables au clavier (focus visible, focus-trap, ARIA).
+## Ergonomics & UX
+- **Toasts**: non-blocking feedback on actions (case qualified, export, session expired, network error).
+- **Help (?)**: keyboard shortcuts, role of each page, glossary of signals (ML, UEBA, severity, go-dark, KEV).
+- **Density**: comfortable/compact toggle (persisted).
+- **Loading**: skeletons on first display, "Updated Xs ago" badge, adjustable **refresh cadence** (30 s / 60 s / pause).
+- **Accessibility**: navigation and modals operable via keyboard (visible focus, focus-trap, ARIA).
 
-## PWA mobile
-Onglets **Synthèse** (KPI, courbe, tactiques), **Alertes**, **Incidents**, et **Menace** —
-parité console : niveau de menace + KPI, **anomalies ML & risque UEBA** (jauges), détections à sévérité colorée. Installable, web-push.
+## Mobile PWA
+**Summary** tabs (KPIs, curve, tactics), **Alerts**, **Incidents**, and **Threat** —
+console parity: threat level + KPIs, **ML anomalies & UEBA risk** (gauges), detections with colored severity. Installable, web-push.
 
 ## Architecture
 ```
-Navigateur (VPN) → nginx 443 → /soc/ (statique) + /m/ (PWA) + /m/api/* (proxy → omni-mobile-api 127.0.0.1:8090)
-omni-mobile-api : auth Graylog (LDAPS) → cookie HMAC ; lecture OpenSearch ; SSE ; web-push VAPID
+Browser (VPN) → nginx 443 → /soc/ (static) + /m/ (PWA) + /m/api/* (proxy → omni-mobile-api 127.0.0.1:8090)
+omni-mobile-api: Graylog auth (LDAPS) → HMAC cookie; OpenSearch read; SSE; web-push VAPID
 ```
-- **Endpoints** `/m/api/` : login, me, kpis, **kpi-trend**, timeseries, by-tactic, top-detections, top-sources,
-  alerts, cases (+POST case avec `disposition`), detections, **entity-search**, entity (size/from + scores), attack-matrix,
+- **Endpoints** `/m/api/`: login, me, kpis, **kpi-trend**, timeseries, by-tactic, top-detections, top-sources,
+  alerts, cases (+POST case with `disposition`), detections, **entity-search**, entity (size/from + scores), attack-matrix,
   graph, **leaks2**, health, report, geo, risk, stream (SSE), vapid/subscribe (push).
-- **Performance** : micro-cache mémoire à TTL (30 s, `MOBILE_CACHE_TTL`) sur les agrégations lourdes
-  (attack-matrix, report, kpis, health, geo, terms) — matrice ATT&CK ~783→7 ms, rapport ~811→3 ms.
-- **Sécurité** : VPN-only, cookie HttpOnly+Secure+SameSite=Strict, rate-limit login (5/15 min),
-  en-têtes CSP/HSTS/X-Frame-Options (`75-console-hardening.sh`).
-- **Mode rédaction** (`MOBILE_REDACT=1`) : pseudonymise comptes/hôtes/IP/SID de façon cohérente
-  (carte réversible pour l'Entité-360) — sert à produire des captures anonymisées. **Désactivé en exploitation.**
+- **Performance**: in-memory micro-cache with TTL (30 s, `MOBILE_CACHE_TTL`) on the heavy aggregations
+  (attack-matrix, report, kpis, health, geo, terms) — ATT&CK matrix ~783→7 ms, report ~811→3 ms.
+- **Security**: VPN-only, HttpOnly+Secure+SameSite=Strict cookie, login rate-limit (5/15 min),
+  CSP/HSTS/X-Frame-Options headers (`75-console-hardening.sh`).
+- **Redaction mode** (`MOBILE_REDACT=1`): consistently pseudonymizes accounts/hosts/IPs/SIDs
+  (reversible map for Entity-360) — used to produce anonymized screenshots. **Disabled in operation.**
 
-## Exploitation
-- Backend : `systemctl status omni-mobile-api` ; conf `/etc/default/omni-mobile`.
-- Déploiement / mise à jour : `65-mobile-pwa.sh` (PWA + backend), `71-soc-console.sh` (console).
-- Bibliothèques front vendorées localement (`chart.min.js`, `cytoscape.min.js`) — aucun CDN au runtime.
-- **Tests** (hors-ligne, sans OpenSearch) : `./run-tests.sh` — rédaction (`_rd`/`_scrub`) + oms-ml (anomalie, gating FP) ; 23 tests.
+## Operation
+- Backend: `systemctl status omni-mobile-api`; conf `/etc/default/omni-mobile`.
+- Deployment / update: `65-mobile-pwa.sh` (PWA + backend), `71-soc-console.sh` (console).
+- Front-end libraries vendored locally (`chart.min.js`, `cytoscape.min.js`) — no CDN at runtime.
+- **Tests** (offline, without OpenSearch): `./run-tests.sh` — redaction (`_rd`/`_scrub`) + oms-ml (anomaly, FP gating); 23 tests.

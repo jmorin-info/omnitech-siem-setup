@@ -1,91 +1,91 @@
-# Glossaire — SIEM OMNITECH
+# Glossary — SIEM OMNITECH
 
-*Termes employés dans le dossier documentaire, pour les lecteurs non
-spécialistes (direction, audit, nouveaux arrivants).*
+*Terms used across the documentation set, for non-specialist readers
+(management, audit, newcomers).*
 
-> Date de revue : 2026-06-14.
+> Review date: 2026-06-14.
 
-## Concepts généraux
+## General concepts
 
-| Terme | Définition |
+| Term | Definition |
 |---|---|
-| **SIEM** | *Security Information and Event Management*. Système qui centralise les journaux de tout le SI, les corrèle, détecte les menaces et alerte. Ici : Graylog. |
-| **SOC** | *Security Operations Center*. La fonction de supervision de sécurité (chez OMNITECH : l'équipe IT, outillée par le SIEM). |
-| **Journal / log** | Trace horodatée d'un événement (connexion, accès, action). La matière première du SIEM. |
-| **Graylog** | Le logiciel SIEM (open source) qui ingère, traite et présente les logs. |
-| **OpenSearch** | La base de données qui stocke et indexe les logs (moteur de recherche). |
-| **Input** | Point d'entrée des logs dans Graylog (un port + un protocole). |
-| **Stream** | Flux nommé qui regroupe les messages d'une même source (ex. « Windows Security »). |
-| **Pipeline / règle** | Traitement appliqué aux messages : normalisation, enrichissement, marquage. |
-| **Index / rétention** | Stockage par période ; la rétention est la durée de conservation avant suppression automatique. |
-| **Détection / alerte** | Règle qui surveille un motif (ex. 10 échecs de connexion) et notifie quand il se produit. |
-| **Dashboard** | Tableau de bord visuel (ici « OMNI - SOC », tableau unique de 24 pages, 100 % open source — aucune licence Enterprise requise). |
-| **GeoIP** | Enrichissement qui associe une IP à un pays/ville (pour la cartographie). |
-| **Lookup** | Table de correspondance (ex. code d'événement → libellé lisible, IP canari → compte). |
+| **SIEM** | *Security Information and Event Management*. A system that centralizes the logs of the entire IS, correlates them, detects threats and alerts. Here: Graylog. |
+| **SOC** | *Security Operations Center*. The security supervision function (at OMNITECH: the IT team, tooled by the SIEM). |
+| **Journal / log** | Timestamped trace of an event (logon, access, action). The SIEM's raw material. |
+| **Graylog** | The (open source) SIEM software that ingests, processes and presents the logs. |
+| **OpenSearch** | The database that stores and indexes the logs (search engine). |
+| **Input** | Entry point for logs into Graylog (a port + a protocol). |
+| **Stream** | Named flow that groups the messages from a single source (e.g. "Windows Security"). |
+| **Pipeline / rule** | Processing applied to messages: normalization, enrichment, tagging. |
+| **Index / retention** | Storage by period; retention is the keeping duration before automatic deletion. |
+| **Detection / alert** | A rule that watches a pattern (e.g. 10 failed logons) and notifies when it occurs. |
+| **Dashboard** | Visual dashboard (here "OMNI - SOC", a single 24-page dashboard, 100% open source — no Enterprise license required). |
+| **GeoIP** | Enrichment that maps an IP to a country/city (for the cartography). |
+| **Lookup** | Correspondence table (e.g. event code → readable label, canary IP → account). |
 
-## Sources de logs et collecteurs
+## Log sources and collectors
 
-| Terme | Définition |
+| Term | Definition |
 |---|---|
-| **AD (Active Directory)** | Annuaire Microsoft qui gère comptes, postes et authentifications du domaine ; principale source d'événements de sécurité. |
-| **Winlogbeat** | Agent installé sur les machines Windows (AD, serveurs) qui envoie leurs journaux au SIEM, chiffré (Beats sur le port 5044, TLS). |
-| **Sysmon** | Outil Microsoft qui produit une télémétrie détaillée des postes (processus, réseau, création de fichiers…) ; rétention 365 j. |
-| **FortiGate** | Pare-feu Fortinet d'OMNITECH ; ses logs (trafic + UTM) sont volumineux, d'où une rétention dédiée de 180 j. Le champ `source` porte le nom de l'équipement. |
-| **FortiAnalyzer (FAZ)** | Collecteur Fortinet qui centralise les logs des pare-feu FortiGate et les transmet au SIEM (syslog, port 1514). |
-| **UTM** | *Unified Threat Management* : fonctions de sécurité du pare-feu (antivirus, IPS, filtrage web/DNS). |
-| **M365 (Microsoft 365)** | Suite cloud Microsoft (messagerie, OneDrive…) ; l'activité d'audit est récupérée par un collecteur puis injectée en GELF. |
-| **GELF** | *Graylog Extended Log Format* : format de log structuré utilisé pour les collecteurs M365 et l'auto-surveillance du SIEM. |
-| **vSphere / vCenter** | Plateforme de virtualisation VMware ; les hôtes ESXi et le vCenter envoient leurs logs en syslog (port 1516). |
-| **Veeam** | Solution de sauvegarde ; ses journaux alimentent la détection liée aux sauvegardes (suppression, échecs). |
-| **ESET PROTECT** | Console antivirus/EDR ESET ; envoie ses détections en syslog JSON (port 1515) vers le stream « OMNI - ESET » (champs `eset_*`), rétention 365 j. |
-| **BunkerWeb** | Pare-feu applicatif web (WAF) protégeant les services exposés ; ses logs sont remontés par Filebeat vers l'input Beats (5044) → stream « OMNI - BunkerWeb » (champs `http_*` / `waf_*`), rétention 90 j. |
-| **WAF** | *Web Application Firewall* : filtre les requêtes HTTP malveillantes (injections, scans…) ; ici assuré par BunkerWeb. |
-| **Filebeat** | Agent léger qui lit des fichiers de logs (ex. BunkerWeb) et les expédie au SIEM via l'input Beats. |
-| **NPS** | *Network Policy Server* (serveur RADIUS Microsoft) ; mappé dans la documentation mais pas encore remonté côté client. |
+| **AD (Active Directory)** | Microsoft directory that manages the domain's accounts, workstations and authentications; the main source of security events. |
+| **Winlogbeat** | Agent installed on Windows machines (AD, servers) that sends their logs to the SIEM, encrypted (Beats on port 5044, TLS). |
+| **Sysmon** | Microsoft tool that produces detailed workstation telemetry (processes, network, file creation…); 365-d retention. |
+| **FortiGate** | OMNITECH's Fortinet firewall; its logs (traffic + UTM) are voluminous, hence a dedicated 180-d retention. The `source` field carries the device name. |
+| **FortiAnalyzer (FAZ)** | Fortinet collector that centralizes the logs of the FortiGate firewalls and forwards them to the SIEM (syslog, port 1514). |
+| **UTM** | *Unified Threat Management*: firewall security functions (antivirus, IPS, web/DNS filtering). |
+| **M365 (Microsoft 365)** | Microsoft cloud suite (mail, OneDrive…); the audit activity is retrieved by a collector then injected in GELF. |
+| **GELF** | *Graylog Extended Log Format*: structured log format used for the M365 collectors and the SIEM's self-monitoring. |
+| **vSphere / vCenter** | VMware virtualization platform; the ESXi hosts and the vCenter send their logs in syslog (port 1516). |
+| **Veeam** | Backup solution; its logs feed the backup-related detection (deletion, failures). |
+| **ESET PROTECT** | ESET antivirus/EDR console; sends its detections in syslog JSON (port 1515) to the "OMNI - ESET" stream (`eset_*` fields), 365-d retention. |
+| **BunkerWeb** | Web application firewall (WAF) protecting the exposed services; its logs are forwarded by Filebeat to the Beats input (5044) → "OMNI - BunkerWeb" stream (`http_*` / `waf_*` fields), 90-d retention. |
+| **WAF** | *Web Application Firewall*: filters malicious HTTP requests (injections, scans…); here provided by BunkerWeb. |
+| **Filebeat** | Lightweight agent that reads log files (e.g. BunkerWeb) and ships them to the SIEM via the Beats input. |
+| **NPS** | *Network Policy Server* (Microsoft RADIUS server); mapped in the documentation but not yet forwarded on the client side. |
 
-## Menaces et techniques d'attaque
+## Threats and attack techniques
 
-| Terme | Définition |
+| Term | Definition |
 |---|---|
-| **DCSync** | Technique d'attaque : se faire passer pour un contrôleur de domaine pour voler les mots de passe AD. |
-| **Kerberoasting** | Attaque qui extrait des tickets Kerberos pour casser les mots de passe de comptes de service. |
-| **Brute force / spraying** | Essais massifs de mots de passe (brute force = un compte ; spraying = un mot de passe sur beaucoup de comptes). |
-| **Ransomware** | Logiciel qui chiffre les données pour extorsion ; détecté ici via la suppression des sauvegardes (shadow copies). |
-| **LSASS** | Processus Windows qui détient les identifiants en mémoire ; cible classique de vol de mots de passe. |
-| **Compte canari** | Compte leurre jamais utilisé ; toute activité le concernant signale une intrusion (lookup `omni-canary`, alerte critique mail + Teams). |
+| **DCSync** | Attack technique: impersonating a domain controller to steal the AD passwords. |
+| **Kerberoasting** | Attack that extracts Kerberos tickets to crack the passwords of service accounts. |
+| **Brute force / spraying** | Massive password attempts (brute force = one account; spraying = one password against many accounts). |
+| **Ransomware** | Software that encrypts data for extortion; detected here via the deletion of backups (shadow copies). |
+| **LSASS** | Windows process that holds credentials in memory; a classic target for password theft. |
+| **Canary account** | Decoy account never used; any activity involving it signals an intrusion (lookup `omni-canary`, critical alert email + Teams). |
 
-## Détection, réponse et alerting
+## Detection, response and alerting
 
-| Terme | Définition |
+| Term | Definition |
 |---|---|
-| **MITRE ATT&CK** | Référentiel public des tactiques et techniques d'attaque ; le SIEM corrèle les détections par tactique pour repérer les chaînes d'attaque. |
-| **UEBA** | *User and Entity Behavior Analytics* : score de risque comportemental par hôte/compte (détections + vulnérabilités + anomalies fusionnées). |
-| **NDR** | *Network Detection and Response* : détection des comportements réseau suspects (scans, exfiltration DNS…). |
-| **SOAR** | *Security Orchestration, Automation and Response* : réponse automatisée (ici, blocage d'IP attaquantes sur le pare-feu). |
-| **Threat feed** | Liste d'IP/domaines malveillants qu'un pare-feu lit pour bloquer ; le SIEM en alimente une dynamiquement. |
-| **LDAPS** | LDAP sécurisé (chiffré) : protocole d'authentification des comptes AD sur la console. |
-| **P2 / P3** | Niveaux de priorité des alertes (P3 = critique ; P2 = important). Le P3 « réveille-moi » part en mail ; toutes priorités confondues partent aussi sur Teams. |
-| **Routage 2 tiers (mail / Teams)** | Acheminement des notifications : **Teams = firehose** (toutes les alertes) ; **mail = 26 alertes critiques** seulement (compromission confirmée + santé du SIEM). Évite le spam de la boîte mail (script `22-alert-routing.sh`). |
-| **Grâce (anti-tempête)** | Délai pendant lequel une même alerte ne re-notifie pas, pour éviter le spam (≥ 60 min sur les alertes mail récurrentes). |
+| **MITRE ATT&CK** | Public reference of attack tactics and techniques; the SIEM correlates the detections by tactic to spot attack chains. |
+| **UEBA** | *User and Entity Behavior Analytics*: behavioral risk score per host/account (detections + vulnerabilities + anomalies merged). |
+| **NDR** | *Network Detection and Response*: detection of suspicious network behaviors (scans, DNS exfiltration…). |
+| **SOAR** | *Security Orchestration, Automation and Response*: automated response (here, blocking attacking IPs on the firewall). |
+| **Threat feed** | List of malicious IPs/domains that a firewall reads to block; the SIEM dynamically feeds one. |
+| **LDAPS** | Secure (encrypted) LDAP: authentication protocol for AD accounts on the console. |
+| **P2 / P3** | Alert priority levels (P3 = critical; P2 = important). The "wake-me-up" P3 goes by email; all priorities combined also go to Teams. |
+| **2-tier routing (email / Teams)** | Notification routing: **Teams = firehose** (all alerts); **email = 26 critical alerts** only (confirmed compromise + SIEM health). Avoids spamming the mailbox (script `22-alert-routing.sh`). |
+| **Grace (anti-storm)** | Delay during which the same alert does not re-notify, to avoid spam (≥ 60 min on recurring email alerts). |
 
-## Gouvernance et exploitation
+## Governance and operations
 
-| Terme | Définition |
+| Term | Definition |
 |---|---|
-| **RTO / RPO** | Objectifs de continuité : temps de reprise (RTO) et perte de données maximale (RPO). |
-| **IaC** | *Infrastructure as Code* : toute la configuration est dans des scripts reproductibles, pas faite « à la main ». |
-| **Purge / repopulation** | Procédure d'exploitation : `53-purge-clean.sh` efface les données en conservant la configuration, puis `54-post-purge-repopulate.sh` réamorce les flux. |
-| **ISO 27001** | Norme internationale de management de la sécurité de l'information ; ce dossier en couvre les mesures de journalisation/surveillance. |
+| **RTO / RPO** | Continuity objectives: recovery time (RTO) and maximum data loss (RPO). |
+| **IaC** | *Infrastructure as Code*: the entire configuration is in reproducible scripts, not done "by hand". |
+| **Purge / repopulation** | Operational procedure: `53-purge-clean.sh` wipes the data while preserving the configuration, then `54-post-purge-repopulate.sh` re-primes the flows. |
+| **ISO 27001** | International standard for information security management; this documentation set covers its logging/monitoring measures. |
 
-## Détection avancée, intégrité & chiffrement
+## Advanced detection, integrity & encryption
 
-| Terme | Définition |
+| Term | Definition |
 |---|---|
-| **MITRE ATT&CK** | Référentiel mondial des techniques d'attaque (T####). Chaque détection y est mappée ; la couverture (44 techniques) se visualise en chargeant le calque `mitre-navigator-layer.json` dans ATT&CK Navigator. |
-| **KEV** | *Known Exploited Vulnerabilities* (catalogue CISA) : failles **activement exploitées** dans la nature → priorité de correction absolue. |
-| **Intégrité / tamper-evidence** | Registre quotidien **haché-en-chaîne et signé** de l'état des journaux, copié hors-SIEM : rend toute suppression/altération rétroactive **prouvable** (valeur probante d'audit). |
-| **Identité unifiée (`identity`)** | Compte canonique (sans domaine ni `@upn`) corrélant une même personne à travers AD, M365, VPN, endpoint ; `identity_human` regroupe les comptes `adm-`/`svc-` sous la personne. |
-| **Attribution DHCP (`src_hostname`)** | Corrélation IP→machine via les baux DHCP du FortiGate : répond à « qui se cache derrière 10.33.x.x » en investigation. |
-| **SOAR** | *Security Orchestration, Automation & Response* : réponse réflexe (ex. blocage d'une IP attaquante), avec garde-fous (jamais une IP interne ou en liste blanche). |
-| **TPM2 / LUKS** | Chiffrement du disque de données `/data` : LUKS2 chiffre, le **TPM2** (puce de la carte mère) déverrouille automatiquement au démarrage — le disque reste illisible s'il est volé/extrait. |
-| **Entra ID Protection** | Moteur de risque (ML) de Microsoft sur le tenant M365 : signale les comptes « à risque » (impossible travel, identifiants fuités…) — ingéré dans le SIEM (`m365_type:risk`). |
+| **MITRE ATT&CK** | Worldwide reference of attack techniques (T####). Every detection is mapped to it; the coverage (44 techniques) is visualized by loading the `mitre-navigator-layer.json` layer into ATT&CK Navigator. |
+| **KEV** | *Known Exploited Vulnerabilities* (CISA catalog): flaws **actively exploited** in the wild → absolute remediation priority. |
+| **Integrity / tamper-evidence** | Daily register **hash-chained and signed** of the logs' state, copied off-SIEM: makes any retroactive deletion/tampering **provable** (audit evidential value). |
+| **Unified identity (`identity`)** | Canonical account (without domain or `@upn`) correlating the same person across AD, M365, VPN, endpoint; `identity_human` groups the `adm-`/`svc-` accounts under the person. |
+| **DHCP attribution (`src_hostname`)** | IP→machine correlation via the FortiGate's DHCP leases: answers "who is behind 10.33.x.x" during an investigation. |
+| **SOAR** | *Security Orchestration, Automation & Response*: reflex response (e.g. blocking an attacking IP), with guards (never an internal or allowlisted IP). |
+| **TPM2 / LUKS** | Encryption of the `/data` data disk: LUKS2 encrypts, the **TPM2** (motherboard chip) unlocks it automatically at boot — the disk stays unreadable if stolen/extracted. |
+| **Entra ID Protection** | Microsoft's risk engine (ML) on the M365 tenant: flags "at-risk" accounts (impossible travel, leaked credentials…) — ingested into the SIEM (`m365_type:risk`). |

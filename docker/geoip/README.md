@@ -1,11 +1,11 @@
-# Bases GeoIP (DB-IP Lite) — montées dans Graylog
+# GeoIP databases (DB-IP Lite) — mounted into Graylog
 
-Placer ici `dbip-city-lite.mmdb` + `dbip-asn-lite.mmdb` pour que le **processeur GeoIP**
-de Graylog enrichisse les IP publiques (`*_country_code`, `*_geolocation`) → **carte 3D vivante**.
+Place here `dbip-city-lite.mmdb` + `dbip-asn-lite.mmdb` so that Graylog's **GeoIP processor**
+enriches public IPs (`*_country_code`, `*_geolocation`) → **living 3D map**.
 
-Deux façons :
-- **Copier** depuis la prod : `cp /var/lib/graylog-server/geoip/*.mmdb ./`
-- **Télécharger** (DB-IP Lite, gratuit, sans compte) : `./fetch-geoip.sh`
+Two ways:
+- **Copy** from production: `cp /var/lib/graylog-server/geoip/*.mmdb ./`
+- **Download** (DB-IP Lite, free, no account): `./fetch-geoip.sh`
 
-Les `.mmdb` ne sont pas versionnés (volumineux, régénérables). Après dépôt, `./deploy.sh up`
-puis dans Graylog : System ▸ Configurations ▸ GeoIP Resolver = activé (déjà restauré par le dump).
+The `.mmdb` files are not versioned (large, regenerable). After placing them, `./deploy.sh up`
+then in Graylog: System ▸ Configurations ▸ GeoIP Resolver = enabled (already restored by the dump).

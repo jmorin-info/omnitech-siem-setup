@@ -1,116 +1,116 @@
-# OMNITECH SIEM — déploiement Docker (plateforme complète)
+# OMNITECH SIEM — Docker deployment (full platform)
 
-Reproduit le **cœur** de la plateforme en conteneurs : moteur Graylog 7.1.3 + OpenSearch 2.19.5
-+ MongoDB, **console SOC** (`/soc`), **PWA** (`/m`) + backend `/m/api`, et **nginx TLS** en frontal
-(`/soc //m //kit` + Graylog). Toute la **configuration** Graylog vit dans MongoDB : **restaurer le
-dump = toute la config** (17 streams, 13 inputs, 136 détections, 27 lookups, alertes, notifications).
+Reproduces the **core** of the platform in containers: Graylog 7.1.3 engine + OpenSearch 2.19.5
++ MongoDB, **SOC console** (`/soc`), **PWA** (`/m`) + `/m/api` backend, and **TLS nginx** as front end
+(`/soc //m //kit` + Graylog). All Graylog **configuration** lives in MongoDB: **restoring the
+dump = all the config** (17 streams, 13 inputs, 136 detections, 27 lookups, alerts, notifications).
 
-> **Périmètre (honnête).** Le restore remonte la config Graylog + la console + le proxy + la
-> **corrélation oms-xdr** (service dédié). Pour que les inputs TLS et la **carte 3D** fonctionnent,
-> fournir les **certs** (`docker/certs/`) et les bases **GeoIP** (`docker/geoip/`) — voir ci-dessous.
-> Restent des **add-ons** lancés séparément : **oms-ml / oms-graph** (ML/graphe) et les **fetchers**
-> (M365/ESET/EMS) — un restore seul ne les ré-active pas (cf. tableau).
+> **Scope (honest).** The restore brings back the Graylog config + the console + the proxy + the
+> **oms-xdr correlation** (dedicated service). For the TLS inputs and the **3D map** to work,
+> provide the **certs** (`docker/certs/`) and the **GeoIP** databases (`docker/geoip/`) — see below.
+> Remaining are **add-ons** launched separately: **oms-ml / oms-graph** (ML/graph) and the **fetchers**
+> (M365/ESET/EMS) — a restore alone does not re-activate them (cf. table).
 
-> Pour **staging, reprise après incident (DR), portabilité et démonstration**. La production reste
-> le déploiement bare-metal chiffré LUKS ; ce bundle ne le remplace pas.
+> For **staging, disaster recovery (DR), portability and demonstration**. Production remains
+> the LUKS-encrypted bare-metal deployment; this bundle does not replace it.
 
-## Services & dépendances (ce que la stack couvre)
+## Services & dependencies (what the stack covers)
 
-| Service     | Image / build                       | Rôle                                           |
+| Service     | Image / build                       | Role                                           |
 |-------------|-------------------------------------|------------------------------------------------|
-| `mongodb`   | `mongo:7.0`                         | Toute la config Graylog                        |
-| `opensearch`| `opensearchproject/opensearch:2.19.5` | Stockage/recherche des événements            |
-| `graylog`   | `graylog/graylog:7.1.3`             | Moteur SIEM (inputs, pipelines, détections)    |
-| `console`   | `Dockerfile.console` (Python+pywebpush) | Backend `/m/api` (lecture OpenSearch, push) |
-| `nginx`     | `nginx:1.27-alpine`                 | TLS, sert `/soc //m //kit`, proxy Graylog      |
-| `oms-xdr`   | `Dockerfile.oms-xdr` (Python)       | Corrélation/réponse (lit OpenSearch → GELF Graylog), DRY-RUN |
+| `mongodb`   | `mongo:7.0`                         | All the Graylog config                         |
+| `opensearch`| `opensearchproject/opensearch:2.19.5` | Event storage/search                         |
+| `graylog`   | `graylog/graylog:7.1.3`             | SIEM engine (inputs, pipelines, detections)    |
+| `console`   | `Dockerfile.console` (Python+pywebpush) | `/m/api` backend (OpenSearch read, push)    |
+| `nginx`     | `nginx:1.27-alpine`                 | TLS, serves `/soc //m //kit`, Graylog proxy    |
+| `oms-xdr`   | `Dockerfile.oms-xdr` (Python)       | Correlation/response (reads OpenSearch → GELF Graylog), DRY-RUN |
 
-**Porté vs non porté (après `restore`) :**
+**Ported vs not ported (after `restore`):**
 
-| Élément | État | Pour l'activer |
+| Element | State | To activate it |
 |---|---|---|
-| Config Graylog (streams/pipelines/détections/lookups/alertes) | ✅ porté | `restore` (mongodump) |
-| Console `/soc` + PWA `/m` + `/m/api` + nginx TLS | ✅ porté | services compose |
-| Inputs TLS (Beats 5044, EMS 1518) | ⚠️ certs requis | déposer `docker/certs/` |
-| Carte 3D / GeoIP (`geo_*`) | ⚠️ mmdb requis | `docker/geoip/fetch-geoip.sh` |
-| Corrélation **oms-xdr** | ✅ porté | service `oms-xdr` (IDs streams ✓ après `restore` ; réajuster si base neuve) |
-| ML (oms-ml) / graphe d'attaque (oms-graph) | ➕ add-on | lancés séparément (dossiers `oms-*`) |
-| Fetchers M365 / ESET / EMS / export SMB | ➕ add-on | déployés séparément |
+| Graylog config (streams/pipelines/detections/lookups/alerts) | ✅ ported | `restore` (mongodump) |
+| Console `/soc` + PWA `/m` + `/m/api` + TLS nginx | ✅ ported | compose services |
+| TLS inputs (Beats 5044, EMS 1518) | ⚠️ certs required | drop in `docker/certs/` |
+| 3D map / GeoIP (`geo_*`) | ⚠️ mmdb required | `docker/geoip/fetch-geoip.sh` |
+| **oms-xdr** correlation | ✅ ported | `oms-xdr` service (stream IDs ✓ after `restore`; readjust if fresh DB) |
+| ML (oms-ml) / attack graph (oms-graph) | ➕ add-on | launched separately (`oms-*` folders) |
+| M365 / ESET / EMS fetchers / SMB export | ➕ add-on | deployed separately |
 
-**Prérequis données** (avant `restore`, pour des inputs RUNNING + une carte vivante) :
+**Data prerequisites** (before `restore`, for RUNNING inputs + a living map):
 - `docker/geoip/` → `dbip-city-lite.mmdb` + `dbip-asn-lite.mmdb` (`./geoip/fetch-geoip.sh`).
 - `docker/certs/` → `graylog.crt`+`graylog-pkcs8.key` (Beats), `fortiems-syslog.cert.pem`+`.key.pem` (EMS).
 
-## 🇫🇷 Démarrage
+## Getting started
 
-### Prérequis
-- Docker Engine + Compose v2, ≥ 6 Go RAM libre, ≥ 20 Go disque.
-- `sudo sysctl -w vm.max_map_count=262144` (persister dans `/etc/sysctl.conf`).
+### Prerequisites
+- Docker Engine + Compose v2, ≥ 6 GB free RAM, ≥ 20 GB disk.
+- `sudo sysctl -w vm.max_map_count=262144` (persist in `/etc/sysctl.conf`).
 
 ```bash
 cd docker
-cp .env.example .env        # renseigner les secrets (voir ci-dessous)
+cp .env.example .env        # fill in the secrets (see below)
 chmod 600 .env
-./deploy.sh up              # construit la console + monte les 5 services
-# Console SOC : https://<SERVER_NAME>/soc/   |   Graylog : https://<SERVER_NAME>/
+./deploy.sh up              # builds the console + brings up the 5 services
+# SOC console: https://<SERVER_NAME>/soc/   |   Graylog: https://<SERVER_NAME>/
 ```
-Le premier démarrage construit l'image console et initialise Graylog (~1–2 min).
+The first start builds the console image and initializes Graylog (~1–2 min).
 
-### Secrets (.env) — tous générables en une ligne
-| Variable | Génération |
+### Secrets (.env) — all generable in one line
+| Variable | Generation |
 |---|---|
 | `GRAYLOG_PASSWORD_SECRET` | `openssl rand -hex 48` |
-| `GRAYLOG_ROOT_PASSWORD_SHA2` | `echo -n 'MotDePasse' \| sha256sum \| cut -d' ' -f1` |
-| `MOBILE_SECRET` | `openssl rand -hex 32` (HMAC des sessions console) |
-| `VAPID_PUBLIC_KEY` | *optionnel* (push web) ; vide = push désactivé |
-| `SERVER_NAME` | nom servi (CN du cert auto-signé généré au 1er démarrage) |
+| `GRAYLOG_ROOT_PASSWORD_SHA2` | `echo -n 'Password' \| sha256sum \| cut -d' ' -f1` |
+| `MOBILE_SECRET` | `openssl rand -hex 32` (HMAC of the console sessions) |
+| `VAPID_PUBLIC_KEY` | *optional* (web push); empty = push disabled |
+| `SERVER_NAME` | served name (CN of the self-signed cert generated at first start) |
 
-### Déployer la configuration COMPLÈTE
-**Restauration (DR / clone, recommandée)** — depuis une sauvegarde de `30-backup-config.sh` :
+### Deploy the FULL configuration
+**Restore (DR / clone, recommended)** — from a `30-backup-config.sh` backup:
 ```bash
-./deploy.sh restore omni-siem-config_AAAAMMJJ.tar.gz.enc   # demande la BACKUP_PASSPHRASE
+./deploy.sh restore omni-siem-config_AAAAMMJJ.tar.gz.enc   # asks for the BACKUP_PASSPHRASE
 ```
-Restaure le dump Mongo (toute la conf) + les lookups, redémarre Graylog → SIEM **identique**.
+Restores the Mongo dump (all the config) + the lookups, restarts Graylog → **identical** SIEM.
 
-**Reconstruction depuis les scripts (IaC)** — stack vide puis scripts `1x`–`9x` contre l'API du
-Graylog conteneurisé (exporter `API` = URL du conteneur). À privilégier pour une base neuve.
+**Rebuild from the scripts (IaC)** — empty stack then scripts `1x`–`9x` against the API of
+the containerized Graylog (export `API` = URL of the container). Preferable for a fresh DB.
 
-## Scalabilité
-- **OpenSearch** : `OS_HEAP` (~50 % de la RAM, max ~31 g). Pour un cluster multi-nœuds, dupliquer
-  le service `opensearch` (os01/os02/os03), retirer `discovery.type=single-node` et fixer
-  `discovery.seed_hosts` + `cluster.initial_cluster_manager_nodes` ; augmenter les replicas d'index.
-- **Graylog** : `GRAYLOG_MEM` borne la mémoire ; pour la charge, lancer plusieurs nœuds Graylog
-  (même MongoDB + OpenSearch) derrière nginx (`upstream` round-robin) — l'état est partagé en base.
-- **Ingest** : régler les buffers/threads des inputs (process/output buffers Graylog) selon la RAM.
-- Limites mémoire posées via `deploy.resources.limits` (compose v2) ; ajuster à l'hôte.
+## Scalability
+- **OpenSearch**: `OS_HEAP` (~50% of the RAM, max ~31 g). For a multi-node cluster, duplicate
+  the `opensearch` service (os01/os02/os03), remove `discovery.type=single-node` and set
+  `discovery.seed_hosts` + `cluster.initial_cluster_manager_nodes`; increase the index replicas.
+- **Graylog**: `GRAYLOG_MEM` bounds the memory; for load, launch several Graylog nodes
+  (same MongoDB + OpenSearch) behind nginx (`upstream` round-robin) — the state is shared in the DB.
+- **Ingest**: tune the input buffers/threads (Graylog process/output buffers) according to the RAM.
+- Memory limits set via `deploy.resources.limits` (compose v2); adjust to the host.
 
-## Sécurité (à lire)
-- Sécurité OpenSearch **désactivée** et liée au réseau Docker interne — **n'exposez jamais**
-  `9200`/`27017`. Seuls `443`/`80` (nginx) sont publiés. nginx génère un **cert auto-signé** au
-  démarrage ; en prod, monter un vrai certificat sur le volume `nginx_certs`.
-- La console pose des cookies `Secure` → **HTTPS obligatoire** (assuré par nginx).
-- `.env` (secrets) : `chmod 600`, hors git (déjà `.gitignore`). Les lookups CSV (`../lookups`) sont
-  montés en lecture seule dans Graylog et la console.
-- **Durcissement (production) — docker secrets** : pour ne pas exposer les secrets en variables
-  d'environnement (visibles via `docker inspect`), utiliser l'override `docker-compose.secrets.yml` :
+## Security (to read)
+- OpenSearch security **disabled** and bound to the internal Docker network — **never expose**
+  `9200`/`27017`. Only `443`/`80` (nginx) are published. nginx generates a **self-signed cert** at
+  startup; in production, mount a real certificate on the `nginx_certs` volume.
+- The console sets `Secure` cookies → **HTTPS mandatory** (ensured by nginx).
+- `.env` (secrets): `chmod 600`, out of git (already `.gitignore`). The CSV lookups (`../lookups`) are
+  mounted read-only in Graylog and the console.
+- **Hardening (production) — docker secrets**: to avoid exposing the secrets as environment
+  variables (visible via `docker inspect`), use the `docker-compose.secrets.yml` override:
   ```bash
-  ./gen-secrets.sh                                   # génère ./secrets/* (chmod 600, hors git)
-  # mettre des placeholders non vides dans .env (GRAYLOG_PASSWORD_SECRET=managed-by-docker-secret, …)
+  ./gen-secrets.sh                                   # generates ./secrets/* (chmod 600, out of git)
+  # put non-empty placeholders in .env (GRAYLOG_PASSWORD_SECRET=managed-by-docker-secret, …)
   docker compose -f docker-compose.yml -f docker-compose.secrets.yml up -d
   ```
-  Les secrets sont alors montés en `/run/secrets/*` (Graylog via un wrapper d'entrypoint, console et
-  oms-xdr via la convention `*_FILE`).
+  The secrets are then mounted at `/run/secrets/*` (Graylog via an entrypoint wrapper, console and
+  oms-xdr via the `*_FILE` convention).
 
-## Exploitation
+## Operation
 ```bash
-./deploy.sh status              # état des conteneurs
-./deploy.sh logs graylog        # (ou console / nginx / opensearch)
-./deploy.sh down                # arrêt (volumes conservés)
+./deploy.sh status              # container status
+./deploy.sh logs graylog        # (or console / nginx / opensearch)
+./deploy.sh down                # stop (volumes preserved)
 ```
 
 ---
 
-## 🇬🇧 English (summary)
+## English (summary)
 Full containerized platform: Graylog 7.1.3 + OpenSearch 2.19.5 + MongoDB + **SOC console** (`/soc`,
 `/m`, `/m/api`) + **TLS nginx**. All Graylog config lives in MongoDB → restoring the backup dump = the
 whole platform. `cp .env.example .env` (set `GRAYLOG_PASSWORD_SECRET`, `GRAYLOG_ROOT_PASSWORD_SHA2`,

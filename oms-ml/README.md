@@ -1,64 +1,64 @@
-# OMS-ML — couche d'apprentissage (scoring ML) du SIEM OMNITECH
+# OMS-ML — the learning layer (ML scoring) of the OMNITECH SIEM
 
-Apprend sur les données déjà collectées par le SIEM et **réinjecte un `ml_score`**
-dans Graylog. Local-first : `scikit-learn` CPU, lecture OpenSearch, écriture via
-l'input GELF existant. Complète — sans dupliquer — l'UEBA statistique
-(`40-ueba-ndr`) et `oms-xdr` (corrélation + LLM).
+Learns from the data already collected by the SIEM and **reinjects an `ml_score`**
+into Graylog. Local-first: `scikit-learn` on CPU, reads from OpenSearch, writes via
+the existing GELF input. Complements — without duplicating — the statistical UEBA
+(`40-ueba-ndr`) and `oms-xdr` (correlation + LLM).
 
-## Deux modèles
+## Two models
 
-| | Anomalie (non-supervisé) | Réduction de FP (supervisé) |
+| | Anomaly (unsupervised) | FP reduction (supervised) |
 |---|---|---|
-| Modèle | IsolationForest (log1p + StandardScaler) | GradientBoosting |
-| Label | **aucun** — entraînable tout de suite | disposition analyste des cas SOC (VP/FP) |
-| Entité | hôte (`source`), compte (`TargetUserName`) | alerte individuelle |
-| Sortie | `ml_score` 0-100 + `ml_reason` par entité | probabilité « faux positif » par alerte |
-| Cadence | horaire (`oms-ml-anomaly.timer`) | ré-entraînement quotidien |
+| Model | IsolationForest (log1p + StandardScaler) | GradientBoosting |
+| Label | **none** — trainable right away | analyst disposition of SOC cases (TP/FP) |
+| Entity | host (`source`), account (`TargetUserName`) | individual alert |
+| Output | `ml_score` 0-100 + `ml_reason` per entity | "false positive" probability per alert |
+| Cadence | hourly (`oms-ml-anomaly.timer`) | daily retraining |
 
-### Features par entité (anomalie)
-Une seule requête OpenSearch `terms` + sous-agrégations sur la fenêtre (7 j) :
+### Features per entity (anomaly)
+A single OpenSearch `terms` query + sub-aggregations over the window (7 d):
 `ev_total, ev_detections, n_alert_tags, n_techniques, risk_max, risk_sum,
 n_src_ip, n_countries, n_event_sources, n_peers`.
-`log1p` avant scaling : sinon un gros émetteur (pare-feu) écrase la population et
-sort toujours « anormal ». On score l'anomalie de **forme**, pas la simple taille.
+`log1p` before scaling: otherwise a large emitter (firewall) overwhelms the population and
+always comes out "abnormal". We score the anomaly of **shape**, not mere size.
 
-### Explicabilité
-Pour chaque entité anormale, on remonte les 3 features qui s'écartent le plus de
-la moyenne de population (z-score) → `ml_reason` lisible par l'analyste. Pas de
-boîte noire : indispensable en SOC et pour l'audit ISO.
+### Explainability
+For each abnormal entity, we surface the 3 features that deviate the most from
+the population mean (z-score) → `ml_reason` readable by the analyst. No
+black box: essential in the SOC and for the ISO audit.
 
 ## Usage
 ```bash
-# Calcul + affichage seul (aucune écriture dans le SIEM)
+# Compute + display only (no write to the SIEM)
 python -m oms_ml.run anomaly --entity all --window 7d --top 15
-# Réinjection GELF (event_source=ml_anomaly, additif, non destructif)
+# GELF reinjection (event_source=ml_anomaly, additive, non-destructive)
 python -m oms_ml.run anomaly --entity all --push
-# État des labels supervisés / (ré)entraînement FP
+# State of supervised labels / FP (re)training
 python -m oms_ml.run status
 python -m oms_ml.run fp --train
 ```
 
-## Déploiement
-`sudo ./77-ml-scoring.sh` : venv + `/etc/oms-ml/config.yaml` + timers systemd +
-routage `ml_anomaly` → stream « OMNI - Interne SIEM » (comme l'UEBA).
+## Deployment
+`sudo ./77-ml-scoring.sh`: venv + `/etc/oms-ml/config.yaml` + systemd timers +
+routing `ml_anomaly` → stream "OMNI - Interne SIEM" (like the UEBA).
 
-## v2 — segmentation par classe d'actif
-Pour éviter qu'un gros émetteur (un pare-feu à 70 M d'événements) écrase la
-population et sorte toujours « anormal », l'anomalie des **hôtes** est calculée
-**par classe d'actif** (`event_source` dominant = pare-feu / serveur Windows /
-hyperviseur / cloud…) : un IsolationForest par classe, les petites classes
-regroupées en « autres ». On compare ainsi un pare-feu à d'autres pare-feux.
-De plus, le score est **amorti par l'ampleur réelle** de la déviation (z-max) et
-non par le simple rang — une entité « dans la norme » n'obtient plus 100 par
-min-max. Activé par `segment: true` (cf. `config.yaml`).
+## v2 — segmentation by asset class
+To prevent a large emitter (a firewall with 70 M events) from overwhelming the
+population and always coming out "abnormal", the anomaly of **hosts** is computed
+**per asset class** (dominant `event_source` = firewall / Windows server /
+hypervisor / cloud…): one IsolationForest per class, the small classes
+grouped as "other". This way we compare a firewall to other firewalls.
+Moreover, the score is **dampened by the actual magnitude** of the deviation (z-max) and
+not by mere rank — an entity "within the norm" no longer gets 100 by
+min-max. Enabled by `segment: true` (see `config.yaml`).
 
-## Limites assumées (honnêteté senior)
-- **Baseline temporelle** : la v2 segmente par classe ; une évolution ultérieure
-  comparerait aussi chaque entité à **son propre passé** (dérive individuelle).
-- **FP supervisé = besoin de labels** : tant que les analystes n'ont pas qualifié
-  assez de cas (VP/FP) dans la console, le modèle s'auto-saute et le signale.
-  → la disposition VP/FP à la clôture des cas est le carburant du modèle.
-- **Déséquilibre de classes** : les vraies attaques sont rares ; on surveille
-  l'AUC en validation croisée et on ne sur-interprète pas un petit échantillon.
-- Le `ml_score` est une **aide à la priorisation**, pas un verdict : il s'ajoute
-  au risque UEBA et à la corrélation oms-xdr, il ne les remplace pas.
+## Acknowledged limitations (senior honesty)
+- **Temporal baseline**: v2 segments by class; a later evolution
+  would also compare each entity to **its own past** (individual drift).
+- **Supervised FP = needs labels**: as long as analysts have not qualified
+  enough cases (TP/FP) in the console, the model self-skips and flags it.
+  → the TP/FP disposition at case closure is the fuel of the model.
+- **Class imbalance**: real attacks are rare; we monitor
+  the AUC in cross-validation and do not over-interpret a small sample.
+- The `ml_score` is a **prioritization aid**, not a verdict: it adds
+  to the UEBA risk and the oms-xdr correlation, it does not replace them.

@@ -1,62 +1,60 @@
-# ESXi / vCenter -> Graylog — procédure
+# ESXi / vCenter -> Graylog — procedure
 
-Côté SIEM tout est prêt (script `19-vsphere.sh` exécuté) : inputs syslog
-**TCP+UDP 1516** dédiés vSphere, index `omni-vsphere` (90 j), stream
-`OMNI - vSphere`, pipeline de parsing/détection (extraction user/IP, tags
-auth_fail / shell_ssh / vm_destroy / config), 3 alertes (mail+Teams) et la page
-dashboard **vSphere**. Pare-feu : 1516 ouvert pour `VSPHERE_NET` (10.33.0.0/16,
-à restreindre au VLAN management dans `00-vars.env`).
+On the SIEM side everything is ready (script `19-vsphere.sh` executed): dedicated
+vSphere syslog inputs **TCP+UDP 1516**, index `omni-vsphere` (90 d), stream
+`OMNI - vSphere`, a parsing/detection pipeline (user/IP extraction, tags
+auth_fail / shell_ssh / vm_destroy / config), 3 alerts (e-mail+Teams) and the
+**vSphere** dashboard page. Firewall: 1516 open for `VSPHERE_NET` (10.33.0.0/16,
+to be restricted to the management VLAN in `00-vars.env`).
 
-Cible : `10.33.220.10` port `1516` (TCP recommandé, UDP accepté).
+Target: `10.33.220.10` port `1516` (TCP recommended, UDP accepted).
 
-## 1. ESXi (par hôte) — via SSH ou esxcli
+## 1. ESXi (per host) — via SSH or esxcli
 
 ```sh
-# Destination syslog (TCP ; "udp://" possible)
+# Syslog destination (TCP ; "udp://" also possible)
 esxcli system syslog config set --loghost='tcp://10.33.220.10:1516'
 esxcli system syslog reload
 
-# Ouvrir le flux sortant syslog dans le pare-feu ESXi
+# Open the outbound syslog flow in the ESXi firewall
 esxcli network firewall ruleset set --ruleset-id=syslog --enabled=true
 esxcli network firewall refresh
 ```
-Ou en GUI : **Host > Configure > System > Advanced System Settings >
+Or via GUI: **Host > Configure > System > Advanced System Settings >
 `Syslog.global.logHost`** = `tcp://10.33.220.10:1516`.
-Déploiement de masse : **Host Profiles** ou PowerCLI
+Mass deployment: **Host Profiles** or PowerCLI
 `Set-VMHostSysLogServer -SysLogServer 'tcp://10.33.220.10:1516' -VMHost $esx`.
 
 ## 2. vCenter Server Appliance (VCSA)
 
-GUI : **Administration > System Configuration > (node) > Syslog** (ou, selon
-version, **VAMI** `https://<vcsa>:5480 > Syslog`) :
-- Server `10.33.220.10`, Port `1516`, Protocole `TCP`.
-- Jusqu'à 3 destinations possibles ; ajouter celle-ci.
+GUI: **Administration > System Configuration > (node) > Syslog** (or, depending
+on version, **VAMI** `https://<vcsa>:5480 > Syslog`):
+- Server `10.33.220.10`, Port `1516`, Protocol `TCP`.
+- Up to 3 destinations possible; add this one.
 
-## 3. Vérification (sur le SIEM, ~2 min après)
+## 3. Verification (on the SIEM, ~2 min later)
 
 ```bash
-# paquets recus ?
+# packets received?
 timeout 10 tcpdump -ni any port 1516 -c 5
-# events parses ?
+# events parsed?
 curl -s "127.0.0.1:9200/omni-vsphere_*/_search?size=5" -H 'Content-Type: application/json' \
   -d '{"sort":[{"timestamp":"desc"}]}' \
   | jq -r '.hits.hits[]._source | "\(.host) | \(.event_action // "-") | \(.user // "-") | \(.alert_tag // "-")"'
 ```
-Puis dashboard **OMNI - SOC > vSphere**.
+Then the **OMNI - SOC > vSphere** dashboard.
 
-## 4. Affinage (après réception des vrais logs)
+## 4. Tuning (after receiving real logs)
 
-Le parsing est volontairement large (basé sur le texte syslog). Une fois de
-vrais logs ESXi/VCSA reçus, on affinera les regex d'extraction (user/IP) et les
-motifs de détection selon ta version exacte (ESXi 7/8, VCSA). Détections
-candidates à ajouter ensuite : modification de permissions vCenter, sortie du
-lockdown mode, montage de datastore, snapshots massifs (ransomware), création
-de comptes locaux ESXi.
+Parsing is deliberately broad (based on the syslog text). Once real ESXi/VCSA
+logs are received, we will refine the extraction regexes (user/IP) and the
+detection patterns for your exact version (ESXi 7/8, VCSA). Detections to add
+next: vCenter permission changes, exit from lockdown mode, datastore mount,
+mass snapshots (ransomware), ESXi local-account creation.
 
-## 5. Bon à savoir
-- ESXi est verbeux : le volume peut être notable. L'index `omni-vsphere` est en
-  rotation quotidienne, rétention 90 j (ajustable dans `19-vsphere.sh`).
-- Garde au moins 1 hôte en TCP (fiable) ; l'UDP peut perdre des messages sous
-  charge.
-- Les events de test injectés pour valider le pipeline sont visibles dans
-  l'index (host `esxi01`/`vcenter`) ; ils disparaîtront avec la rotation.
+## 5. Good to know
+- ESXi is verbose: the volume can be significant. The `omni-vsphere` index rotates
+  daily, 90 d retention (adjustable in `19-vsphere.sh`).
+- Keep at least one host on TCP (reliable); UDP can drop messages under load.
+- The test events injected to validate the pipeline are visible in the index
+  (host `esxi01`/`vcenter`); they will disappear with rotation.

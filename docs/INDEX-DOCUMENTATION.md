@@ -1,16 +1,16 @@
-# Index de la documentation — déplacé
+# Documentation index — moved
 
-> **Dernière revue : 2026-06-14**
+> **Last reviewed: 2026-06-14**
 
-➡️ **L'index maître unique est désormais [`00-INDEX.md`](00-INDEX.md).**
+➡️ **The single master index is now [`00-INDEX.md`](00-INDEX.md).**
 
-Ce fichier est conservé comme simple redirection (un seul index pour éviter la
-divergence). Toute la table des documents — objet, public cible, contrôle ISO
-associé — se trouve dans `00-INDEX.md`.
+This file is kept as a simple redirect (a single index to avoid
+divergence). The whole table of documents — purpose, target audience, associated ISO
+control — is found in `00-INDEX.md`.
 
-À noter : les deux procédures d'exploitation sont **complémentaires**, pas
-redondantes —
-- `PROCEDURE-EXPLOITATION-SIEM.md` : exploitation courante, contrôles
-  quotidiens/périodiques, supervision des robots, capacité, maintenance.
-- `PRO-EXPLOITATION-SIEM.md` : traitement des alertes, **playbooks de réponse**,
-  classification des incidents, RACI, escalade.
+Note: the two operating procedures are **complementary**, not
+redundant —
+- `PROCEDURE-EXPLOITATION-SIEM.md`: routine operations, daily/periodic
+  checks, robot supervision, capacity, maintenance.
+- `PRO-EXPLOITATION-SIEM.md`: alert handling, **response playbooks**,
+  incident classification, RACI, escalation.

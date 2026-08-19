@@ -1,284 +1,284 @@
-# Journal des modifications — SIEM OMNITECH
+# Changelog — SIEM OMNITECH
 
-Toutes les évolutions notables du dispositif. Format : date — changement.
-*Dernière revue : 2026-06-22.*
+All notable changes to the platform. Format: date — change.
+*Last review: 2026-06-22.*
 
-## 2026-06-22 (couche ML, console enrichie, qualité)
+## 2026-06-22 (ML layer, enriched console, quality)
 
-### Couche d'apprentissage `oms-ml`
-- **Détection d'anomalie non-supervisée** (IsolationForest, log1p + StandardScaler)
-  par entité (hôte/compte) — score 0-100 explicable (z-score), réinjecté en GELF
-  (`event_source=ml_anomaly`). Déployé (`77-ml-scoring.sh`, timers).
-- **Réduction de faux positifs supervisée** : labels = **disposition Vrai/Faux
-  positif** posée à la clôture des cas dans la console (boucle fermée) ; s'entraîne
-  dès ~30 cas qualifiés.
-- **`79-interne-indexset.sh`** : index set dédié `omni-interne` pour le stream
-  interne — corrige un angle mort : `ueba_score` (74 k), `collecte_sla`, `siem_health`,
-  `xdr_incident`, `ml_anomaly` étaient écrits dans `graylog_0`, invisibles à la console.
+### `oms-ml` learning layer
+- **Unsupervised anomaly detection** (IsolationForest, log1p + StandardScaler)
+  per entity (host/account) — explainable 0-100 score (z-score), re-injected as GELF
+  (`event_source=ml_anomaly`). Deployed (`77-ml-scoring.sh`, timers).
+- **Supervised false-positive reduction**: labels = **True/False positive
+  disposition** set at case closure in the console (closed loop); trains
+  from ~30 qualified cases onward.
+- **`79-interne-indexset.sh`**: dedicated `omni-interne` index set for the internal
+  stream — fixes a blind spot: `ueba_score` (74 k), `collecte_sla`, `siem_health`,
+  `xdr_incident`, `ml_anomaly` were being written to `graylog_0`, invisible to the console.
 
-### Console SOC — refonte visuelle premium + enrichissements
-- Interface premium (glassmorphism, glow, KPI métalliques teintés, micro-interactions).
-- **Vue d'ensemble** : cartes **Anomalies ML** + **Risque UEBA** (vrais scores),
-  **tendances KPI** (▲/▼ % vs période précédente).
-- **Détections** : recherche libre + export CSV + **sévérité réelle** (`risk_severity`
-  au lieu de `priority`, absent) + score de risque.
-- **Palette ⌘K** : recherche live d'entités → Entité-360.
-- **Incidents** : disposition VP/FP (alimente le ML) + verrou `cases.json` (race).
-- **Santé** : robots d'auto-supervision (X/Y), couverture de collecte (SLA),
-  liste des hôtes go-dark.
-- **Graphe d'attaque** filtrable (tactique / volume / centrage d'entité).
-- **Entité-360** : score ML + UEBA + pagination des événements.
-- **Fuites & Dark Web** : synthèse par catégorie + état « aucune fuite » rassurant.
-- **Rapport exécutif** enrichi (posture opérationnelle, entités à risque ML/UEBA).
+### SOC console — premium visual redesign + enrichments
+- Premium interface (glassmorphism, glow, tinted metallic KPIs, micro-interactions).
+- **Overview**: **ML Anomalies** + **UEBA Risk** cards (real scores),
+  **KPI trends** (▲/▼ % vs previous period).
+- **Detections**: free-text search + CSV export + **real severity** (`risk_severity`
+  instead of `priority`, which is absent) + risk score.
+- **⌘K palette**: live entity search → Entity-360.
+- **Incidents**: TP/FP disposition (feeds the ML) + `cases.json` lock (race).
+- **Health**: self-supervision robots (X/Y), collection coverage (SLA),
+  list of go-dark hosts.
+- **Attack graph**, filterable (tactic / volume / entity centering).
+- **Entity-360**: ML + UEBA score + event pagination.
+- **Leaks & Dark Web**: summary by category + reassuring "no leak" state.
+- **Executive report** enriched (operational posture, ML/UEBA at-risk entities).
 
-### Ergonomie / UX / mobile
-- Accessibilité clavier (focus visible, focus-trap, ARIA), **toasts** de feedback,
-  squelettes de chargement, **cadence de rafraîchissement** réglable, **panneau d'aide
-  (?)** + **bascule de densité**.
-- **PWA mobile** : onglet **Menace** (parité console : menace, KPI, ML/UEBA, détections).
+### Ergonomics / UX / mobile
+- Keyboard accessibility (visible focus, focus-trap, ARIA), feedback **toasts**,
+  loading skeletons, adjustable **refresh cadence**, **help panel
+  (?)** + **density toggle**.
+- **Mobile PWA**: **Threat** tab (console parity: threat, KPI, ML/UEBA, detections).
 
-### Qualité / performance / corrections d'audit
-- **Cache mémoire à TTL** sur les agrégations lourdes (matrice ATT&CK ~783→7 ms,
-  rapport ~811→3 ms).
-- **Suite de tests** hors-ligne (`run-tests.sh`, 23 tests : rédaction + oms-ml).
-- **Mode rédaction** (`MOBILE_REDACT`) pour captures anonymisées.
-- Corrections de l'audit multi-agents : robots de supervision **versionnés**
-  (`61-supervision-robots.sh`), `ensure_lookup` **centralisé** dans `lib-graylog.sh`
-  (corrige l'échec silencieux du lookup m365), alerte **`service_stop_securite`**
-  (T1489, précurseur ransomware) câblée (`78`), honnêteté de la doc d'intégrité
-  (clé HMAC co-localisée).
+### Quality / performance / audit fixes
+- **TTL in-memory cache** on heavy aggregations (ATT&CK matrix ~783→7 ms,
+  report ~811→3 ms).
+- **Offline test suite** (`run-tests.sh`, 23 tests: redaction + oms-ml).
+- **Redaction mode** (`MOBILE_REDACT`) for anonymized screenshots.
+- Multi-agent audit fixes: supervision robots **versioned**
+  (`61-supervision-robots.sh`), `ensure_lookup` **centralized** in `lib-graylog.sh`
+  (fixes the silent failure of the m365 lookup), **`service_stop_securite`** alert
+  (T1489, ransomware precursor) wired (`78`), integrity-doc honesty
+  (HMAC key co-located).
 
-### Détections prêtes à déployer (NON déployées — `80-detection-extra2.sh`)
-3 tripwires 0 faux positif validés par sondage OpenSearch (30 j) : `defender_tamper`
-(T1562.001), `schtask_payload` (T1053.005), `amsi_bypass` (T1562.001). À déployer
-après revue (relancer ensuite `57` puis `14`).
+### Detections ready to deploy (NOT deployed — `80-detection-extra2.sh`)
+3 zero-false-positive tripwires validated by OpenSearch survey (30 d): `defender_tamper`
+(T1562.001), `schtask_payload` (T1053.005), `amsi_bypass` (T1562.001). To deploy
+after review (then re-run `57` followed by `14`).
 
-### Durcissement Graylog (streams / index / dashboards / corrélation / FP)
-- **Réduction des faux positifs (`81-fp-allowlist.sh`, déployé)** : pipeline
-  « OMNI - Allowlist FP » (stage 25) — pour des motifs bénins **mesurés**
-  (scheduled_task 97 % FP, service_install 86 % FP, dont nos propres agents
-  winlogbeat/Sysmon), pose `fp_allowlist=true` et **retire `alert_tag`** (l'alerte
-  ne tire plus ; l'événement reste indexé). Réversible (lookup `fp-allowlist.csv`).
-- **Dashboard « OMNI - Analytics » (`82-...`, déployé)** : 5 onglets — vue
-  d'ensemble, anomalies ML, UEBA, couverture & santé, bruit/FP.
-- **Corrélation kill-chain (`oms-xdr/rules.yaml`)** : 4 règles multi-signaux
-  (vol LSASS→persistance, PowerShell offensif→persistance, usage creds→partage
-  admin, LSASS→latéral 6 h) + 6 signaux + fenêtre par signal. Additif, réponse
-  dry-run préservée ; live au prochain cycle du timer `oms-xdr`.
-- **Rétention consolidée (`83-...`, dry-run par défaut)** : source unique de
-  vérité (valeurs = `POLITIQUE-RETENTION.md`) ; corrige le routage
-  `OMNI - FortiManager` (graylog_0 → `omni-fortimanager`). `APPLY=1` pour appliquer
-  (0 suppression immédiate ; auto-purge au-delà des seuils ensuite).
-- **Consolidation alertes Kerberos (`84-kerberoast-dedup.sh`, dry-run par défaut)** :
-  kerberoasting/RC4 ×3 et AS-REP ×2 sur le même événement → **5 alertes → 2**
-  (source canonique = `73`), garde-fou anti-perte de couverture. Posture AES
-  confirmée (zéro RC4/0x17 en 90 j → bruit latent). `APPLY=1` pour consolider.
+### Graylog hardening (streams / index / dashboards / correlation / FP)
+- **False-positive reduction (`81-fp-allowlist.sh`, deployed)**: "OMNI - Allowlist FP"
+  pipeline (stage 25) — for **measured** benign patterns
+  (scheduled_task 97% FP, service_install 86% FP, including our own
+  winlogbeat/Sysmon agents), sets `fp_allowlist=true` and **removes `alert_tag`** (the alert
+  no longer fires; the event stays indexed). Reversible (lookup `fp-allowlist.csv`).
+- **"OMNI - Analytics" dashboard (`82-...`, deployed)**: 5 tabs — overview,
+  ML anomalies, UEBA, coverage & health, noise/FP.
+- **Kill-chain correlation (`oms-xdr/rules.yaml`)**: 4 multi-signal rules
+  (LSASS theft→persistence, offensive PowerShell→persistence, cred usage→admin
+  share, LSASS→lateral 6 h) + 6 signals + per-signal window. Additive, dry-run
+  response preserved; live at the next `oms-xdr` timer cycle.
+- **Consolidated retention (`83-...`, dry-run by default)**: single source of
+  truth (values = `POLITIQUE-RETENTION.md`); fixes the
+  `OMNI - FortiManager` routing (graylog_0 → `omni-fortimanager`). `APPLY=1` to apply
+  (0 immediate deletion; auto-purge beyond thresholds thereafter).
+- **Kerberos alert consolidation (`84-kerberoast-dedup.sh`, dry-run by default)**:
+  kerberoasting/RC4 ×3 and AS-REP ×2 on the same event → **5 alerts → 2**
+  (canonical source = `73`), coverage-loss safeguard. AES posture
+  confirmed (zero RC4/0x17 in 90 d → latent noise). `APPLY=1` to consolidate.
 
-## 2026-06-14 (audit de cohérence & nouvelles sources)
+## 2026-06-14 (consistency audit & new sources)
 
-### Nouvelles sources intégrées (`52-new-sources.sh`)
-- **ESET PROTECT** (10.33.50.20) : input Syslog TCP 1515 (514 redirigé par le
-  pare-feu), stream « OMNI - ESET », `event_source=eset` (+ tag menace). Index set
-  dédié `omni-eset` (rétention 365 j). Alerte « ESET : détection » (route mail).
-- **BunkerWeb WAF** (10.33.70.1) : Filebeat → Beats 5044, stream « OMNI - BunkerWeb »
-  (routage par `event_source=bunkerweb` posé par Filebeat), tag WAF, champs `http_*`/`waf_*`.
-  Index set dédié `omni-bunkerweb` (rétention 90 j), page dashboard « WAF BunkerWeb ».
-- **NPS** (10.33.50.247) : déjà mappé côté SIEM (lookup `win-events.csv` 6272/6273/6274
-  + alerte ajoutée en 13). Reste à déployer Winlogbeat côté serveur — **pas encore
-  remonté côté client**.
+### New sources integrated (`52-new-sources.sh`)
+- **ESET PROTECT** (10.33.50.20): Syslog TCP 1515 input (514 redirected by the
+  firewall), "OMNI - ESET" stream, `event_source=eset` (+ threat tag). Dedicated
+  `omni-eset` index set (365 d retention). "ESET: detection" alert (mail route).
+- **BunkerWeb WAF** (10.33.70.1): Filebeat → Beats 5044, "OMNI - BunkerWeb" stream
+  (routing by `event_source=bunkerweb` set by Filebeat), WAF tag, `http_*`/`waf_*` fields.
+  Dedicated `omni-bunkerweb` index set (90 d retention), "WAF BunkerWeb" dashboard page.
+- **NPS** (10.33.50.247): already mapped on the SIEM side (lookup `win-events.csv` 6272/6273/6274
+  + alert added in 13). Winlogbeat still to be deployed server-side — **not yet
+  reporting on the client side**.
 
-### Bugs corrigés (audit de cohérence 2026-06-14)
-- **Timestamp FortiGate** : pose du `timestamp` depuis `eventtime` (epoch
-  nanosecondes) — règle `omni-forti-05-eventtime`, conforme A.8.17 (synchro horaire).
-- **Faux positifs brute-force** : exclusion des comptes machine (`*$`) et des comptes
-  de service bruyants (`ninjaone`, `ADSyncMSA_*`) qui échouent en boucle.
-- **PowerShell** : exclusion de `wakeup-ssrs.ps1` (tâche légitime récurrente).
-- **vSphere brute-force** : exclusion de `vpxuser` / `dcui` / `localhost` ; **(2026-06-15)** exclusion du **bruit des services cluster ESXi** (`clusterAgent`/gRPC « authentication handshake failed », jeton **SAML expiré**) qui était mal tagué `auth_echec` (user/src_ip vides) → générait de **faux brute-force** (par IP nœud ESXi et « (Empty Value) ») et de **faux « Hôte à risque » UEBA** sur l'infra. Corrigé à la racine (`19-vsphere.sh`, règle `omni-vsphere-10-auth-fail`).
-- **Déduplication des incidents** : `event_source=incident` routé vers « OMNI - Interne
-  SIEM » avec exclusion symétrique côté M365 (anti-dup) — `44-incidents.sh`.
-- **cert-check** passé en télémétrie permanente.
+### Bugs fixed (consistency audit 2026-06-14)
+- **FortiGate timestamp**: sets `timestamp` from `eventtime` (epoch
+  nanoseconds) — rule `omni-forti-05-eventtime`, compliant with A.8.17 (time sync).
+- **Brute-force false positives**: exclusion of machine accounts (`*$`) and noisy
+  service accounts (`ninjaone`, `ADSyncMSA_*`) that fail in a loop.
+- **PowerShell**: exclusion of `wakeup-ssrs.ps1` (legitimate recurring task).
+- **vSphere brute-force**: exclusion of `vpxuser` / `dcui` / `localhost`; **(2026-06-15)** exclusion of the **ESXi cluster service noise** (`clusterAgent`/gRPC "authentication handshake failed", expired **SAML token**) that was mis-tagged `auth_echec` (empty user/src_ip) → generated **false brute-force** (per ESXi node IP and "(Empty Value)") and false **"At-risk host" UEBA** on the infrastructure. Fixed at the root (`19-vsphere.sh`, rule `omni-vsphere-10-auth-fail`).
+- **Incident deduplication**: `event_source=incident` routed to "OMNI - Interne
+  SIEM" with symmetric exclusion on the M365 side (anti-dup) — `44-incidents.sh`.
+- **cert-check** switched to permanent telemetry.
 
-### Architecture & rétentions
-- **Index sets dédiés** ESET et BunkerWeb (séparation des flux et des rétentions).
-- Rétentions actuelles : **FortiGate = 180 j** ; Windows/Sysmon/vSphere/M365/ESET = 365 j ;
-  **BunkerWeb = 90 j**. Disque `/data` : 7,3 To.
-- FortiGate : `source` = nom de l'équipement (host).
+### Architecture & retention
+- **Dedicated index sets** for ESET and BunkerWeb (separation of streams and retention).
+- Current retention: **FortiGate = 180 d**; Windows/Sysmon/vSphere/M365/ESET = 365 d;
+  **BunkerWeb = 90 d**. `/data` disk: 7.3 TB.
+- FortiGate: `source` = device name (host).
 
-### Routage des alertes (2 tiers — `22-alert-routing.sh`)
-- **Teams = firehose** : toutes les alertes.
-- **Mail = critique « réveille-moi »** uniquement (compromission confirmée + santé
-  SIEM), 26 alertes. Grâce des alertes mail récurrentes relevée à ≥ 60 min.
-- Templates mail/Teams enrichis et *source-aware* (script 13).
+### Alert routing (2 tiers — `22-alert-routing.sh`)
+- **Teams = firehose**: all alerts.
+- **Mail = critical "wake me up"** only (confirmed compromise + SIEM
+  health), 26 alerts. Grace period for recurring mail alerts raised to ≥ 60 min.
+- Enriched, *source-aware* mail/Teams templates (script 13).
 
-### Outillage de purge
-- `53-purge-clean.sh` : purge des **données** (logs + historique d'alertes) en
-  conservant **toute la configuration** (méthode : cycle deflector + suppression des
-  anciens index via l'API). Enchaîne sur `54-post-purge-repopulate.sh` (reconstruction
-  des ranges, re-fetch M365, relance des robots d'analyse).
+### Purge tooling
+- `53-purge-clean.sh`: purges **data** (logs + alert history) while
+  preserving **the entire configuration** (method: deflector cycle + deletion of
+  old indices via the API). Chains into `54-post-purge-repopulate.sh` (rebuild
+  of ranges, M365 re-fetch, restart of analysis robots).
 
-### Vérifications (live)
-- Dashboard unique **« OMNI - SOC » à 24 pages**, `requires={}` (100 % OSS, pas
-  d'Enterprise).
-- 144 règles de pipeline, 88 définitions d'événements, 13 streams actifs (dont
+### Verifications (live)
+- Single **"OMNI - SOC" dashboard with 24 pages**, `requires={}` (100% OSS, no
+  Enterprise).
+- 144 pipeline rules, 88 event definitions, 13 active streams (including
   ESET, BunkerWeb, FortiGate).
 
-### Sources & enrichissements ajoutés (suite de journée)
-- **Vaultwarden** (BX-VAULTWARDEN, Docker → Filebeat) : stream + pipeline dédiés
-  (`55-vaultwarden.sh`), **index set dédié `omni-vaultwarden`** (90 j) — évite
-  l'éviction des events internes du SIEM. Kit client `/kit/vw-filebeat.sh`
-  (anti-rejeu : `ignore_older 72h` + registry persistant). Détections coffre :
-  `vault_auth_fail` (brute-force avec src_ip/compte), MITRE T1555.
-- **Attribution DHCP FortiGate** (`56-fortidhcp.sh`) : collecteur API REST
-  (token lecture seule) → lookup `omni-dhcp-attribution` (ip→hostname/MAC), timer
-  15 min. Le pipeline FortiGate pose `src_hostname`/`dest_hostname` sur les IP
-  internes (règles `omni-forti-06-dhcp-src/dest`) → « qui est derrière 10.33.x.x ».
-- **Identité unifiée** (`58-identity-correlation.sh`) : champs `identity`
-  (compte canonique : sans domaine/upn, minuscules) + `identity_human` (regroupe
-  `adm-X`/`svc-X` sous la personne) sur winsec/sysmon/winother/M365/FortiGate/vSphere.
-  Page dashboard **« Identité »** (pivot 1 personne, toutes sources). Corrèle déjà
-  jmorin/adm-jmorin sur FortiGate+AD+Sysmon.
-- **M365 / Entra ID Protection** : ingestion des `riskDetections` (permission
+### Sources & enrichments added (rest of the day)
+- **Vaultwarden** (BX-VAULTWARDEN, Docker → Filebeat): dedicated stream + pipeline
+  (`55-vaultwarden.sh`), **dedicated `omni-vaultwarden` index set** (90 d) — avoids
+  eviction of the SIEM's internal events. Client kit `/kit/vw-filebeat.sh`
+  (anti-replay: `ignore_older 72h` + persistent registry). Vault detections:
+  `vault_auth_fail` (brute-force with src_ip/account), MITRE T1555.
+- **FortiGate DHCP attribution** (`56-fortidhcp.sh`): REST API collector
+  (read-only token) → lookup `omni-dhcp-attribution` (ip→hostname/MAC), 15 min timer.
+  The FortiGate pipeline sets `src_hostname`/`dest_hostname` on internal
+  IPs (rules `omni-forti-06-dhcp-src/dest`) → "who is behind 10.33.x.x".
+- **Unified identity** (`58-identity-correlation.sh`): `identity`
+  (canonical account: no domain/upn, lowercase) + `identity_human` (groups
+  `adm-X`/`svc-X` under the person) fields on winsec/sysmon/winother/M365/FortiGate/vSphere.
+  **"Identity"** dashboard page (pivot 1 person, all sources). Already correlates
+  jmorin/adm-jmorin on FortiGate+AD+Sysmon.
+- **M365 / Entra ID Protection**: ingestion of `riskDetections` (permission
   `IdentityRiskEvent.Read.All`) → `m365_type:risk`, tag `m365_risque` (atRisk),
-  alerte mail. A révélé le compte **jaubert** flaggé atRisk (attaque cloud étrangère).
-  Détection `m365_brute_externe` (échecs M365 hors-FR, T1110).
+  mail alert. Revealed the **jaubert** account flagged atRisk (foreign cloud attack).
+  Detection `m365_brute_externe` (M365 failures outside FR, T1110).
 
-### Détection — couverture MITRE & nouvelles règles
-- **Carte de couverture MITRE ATT&CK** (`57-mitre-coverage.sh`) : calque
-  `docs/mitre-navigator-layer.json` (à charger dans ATT&CK Navigator) + bilan.
-  **58 détections / 44 techniques / 12-14 tactiques** (cf. COUVERTURE-MITRE-ATTACK.md).
-- **Privilege Escalation comblée** (`47-detections-extra.sh`) : `uac_bypass`
+### Detection — MITRE coverage & new rules
+- **MITRE ATT&CK coverage map** (`57-mitre-coverage.sh`): layer
+  `docs/mitre-navigator-layer.json` (to load into ATT&CK Navigator) + report.
+  **58 detections / 44 techniques / 12-14 tactics** (cf. COUVERTURE-MITRE-ATTACK.md).
+- **Privilege Escalation filled** (`47-detections-extra.sh`): `uac_bypass`
   (T1548.002), `scheduled_task` (T1053.005), `service_install` (T1543.003). +
   `remote_discovery` (T1018), `service_stop_securite` (T1489).
-- **Audit fichiers sensibles** (`59-file-audit.sh`) : parse 4663/5145, tags
-  `file_sensitive_access` (T1039) / `file_delete_sensible` (T1485), alertes accès/
-  suppression de masse (exfil/ransomware). *Armé* — nécessite les SACL côté serveurs.
+- **Sensitive file audit** (`59-file-audit.sh`): parses 4663/5145, tags
+  `file_sensitive_access` (T1039) / `file_delete_sensible` (T1485), mass access/
+  deletion alerts (exfil/ransomware). *Armed* — requires SACLs on the servers.
 
-### Intégrité & chiffrement (piliers ISO)
-- **Intégrité des logs** (`60-integrity.sh`, A.8.15) : registre quotidien
-  **haché-en-chaîne + signé HMAC** de l'état du corpus, copie hors-SIEM (SMB),
-  `omni-integrity --verify` (hebdo + alerte mail si chaîne rompue — testé : une
-  falsification est détectée). **Rôle Graylog « OMNI - Analyste (lecture seule) »**
-  (moindre privilège, A.8.2).
-- **Chiffrement au repos** `/data` (A.8.24/A.5.33) **réalisé le 2026-06-14** :
-  **LUKS2 (header inline, aes-xts 512 bits) + déverrouillage TPM2/PCR7**. Reformatage
-  chiffré à neuf (config hors `/data` préservée, logs repeuplés). Voir PROCEDURE-CHIFFREMENT-REPOS.md.
-- **Supervision du chiffrement** : `omni-self-health` vérifie désormais que `/data`
-  (chiffré) est bien ouvert + monté (alerte si le TPM échoue au boot ou si le volume
-  est démonté) ; le **header LUKS est inclus dans la sauvegarde config quotidienne**
-  (chiffrée, hors-bande `/SIEM/luks/`) → recovery toujours à jour.
-- **SOAR avancé** : cadrage des playbooks (isoler hôte / désactiver compte /
-  ticket) en attente de l'API NinjaOne. Voir SOAR-PLAYBOOKS.md.
+### Integrity & encryption (ISO pillars)
+- **Log integrity** (`60-integrity.sh`, A.8.15): daily **hash-chained + HMAC-signed**
+  register of the corpus state, off-SIEM copy (SMB),
+  `omni-integrity --verify` (weekly + mail alert if the chain is broken — tested: a
+  tampering is detected). **Graylog role "OMNI - Analyst (read-only)"**
+  (least privilege, A.8.2).
+- **Encryption at rest** of `/data` (A.8.24/A.5.33) **completed on 2026-06-14**:
+  **LUKS2 (inline header, aes-xts 512 bits) + TPM2/PCR7 unlock**. Fresh encrypted
+  reformat (config outside `/data` preserved, logs repopulated). See PROCEDURE-CHIFFREMENT-REPOS.md.
+- **Encryption supervision**: `omni-self-health` now verifies that `/data`
+  (encrypted) is indeed open + mounted (alert if the TPM fails at boot or if the volume
+  is unmounted); the **LUKS header is included in the daily config backup**
+  (encrypted, out-of-band `/SIEM/luks/`) → recovery always up to date.
+- **Advanced SOAR**: playbook scoping (isolate host / disable account /
+  ticket) pending the NinjaOne API. See SOAR-PLAYBOOKS.md.
 
-### Audit multi-agent & corrections (cohérence)
-- **Halt-traps de pipeline corrigés** (un stage « match either » sans règle
-  satisfaite stoppe le pipeline) : Exposition réseau (privflags + 4ᵉ direction
-  `transit`), Sources externes (règle pass-through), Identité (pass-through/stage).
-- **Veeam** : `veeam_job_echec` = échec **final** du job (eid 190) seulement ;
-  les retries transitoires (eid 450, « restore point locked ») → `veeam_job_warn`
-  (visu, pas d'alerte). Fini les faux « backup échoué ».
-- **SOAR rebranché et rendu permanent** (le sync de 13 le préservait désormais),
-  **champs ESET** corrigés (`eset_action`), **boucle Vaultwarden** droppée
-  (~9k/j de bruit), **`vw_level`** unifié, **faux « robot en panne »**
-  (omni-self-health : calcul d'âge robuste) supprimés. Nouveaux robots supervisés.
-- **Mail anti-spam** : 26 alertes critiques en mail (tier « réveille-moi »),
-  tout le reste en Teams (firehose). Ajout « Sabotage de l'audit » au mail.
+### Multi-agent audit & fixes (consistency)
+- **Pipeline halt-traps fixed** (a "match either" stage with no satisfied rule
+  stops the pipeline): Network exposure (privflags + 4th direction
+  `transit`), External sources (pass-through rule), Identity (pass-through/stage).
+- **Veeam**: `veeam_job_echec` = **final** job failure (eid 190) only;
+  transient retries (eid 450, "restore point locked") → `veeam_job_warn`
+  (view, no alert). No more false "backup failed".
+- **SOAR reconnected and made permanent** (the sync in 13 now preserved it),
+  **ESET fields** fixed (`eset_action`), **Vaultwarden loop** dropped
+  (~9k/day of noise), **`vw_level`** unified, false **"robot down"**
+  (omni-self-health: robust age calculation) removed. New supervised robots.
+- **Anti-spam mail**: 26 critical alerts by mail ("wake me up" tier),
+  everything else in Teams (firehose). Added "Audit sabotage" to mail.
 
-### Hygiène données
-- **Purge du rejeu Vaultwarden** : Filebeat avait rejoué tout l'historique
-  conteneur (2023→2026). ~23 M docs antidatés purgés de l'index Default `graylog_*`
-  **et** ~23 M de l'index Windows `omni-winother_*` (double routage corrigé). Les
-  événements internes/Windows réels sont préservés.
+### Data hygiene
+- **Vaultwarden replay purge**: Filebeat had replayed the entire container
+  history (2023→2026). ~23 M backdated docs purged from the Default `graylog_*` index
+  **and** ~23 M from the Windows `omni-winother_*` index (double routing fixed). Real
+  internal/Windows events are preserved.
 
-## 2026-06-12 (après-midi — corrections, audit & optimisations)
+## 2026-06-12 (afternoon — fixes, audit & optimizations)
 
-### Bugs corrigés (audit de cohérence)
-- **vSphere ne parsait rien** : le stage 0 du pipeline ne contenait que la
-  règle « drop bruit » en *match either* — tout message non-bruit était bloqué
-  avant la normalisation (0 host/event_action sur 44k logs/15 min). Corrigé.
-- **Collecteur M365 Activité planté** (datetime naive vs aware) : crashait à
-  chaque exécution après la première → page M365 Activité vide. Corrigé +
-  reset des curseurs → 53 000+ events M365 (Exchange/SharePoint/OneDrive/Teams).
-- Correctif appliqué au binaire **et** au script source (anti-régression).
+### Bugs fixed (consistency audit)
+- **vSphere parsed nothing**: stage 0 of the pipeline contained only the
+  "drop noise" rule in *match either* — any non-noise message was blocked
+  before normalization (0 host/event_action on 44k logs/15 min). Fixed.
+- **M365 Activity collector crashed** (naive vs aware datetime): crashed on
+  every run after the first → empty M365 Activity page. Fixed +
+  cursor reset → 53,000+ M365 events (Exchange/SharePoint/OneDrive/Teams).
+- Fix applied to the binary **and** the source script (anti-regression).
 
-### Optimisations
-- **vSphere −87 %** : filtrage du bruit stockage ESXi (traces vSAN, osfsd,
-  envoy-access, vmkwarning ; application_name vide côté ESXi → filtrage sur le
-  contenu). 26k → 3,4k logs/5 min, événements de sécurité conservés.
-- **SOAR whitelist** renseignée (IP VPN France légitimes + IP site Ivry),
-  testée. À compléter par les IP publiques des sites Bordeaux/PACA.
+### Optimizations
+- **vSphere −87%**: filtering of ESXi storage noise (vSAN traces, osfsd,
+  envoy-access, vmkwarning; empty application_name on ESXi → filter on
+  content). 26k → 3.4k logs/5 min, security events preserved.
+- **SOAR whitelist** populated (legitimate France VPN IPs + Ivry site IPs),
+  tested. To be completed with the public IPs of the Bordeaux/PACA sites.
 
-### Vérifications
-- Audit complet : 56 règles pipeline (0 erreur), 0 échec d'indexation, tous
-  services/timers OK, 43 définitions, throughput nominal.
-- Veeam confirmé fonctionnel (canal « Veeam Backup » + alerte d'échec active).
-- Purge des logs (base saine) : collecte temps réel vérifiée sur tous les flux.
+### Verifications
+- Full audit: 56 pipeline rules (0 errors), 0 indexing failures, all
+  services/timers OK, 43 definitions, nominal throughput.
+- Veeam confirmed functional ("Veeam Backup" channel + active failure alert).
+- Log purge (clean base): real-time collection verified on all streams.
 
 ## 2026-06-12 (consolidation)
 
-### Sécurité / détection
-- **SOAR-light** : blocage automatique d'IP attaquantes (alertes VPN/spraying)
-  via threat feed lu par le FortiGate. Sécurités : jamais d'IP interne/whitelist,
-  seuil, plafond, expiration 24 h, traçabilité.
-- **Compte canari AD** : détection d'intrusion interne (lookup + règle + alerte
-  + script de création `New-OmniCanary.ps1` avec SPN piège à Kerberoasting).
-- Durcissement VPN FortiGate (géo-restriction FR) — campagne de spraying stoppée.
-- UTM FortiGate complet activé sur les 3 clusters (AV/IPS/web/DNS/app-control).
+### Security / detection
+- **SOAR-light**: automatic blocking of attacking IPs (VPN/spraying alerts)
+  via a threat feed read by the FortiGate. Safeguards: never an internal IP/whitelist,
+  threshold, ceiling, 24 h expiry, traceability.
+- **AD canary account**: internal intrusion detection (lookup + rule + alert
+  + creation script `New-OmniCanary.ps1` with a Kerberoasting-bait SPN).
+- FortiGate VPN hardening (FR geo-restriction) — spraying campaign stopped.
+- Full FortiGate UTM enabled on the 3 clusters (AV/IPS/web/DNS/app-control).
 
-### Résilience / conformité
-- Sauvegarde de configuration quotidienne chiffrée (AES-256) externalisée SMB,
-  rétention 14 j, auto-surveillée + **PRA** (plan de reconstruction) + RESTORE.md.
-- Rétentions alignées ISO (365 j identité/cloud, 180 j réseau/endpoint) + garde-fou
-  disque (alerte 80 %, purge d'urgence 88 %).
-- **Rapport hebdomadaire automatique** (lundi 08:00) — preuve de revue.
-- **Dossier documentaire ISO 27001** : politique, standard, procédure, dossier
-  d'architecture, registre de conformité, PRA, LDAPS, synthèse exécutive.
-- Authentification console par **LDAPS** restreinte aux Admins du domaine.
+### Resilience / compliance
+- Daily encrypted (AES-256) configuration backup externalized to SMB,
+  14 d retention, self-monitored + **DRP** (rebuild plan) + RESTORE.md.
+- ISO-aligned retention (365 d identity/cloud, 180 d network/endpoint) + disk
+  safeguard (alert at 80%, emergency purge at 88%).
+- **Automatic weekly report** (Monday 08:00) — review evidence.
+- **ISO 27001 documentation set**: policy, standard, procedure, architecture
+  dossier, compliance register, DRP, LDAPS, executive summary.
+- Console authentication by **LDAPS** restricted to Domain Admins.
 
-### Exploitation
-- Intégration **Veeam** (canal Windows) — a révélé un job critique en échec.
-- Script d'enrôlement Windows unique `Install-OmniSiem-NinjaOne.ps1`.
-- Correctif tempête d'alertes (grâces/clés, détection des comptes de service).
-- **Purge des logs** (base saine) après la phase de build/tests.
+### Operations
+- **Veeam** integration (Windows channel) — revealed a critical job in failure.
+- Single Windows enrollment script `Install-OmniSiem-NinjaOne.ps1`.
+- Alert-storm fix (grace periods/keys, service account detection).
+- **Log purge** (clean base) after the build/test phase.
 
-## 2026-06-13 (UEBA/NDR, MITRE ATT&CK & corrélation d'incidents)
+## 2026-06-13 (UEBA/NDR, MITRE ATT&CK & incident correlation)
 
-### Détection avancée (au-delà de Graylog)
-- **Couche UEBA / NDR** (`40-ueba-ndr.sh`) : collecteurs `omni-ueba-volume`
-  (anomalie de volume par source, z-score même-heure-du-jour), score, géo, et
-  nouveau pays — robots autonomes alimentant le stream interne SIEM.
-- **NDR réseau** : détection de scan interne (`48-ndr-scan.sh`, T1046),
-  exfiltration/tunneling DNS (`43-ndr-dns.sh`, T1071.004), beaconing, mouvement
-  latéral et exfiltration.
-- **Reconnaissance LDAP / annuaire** (`49-ldap-recon.sh`) : détection
-  BloodHound / SharpHound via le collecteur `omni-ldap-recon`.
-- **Corrélation attack-chain → incidents** (`44-incidents.sh`) : le corrélateur
-  `omni-incident-correlate` agrège les détections d'une même entité en incidents
-  notés (`incident_score`), routés vers « OMNI - Interne SIEM ».
-- **Détections complémentaires** (`47-detections-extra.sh`) : 5 règles issues de
-  la revue multi-agent, dans un pipeline dédié.
+### Advanced detection (beyond Graylog)
+- **UEBA / NDR layer** (`40-ueba-ndr.sh`): collectors `omni-ueba-volume`
+  (volume anomaly per source, same-hour-of-day z-score), score, geo, and
+  new country — autonomous robots feeding the internal SIEM stream.
+- **Network NDR**: internal scan detection (`48-ndr-scan.sh`, T1046),
+  DNS exfiltration/tunneling (`43-ndr-dns.sh`, T1071.004), beaconing, lateral
+  movement and exfiltration.
+- **LDAP / directory reconnaissance** (`49-ldap-recon.sh`): detection of
+  BloodHound / SharpHound via the `omni-ldap-recon` collector.
+- **Attack-chain correlation → incidents** (`44-incidents.sh`): the `omni-incident-correlate`
+  correlator aggregates the detections of a single entity into scored
+  incidents (`incident_score`), routed to "OMNI - Interne SIEM".
+- **Complementary detections** (`47-detections-extra.sh`): 5 rules from the
+  multi-agent review, in a dedicated pipeline.
 
-### Cartographie & MITRE
-- **Mapping MITRE ATT&CK + score de risque** (`37-mitre-attack.sh`) :
-  `alert_tag` → technique (Txxxx) / tactique / sévérité / score, via lookup CSV.
-- **Carte cyber temps réel** (`42-carte-cyber.sh`) : arcs de flux animés générés
-  hors Graylog (`omni-geo-flux` → `flux.json`).
-- **Exposition Internet & classe de port à risque** (`49-expo-port-class.sh`) :
-  enrichissement des flux FortiGate.
+### Mapping & MITRE
+- **MITRE ATT&CK mapping + risk score** (`37-mitre-attack.sh`):
+  `alert_tag` → technique (Txxxx) / tactic / severity / score, via a CSV lookup.
+- **Real-time cyber map** (`42-carte-cyber.sh`): animated flow arcs generated
+  outside Graylog (`omni-geo-flux` → `flux.json`).
+- **Internet exposure & at-risk port class** (`49-expo-port-class.sh`):
+  enrichment of FortiGate flows.
 
-### Exploitation & supervision
-- **Auto-supervision des robots** (`46-self-health.sh`) : `omni-self-health`
-  route `event_source=siem_health` → INT, timer 30 min (alerte « Robot d'analyse
-  en panne »).
-- **Rapport exécutif mensuel** (`45-monthly-report.sh`) : HTML + PDF (weasyprint),
-  envoi le 1er du mois à 06:00, archivé sous `/var/www/siem-kit/rapports/`.
-- **Ventilation des échecs M365 par code Azure AD** (`48-m365-fail-codes.sh`).
+### Operations & supervision
+- **Robot self-supervision** (`46-self-health.sh`): `omni-self-health`
+  routes `event_source=siem_health` → INT, 30 min timer ("Analysis robot
+  down" alert).
+- **Monthly executive report** (`45-monthly-report.sh`): HTML + PDF (weasyprint),
+  sent on the 1st of the month at 06:00, archived under `/var/www/siem-kit/rapports/`.
+- **Breakdown of M365 failures by Azure AD code** (`48-m365-fail-codes.sh`).
 
-## 2026-06-11 (mise en production initiale)
-- Build du SIEM : modèle (index/streams/inputs), 55 règles pipeline,
-  détections, dashboard 24 pages, TLS bout-en-bout, collecte M365, FortiAnalyzer,
-  vSphere, déploiement des agents Windows (NinjaOne + GPO).
+## 2026-06-11 (initial production release)
+- SIEM build: model (index/streams/inputs), 55 pipeline rules,
+  detections, 24-page dashboard, end-to-end TLS, M365 collection, FortiAnalyzer,
+  vSphere, Windows agent deployment (NinjaOne + GPO).
 
 ---
-*Tenir à jour à chaque évolution. Référence technique détaillée : `CONTEXT.md`
-(racine du dépôt). Voir aussi `INTEGRATION-SOURCES.md`, `INVENTAIRE-SOURCES.md`,
-`POLITIQUE-RETENTION.md` et `REPONSE-AUTOMATISEE.md` dans `docs/`.*
+*Keep up to date with every change. Detailed technical reference: `CONTEXT.md`
+(repo root). See also `INTEGRATION-SOURCES.md`, `INVENTAIRE-SOURCES.md`,
+`POLITIQUE-RETENTION.md` and `REPONSE-AUTOMATISEE.md` in `docs/`.*

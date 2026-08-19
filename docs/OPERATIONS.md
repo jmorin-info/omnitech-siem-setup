@@ -43,7 +43,7 @@ sensible silence threshold, otherwise a future outage of that source goes unnoti
 
 The nightly `siem-backup` unit produces three artefacts: a MongoDB dump (Graylog config), an
 OpenSearch snapshot (message data), and a config tarball. Restore is documented and validated
-in [FR-RESTORE.md](FR-RESTORE.md); a full rebuild-from-source procedure is
+in [../RESTORE.md](../RESTORE.md); a full rebuild-from-source procedure is
 [PRA-RECONSTRUCTION-SIEM.md](PRA-RECONSTRUCTION-SIEM.md).
 
 ```bash

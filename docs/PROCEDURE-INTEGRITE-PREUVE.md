@@ -1,40 +1,40 @@
-# Intégrité & valeur probante des journaux — OMNITECH SIEM
+# Log integrity & evidentiary value — OMNITECH SIEM
 
-> ISO/IEC 27001 : A.8.15 (journalisation + **protection des journaux**), A.8.2 (droits d'accès privilégiés), A.5.28 (collecte de preuves). · 2026-06-14
+> ISO/IEC 27001: A.8.15 (logging + **log protection**), A.8.2 (privileged access rights), A.5.28 (collection of evidence). · 2026-06-14
 
-## Problème adressé
-Graylog OSS n'a pas d'archivage natif (Enterprise) et un administrateur peut supprimer/altérer des index (démontré : purge de 22,9 M docs). Sans contrôle, les journaux n'ont pas de **valeur probante**. On met en place une **preuve d'inaltérabilité (tamper-evidence)** OSS + du **moindre privilège**.
+## Problem addressed
+Graylog OSS has no native archiving (Enterprise) and an administrator can delete/alter indices (demonstrated: purge of 22.9 M docs). Without controls, the logs have no **evidentiary value**. We put in place OSS **tamper-evidence** + **least privilege**.
 
-## Dispositif en place
+## Mechanism in place
 
-### 1. Registre d'intégrité haché-en-chaîne + signé (`60-integrity.sh` → `/usr/local/sbin/omni-integrity`)
-- **Quotidien (03:30)** : un *maillon* capture l'état du corpus (par index : `docs`, `bytes`, `uuid` ; totaux). Chaque maillon inclut le **hash SHA-256 du maillon précédent** (chaînage) et est **signé HMAC-SHA256** avec une clé root-only (`/etc/graylog/omni-integrity.key`, chmod 600).
-- **Hors-SIEM** : le registre `/var/lib/omni-integrity/chain.jsonl` est copié à chaque exécution vers `//10.33.50.5/Public/SIEM/integrity/` → un insider qui efface/altère **de façon opportuniste** est **trahi** par la divergence avec la copie hors-bande. *(Voir « Limites » pour le cas du root déterminé qui re-signe la chaîne — le dispositif ne couvre pas ce modèle.)*
-- **Attestation** : chaque exécution émet un événement `event_source:siem_integrity` dans le SIEM lui-même (le SIEM atteste de son propre état).
-- **Vérification à tout moment** : `omni-integrity --verify` → recalcule tous les hash, vérifie la signature HMAC et le chaînage. *Toute* altération (suppression masquée, édition) **casse la chaîne** (testé : falsifier une valeur ⇒ « CHAINE COMPROMISE »).
+### 1. Hash-chained + signed integrity ledger (`60-integrity.sh` → `/usr/local/sbin/omni-integrity`)
+- **Daily (03:30)**: a *link* captures the state of the corpus (per index: `docs`, `bytes`, `uuid`; totals). Each link includes the **SHA-256 hash of the previous link** (chaining) and is **HMAC-SHA256 signed** with a root-only key (`/etc/graylog/omni-integrity.key`, chmod 600).
+- **Off-SIEM**: the ledger `/var/lib/omni-integrity/chain.jsonl` is copied on each run to `//10.33.50.5/Public/SIEM/integrity/` → an insider who **opportunistically** erases/alters is **betrayed** by the divergence with the out-of-band copy. *(See "Limitations" for the case of the determined root who re-signs the chain — the mechanism does not cover this model.)*
+- **Attestation**: each run emits an `event_source:siem_integrity` event into the SIEM itself (the SIEM attests to its own state).
+- **Verification at any time**: `omni-integrity --verify` → recomputes all hashes, verifies the HMAC signature and the chaining. *Any* alteration (masked deletion, edit) **breaks the chain** (tested: falsifying a value ⇒ "CHAIN COMPROMISED").
 
-**En cas d'enquête / audit** : exécuter `omni-integrity --verify`, puis comparer `chain.jsonl` (SIEM) avec la copie SMB hors-bande (doivent être identiques jusqu'au dernier maillon commun). Une divergence ou une chaîne rompue = manipulation à investiguer.
+**In case of investigation / audit**: run `omni-integrity --verify`, then compare `chain.jsonl` (SIEM) with the out-of-band SMB copy (they must be identical up to the last common link). A divergence or a broken chain = tampering to investigate.
 
-### 2. Moindre privilège (anti-tampering préventif) — ISO A.8.2
-- Rôle Graylog **« OMNI - Analyste (lecture seule) »** créé : lecture flux/recherches/dashboards, **aucun droit d'admin ni de suppression**.
-- **Politique** : les comptes SOC utilisent ce rôle. Le compte **admin** (seul à pouvoir supprimer index/streams) est **break-glass** : usage exceptionnel, traçé (accès au SIEM journalisé), MDP au coffre, idéalement MFA.
+### 2. Least privilege (preventive anti-tampering) — ISO A.8.2
+- Graylog role **"OMNI - Analyste (lecture seule)"** created: read streams/searches/dashboards, **no admin or deletion rights**.
+- **Policy**: SOC accounts use this role. The **admin** account (the only one able to delete indices/streams) is **break-glass**: exceptional use, traced (SIEM access logged), password in the vault, ideally MFA.
 
-### 3. Sauvegarde de configuration chiffrée hors-bande (`30-backup-config.sh`)
-- Archive **AES-256** de la config (sans les logs) poussée quotidiennement vers le partage SMB, rétention bornée. Garantit la reconstruction (cf. `PRA-RECONSTRUCTION-SIEM.md`).
+### 3. Encrypted out-of-band configuration backup (`30-backup-config.sh`)
+- **AES-256** archive of the config (without the logs) pushed daily to the SMB share, bounded retention. Guarantees reconstruction (see `PRA-RECONSTRUCTION-SIEM.md`).
 
-## Procédure d'extraction de preuve (chaîne de possession)
-Pour produire des logs à valeur probante (incident, réquisition) :
-1. Délimiter la recherche (Graylog ou OpenSearch) : période + critères, **horodatage UTC**.
-2. Exporter le résultat (CSV/JSON).
-3. **Sceller** : `sha256sum export.json > export.json.sha256` + noter date/heure, opérateur, motif.
-4. Joindre l'extrait du registre d'intégrité (`omni-integrity --verify` + le maillon couvrant la période) qui atteste que le corpus n'a pas été altéré sur l'intervalle.
-5. Conserver l'ensemble (export + hash + attestation) sur support maîtrisé ; journaliser la remise (qui/quand/à qui).
+## Evidence extraction procedure (chain of custody)
+To produce logs with evidentiary value (incident, legal request):
+1. Delimit the search (Graylog or OpenSearch): period + criteria, **UTC timestamp**.
+2. Export the result (CSV/JSON).
+3. **Seal**: `sha256sum export.json > export.json.sha256` + note date/time, operator, reason.
+4. Attach the integrity ledger extract (`omni-integrity --verify` + the link covering the period) attesting that the corpus was not altered over the interval.
+5. Keep the whole set (export + hash + attestation) on controlled media; log the handover (who/when/to whom).
 
-## Limites & évolution
-- **Modèle de menace — limite assumée (clé co-localisée).** La clé HMAC (`/etc/graylog/omni-integrity.key`) est sur la **même VM**, lisible par `root`. Un administrateur SIEM **déterminé et malveillant** peut donc altérer les index, **recalculer et re-signer** toute la chaîne `chain.jsonl` (et écraser la copie SMB s'il monte le partage avec le même compte) : `--verify` repasserait au **vert**. La copie hors-bande protège contre l'**effacement opportuniste**, **pas** contre un root qui re-signe. *À ne pas survendre à l'auditeur.* **Pour couvrir ce modèle** : externaliser la racine de confiance — envoi quotidien du **dernier hash horodaté** vers un destinataire **hors du contrôle du root SIEM** (mail/Teams, déjà disponibles) et/ou signature par une clé détenue **hors-bande** (HSM, coffre).
-- Le registre prouve l'inaltérabilité de l'**état** du corpus (suppression/altération **détectable** dans le modèle ci-dessus), pas une immutabilité du **contenu** au niveau bit. Pour aller plus loin : expédier les logs vers un stockage **WORM / S3 Object Lock** (immuable côté stockage) — chantier infra à part.
-- Entra ID **P1** actuel : passer en **P2** enrichit la détection cloud (niveaux de risque, riskyUsers) — cf. couverture M365.
+## Limitations & evolution
+- **Threat model — assumed limitation (co-located key).** The HMAC key (`/etc/graylog/omni-integrity.key`) is on the **same VM**, readable by `root`. A **determined and malicious** SIEM administrator can therefore alter the indices, **recompute and re-sign** the entire `chain.jsonl` chain (and overwrite the SMB copy if they mount the share with the same account): `--verify` would go back to **green**. The out-of-band copy protects against **opportunistic erasure**, **not** against a root who re-signs. *Not to be oversold to the auditor.* **To cover this model**: externalize the root of trust — daily send of the **last timestamped hash** to a recipient **outside the SIEM root's control** (email/Teams, already available) and/or signature with a key held **out-of-band** (HSM, vault).
+- The ledger proves the immutability of the corpus **state** (deletion/alteration **detectable** in the model above), not a bit-level immutability of the **content**. To go further: ship the logs to **WORM / S3 Object Lock** storage (immutable on the storage side) — a separate infra project.
+- Entra ID currently **P1**: moving to **P2** enriches cloud detection (risk levels, riskyUsers) — see M365 coverage.
 
-## Contrôles périodiques (à inscrire au plan d'exploitation)
-- **Hebdo** : `omni-integrity --verify` (et comparaison avec la copie SMB).
-- **Mensuel** : revue des comptes Graylog (qui a l'admin ?) + rotation de la clé HMAC si compromission suspectée.
+## Periodic controls (to be entered in the operations plan)
+- **Weekly**: `omni-integrity --verify` (and comparison with the SMB copy).
+- **Monthly**: review of Graylog accounts (who has admin?) + rotation of the HMAC key if compromise is suspected.

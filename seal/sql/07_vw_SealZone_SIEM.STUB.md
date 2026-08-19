@@ -1,50 +1,52 @@
 /* ============================================================================
-   03_vw_SealZone_SIEM.sql - Vue de resolution ZONE physique
+   03_vw_SealZone_SIEM.sql - Physical ZONE resolution view
    OMNITECH SECURITY - MISSION_SEAL_GRAYLOG
 
-   >>> CE SCRIPT NE CONTIENT PLUS AUCUNE INSTRUCTION. Le lancer ne fait RIEN. <<<
+   >>> THIS SCRIPT NO LONGER CONTAINS ANY STATEMENT. Running it does NOTHING. <<<
 
-   POURQUOI
-   --------
-   La version precedente supposait une hierarchie "parent -> enfant" classique :
+   WHY
+   ---
+   The previous version assumed a classic "parent -> child" hierarchy:
        NodeId / ParentNodeId / NodeLabel / NodeClass
-   L'extraction du modele reel (05_recon_fonctionnel.sql, joue sur OMEGA le
-   16/07/2026) montre que Hypervision.ObjectsHierarchicalCatalog n'a que QUATRE
-   colonnes, et pas celles-la :
+   Extracting the real model (05_recon_fonctionnel.sql, run on OMEGA on
+   07/16/2026) shows that Hypervision.ObjectsHierarchicalCatalog has only FOUR
+   columns, and not those:
 
-       NodeHierarchyId   hierarchyid   -- cle primaire : LE CHEMIN dans l'arbre
+       NodeHierarchyId   hierarchyid   -- primary key: THE PATH in the tree
        NodeId            bigint
-       NodeObjectId      numeric       -- l'objet porte par le noeud
-       NodeObjectType    varchar(50)   -- son type
+       NodeObjectId      numeric       -- the object carried by the node
+       NodeObjectType    varchar(50)   -- its type
 
-   Ni ParentNodeId, ni NodeLabel, ni NodeClass. La parente est portee par le type
-   hierarchyid de SQL Server (.GetAncestor(), .IsDescendantOf(), .GetLevel()),
-   pas par une jointure sur un identifiant parent. La vue precedente ne pouvait
-   donc pas fonctionner : elle est retiree plutot que laissee en commentaire (un
-   commentaire SQL imbrique se referme trop tot et le code redevient actif -
-   piege rencontre en la neutralisant).
+   Neither ParentNodeId, nor NodeLabel, nor NodeClass. Parenthood is carried by the
+   SQL Server hierarchyid type (.GetAncestor(), .IsDescendantOf(), .GetLevel()),
+   not by a join on a parent identifier. The previous view therefore could
+   not work: it is removed rather than left commented out (a nested SQL
+   comment closes too early and the code becomes active again -
+   pitfall encountered while neutralizing it).
 
-   L'original reste consultable au depot : seal/sql/07_vw_SealZone_SIEM.sql
-   (et dans l'historique git). Le garde-fou de Run-SealFix.ps1 a fait son travail :
-   il a empeche le deploiement d'une vue de zones fausse.
+   The original remains available in the repo: seal/sql/07_vw_SealZone_SIEM.sql
+   (and in the git history). The Run-SealFix.ps1 guardrail did its job:
+   it prevented the deployment of an incorrect zones view.
 
-   LA SUITE
-   --------
-   Jouer 06_recon_complements.sql (questions Q2 et Q2b). Son resultat designera
-   la bonne piste parmi :
+   NEXT STEPS
+   ----------
+   Run 06_recon_complements.sql (questions Q2 and Q2b). Its result will point to
+   the right track among:
 
-     1. dbo.POS_OBJECTS_IN_ZONES_CACHE (54 lignes)
-        Le cache objet -> zone que SEAL utilise deja pour ses plans. La piste la
-        plus simple SI elle couvre le parc (a comparer aux 165 portes deployees).
+     1. dbo.POS_OBJECTS_IN_ZONES_CACHE (54 rows)
+        The object -> zone cache that SEAL already uses for its plans. The
+        simplest track IF it covers the estate (to compare against the 165 doors
+        deployed).
 
      2. Hypervision.fn_GetObjectsCatalogPath
-        La fonction de l'editeur qui rend le chemin d'un noeud : exactement le
-        ZONE_PATH recherche. A privilegier sur toute remontee d'arbre maison.
+        The vendor function that returns a node's path: exactly the
+        ZONE_PATH we are looking for. To be preferred over any homemade tree
+        walk.
 
-     3. dbo.T_PASSAGES (45 623 lignes)  <-- probablement la meilleure
-        Porte deja FICH_ID (le porteur), ZONE_OBFI_ID (la zone) et ZONE_IN_OUT
-        (le sens), et fait le lien avec l'evenement via EVEN_ID. Elle resout d'un
-        coup les DEUX manques du SIEM : l'identite ET la zone.
+     3. dbo.T_PASSAGES (45,623 rows)  <-- probably the best
+        Already carries FICH_ID (the holder), ZONE_OBFI_ID (the zone) and ZONE_IN_OUT
+        (the direction), and links to the event via EVEN_ID. It resolves in one
+        go BOTH of the SIEM's gaps: identity AND zone.
 
-   La vue definitive sera ecrite sur la piste retenue, puis livree ici meme.
+   The final view will be written on the selected track, then delivered right here.
    ============================================================================ */

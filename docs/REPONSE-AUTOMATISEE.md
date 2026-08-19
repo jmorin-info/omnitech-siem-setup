@@ -1,113 +1,113 @@
-# Détection avancée & réponse automatisée — Canari AD + SOAR
+# Advanced detection & automated response — AD Canary + SOAR
 
-*Version 1.0 — 12/06/2026 — Classification : interne — Réf ISO A.8.16, A.5.26.*
+*Version 1.0 — 12/06/2026 — Classification: internal — ISO ref A.8.16, A.5.26.*
 
-Ce document décrit les deux dispositifs « actifs » du SIEM : le **compte
-canari** (détection d'intrusion à très faible bruit) et le **SOAR-light**
-(réponse automatique par blocage d'IP).
+This document describes the two "active" SIEM mechanisms: the **canary
+account** (very low-noise intrusion detection) and the **SOAR-light**
+(automatic response by IP blocking).
 
 ---
 
-## 1. Compte canari AD (détection d'intrusion interne)
+## 1. AD canary account (internal intrusion detection)
 
-### Principe
-Un compte Active Directory **leurre**, crédible et attractif (il a l'air d'un
-compte de service SQL privilégié), mais **sans aucun privilège réel** et qui
-n'est **jamais utilisé légitimement**. Toute authentification, tentative ou
-requête Kerberos le concernant ne peut être que le fait d'un attaquant qui
-énumère l'annuaire, fait du brute force, du Kerberoasting ou du mouvement
-latéral. **Taux de faux positifs quasi nul par construction.**
+### Principle
+A **decoy** Active Directory account, credible and attractive (it looks like a
+privileged SQL service account), but **with no real privilege** and that is
+**never used legitimately**. Any authentication, attempt or Kerberos
+request concerning it can only be the act of an attacker who is
+enumerating the directory, brute-forcing, Kerberoasting or moving
+laterally. **Near-zero false positive rate by construction.**
 
-### Mise en œuvre
-| Élément | Détail |
+### Implementation
+| Element | Detail |
 |---|---|
-| Compte AD | `windows/New-OmniCanary.ps1` — mot de passe aléatoire jamais communiqué, `PasswordNeverExpires`, **SPN MSSQLSvc** (piège à Kerberoasting → génère un 4769), `logonHours` nuls, aucune appartenance privilégiée |
-| Détection SIEM | lookup `omni-canary` (CSV `lookups/canary-accounts.csv`) + règle pipeline `omni-winsec-10-canary` (matche user / TargetUserName / SubjectUserName / ServiceName) |
-| Alerte | **« OMNI - COMPTE CANARI touché »** — P3, mail + Teams, immédiate |
-| Provisionnement | `35-canary.sh` (lookup + alerte), puis rejouer `12-graylog-pipelines.sh` |
+| AD account | `windows/New-OmniCanary.ps1` — random password never communicated, `PasswordNeverExpires`, **MSSQLSvc SPN** (Kerberoasting trap → generates a 4769), zero `logonHours`, no privileged membership |
+| SIEM detection | `omni-canary` lookup (CSV `lookups/canary-accounts.csv`) + pipeline rule `omni-winsec-10-canary` (matches user / TargetUserName / SubjectUserName / ServiceName) |
+| Alert | **"OMNI - CANARY ACCOUNT touched"** — P3, email + Teams, immediate |
+| Provisioning | `35-canary.sh` (lookup + alert), then replay `12-graylog-pipelines.sh` |
 
-### Exploitation
-- **Ajouter un canari** : éditer `canary-accounts.csv` + relancer `35-canary.sh`.
-- **Déclenchement = incident** : toute alerte canari est traitée en priorité
-  (cf. playbook P-4, PRO §6). Identifier le poste/IP source immédiatement.
-- Recommandé : un canari par zone sensible (un nom différent, crédible).
+### Operation
+- **Add a canary**: edit `canary-accounts.csv` + rerun `35-canary.sh`.
+- **Trigger = incident**: any canary alert is handled as a priority
+  (cf. playbook P-4, PRO §6). Identify the source host/IP immediately.
+- Recommended: one canary per sensitive zone (a different, credible name).
 
 ---
 
-## 2. SOAR-light (blocage automatique d'IP attaquantes)
+## 2. SOAR-light (automatic blocking of attacking IPs)
 
-### Principe
-Quand une attaque réseau est détectée (brute force / spraying VPN), le SIEM
-publie l'IP source dans une **liste de blocage** que le FortiGate lit en
-*External Threat Feed* et bloque. Architecture **découplée** : le SIEM n'a
-**aucun identifiant** sur le pare-feu (sécurité), et le blocage **expire seul**.
+### Principle
+When a network attack is detected (brute force / VPN spraying), the SIEM
+publishes the source IP in a **blocklist** that the FortiGate reads as an
+*External Threat Feed* and blocks. **Decoupled** architecture: the SIEM has
+**no credentials** on the firewall (security), and the block **expires on its own**.
 
-### Chaîne complète
+### Full chain
 ```
-Alerte Graylog (Force brute VPN / Password spraying)
-   │  notification HTTP
+Graylog alert (VPN brute force / Password spraying)
+   │  HTTP notification
    ▼
 omni-soar (service, 127.0.0.1:8088)
-   │  sécurités : jamais RFC1918, jamais SOAR_WHITELIST,
-   │  seuil SOAR_MIN_HITS, plafond SOAR_MAX, TTL SOAR_TTL_HOURS
+   │  safeguards: never RFC1918, never SOAR_WHITELIST,
+   │  threshold SOAR_MIN_HITS, cap SOAR_MAX, TTL SOAR_TTL_HOURS
    ▼
-/var/www/siem-kit/soar/blocklist.txt   (servi en HTTPS)
-   │  poll toutes les 2 min
+/var/www/siem-kit/soar/blocklist.txt   (served over HTTPS)
+   │  poll every 2 min
    ▼
 FortiGate External Connector "OMNI_SOAR_Blocklist"
    │
-   ├─ local-in-policy  → bloque le portail SSLVPN (trafic vers le boîtier)
-   └─ firewall policy  → bloque les services publiés (trafic traversant)
+   ├─ local-in-policy  → blocks the SSLVPN portal (traffic to the appliance)
+   └─ firewall policy  → blocks the published services (traversing traffic)
    ▼
-Blocage — expiration automatique après TTL (défaut 24 h)
+Block — automatic expiration after TTL (default 24 h)
 ```
 
-### Composants
-| Élément | Rôle |
+### Components
+| Element | Role |
 |---|---|
-| `/usr/local/sbin/omni-soar` | service webhook → décision → feed (GELF de traçabilité) |
-| `/usr/local/sbin/omni-soar-expire` (+ timer horaire) | retire les IP expirées |
-| `36-soar.sh` | crée la notification HTTP, l'attache aux alertes VPN/spraying, crée l'alerte de traçabilité |
-| `fortigate/06-soar-threatfeed.conf` | connecteur + policies FortiGate |
-| Alerte **« OMNI - SOAR : IP bloquée automatiquement »** | mail à chaque blocage |
+| `/usr/local/sbin/omni-soar` | webhook service → decision → feed (traceability GELF) |
+| `/usr/local/sbin/omni-soar-expire` (+ hourly timer) | removes expired IPs |
+| `36-soar.sh` | creates the HTTP notification, attaches it to the VPN/spraying alerts, creates the traceability alert |
+| `fortigate/06-soar-threatfeed.conf` | FortiGate connector + policies |
+| Alert **"OMNI - SOAR: IP blocked automatically"** | email on each block |
 
-### Garde-fous (paramètres `00-vars.env`)
-| Paramètre | Défaut | Rôle |
+### Safeguards (`00-vars.env` parameters)
+| Parameter | Default | Role |
 |---|---|---|
-| `SOAR_WHITELIST` | (vide) | **IP publiques à NE JAMAIS bloquer** : sites OMNITECH, peers IPsec, admins. À renseigner. |
-| `SOAR_MIN_HITS` | 5 | occurrences minimum de l'IP dans le backlog pour bloquer |
-| `SOAR_MAX` | 500 | plafond d'IP simultanément bloquées |
-| `SOAR_TTL_HOURS` | 24 | durée de blocage avant expiration auto |
+| `SOAR_WHITELIST` | (empty) | **Public IPs to NEVER block**: OMNITECH sites, IPsec peers, admins. To be filled in. |
+| `SOAR_MIN_HITS` | 5 | minimum occurrences of the IP in the backlog to block |
+| `SOAR_MAX` | 500 | cap on IPs blocked simultaneously |
+| `SOAR_TTL_HOURS` | 24 | block duration before auto expiration |
 
-Sécurités structurelles : **aucune IP privée** (RFC1918) n'est jamais bloquée ;
-chaque blocage est **tracé** (mail + GELF) ; un faux positif se **débloque
-seul** au bout du TTL.
+Structural safeguards: **no private IP** (RFC1918) is ever blocked;
+each block is **traced** (email + GELF); a false positive **unblocks
+itself** after the TTL.
 
-### Exploitation
-- **Voir les IP bloquées** : console SIEM (page Sauvegardes / recherche
-  `event_action:ip_bloquee`) ou FortiGate GUI (*External Connectors → View
-  Entries*). Les commandes `diagnose` CLI ne sont pas supportées sur toutes
-  les versions FortiOS.
-- **Débloquer manuellement** : retirer l'IP de `/var/lib/omni-soar/blocklist.json`
-  puis `python3 /usr/local/sbin/omni-soar-expire`.
-- **Compléter la whitelist** : indispensable avant exploitation réelle —
-  ajouter les IP publiques fixes des sites et des admins.
-- **Test de bout en bout** : injecter une IP de test dans le feed et vérifier
-  qu'elle est lue côté FortiGate (poll ≤ 2 min, visible dans les logs nginx).
+### Operation
+- **View blocked IPs**: SIEM console (Backups page / search
+  `event_action:ip_bloquee`) or FortiGate GUI (*External Connectors → View
+  Entries*). The `diagnose` CLI commands are not supported on all
+  FortiOS versions.
+- **Unblock manually**: remove the IP from `/var/lib/omni-soar/blocklist.json`
+  then `python3 /usr/local/sbin/omni-soar-expire`.
+- **Complete the whitelist**: essential before real operation —
+  add the fixed public IPs of the sites and of the admins.
+- **End-to-end test**: inject a test IP into the feed and check
+  that it is read on the FortiGate side (poll ≤ 2 min, visible in the nginx logs).
 
-> ⚠️ Le SOAR agit **automatiquement** sur le pare-feu. Maintenir la whitelist
-> à jour est une responsabilité d'exploitation (revue mensuelle, PRO §2).
+> ⚠️ The SOAR acts **automatically** on the firewall. Keeping the whitelist
+> up to date is an operational responsibility (monthly review, PRO §2).
 
-## Évolution — SOAR avancé (cadrage)
+## Evolution — advanced SOAR (scoping)
 
-Le blocage d'IP ci-dessus est **PB-01** (en production). Les playbooks suivants
-sont **conçus**, en attente de l'**API NinjaOne** (cf. **`SOAR-PLAYBOOKS.md`**) :
-- **PB-02 Isoler un hôte** compromis (ransomware / LSASS / lateral confirmé).
-- **PB-03 Désactiver un compte** (s'appuie sur le champ `identity`) — canari /
+The IP blocking above is **PB-01** (in production). The following playbooks
+are **designed**, pending the **NinjaOne API** (cf. **`SOAR-PLAYBOOKS.md`**):
+- **PB-02 Isolate a compromised host** (ransomware / LSASS / confirmed lateral).
+- **PB-03 Disable an account** (relies on the `identity` field) — canary /
   impossible travel / DCSync.
-- **PB-04 Ouvrir un ticket** d'incident pré-rempli ; **PB-05 Enrichir IOC**.
+- **PB-04 Open a pre-filled incident ticket**; **PB-05 Enrich IOC**.
 
-Garde-fous renforcés (mêmes principes que PB-01) : **jamais** un contrôleur de
-domaine / le SIEM / l'hyperviseur / un compte break-glass ; **dry-run** d'abord ;
-actions réversibles et tracées. Tant que NinjaOne n'est pas branché, l'isolation
-et la désactivation restent **manuelles** (cf. PROCEDURE-INCIDENT §5).
+Reinforced safeguards (same principles as PB-01): **never** a domain
+controller / the SIEM / the hypervisor / a break-glass account; **dry-run** first;
+reversible and traced actions. As long as NinjaOne is not connected, isolation
+and disabling remain **manual** (cf. PROCEDURE-INCIDENT §5).

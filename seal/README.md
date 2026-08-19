@@ -1,227 +1,226 @@
-# SEAL → Graylog — Intégration SIEM (OMNITECH SECURITY)
+# SEAL → Graylog — SIEM Integration (OMNITECH SECURITY)
 
-Intégration de la GTC/contrôle d'accès **SEAL** (base SQL Server) dans le SIEM
-Graylog du repo `omnitech-siem-setup`. **Périmètre : QA uniquement.**
+Integration of the **SEAL** BMS/access-control system (SQL Server database) into the
+`omnitech-siem-setup` Graylog SIEM. **Scope: QA only.**
 
-> Autorité unique de conception : [`docs/CONTRACT.md`](docs/CONTRACT.md).
-> Reconnaissance Phase 0 : [`docs/RECON.md`](docs/RECON.md).
-> Recette : [`tests/RECETTE.md`](tests/RECETTE.md).
+> Single design authority: [`docs/CONTRACT.md`](docs/CONTRACT.md).
+> Phase 0 reconnaissance: [`docs/RECON.md`](docs/RECON.md).
+> Acceptance test: [`tests/RECETTE.md`](tests/RECETTE.md).
 
-## 1. Architecture — flux de bout en bout
+## 1. Architecture — end-to-end flow
 
 ```
                     bx-qa-seal-vm.omnitech.security  (SQL Server 2019 Std)
-                    10.33.120.2:1433   —  base SEAL   (QA UNIQUEMENT)
+                    10.33.120.2:1433   —  SEAL database   (QA ONLY)
    ┌──────────────────────────────────────────────────────────────────────┐
-   │  Tables sources                Vues SIEM (minimisées RGPD, D1)         │
+   │  Source tables                 SIEM views (GDPR-minimized, D1)         │
    │  dbo.EVENEMENTS  ───────────►  vw_SealEvents_SIEM   (wm: EVEN_ROWVER)  │
    │  dbo.ALARMES     ───────────►  vw_SealAlarms_SIEM   (wm: VERSION)      │
    │  Audit.* (15)    ───────────►  vw_SealAudit_SIEM    (wm: RowVer,UNION) │
-   │  milf.BADGES/... ───────────►  vw_SealIdentity_SIEM (enrichissement)   │
+   │  milf.BADGES/... ───────────►  vw_SealIdentity_SIEM (enrichment)       │
    └───────────────────────────────────┬──────────────────────────────────┘
         JDBC (mssql-jdbc)               │  encrypt=true; trustServerCertificate=false
-        Server=10.33.120.2,1433         │  hostNameInCertificate=<FQDN>  (IP épinglée)
+        Server=10.33.120.2,1433         │  hostNameInCertificate=<FQDN>  (IP pinned)
         WHERE WatermarkBig > :sql_last_value
               AND WatermarkBig < MIN_ACTIVE_ROWVERSION()   (CONTRACT D5)
                                         ▼
                     ┌─────────────────────────────┐
-                    │  Logstash (VM SIEM 10.33.220.10)
-                    │  input jdbc (secret: keystore) │
-                    │  output gelf → 12201           │
+                    │  Logstash (SIEM VM 10.33.220.10)
+                    │  jdbc input (secret: keystore) │
+                    │  gelf output → 12201           │
                     └───────────────┬────────────────┘
                                     │  GELF  10.33.220.10:12201
                                     ▼
    ┌──────────────────────────────────────────────────────────────────────┐
    │  Graylog 7.1.3 Open                                                    │
-   │  Pipelines de normalisation (CONTRACT D4 : event_source/domain/...)   │
-   │  Lookup CSV  REEV_CODE → REEV_LIBELLE  (Data Adapter régénéré/cron)    │
-   │  Enrichissement identité : matricule (SQL) → UPN (SIEM-side, miroir)   │
-   │  Streams / index sets :                                               │
-   │    OMNI - SEAL Accès    (omni-seal-access, 12 mois)                    │
-   │    OMNI - SEAL Alarmes  (omni-seal-alarm,  12 mois)                    │
-   │    OMNI - SEAL Audit    (omni-seal-audit,  24 mois)                    │
+   │  Normalization pipelines (CONTRACT D4: event_source/domain/...)       │
+   │  CSV lookup  REEV_CODE → REEV_LIBELLE  (Data Adapter regenerated/cron) │
+   │  Identity enrichment: matricule (SQL) → UPN (SIEM-side, mirror)        │
+   │  Streams / index sets:                                                │
+   │    OMNI - SEAL Accès    (omni-seal-access, 12 months)                 │
+   │    OMNI - SEAL Alarmes  (omni-seal-alarm,  12 months)                 │
+   │    OMNI - SEAL Audit    (omni-seal-audit,  24 months)                 │
    └───────────────┬───────────────────────────────┬──────────────────────┘
-        Détections │ (EVT/ACC/ALM/HYP/XCO)          │ Dead man's switches
+        Detections │ (EVT/ACC/ALM/HYP/XCO)          │ Dead man's switches
                    ▼                                ▼  (74-source-watchdog:
              Event Definitions              seal_access/alarm/audit)
                    └──────────────┬─────────────────┘
                                   ▼
-                        Notification Teams  (TEAMS_WEBHOOK_URL)
+                        Teams notification  (TEAMS_WEBHOOK_URL)
 ```
 
-Détails clés (cf. CONTRACT) :
-- **Fuseau** : `timestamp` en UTC. EVENEMENTS/ALARMES convertis
-  `AT TIME ZONE 'Romance Standard Time' AT TIME ZONE 'UTC'` ; `Audit.*` utilise
-  `OperationDateUtc` (déjà UTC).
-- **Identité** : `EVEN_PHYSICAL_NUMBER → milf.BADGES → MATRICULE` (~76,5 % en QA) ;
-  `identity_upn` résolu côté SIEM (AD/M365), absent en QA.
-- **Édition Open** : pas de Correlation event def native → règles `[SEQ]`
-  approximées par état de pipeline ou reportées v2 (limite documentée).
+Key details (see CONTRACT):
+- **Time zone**: `timestamp` in UTC. EVENEMENTS/ALARMES converted with
+  `AT TIME ZONE 'Romance Standard Time' AT TIME ZONE 'UTC'`; `Audit.*` uses
+  `OperationDateUtc` (already UTC).
+- **Identity**: `EVEN_PHYSICAL_NUMBER → milf.BADGES → MATRICULE` (~76.5% in QA);
+  `identity_upn` resolved on the SIEM side (AD/M365), absent in QA.
+- **Open edition**: no native Correlation event def → `[SEQ]` rules
+  approximated via pipeline state or deferred to v2 (documented limitation).
 
-## 2. Contenu du livrable
+## 2. Deliverable contents
 
-| Chemin | Rôle |
+| Path | Role |
 |---|---|
-| `docs/CONTRACT.md` | Contrat d'intégration (autorité unique) |
-| `docs/RECON.md` | Reconnaissance Phase 0 (lecture seule) |
-| `sql/00_recon_queries.sql` | Requêtes de découverte (lecture seule) |
-| `sql/01..05_*.sql`, `sql/90_provision.sql` | **DDL** : colonnes rowversion, vues SIEM, login `svc_graylog_seal` (à rédiger/valider Phase 1) |
-| `logstash/` | Pipeline JDBC → GELF (Phase 2) |
-| `graylog/pipelines/`, `lookups/`, `detections/` | Normalisation, lookup REEV, règles (Phases 3-4) |
-| `tests/RECETTE.md` | Recette assistée + tableau règle-par-règle + test DMS |
-| `tests/inject_synthetic.sql` | Injection synthétique `TEST_SIEM` (QA) |
-| `tests/cleanup.sql` | Purge des marqueurs `TEST_SIEM` (QA) |
-| `../seal_graylog_setup.py` | Orchestrateur (`--phase preflight/recon/plan-sql/apply-*`) |
+| `docs/CONTRACT.md` | Integration contract (single authority) |
+| `docs/RECON.md` | Phase 0 reconnaissance (read-only) |
+| `sql/00_recon_queries.sql` | Discovery queries (read-only) |
+| `sql/01..05_*.sql`, `sql/90_provision.sql` | **DDL**: rowversion columns, SIEM views, `svc_graylog_seal` login (to be written/validated in Phase 1) |
+| `logstash/` | JDBC → GELF pipeline (Phase 2) |
+| `graylog/pipelines/`, `lookups/`, `detections/` | Normalization, REEV lookup, rules (Phases 3-4) |
+| `tests/RECETTE.md` | Assisted acceptance test + rule-by-rule table + DMS test |
+| `tests/inject_synthetic.sql` | Synthetic `TEST_SIEM` injection (QA) |
+| `tests/cleanup.sql` | Purge of `TEST_SIEM` markers (QA) |
+| `../seal_graylog_setup.py` | Orchestrator (`--phase preflight/recon/plan-sql/apply-*`) |
 
-## 3. Exploitation
+## 3. Operation
 
-- **Provisioning idempotent** : scripts bash `NN-*.sh` + `lib-graylog.sh`
-  (recherche-par-titre avant création, create-or-update). Ré-exécutables sans
-  effet de bord. SQL en `CREATE OR ALTER`.
-- **Dry-run par défaut** : tout code modifiant nécessite `--apply` explicite.
-- **Secrets** : jamais en clair. `00-vars.env` (gitignoré) + variables d'env +
-  keystore Logstash. Le rapport preflight ne divulgue que la *présence* des secrets.
-- **Surveillance de la source** : les 3 flux SEAL (`seal_access`, `seal_alarm`,
-  `seal_audit`) sont ajoutés au watchdog (`74-source-watchdog.sh`,
-  `alert_tag=source_silent`) → dead man's switch par stream (cf. RECETTE §C).
-- **Lookup REEV** : Data Adapter CSV régénéré par cron depuis `dbo.REF_EVENEMENT`
-  (pas de lookup JDBC natif en Open). Vérifier la fraîcheur du CSV.
-- **Watermark** : monotone via rowversion + borne `MIN_ACTIVE_ROWVERSION()`. En cas
-  d'arrêt Logstash, reprise au dernier `sql_last_value` (pas de perte, cf. RECETTE §C6).
+- **Idempotent provisioning**: `NN-*.sh` bash scripts + `lib-graylog.sh`
+  (search-by-title before creation, create-or-update). Re-runnable without
+  side effects. SQL uses `CREATE OR ALTER`.
+- **Dry-run by default**: any modifying code requires an explicit `--apply`.
+- **Secrets**: never in plaintext. `00-vars.env` (gitignored) + env variables +
+  Logstash keystore. The preflight report discloses only the *presence* of secrets.
+- **Source monitoring**: the 3 SEAL feeds (`seal_access`, `seal_alarm`,
+  `seal_audit`) are added to the watchdog (`74-source-watchdog.sh`,
+  `alert_tag=source_silent`) → dead man's switch per stream (see RECETTE §C).
+- **REEV lookup**: CSV Data Adapter regenerated by cron from `dbo.REF_EVENEMENT`
+  (no native JDBC lookup in Open). Check the CSV freshness.
+- **Watermark**: monotonic via rowversion + `MIN_ACTIVE_ROWVERSION()` bound. On a
+  Logstash stop, resume from the last `sql_last_value` (no loss, see RECETTE §C6).
 
 ## 4. ROLLBACK
 
-Retrait complet, dans cet ordre (QA ; en prod, sous fenêtre de maintenance) :
+Complete removal, in this order (QA; in prod, under a maintenance window):
 
-1. **Graylog** : arrêter les notifications, supprimer les Event Definitions SEAL,
-   les pipelines/règles SEAL, les connexions pipeline→stream, le lookup/adapter
-   REEV, puis les 3 streams et leurs index sets (`omni-seal-access/alarm/audit`).
-   Idéalement via les scripts `NN-*.sh` en mode suppression, sinon API
-   (`ensure_*` recherche par titre → supprimer par id).
-2. **Logstash** : arrêter et désactiver le pipeline SEAL ; retirer l'entrée du
-   keystore ; retirer les 3 sources du watchdog (`/etc/default/omni-watchdog`).
-3. **SQL — vues** : `DROP VIEW vw_SealEvents_SIEM, vw_SealAlarms_SIEM,
+1. **Graylog**: stop the notifications, delete the SEAL Event Definitions,
+   the SEAL pipelines/rules, the pipeline→stream connections, the REEV
+   lookup/adapter, then the 3 streams and their index sets (`omni-seal-access/alarm/audit`).
+   Ideally via the `NN-*.sh` scripts in deletion mode, otherwise via API
+   (`ensure_*` searches by title → delete by id).
+2. **Logstash**: stop and disable the SEAL pipeline; remove the keystore
+   entry; remove the 3 sources from the watchdog (`/etc/default/omni-watchdog`).
+3. **SQL — views**: `DROP VIEW vw_SealEvents_SIEM, vw_SealAlarms_SIEM,
    vw_SealAudit_SIEM, vw_SealIdentity_SIEM;`
-4. **SQL — login/permissions** : révoquer les GRANT sur les vues, puis
-   `DROP USER svc_graylog_seal` (base) et `DROP LOGIN svc_graylog_seal` (serveur).
-5. **SQL — colonnes rowversion ajoutées** (réversible) :
-   `ALTER TABLE dbo.EVENEMENTS DROP COLUMN EVEN_ROWVER;` (réécriture de table →
-   **fenêtre de maintenance**) et `ALTER TABLE Audit.<t> DROP COLUMN RowVer;` sur
-   les 15 tables (instantané). `dbo.ALARMES.VERSION` est **natif** : NE PAS le retirer.
-6. **Données de recette** : `tests/cleanup.sql` (purge `TEST_SIEM`).
+4. **SQL — login/permissions**: revoke the GRANTs on the views, then
+   `DROP USER svc_graylog_seal` (database) and `DROP LOGIN svc_graylog_seal` (server).
+5. **SQL — added rowversion columns** (reversible):
+   `ALTER TABLE dbo.EVENEMENTS DROP COLUMN EVEN_ROWVER;` (table rewrite →
+   **maintenance window**) and `ALTER TABLE Audit.<t> DROP COLUMN RowVer;` on
+   the 15 tables (instant). `dbo.ALARMES.VERSION` is **native**: DO NOT remove it.
+6. **Acceptance-test data**: `tests/cleanup.sql` (purge `TEST_SIEM`).
 
-> Les index SEAL déjà écrits dans Graylog restent soumis à leur rétention ; les
-> supprimer explicitement si une purge immédiate est requise.
+> The SEAL indices already written into Graylog remain subject to their retention;
+> delete them explicitly if an immediate purge is required.
 
-## 5. Notes PROD (avant bascule hors QA)
+## 5. PROD notes (before the non-QA cutover)
 
-- **Fenêtre de maintenance — rowversion EVENEMENTS** : `ALTER TABLE ADD
-  EVEN_ROWVER` réécrit ~961 k lignes (RECON §9.4) → planifier une fenêtre.
-  Les 15 `Audit.*` et `dbo.ALARMES.VERSION` (natif) n'imposent pas de fenêtre.
-- **Rotation du compte de service** : le mot de passe de `svc_graylog_seal` a
-  transité par un canal chat lors de la mise en place → **le renouveler** avant
-  prod, le stocker uniquement en keystore/variable d'env, et retirer la
-  dérogation `db_datareader` de recon au profit du GRANT SELECT sur les seules
-  vues (RECON §9.6).
-- **Installation pilote SQL + Logstash** : le pilote (`msodbcsql18`+`pyodbc` ou
-  `pymssql`) et Logstash (plugin `jdbc` + `mssql-jdbc`) sont **absents** de la VM
-  SIEM (RECON §4). À installer (paquets, action modifiante, plan à confirmer).
-- **DNS double enregistrement** : `bx-qa-seal-vm` a 2 A (`10.33.120.2` +
-  `10.108.15.143` filtré). **Épingler l'IP** `10.33.120.2` dans la chaîne JDBC +
-  `hostNameInCertificate=<FQDN>` (validation stricte du cert conservée).
-- **Cert serveur SQL** : CN=`bx-qa-seal-vm.omnitech.security`, exp. 2028-07-09 —
-  surveiller l'expiration.
-- **Édition Graylog** : instance réelle 7.1.3 (mission annonçait 6.x). Sans
-  incidence API ; les `[SEQ]` restent limitées (Open).
-- **Volumétrie / seuils** : calibrés sur QA (~158 évts/24 h) — recalibrer les
-  seuils de détection et le schedule Logstash sur les volumes de prod.
+- **Maintenance window — EVENEMENTS rowversion**: `ALTER TABLE ADD
+  EVEN_ROWVER` rewrites ~961k rows (RECON §9.4) → schedule a window.
+  The 15 `Audit.*` and `dbo.ALARMES.VERSION` (native) do not require a window.
+- **Service-account rotation**: the `svc_graylog_seal` password transited
+  through a chat channel during setup → **renew it** before prod, store it only
+  in a keystore/env variable, and remove the recon `db_datareader` grant in
+  favor of a GRANT SELECT on the views only (RECON §9.6).
+- **SQL driver + Logstash install**: the driver (`msodbcsql18`+`pyodbc` or
+  `pymssql`) and Logstash (`jdbc` plugin + `mssql-jdbc`) are **absent** from the
+  SIEM VM (RECON §4). To be installed (packages, modifying action, plan to confirm).
+- **DNS double record**: `bx-qa-seal-vm` has 2 A records (`10.33.120.2` +
+  `10.108.15.143`, filtered). **Pin the IP** `10.33.120.2` in the JDBC string +
+  `hostNameInCertificate=<FQDN>` (strict cert validation preserved).
+- **SQL server cert**: CN=`bx-qa-seal-vm.omnitech.security`, exp. 2028-07-09 —
+  monitor the expiry.
+- **Graylog edition**: actual instance 7.1.3 (the mission stated 6.x). No API
+  impact; the `[SEQ]` rules remain limited (Open).
+- **Volume / thresholds**: calibrated on QA (~158 events/24h) — recalibrate the
+  detection thresholds and the Logstash schedule on prod volumes.
 
-## 6. Checklist AIPD / RGPD (référencée — hors périmètre de ce livrable)
+## 6. DPIA / GDPR checklist (referenced — out of scope for this deliverable)
 
-La minimisation est **imposée par le contrat** (`docs/CONTRACT.md` **§D1**) : les
-vues SIEM excluent mots de passe/hashes/seed, photos, état civil et coordonnées ;
-`milf.BADGES` limité à `PHYSICAL_NUMBER/BADGE_NUMBER/MATRICULE/STATUS/USER_TYPE/
-COMPANY/SITE` ; descriptions `*_ANON` préférées ; `identity_upn` non extrait en QA.
-La conformité formelle (**AIPD**, base légale, durées de conservation vs
-rétentions 12/12/24 mois, information des personnes, registre) relève du DPO et
-n'est **pas** produite ici — ce livrable fournit la **preuve technique de
-minimisation** (colonnes interdites jamais exposées) à joindre au dossier AIPD.
-Contrôle recette associé : RECETTE.md « Points d'attention → RGPD ».
+Minimization is **imposed by the contract** (`docs/CONTRACT.md` **§D1**): the
+SIEM views exclude passwords/hashes/seed, photos, civil status and contact
+details; `milf.BADGES` is limited to `PHYSICAL_NUMBER/BADGE_NUMBER/MATRICULE/STATUS/USER_TYPE/
+COMPANY/SITE`; `*_ANON` descriptions are preferred; `identity_upn` is not
+extracted in QA. Formal compliance (**DPIA**, legal basis, retention periods vs
+the 12/12/24-month retentions, notice to data subjects, register) falls to the DPO
+and is **not** produced here — this deliverable provides the **technical proof of
+minimization** (forbidden columns never exposed) to attach to the DPIA file.
+Associated acceptance-test check: RECETTE.md "Points of attention → GDPR".
 
-## 7. Ordre exact de déploiement
+## 7. Exact deployment order
 
-Piloté par `seal_graylog_setup.py` (dry-run par défaut, `--apply` pour modifier) :
+Driven by `seal_graylog_setup.py` (dry-run by default, `--apply` to modify):
 
-| # | Étape | Commande / script | Modifiant | Checkpoint |
+| # | Step | Command / script | Modifying | Checkpoint |
 |---|---|---|---|---|
-| 1 | **Preflight** (réseau/DNS/TLS/édition/creds) | `./seal_graylog_setup.py --phase preflight` | non | — |
-| 2 | **Recon** (SELECT lecture seule) | `./seal_graylog_setup.py --phase recon` | non | décodages validés (RECON §9) |
-| 3 | **DDL** (rowversion + vues + login restreint) | `--phase plan-sql` puis `--phase apply-sql --apply` (`sql/01..05` + `90_provision.sql`) | **oui (SQL)** | valider le DDL AVANT exec |
-| 4 | **Provision Graylog** (streams/index, lookup REEV, pipelines de normalisation) | `NN-*.sh` SEAL / phase dédiée `--apply` | oui (Graylog) | contrat D4 respecté |
-| 5 | **Keystore + Logstash** (secret keystore, pipeline JDBC→GELF, seed watermark) | install + config Logstash | oui (VM SIEM) | flux GELF visible |
-| 6 | **Détections + DMS + Teams** | scripts `detections/` + `74-source-watchdog.sh` (sources SEAL) | oui (Graylog) | règles branchées |
-| 7 | **Recette** | `tests/RECETTE.md` (+ `inject_synthetic.sql`, test DMS), puis `cleanup.sql` | oui (QA data) | tableau règle-par-règle rempli |
+| 1 | **Preflight** (network/DNS/TLS/edition/creds) | `./seal_graylog_setup.py --phase preflight` | no | — |
+| 2 | **Recon** (read-only SELECT) | `./seal_graylog_setup.py --phase recon` | no | decodings validated (RECON §9) |
+| 3 | **DDL** (rowversion + views + restricted login) | `--phase plan-sql` then `--phase apply-sql --apply` (`sql/01..05` + `90_provision.sql`) | **yes (SQL)** | validate the DDL BEFORE exec |
+| 4 | **Graylog provisioning** (streams/index, REEV lookup, normalization pipelines) | SEAL `NN-*.sh` / dedicated `--apply` phase | yes (Graylog) | contract D4 respected |
+| 5 | **Keystore + Logstash** (keystore secret, JDBC→GELF pipeline, watermark seed) | Logstash install + config | yes (SIEM VM) | GELF flow visible |
+| 6 | **Detections + DMS + Teams** | `detections/` scripts + `74-source-watchdog.sh` (SEAL sources) | yes (Graylog) | rules wired |
+| 7 | **Acceptance test** | `tests/RECETTE.md` (+ `inject_synthetic.sql`, DMS test), then `cleanup.sql` | yes (QA data) | rule-by-rule table filled |
 
-## 8. Les 2 étapes opérateur restantes
+## 8. The 2 remaining operator steps
 
-Ces deux actions ne sont **pas** réalisées par le livrable (installation système /
-DDL privilégié) et doivent être exécutées par l'opérateur.
+These two actions are **not** performed by the deliverable (system installation /
+privileged DDL) and must be carried out by the operator.
 
-### 8.1 DDL admin (Phase 3 du plan) — login privilégié SQL
-Appliquer le DDL avec un compte **admin SQL temporaire** (le compte de service
-n'a pas les droits DDL). Aucun secret dans les fichiers ; le mot de passe admin
-passe par variable d'environnement, **non stocké** :
+### 8.1 Admin DDL (Phase 3 of the plan) — privileged SQL login
+Apply the DDL with a **temporary SQL admin** account (the service account does
+not have DDL rights). No secret in the files; the admin password is passed via
+an environment variable, **not stored**:
 ```bash
-export SEAL_DB_ADMIN_USER='<admin_sql_temporaire>'
-read -rs SEAL_DB_ADMIN_PWD; export SEAL_DB_ADMIN_PWD   # saisie masquée, hors historique
-./seal_graylog_setup.py --phase plan-sql                # revue du DDL (aucune exec)
-./seal_graylog_setup.py --phase apply-sql --apply       # exécute sql/01..05 + 90_provision.sql
+export SEAL_DB_ADMIN_USER='<temporary_sql_admin>'
+read -rs SEAL_DB_ADMIN_PWD; export SEAL_DB_ADMIN_PWD   # masked input, out of history
+./seal_graylog_setup.py --phase plan-sql                # DDL review (no exec)
+./seal_graylog_setup.py --phase apply-sql --apply       # runs sql/01..05 + 90_provision.sql
 unset SEAL_DB_ADMIN_PWD
 ```
-Effet : ajoute `EVEN_ROWVER` (EVENEMENTS) et `RowVer` (15 `Audit.*`), crée les 4
-vues SIEM, crée `svc_graylog_seal` restreint aux vues (retire `db_datareader`).
+Effect: adds `EVEN_ROWVER` (EVENEMENTS) and `RowVer` (15 `Audit.*`), creates the 4
+SIEM views, creates `svc_graylog_seal` restricted to the views (removes `db_datareader`).
 
-### 8.2 Installation du pilote SQL + Logstash (VM SIEM `10.33.220.10`)
+### 8.2 SQL driver + Logstash install (SIEM VM `10.33.220.10`)
 ```bash
-# Pilote SQL (au choix) :
-sudo apt-get install -y msodbcsql18 python3-pyodbc      # OU : pip install pymssql
-# Logstash + plugins JDBC :
+# SQL driver (either option):
+sudo apt-get install -y msodbcsql18 python3-pyodbc      # OR: pip install pymssql
+# Logstash + JDBC plugins:
 sudo apt-get install -y logstash
 sudo /usr/share/logstash/bin/logstash-plugin install logstash-integration-jdbc
-# driver mssql-jdbc déposé dans le répertoire du pipeline SEAL (cf. logstash/)
-# Secret hors clair — via keystore Logstash :
+# mssql-jdbc driver dropped into the SEAL pipeline directory (see logstash/)
+# Secret out of plaintext — via Logstash keystore:
 sudo /usr/share/logstash/bin/logstash-keystore add SEAL_DB_SVC_PWD
 ```
-Puis démarrer le pipeline SEAL et **seeder les watermarks** à la valeur courante
-(pas de rapatriement d'historique, CONTRACT D5). Vérifier l'arrivée GELF sur
+Then start the SEAL pipeline and **seed the watermarks** to the current value
+(no historical backfill, CONTRACT D5). Verify the GELF arrival on
 `10.33.220.10:12201`.
 
 ---
 
-## État de déploiement (2026-07-15)
+## Deployment status (2026-07-15)
 
-**Côté VM SIEM (10.33.220.10) — FAIT et vérifié :**
-- Logstash 8.19 installé (`seal/logstash/install-logstash-siem.sh`), driver
-  mssql-jdbc 12.8.1, plugins gelf/jdbc.
-- `seal.conf` déployé (`/etc/logstash/conf.d/`), requêtes SQL (`/etc/logstash/sql/`),
-  dossier watermark (`/var/lib/logstash/seal/`).
-- Keystore Logstash peuplé (`SEAL_DB_SVC_USER/PWD`) — passphrase générée fournie
-  au service via drop-in systemd `EnvironmentFile=/etc/logstash/keystore.env`
-  (0640, hors dépôt). **`logstash -t` = Configuration OK.**
-- **Input GELF UDP dédié SEAL `OMNI - SEAL (GELF UDP 12202)`** (127.0.0.1) — la
-  sortie `gelf` (UDP) ne pouvait pas viser l'input GELF *HTTP* 12201 ; validé E2E.
-- Service `logstash` **activé mais NON démarré** (attend les vues).
+**On the SIEM VM (10.33.220.10) — DONE and verified:**
+- Logstash 8.19 installed (`seal/logstash/install-logstash-siem.sh`), mssql-jdbc
+  12.8.1 driver, gelf/jdbc plugins.
+- `seal.conf` deployed (`/etc/logstash/conf.d/`), SQL queries (`/etc/logstash/sql/`),
+  watermark directory (`/var/lib/logstash/seal/`).
+- Logstash keystore populated (`SEAL_DB_SVC_USER/PWD`) — generated passphrase
+  supplied to the service via a systemd drop-in `EnvironmentFile=/etc/logstash/keystore.env`
+  (0640, outside the repo). **`logstash -t` = Configuration OK.**
+- **Dedicated SEAL GELF UDP input `OMNI - SEAL (GELF UDP 12202)`** (127.0.0.1) — the
+  `gelf` (UDP) output could not target the GELF *HTTP* input 12201; validated E2E.
+- `logstash` service **enabled but NOT started** (waiting on the views).
 
-**Corrections de configuration appliquées :** sortie GELF (UDP→input dédié 12202) ;
-chemins driver/SQL réalignés ; vue `vw_SealReev_SIEM` (06) + grant pour que la
-régénération du lookup REEV survive au verrouillage `90_provision`.
+**Configuration fixes applied:** GELF output (UDP→dedicated 12202 input);
+driver/SQL paths realigned; `vw_SealReev_SIEM` view (06) + grant so the
+REEV lookup regeneration survives the `90_provision` lockdown.
 
-**Étape opérateur restante (bloquante) — DDL sur SEAL :** mon compte de service
-est en lecture seule (`db_datareader`), il ne peut pas créer les vues. Package
-prêt : **`/tmp/seal-sql-package/`** (+ `.tgz`) — `Run-SealDDL.ps1` / `run-ddl.bat`
-+ `sql/` (01→06, 90_provision) + README. À exécuter sur BX-QA-SEAL-VM avec un
-login SQL admin (ex. `sa`).
+**Remaining operator step (blocking) — DDL on SEAL:** my service account is
+read-only (`db_datareader`), it cannot create the views. Package
+ready: **`/tmp/seal-sql-package/`** (+ `.tgz`) — `Run-SealDDL.ps1` / `run-ddl.bat`
++ `sql/` (01→06, 90_provision) + README. To run on BX-QA-SEAL-VM with an
+SQL admin login (e.g. `sa`).
 
-**Ordre de mise en service :** (1) DDL sur SEAL → (2) `systemctl start logstash`
-→ (3) vérifier l'arrivée dans les 3 streams → (4) repasser
-`seal/dashboards/DATA_READINESS.md` au vert → (5) Phase 6 dashboards.
+**Commissioning order:** (1) DDL on SEAL → (2) `systemctl start logstash`
+→ (3) verify arrival in the 3 streams → (4) turn
+`seal/dashboards/DATA_READINESS.md` back to green → (5) Phase 6 dashboards.

@@ -342,7 +342,7 @@ for operations.
 ## 11. Operations &amp; resilience
 
 - **Backups** — nightly application backup (MongoDB dump + OpenSearch snapshot + configs),
-  restore procedure validated ([`docs/FR-RESTORE.md`](docs/FR-RESTORE.md)).
+  restore procedure validated ([`RESTORE.md`](RESTORE.md)).
 - **Retention** — ISO-aligned per-source retention tiers (e.g. FortiGate/Sysmon 90 d,
   Windows Security / vSphere / ESET 180 d, M365 365 d) — see
   [`docs/POLITIQUE-RETENTION.md`](docs/POLITIQUE-RETENTION.md).
@@ -420,9 +420,9 @@ The complete documentation set lives under [`docs/`](docs/) — start at
 | Executive summary | [`docs/SYNTHESE-EXECUTIVE.md`](docs/SYNTHESE-EXECUTIVE.md) |
 
 > Source-specific integration notes (kept from the original French documentation):
-> [`docs/FR-VEEAM.md`](docs/FR-VEEAM.md), [`docs/FR-M365.md`](docs/FR-M365.md),
-> [`docs/FR-VSPHERE.md`](docs/FR-VSPHERE.md), [`docs/FR-FORTIANALYZER.md`](docs/FR-FORTIANALYZER.md),
-> [`docs/FR-GUIDE.md`](docs/FR-GUIDE.md), [`docs/FR-CONTEXT.md`](docs/FR-CONTEXT.md).
+> [`VEEAM.md`](VEEAM.md), [`M365.md`](M365.md),
+> [`VSPHERE.md`](VSPHERE.md), [`FORTIANALYZER.md`](FORTIANALYZER.md),
+> [`GUIDE.md`](GUIDE.md), [`CONTEXT.md`](CONTEXT.md).
 
 ---
 

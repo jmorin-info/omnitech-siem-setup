@@ -1,291 +1,291 @@
-# Revue critique & synthèse — Plateforme de détection/réponse IA sur socle Graylog
+# Critical review & synthesis — AI detection/response platform on a Graylog foundation
 
-**OMNITECH SECURITY — 2026-06-18 — destiné à : Julien Morin (RSSI/dev)**
-**Objet :** réconcilier les 3 dossiers de recherche (`/tmp/prompt/compass_*.md`) avec l'état réel de
-`omnitech-siem-setup`, en challenger les hypothèses, et trancher une séquence exécutable.
-**Sources :** les 3 artefacts ; `CONTEXT.md` (1007 l.), `README.md`, `docs/`, inventaire script-par-script
-(59 scripts / 10 238 lignes bash + 26 microservices Python `/usr/local/sbin/omni-*`).
-
----
-
-## 0. Verdict en cinq décisions
-
-1. **Les 3 docs raisonnent en greenfield ; ton système est en production et mûr.** Le « point de départ
-   recommandé » du Doc 3 (PoC Kerberoasting → MVP read-only multi-cas, soit ses Lots 1-2, ~6 mois) est
-   **déjà livré et dépassé**. Suivre la feuille de route à la lettre = reconstruire ce qui tourne.
-2. **Le vrai périmètre neuf se réduit à 4 briques** : (a) couche LLM de triage, (b) actionneurs de réponse
-   au-delà du blocage IP (isolation ESET, désactivation AD), (c) chaîne LLM cloud (anonymisation + ZDR) —
-   **conditionnelle**, (d) scan de surface **actif** — **à déprioriser**. Tout le reste existe.
-3. **Le risque #1 n'est pas l'IA, c'est l'absence totale de contrôle de version.** 10k lignes de sécurité
-   de prod, zéro git, zéro test, zéro CI, un seul mainteneur. **C'est la priorité absolue, avant toute
-   ligne d'IA**, et c'est aussi une preuve directe pour l'audit ISO (maîtrise du changement, clause 10).
-4. **Commencer par le LLM *local* (Mistral/Ollama), pas par LLM cloud.** Il valide la valeur du triage sans
-   dépendance contractuelle (ZDR), sans risque d'anonymisation, sans surface d'exfiltration. LLM cloud ne se
-   justifie qu'**après** preuve de valeur locale **et** d'un cas que Mistral 7B échoue à traiter.
-5. **LLM cloud n'apporte AUCUNE preuve requise pour l'audit de nov. 2026.** L'audit est servi par le SIEM
-   existant + le dossier ISO déjà rédigé. La plateforme IA est un *plus*, hors chemin critique de l'audit,
-   et ne doit pas le mettre en péril (c'est d'ailleurs ce que dit le Doc 3 — mais l'enthousiasme IA le noie).
+**OMNITECH SECURITY — 2026-06-18 — intended for: Julien Morin (CISO/dev)**
+**Subject:** reconcile the 3 research dossiers (`/tmp/prompt/compass_*.md`) with the real state of
+`omnitech-siem-setup`, challenge their assumptions, and settle an executable sequence.
+**Sources:** the 3 artifacts; `CONTEXT.md` (1007 l.), `README.md`, `docs/`, script-by-script inventory
+(59 scripts / 10,238 lines of bash + 26 Python microservices `/usr/local/sbin/omni-*`).
 
 ---
 
-## 1. Le décalage central : « à construire » vs « déjà en prod »
+## 0. Verdict in five decisions
 
-Les trois dossiers décrivent un BUILD comme si la couche détection/corrélation/réponse n'existait pas.
-Réconciliation chiffrée (le % « déjà fait » est l'auto-évaluation de l'inventaire, corroborée par `CONTEXT.md`) :
+1. **The 3 docs reason in greenfield; your system is in production and mature.** The "recommended
+   starting point" of Doc 3 (Kerberoasting PoC → read-only multi-case MVP, i.e. its Lots 1-2, ~6 months) is
+   **already delivered and surpassed**. Following the roadmap to the letter = rebuilding what is running.
+2. **The real new scope reduces to 4 building blocks**: (a) LLM triage layer, (b) response actuators
+   beyond IP blocking (ESET isolation, AD disabling), (c) cloud LLM chain (anonymization + ZDR) —
+   **conditional**, (d) **active** surface scan — **to be deprioritized**. Everything else exists.
+3. **Risk #1 is not the AI, it is the total absence of version control.** 10k lines of production
+   security, zero git, zero test, zero CI, a single maintainer. **This is the absolute priority, before any
+   line of AI**, and it is also direct evidence for the ISO audit (change management, clause 10).
+4. **Start with the *local* LLM (Mistral/Ollama), not with cloud LLM.** It validates the value of triage without
+   contractual dependency (ZDR), without anonymization risk, without exfiltration surface. Cloud LLM is only
+   justified **after** proof of local value **and** of a case that Mistral 7B fails to handle.
+5. **Cloud LLM provides NO evidence required for the Nov. 2026 audit.** The audit is served by the existing
+   SIEM + the ISO dossier already drafted. The AI platform is a *plus*, off the audit's critical path,
+   and must not jeopardize it (this is in fact what Doc 3 says — but the AI enthusiasm drowns it out).
 
-| Ce que les docs proposent de « construire » | Réalité dans `omnitech-siem-setup` | Déjà fait |
+---
+
+## 1. The central mismatch: "to be built" vs "already in prod"
+
+The three dossiers describe a BUILD as if the detection/correlation/response layer did not exist.
+Quantified reconciliation (the "already done" % is the inventory's self-assessment, corroborated by `CONTEXT.md`):
+
+| What the docs propose to "build" | Reality in `omnitech-siem-setup` | Already done |
 |---|---|---|
-| **PoC Kerberoasting** (Doc 3, Lot 1, point de départ) | Détection 4769 RC4 0x17 + SPN non-machine en prod, mappée T1558.003, **+ compte canari** avec SPN `MSSQLSvc` posé exprès comme appât (`35-canary.sh`) | **100%** |
-| Microservice de **corrélation** multi-source (Doc 1, Obj 1) | `omni-incident-correlate` : agrège par entité, reconstruit la kill-chain (ordre canonique), score 0-100 par saturation, fenêtre 24h, ≥2 tactiques | **~70%** |
-| **Détections Sigma / MITRE** (Doc 1 & 3) | 74 règles pipeline, ~54 techniques / 14 tactiques, export Navigator (`37`/`57`), enrichissement MITRE sur tout événement | **~85%** |
-| **NDR / surveillance réseau** (Doc 1, Obj 2) | 4 services : beaconing C2 (coeff. de variation), DNS tunneling (entropie), scan réseau (T1046), impossible-travel (Haversine) | **~85%** |
-| **SOAR / réponse semi-autonome** (Doc 1 & 2) | `omni-soar` : webhook → feed → deny FortiGate, **sans creds sur le FW**, TTL 24h, whitelist, seuil, cap/kill-switch, audit GELF | **~60%** |
-| **Console unifiée « single pane of glass »** (Doc 2 & 3) | Dashboard SOC 19-21 pages (50 widgets), carte-cyber temps réel, drill-down Graylog natif | **~80%** |
-| **Threat intel** (Doc 1) | Tor exit + Spamhaus DROP branchés, alerte sur hit IP publique | partiel (OSS) |
-| **Rétention / intégrité ISO** (transverse) | Rétention par paliers, chaîne d'intégrité HMAC-SHA256 anti-altération (`omni-integrity`), PRA/PRO/POL rédigés | **~90%** |
-| **Reporting** (Doc 2, KPI) | Rapport hebdo HTML + mensuel PDF (weasyprint) + KPI MTTD/posture | **~85%** |
-| **Couche LLM (Mistral/Ollama)** | — | **0%** |
-| **Couche LLM cloud + anonymisation Presidio + ZDR** | — | **0%** |
-| **Actionneurs réponse** (ESET isolate, AD disable) | ESET ingéré comme *source de logs* (syslog 1515), **pas** d'API de réponse | **0%** |
-| **Scan de surface ACTIF** (nmap/OpenVAS) | Cartographie *passive* (FortiGate, `49-expo-port-class`) + détection KEV/patch (`38`) ; aucun scanner actif | **0% (actif) / ~70% (passif)** |
+| **Kerberoasting PoC** (Doc 3, Lot 1, starting point) | 4769 RC4 0x17 detection + non-machine SPN in prod, mapped to T1558.003, **+ canary account** with an `MSSQLSvc` SPN deliberately set as bait (`35-canary.sh`) | **100%** |
+| Multi-source **correlation** microservice (Doc 1, Obj 1) | `omni-incident-correlate`: aggregates by entity, reconstructs the kill-chain (canonical order), scores 0-100 by saturation, 24h window, ≥2 tactics | **~70%** |
+| **Sigma / MITRE detections** (Doc 1 & 3) | 74 pipeline rules, ~54 techniques / 14 tactics, Navigator export (`37`/`57`), MITRE enrichment on every event | **~85%** |
+| **NDR / network monitoring** (Doc 1, Obj 2) | 4 services: C2 beaconing (coefficient of variation), DNS tunneling (entropy), network scan (T1046), impossible-travel (Haversine) | **~85%** |
+| **SOAR / semi-autonomous response** (Doc 1 & 2) | `omni-soar`: webhook → feed → FortiGate deny, **no creds on the FW**, TTL 24h, whitelist, threshold, cap/kill-switch, GELF audit | **~60%** |
+| **Unified "single pane of glass" console** (Doc 2 & 3) | SOC dashboard 19-21 pages (50 widgets), real-time cyber map, native Graylog drill-down | **~80%** |
+| **Threat intel** (Doc 1) | Tor exit + Spamhaus DROP wired in, alert on public IP hit | partial (OSS) |
+| **ISO retention / integrity** (cross-cutting) | Tiered retention, HMAC-SHA256 anti-tampering integrity chain (`omni-integrity`), DRP/PRO/POL drafted | **~90%** |
+| **Reporting** (Doc 2, KPI) | Weekly HTML report + monthly PDF (weasyprint) + MTTD/posture KPIs | **~85%** |
+| **LLM layer (Mistral/Ollama)** | — | **0%** |
+| **Cloud LLM layer + Presidio anonymization + ZDR** | — | **0%** |
+| **Response actuators** (ESET isolate, AD disable) | ESET ingested as a *log source* (syslog 1515), **no** response API | **0%** |
+| **ACTIVE surface scan** (nmap/OpenVAS) | *Passive* mapping (FortiGate, `49-expo-port-class`) + KEV/patch detection (`38`); no active scanner | **0% (active) / ~70% (passive)** |
 
-**Lecture :** la feuille de route du Doc 3 (Lots 1→8) commence par reconstruire ce qui est, par sa propre
-métrique, à 60-90 % livré. Le centre de gravité du projet doit basculer de « construire la détection » vers
-« greffer une fine couche LLM + 2 actionneurs sur un socle qui marche déjà ».
-
----
-
-## 2. Le vrai périmètre neuf (la liste de travail honnête)
-
-1. **Service de triage LLM** — 27ᵉ microservice `omni-*`, même patron que les 26 autres (consomme OpenSearch,
-   émet GELF). Net-new, mais petit. **Valeur : narratif d'incident pour le RSSI + triage des patterns
-   nouveaux/ambigus non couverts par les règles + brouillon de plan de réponse.** C'est un *copilote*, pas
-   un moteur.
-2. **Actionneurs de réponse** — API ESET PROTECT (isolation/scan/kill) et désactivation AD. Net-new côté
-   intégration, **mais la machine à états de sûreté existe déjà** dans `omni-soar` (cf. §4-H).
-3. **Chaîne LLM cloud** *(conditionnelle)* — tokenisation déterministe + Presidio en filet + ZDR contractuel.
-   À n'engager qu'après §0-4.
-4. **Surface ACTIVE** *(à déprioriser)* — nmap/OpenVAS. Plus faible valeur ajoutée (le passif + KEV existent),
-   plus fort risque opérationnel (prod fragile + 14 tunnels partenaires).
-5. **Surface d'approbation humaine** — uniquement utile une fois (2) en place ; petite extension de la console.
-
-Tout le reste des 3 docs est soit déjà fait, soit du *nice-to-have* (Grafana, CMDB, graphe topologie, iOS).
+**Reading:** Doc 3's roadmap (Lots 1→8) starts by rebuilding what is, by its own
+metric, 60-90% delivered. The project's center of gravity must shift from "building detection" to
+"grafting a thin LLM layer + 2 actuators onto a foundation that already works".
 
 ---
 
-## 3. Réconciliation détaillée par objectif
+## 2. The real new scope (the honest work list)
 
-### Doc 1 — Architecture (corrélation+LLM / surface / MXDR)
+1. **LLM triage service** — 27th `omni-*` microservice, same pattern as the other 26 (consumes OpenSearch,
+   emits GELF). Net-new, but small. **Value: incident narrative for the CISO + triage of the new/ambiguous
+   patterns not covered by the rules + draft response plan.** It is a *copilot*, not
+   an engine.
+2. **Response actuators** — ESET PROTECT API (isolation/scan/kill) and AD disabling. Net-new on the
+   integration side, **but the safety state machine already exists** in `omni-soar` (cf. §4-H).
+3. **Cloud LLM chain** *(conditional)* — deterministic tokenization + Presidio as a net + contractual ZDR.
+   To be undertaken only after §0-4.
+4. **ACTIVE surface** *(to be deprioritized)* — nmap/OpenVAS. Lower added value (passive + KEV exist),
+   higher operational risk (fragile prod + 14 partner tunnels).
+5. **Human approval surface** — only useful once (2) is in place; small console extension.
 
-| Objectif | Position du doc | Écart avec le réel | Verdict |
+Everything else in the 3 docs is either already done, or a *nice-to-have* (Grafana, CMDB, topology graph, iOS).
+
+---
+
+## 3. Detailed reconciliation by objective
+
+### Doc 1 — Architecture (correlation+LLM / surface / MXDR)
+
+| Objective | Doc's position | Gap with reality | Verdict |
 |---|---|---|---|
-| **Obj 1** Microservice corrélation + LLM | Construire un FastAPI qui poll `/events/search`, re-corrèle par clé/fenêtre, mappe MITRE, puis LLM | Corrélation + MITRE **déjà faits** (pipelines + `omni-incident-correlate`). Le doc risque de **dupliquer le moteur** (2ᵉ source de vérité = divergence) | Ne **pas** reconstruire la corrélation. Ajouter **un seul étage** : LLM en aval de `event_source=incident`. Garder l'idiome stdlib/timer, **pas FastAPI** (cf. §4-C) |
-| **Obj 2** Surface d'exposition | Passif FortiGate + actif nmap/OpenVAS prudent | Passif **déjà fait** ; détection de scan **déjà faite** ; **actif = seule vraie nouveauté** | Garder le passif. Actif = **dernière priorité**, OpenVAS authentifié seulement si A.8.8 l'exige au-delà du KEV |
-| **Obj 3** Reproduire ~70 % de Bitdefender MXDR | ~70 % reproductible, gaps durs = 24/7 humain + dark-web + garantie | Sur l'axe *technique*, tu es plutôt à **75-85 %** déjà (SIEM fort, NDR-logs+beaconing, SOAR-block, scoring, threat-intel). Les gaps durs sont exacts | Reframe : tu as **déjà bâti l'essentiel de la *techno* MXDR**. L'irréductible = le *service staffé* + l'*assurance*, pas la techno |
+| **Obj 1** Correlation + LLM microservice | Build a FastAPI that polls `/events/search`, re-correlates by key/window, maps MITRE, then LLM | Correlation + MITRE **already done** (pipelines + `omni-incident-correlate`). The doc risks **duplicating the engine** (2nd source of truth = divergence) | Do **not** rebuild the correlation. Add **a single stage**: LLM downstream of `event_source=incident`. Keep the stdlib/timer idiom, **not FastAPI** (cf. §4-C) |
+| **Obj 2** Exposure surface | FortiGate passive + prudent nmap/OpenVAS active | Passive **already done**; scan detection **already done**; **active = the only real novelty** | Keep the passive. Active = **last priority**, authenticated OpenVAS only if A.8.8 requires it beyond the KEV |
+| **Obj 3** Reproduce ~70% of Bitdefender MXDR | ~70% reproducible, hard gaps = 24/7 human + dark-web + guarantee | On the *technical* axis, you are rather at **75-85%** already (strong SIEM, NDR-logs+beaconing, SOAR-block, scoring, threat-intel). The hard gaps are accurate | Reframe: you have **already built the essentials of the MXDR *technology***. The irreducible part = the *staffed service* + the *insurance*, not the technology |
 
-### Doc 2 — Intégration LLM cloud (hybride / Presidio / console / amélioration continue)
+### Doc 2 — Cloud LLM integration (hybrid / Presidio / console / continual improvement)
 
-| Volet | Position du doc | Écart / critique | Verdict |
+| Aspect | Doc's position | Gap / critique | Verdict |
 |---|---|---|---|
-| **A** Routeur hybride Mistral/LLM cloud + tool gateway | Score de routage, machine à états d'approbation, anti-injection | Excellent sur le principe. **La machine à états existe en v1 dans `omni-soar`** (valide→politique→TTL/cap→exécute→audit) | **Généraliser `omni-soar`**, ne pas redessiner de zéro |
-| **B** Anonymisation Presidio réversible | Presidio = colonne vertébrale, recall FR modeste | **Inversion nécessaire** : tes données sont surtout *structurées* (schéma de champs connu). Tokenisation **déterministe = colonne vertébrale** (100 % de recall sur les champs connus), Presidio = *filet* sur le texte libre (cmdline/message). Cf. §4-D | Adopter Presidio **en backstop**, pas en spine |
-| **C** Console (Grafana + NestJS) | Tout assembler | Le « single pane of glass » **existe déjà** (dashboard SOC + carte). Grafana n'ajoute que des métriques infra (Centreon/Prometheus) | Console = **petite extension** (approbation + auth nominative), pas un chantier |
-| **D** Amélioration continue + orchestration n8n/Ansible | Boucle fermée, Batch API nocturne | Le Doc 3 documente lui-même le **piège n8n** (abandon dès que conditionnels/état). Garder le complexe en code maîtrisé | n8n pour le linéaire simple uniquement ; Ansible pour la config idempotente |
+| **A** Hybrid Mistral/cloud-LLM router + tool gateway | Routing score, approval state machine, anti-injection | Excellent in principle. **The state machine exists in v1 in `omni-soar`** (validate→policy→TTL/cap→execute→audit) | **Generalize `omni-soar`**, do not redesign from scratch |
+| **B** Reversible Presidio anonymization | Presidio = backbone, modest FR recall | **Inversion needed**: your data is mostly *structured* (known field schema). Deterministic tokenization **= backbone** (100% recall on the known fields), Presidio = *net* on free text (cmdline/message). Cf. §4-D | Adopt Presidio **as a backstop**, not as the spine |
+| **C** Console (Grafana + NestJS) | Assemble everything | The "single pane of glass" **already exists** (SOC dashboard + map). Grafana only adds infra metrics (Centreon/Prometheus) | Console = **small extension** (approval + nominative auth), not a project |
+| **D** Continual improvement + n8n/Ansible orchestration | Closed loop, nightly Batch API | Doc 3 itself documents the **n8n trap** (abandoned as soon as conditionals/state appear). Keep the complex part in controlled code | n8n for the simple linear only; Ansible for idempotent config |
 
-### Doc 3 — Feuille de route (Lots 0-8)
+### Doc 3 — Roadmap (Lots 0-8)
 
-| Lot | Position du doc | Réalité | Verdict |
+| Lot | Doc's position | Reality | Verdict |
 |---|---|---|---|
-| **0** Socle / anti-key-person (IaC, git, doc) | « transverse, démarrage immédiat » | **Sous-pondéré.** C'est en fait **LA priorité #1 et elle est urgente** : aucun git, aucun test (cf. §6) | **Remonter en P0 absolue** |
-| **1** PoC Kerberoasting | point de départ | **Déjà en prod** | Sauter (mais propager la note calendrier RC4 2026, cf. §5) |
-| **2** MVP read-only multi-cas | 10-15 règles Sigma | **74 règles déjà en prod** | Largement dépassé |
-| **3** Couche LLM cloud + Presidio | mode conseil | Net-new, mais **commencer local** (cf. §0-4) | Reséquencer : Mistral local **avant** LLM cloud |
-| **4** Tool gateway actions réversibles | le lot « renfort conseillé » | Patron de sûreté **déjà prouvé** (`omni-soar`) | Généraliser, pas reconstruire |
-| **5** Console unifiée | Grafana + NestJS | **~80 % déjà là** | Extension ciblée |
-| **6** Surface d'attaque | passif + actif | Passif fait ; actif = à déprioriser | Repousser |
-| **7** Amélioration continue | revues de posture, registre clause 10 | Rapports + KPI déjà là ; manque le **registre formel** | Valeur réelle = formaliser le registre |
-| **8** App iOS | sous-traiter/différer | Dépend d'un workflow d'approbation inexistant ; compétence la moins probable | **Hors périmètre jusqu'à stabilisation** |
+| **0** Foundation / anti-key-person (IaC, git, doc) | "cross-cutting, immediate start" | **Under-weighted.** It is in fact **THE #1 priority and it is urgent**: no git, no test (cf. §6) | **Raise to absolute P0** |
+| **1** Kerberoasting PoC | starting point | **Already in prod** | Skip (but propagate the RC4 2026 calendar note, cf. §5) |
+| **2** Read-only multi-case MVP | 10-15 Sigma rules | **74 rules already in prod** | Largely surpassed |
+| **3** Cloud LLM layer + Presidio | advisory mode | Net-new, but **start local** (cf. §0-4) | Re-sequence: local Mistral **before** cloud LLM |
+| **4** Tool gateway for reversible actions | the "recommended reinforcement" lot | Safety pattern **already proven** (`omni-soar`) | Generalize, not rebuild |
+| **5** Unified console | Grafana + NestJS | **~80% already there** | Targeted extension |
+| **6** Attack surface | passive + active | Passive done; active = to be deprioritized | Push back |
+| **7** Continual improvement | posture reviews, clause 10 register | Reports + KPIs already there; the **formal register** is missing | Real value = formalize the register |
+| **8** iOS app | outsource/defer | Depends on a nonexistent approval workflow; the least likely competency | **Out of scope until stabilization** |
 
 ---
 
-## 4. Critique des hypothèses (le fond)
+## 4. Critique of the assumptions (the substance)
 
-**A. Le sophisme du greenfield (critique maîtresse).** Déjà traité §1. Conséquence pratique : toute estimation
-en jours-homme du Doc 3 pour les Lots 1-2 est sans objet ; ces lots sont du passé.
+**A. The greenfield fallacy (master critique).** Already treated in §1. Practical consequence: any estimate
+in person-days from Doc 3 for Lots 1-2 is moot; those lots are the past.
 
-**B. Le microservice de corrélation est une réinvention partielle.** `omni-incident-correlate` *est* le
-moteur que le Doc 1 veut bâtir. La seule évolution légitime est la **latence** : le corrélateur est un timer
-15 min ; les docs suggèrent un flux webhook. Mais c'est « ajouter un déclencheur webhook + un étage LLM au
-corrélateur existant », **pas** « construire un nouveau microservice de corrélation ». Deux moteurs = deux
-vérités = dérive.
+**B. The correlation microservice is a partial reinvention.** `omni-incident-correlate` *is* the
+engine that Doc 1 wants to build. The only legitimate evolution is **latency**: the correlator is a
+15-min timer; the docs suggest a webhook flow. But that is "add a webhook trigger + an LLM stage to the
+existing correlator", **not** "build a new correlation microservice". Two engines = two
+truths = drift.
 
-**C. FastAPI est sur-dimensionné pour la forme actuelle.** Tes 26 services sont en **Python stdlib**
-(HTTPServer, timers) — choix délibéré, dépendances minimales, idempotents. Les docs imposent par défaut
-FastAPI + httpx + APScheduler + pySigma + psycopg/pgvector. Pour un mainteneur **solo** avec le key-person
-comme risque #1, empiler un framework async + un ORM + une base vectorielle **contredit** la philosophie qui
-fait que ce système est maintenable. Garde le stdlib/systemd pour le service LLM ; n'introduis pgvector que
-si le RAG est *validé* nécessaire. **Ne pas importer un framework pour héberger un endpoint.**
+**C. FastAPI is oversized for the current form.** Your 26 services are in **Python stdlib**
+(HTTPServer, timers) — a deliberate choice, minimal dependencies, idempotent. The docs impose by default
+FastAPI + httpx + APScheduler + pySigma + psycopg/pgvector. For a **solo** maintainer with the key-person
+being risk #1, stacking an async framework + an ORM + a vector database **contradicts** the philosophy that
+makes this system maintainable. Keep the stdlib/systemd for the LLM service; only introduce pgvector
+if the RAG is *validated* as necessary. **Do not import a framework to host an endpoint.**
 
-**D. Presidio : le bon risque, mais la mauvaise architecture.** Le Doc 3 a raison de marteler le recall FR
-modeste (~0,74, téléphones FR à 0 %). Mais il rate une subtilité décisive : **tes données sont en grande
-partie structurées** — Graylog te livre `user`, `host`, `src_ip`, `dest_ip`, `process_name`… (schéma connu,
-listé dans `CONTEXT.md`). On **n'a pas besoin** de NER probabiliste pour anonymiser un champ connu : on le
-**tokenise de façon déterministe** (recall 100 % sur ces champs). Presidio ne sert que pour le **texte libre
-résiduel** (lignes de commande, corps de message). Architecture correcte :
-*tokenisation déterministe par champ (spine) → Presidio/regex sur le texte libre (backstop) → fail-closed.*
-Cela **dé-risque toute la voie LLM cloud** et réduit Presidio d'un point de défaillance à un filet.
+**D. Presidio: the right risk, but the wrong architecture.** Doc 3 is right to hammer on the modest FR recall
+(~0.74, FR phone numbers at 0%). But it misses a decisive subtlety: **your data is largely
+structured** — Graylog gives you `user`, `host`, `src_ip`, `dest_ip`, `process_name`… (known schema,
+listed in `CONTEXT.md`). We **do not need** probabilistic NER to anonymize a known field: we
+**tokenize it deterministically** (100% recall on those fields). Presidio only serves for the **residual
+free text** (command lines, message bodies). Correct architecture:
+*deterministic per-field tokenization (spine) → Presidio/regex on the free text (backstop) → fail-closed.*
+This **de-risks the entire cloud LLM path** and reduces Presidio from a point of failure to a net.
 
-**E. La question que les 3 docs n'osent pas poser : « a-t-on besoin de LLM cloud ? »** Ils supposent LLM cloud
-désirable et débattent du *comment*. Un regard senior pose le *si*. Le système fait déjà détection + scoring
-0-100 + kill-chain. La valeur *marginale* d'un LLM = (1) narratifs pour le RSSI, (2) triage des patterns
-nouveaux, (3) brouillon de plan de réponse, (4) revues de posture. Réel, mais c'est un **copilote**. En face :
-dépendance ZDR, fuite résiduelle Presidio, surface d'injection (les logs sont *contrôlés par l'attaquant* —
-les docs ont raison d'insister), coût (+35 % de tokens au nouveau tokenizer, note Doc 2), maintenance. **Donc :
-prouver la valeur en *local* d'abord. Si Mistral 7B suffit au triage, l'épopée LLM cloud/ZDR/Presidio est
-peut-être inutile.** Les docs séquencent Mistral→LLM cloud mais n'explicitent jamais ce point de bascule.
+**E. The question the 3 docs dare not ask: "do we need cloud LLM?"** They assume cloud LLM
+desirable and debate the *how*. A senior look poses the *if*. The system already does detection + scoring
+0-100 + kill-chain. The *marginal* value of an LLM = (1) narratives for the CISO, (2) triage of new
+patterns, (3) draft response plan, (4) posture reviews. Real, but it is a **copilot**. Against it:
+ZDR dependency, residual Presidio leakage, injection surface (the logs are *attacker-controlled* —
+the docs are right to insist), cost (+35% of tokens with the new tokenizer, Doc 2 note), maintenance. **So:
+prove the value *locally* first. If Mistral 7B suffices for triage, the cloud LLM/ZDR/Presidio saga is
+perhaps unnecessary.** The docs sequence Mistral→cloud LLM but never make this tipping point explicit.
 
-**F. Le « ~70 % MXDR » est désormais mesurable — et plus haut que 70 % sur l'axe techno.** Vu l'inventaire,
-la reproduction *technique* est plutôt à 75-85 %. L'honnête formulation : **tu as déjà construit l'essentiel
-de la *technologie* MXDR ; ce que tu ne peux pas construire, c'est le *service humain 24/7*, la *threat-intel
-profonde/dark-web*, et la *garantie cyber* (un produit d'assurance, pas une techno).** Build-vs-buy qui en
-découle : n'achète pas un MXDR pour la techno ; envisage un **MDR co-managé uniquement** pour la couverture
-nuit/week-end + threat-intel, **si** une analyse de risque le justifie.
+**F. The "~70% MXDR" is now measurable — and higher than 70% on the tech axis.** Given the inventory,
+the *technical* reproduction is rather at 75-85%. The honest formulation: **you have already built the
+essentials of the MXDR *technology*; what you cannot build is the *24/7 human service*, the *deep
+threat-intel/dark-web*, and the *cyber guarantee* (an insurance product, not a technology).** The
+resulting build-vs-buy: do not buy an MXDR for the technology; consider a **co-managed MDR only**
+for the night/weekend coverage + threat-intel, **if** a risk analysis justifies it.
 
-**G. Le key-person est bien le risque #1 — et la preuve est accablante.** Cf. §6 : aucun git, aucun test.
+**G. The key-person is indeed risk #1 — and the evidence is damning.** Cf. §6: no git, no test.
 
-**H. Détail de crédibilité technique (les docs « sentent » l'extérieur).** Cf. Annexe. En résumé : l'exemple
-curl du Doc 1 tape `:443` alors que l'API est `:9000` derrière nginx, TLS bout-en-bout, `--cacert`,
-`X-Requested-By`, et surtout **les helpers `lib-graylog.sh` (wrap_entity/post_entity) existent** ; le bus de
-réinjection GELF `:12201` / `event_source=siem_*` **existe** (M365, SOAR, backup, intégrité l'utilisent
-déjà) ; et la machine à états du tool gateway **existe en v1** dans `omni-soar`.
+**H. Technical credibility detail (the docs "smell" of the outside).** Cf. Appendix. In short: Doc 1's curl
+example hits `:443` whereas the API is `:9000` behind nginx, end-to-end TLS, `--cacert`,
+`X-Requested-By`, and above all **the `lib-graylog.sh` helpers (wrap_entity/post_entity) exist**; the GELF
+reinjection bus `:12201` / `event_source=siem_*` **exists** (M365, SOAR, backup, integrity already use it);
+and the tool gateway's state machine **exists in v1** in `omni-soar`.
 
-**I. Scan actif : prudence juste, mais priorité mal placée.** Tout le laïus « jamais les tunnels partenaires,
-masscan proscrit, nmap -T2/-T3, systemd timers » est correct. Mais le passif + la détection de scan + le KEV
-existent déjà. Le scan actif est **la brique la plus risquée et la moins différenciante** — à repousser, et
-seulement en OpenVAS authentifié *minimally invasive* si l'auditeur A.8.8 en demande plus.
+**I. Active scan: the caution is right, but the priority is misplaced.** The whole spiel "never the partner
+tunnels, masscan banned, nmap -T2/-T3, systemd timers" is correct. But the passive + scan detection + KEV
+already exist. The active scan is **the riskiest and least differentiating brick** — to be pushed back, and
+only in authenticated *minimally invasive* OpenVAS if the A.8.8 auditor asks for more.
 
-**J. Console : les docs sur-construisent.** Dashboard SOC 19-21 pages + carte temps réel = le « single pane »
-est là. Les vrais manques sont étroits : surface d'**approbation** (utile seulement avec les actionneurs (2))
-et **auth nominative** (LDAPS existe, mais compte `admin` partagé encore utilisé). iOS = différer/sous-traiter.
-
----
-
-## 5. Ce que les docs ont juste (à conserver tel quel)
-
-- **Injection de prompt = risque #1, défense *architecturale* et non *modèle*** : politique d'autorisation
-  jamais déléguée au LLM, exécution déterministe côté orchestrateur, human-in-the-loop pour le non-réversible.
-  Aligné ANSSI R9/R25/R27. **Garder intégralement.**
-- **Recall Presidio à mesurer sur corpus réel** (je ne fais qu'inverser spine/backstop, pas annuler la garde).
-- **ZDR n'est pas self-service** (accord Sales/Enterprise, exclusions modèles Mythos/Fable, classifieurs de
-  sûreté retenus) — caveat correct si la voie LLM cloud est engagée.
-- **« Read-only / advisory d'abord, puis actions »** — correct et conforme à ta culture prudente existante.
-- **Mapping ISO** (A.8.11 masquage, A.5.34 PII, clause 10) — correct.
-- **Build-vs-buy par composant** : construire le cœur différenciant, adopter l'OSS (SigmaHQ, Presidio).
-- **Note calendrier RC4/Kerberos 2026** (CVE-2026-20833, enforcement avril 2026, fin du rollback juillet) :
-  **utile et actionnable maintenant** — ta détection Kerberoasting va voir sa base de faux positifs RC4 fondre ;
-  ajoute la surveillance de l'**AES anormal (0x12)** et des **pics 4769 par compte (règle 3-sigma)**. À porter
-  dans `12-graylog-pipelines.sh` / `omni-ueba-*` indépendamment de tout le reste.
+**J. Console: the docs over-build.** SOC dashboard 19-21 pages + real-time map = the "single pane"
+is there. The real gaps are narrow: the **approval** surface (useful only with the actuators (2))
+and **nominative auth** (LDAPS exists, but a shared `admin` account is still used). iOS = defer/outsource.
 
 ---
 
-## 6. Risques, réordonnés (vérifiés sur le système réel)
+## 5. What the docs got right (to keep as-is)
 
-1. **🔴 Key-person / absence de contrôle de version — CRITIQUE, IMMÉDIAT.**
-   `git` n'est **pas installé** ; **aucun dépôt** sous `/root`. **10 238 lignes** de bash de prod (59 scripts)
-   + **26 microservices Python** ne sont **sous aucun versioning**. Aucun test, aucune CI, aucun shellcheck.
-   Seul filet : le tar AES-256 quotidien vers SMB. Le savoir d'exploitation vit dans `CONTEXT.md` (un
-   changelog) **et dans ta tête**. Si tu pars demain, c'est une boîte noire. *Note ISO : c'est aussi un trou
-   de maîtrise du changement (A.8.32) et de la clause 10.* **→ Action P0, avant toute IA (cf. §7).**
-2. **🟠 Injection de prompt indirecte** (dès qu'un LLM lit des logs). Traité par l'architecture (politique
-   déterministe + human-in-loop). **Ne jamais** donner au LLM une action destructive en auto.
-3. **🟠 Secrets en clair.** Les secrets de service vivent dans `00-vars.env` (chmod 600, **plaintext**).
-   Vaultwarden est aujourd'hui une *source de logs auditée*, **pas** un backend de récupération de secrets.
-   Or le service de réponse détiendra les creds les plus puissants (isolate ESET, disable AD) : **ceux-là
-   surtout** ne doivent pas finir en clair dans `00-vars.env`. *La « récupération de secrets via Vaultwarden »
-   des docs est donc à la fois du net-new ET un vrai durcissement à faire.*
-4. **🟠 Scan actif sur prod + tunnels partenaires** — risque réel mais **évitable en repoussant la brique**.
-5. **🟡 Fatigue d'alerte / d'approbation** — déjà rencontrée (tempête « Force brute » du 12/06). Le LLM peut
-   *aider* (regrouper, narrer) ou *aggraver* (une approbation de plus). À surveiller.
-6. **🟡 Divergence de moteurs** si on construit une 2ᵉ corrélation à côté de `omni-incident-correlate`.
+- **Prompt injection = risk #1, *architectural* defense not *model* defense**: authorization policy
+  never delegated to the LLM, deterministic execution on the orchestrator side, human-in-the-loop for the non-reversible.
+  Aligned with ANSSI R9/R25/R27. **Keep in full.**
+- **Presidio recall to be measured on a real corpus** (I only invert spine/backstop, I do not cancel the guard).
+- **ZDR is not self-service** (Sales/Enterprise agreement, Mythos/Fable model exclusions, retained safety
+  classifiers) — a correct caveat if the cloud LLM path is undertaken.
+- **"Read-only / advisory first, then actions"** — correct and consistent with your existing prudent culture.
+- **ISO mapping** (A.8.11 masking, A.5.34 PII, clause 10) — correct.
+- **Build-vs-buy per component**: build the differentiating core, adopt the OSS (SigmaHQ, Presidio).
+- **RC4/Kerberos 2026 calendar note** (CVE-2026-20833, enforcement April 2026, end of rollback July):
+  **useful and actionable now** — your Kerberoasting detection will see its RC4 false-positive base melt away;
+  add monitoring of the **abnormal AES (0x12)** and of the **4769 spikes per account (3-sigma rule)**. To be carried
+  into `12-graylog-pipelines.sh` / `omni-ueba-*` independently of everything else.
 
 ---
 
-## 7. Décision : séquence révisée + build-vs-buy
+## 6. Risks, reordered (verified on the real system)
 
-**Principe directeur :** greffer une fine couche IA sur un socle qui marche, en commençant par dé-risquer
-l'organisationnel et le local avant l'externe et le contractuel.
-
-**P0 — Mettre l'existant sous git + filet de test (3-5 j). NON NÉGOCIABLE, AVANT TOUT.**
-Installer git, initialiser le dépôt (monorepo : scripts + `windows/` + `fortigate/` + `lookups/` + `docs/` +
-**copie versionnée des `/usr/local/sbin/omni-*`**), pousser sur le serveur GIT interne déjà sauvegardé.
-Ajouter : `shellcheck` sur les `.sh`, un smoke-test de syntaxe (`bash -n`) + un test de migration idempotente,
-externaliser le runbook hors de ta tête. *Sert directement A.8.32 / clause 10 pour l'audit.* **Aucune ligne
-d'IA avant ce point.**
-
-**P1 — Triage LLM *local* en mode advisory (≈8-12 j).**
-27ᵉ microservice `omni-llm-triage` (stdlib, timer ou webhook) : consomme `event_source=incident` (score ≥ seuil)
-→ prompt Mistral/Ollama local → émet `event_source=llm_triage` en GELF (narratif + technique + plan proposé)
-→ page dashboard + mail. **Zéro LLM cloud, zéro Presidio, zéro ZDR.** *Teste l'hypothèse centrale* : le LLM
-ajoute-t-il de la valeur au-dessus du score 0-100 ? Si non, tu as économisé tout le programme LLM cloud.
-
-**P2 — Généraliser `omni-soar` en tool-gateway (≈10-15 j), actions réversibles uniquement.**
-Étendre la machine à états existante (validate→politique→TTL→exécute→audit) à : **isolation ESET** (API ESET
-PROTECT — net-new), **désactivation AD** (compte dédié moindre privilège). Réversible + rollback + dry-run par
-défaut + exclusion stricte des 14 tunnels partenaires. Surface d'approbation = la seule vraie extension console.
-Secrets de réponse → durcir (cf. §6-3).
-
-**P3 *(conditionnel)* — Chaîne LLM cloud (≈15-25 j), si et seulement si P1 prouve la valeur ET un cas réel échappe
-à Mistral 7B.** Tokenisation **déterministe** sur le schéma connu (spine) + Presidio backstop sur texte libre +
-fail-closed + accord ZDR + DPA. Routeur Mistral/LLM cloud par score. **Fail-safe : si anonymisation douteuse ou
-ZDR non confirmé → reste local.**
-
-**P4 *(optionnel / repoussé)* — Surface active (OpenVAS authentifié si A.8.8 l'exige), Grafana infra, registre
-clause 10 formalisé. iOS : hors périmètre jusqu'à stabilisation complète.**
-
-**Build-vs-buy :**
-- **Construire** : le service LLM, l'extension tool-gateway, la surface d'approbation (cœur différenciant).
-- **Adopter (OSS)** : règles SigmaHQ, Presidio (backstop only), OpenVAS (si besoin A.8.8).
-- **Acheter / envisager** : MDR co-managé **uniquement** pour le 24/7 humain + threat-intel/dark-web (les gaps
-  *irréductibles*), pas pour la techno. **Sous-traiter** : iOS, polish UI.
-- **Ne pas construire** : 2ᵉ moteur de corrélation, FastAPI pour un endpoint, orchestration lourde n8n.
+1. **🔴 Key-person / absence of version control — CRITICAL, IMMEDIATE.**
+   `git` is **not installed**; **no repository** under `/root`. **10,238 lines** of production bash (59 scripts)
+   + **26 Python microservices** are **under no versioning**. No test, no CI, no shellcheck.
+   The only net: the daily AES-256 tar to SMB. The operational knowledge lives in `CONTEXT.md` (a
+   changelog) **and in your head**. If you leave tomorrow, it is a black box. *ISO note: it is also a hole
+   in change management (A.8.32) and in clause 10.* **→ P0 action, before any AI (cf. §7).**
+2. **🟠 Indirect prompt injection** (as soon as an LLM reads logs). Handled by the architecture (deterministic
+   policy + human-in-loop). **Never** give the LLM a destructive action in auto mode.
+3. **🟠 Cleartext secrets.** The service secrets live in `00-vars.env` (chmod 600, **plaintext**).
+   Vaultwarden is today an *audited log source*, **not** a secret-retrieval backend.
+   Yet the response service will hold the most powerful creds (ESET isolate, AD disable): **those above all**
+   must not end up in clear in `00-vars.env`. *The docs' "secret retrieval via Vaultwarden"
+   is therefore both net-new AND a real hardening to do.*
+4. **🟠 Active scan on prod + partner tunnels** — a real risk but **avoidable by pushing the brick back**.
+5. **🟡 Alert / approval fatigue** — already encountered (the "Brute force" storm of 12/06). The LLM can
+   *help* (group, narrate) or *worsen* (one more approval). To watch.
+6. **🟡 Engine divergence** if a 2nd correlation is built alongside `omni-incident-correlate`.
 
 ---
 
-## 8. Décisions ouvertes (à trancher par Julien)
+## 7. Decision: revised sequence + build-vs-buy
 
-1. **Périmètre LLM cloud :** acceptes-tu le principe « local d'abord, LLM cloud seulement si prouvé nécessaire »,
-   ou y a-t-il un impératif (client, direction) à intégrer LLM cloud d'emblée ?
-2. **ZDR / souveraineté :** es-tu prêt à engager un accord ZDR + DPA fournisseur LLM (négociation Sales), ou la
-   contrainte RGPD/souveraineté impose-t-elle de rester 100 % local pour les données d'alerte ?
-3. **Actionneurs de réponse :** jusqu'où en auto ? (proposition : isolation ESET + désactivation AD en
-   *réversible auto* avec rollback ; tout le reste en human-in-the-loop — comme `omni-soar` aujourd'hui).
-4. **Scan actif :** l'auditeur A.8.8 se contente-t-il du KEV/patch-age + passif (alors on repousse l'actif),
-   ou exige-t-il un scan de vulnérabilité actif (alors OpenVAS authentifié, scope OMNITECH strict) ?
-5. **MDR co-managé :** veux-tu que je chiffre l'option « nuit/week-end + threat-intel externalisés » comme
-   complément, ou le 24/7 humain reste-t-il hors budget (et donc gap assumé) ?
-6. **Priorité immédiate :** confirmes-tu P0 (git/tests) avant toute IA ? C'est ma recommandation forte.
+**Guiding principle:** graft a thin AI layer onto a foundation that works, starting by de-risking
+the organizational and the local before the external and the contractual.
+
+**P0 — Put the existing under git + a test net (3-5 d). NON-NEGOTIABLE, BEFORE ANYTHING.**
+Install git, initialize the repository (monorepo: scripts + `windows/` + `fortigate/` + `lookups/` + `docs/` +
+**versioned copy of the `/usr/local/sbin/omni-*`**), push to the internal GIT server already backed up.
+Add: `shellcheck` on the `.sh`, a syntax smoke-test (`bash -n`) + an idempotent migration test,
+externalize the runbook out of your head. *Directly serves A.8.32 / clause 10 for the audit.* **No line
+of AI before this point.**
+
+**P1 — *Local* LLM triage in advisory mode (≈8-12 d).**
+27th `omni-llm-triage` microservice (stdlib, timer or webhook): consumes `event_source=incident` (score ≥ threshold)
+→ local Mistral/Ollama prompt → emits `event_source=llm_triage` as GELF (narrative + technique + proposed plan)
+→ dashboard page + email. **Zero cloud LLM, zero Presidio, zero ZDR.** *Tests the central hypothesis*: does the LLM
+add value on top of the 0-100 score? If not, you have saved the whole cloud LLM program.
+
+**P2 — Generalize `omni-soar` into a tool-gateway (≈10-15 d), reversible actions only.**
+Extend the existing state machine (validate→policy→TTL→execute→audit) to: **ESET isolation** (ESET
+PROTECT API — net-new), **AD disabling** (dedicated least-privilege account). Reversible + rollback + dry-run by
+default + strict exclusion of the 14 partner tunnels. The approval surface = the only real console extension.
+Response secrets → harden (cf. §6-3).
+
+**P3 *(conditional)* — Cloud LLM chain (≈15-25 d), if and only if P1 proves the value AND a real case escapes
+Mistral 7B.** **Deterministic** tokenization on the known schema (spine) + Presidio backstop on free text +
+fail-closed + ZDR agreement + DPA. Mistral/cloud-LLM router by score. **Fail-safe: if anonymization is doubtful or
+ZDR not confirmed → stays local.**
+
+**P4 *(optional / pushed back)* — Active surface (authenticated OpenVAS if A.8.8 requires it), Grafana infra, formalized
+clause 10 register. iOS: out of scope until full stabilization.**
+
+**Build-vs-buy:**
+- **Build**: the LLM service, the tool-gateway extension, the approval surface (differentiating core).
+- **Adopt (OSS)**: SigmaHQ rules, Presidio (backstop only), OpenVAS (if A.8.8 need).
+- **Buy / consider**: co-managed MDR **only** for the 24/7 human + threat-intel/dark-web (the *irreducible*
+  gaps), not for the technology. **Outsource**: iOS, UI polish.
+- **Do not build**: 2nd correlation engine, FastAPI for one endpoint, heavy n8n orchestration.
 
 ---
 
-## Annexe — Corrections techniques de crédibilité (pour tout futur code IA)
+## 8. Open decisions (to be settled by Julien)
 
-- **API Graylog :** pas `:443` mais **`https://${SIEM_FQDN}:9000/api`**, TLS bout-en-bout, `--cacert
-  /etc/graylog/certs/omnitech-rootca.crt`, en-tête `X-Requested-By` sur tout non-GET. **Réutiliser
-  `lib-graylog.sh`** (`api_get`/`api_put`/`wrap_entity`/`post_entity`) — l'enveloppe `CreateEntityRequest`
-  (`{"entity":…, "share_request":…}`) est déjà gérée, et `api_put` peut renvoyer exit 0 sur échec → **toujours
-  vérifier `.id`** (piège documenté CONTEXT §7octies).
-- **Bus de réinjection :** GELF `:12201`, `event_source=siem_*` / `*_score` / `incident` / `llm_triage`,
-  routés vers le stream **« OMNI - Interne SIEM »**. Les verdicts LLM doivent rouler sur **ce** bus existant,
-  pas un nouveau. (Rappels GELF : JSON 1 ligne, champs custom préfixés `_`, IP au format `ip` sans `:port` —
-  `clean_ip()` existe déjà ; booléens ignorés à l'ingestion.)
-- **Machine à états :** `omni-soar` implémente déjà valider→politique(non-RFC1918/whitelist/seuil)→cap/TTL→
-  exécuter→audit GELF. La généralisation du tool-gateway part de **là**.
-- **Secrets :** aujourd'hui `00-vars.env` (plaintext, 600). Vaultwarden = source de logs, **pas** backend de
-  secrets. La « récupération via API Vaultwarden » des docs = net-new + durcissement (prioritaire pour les
-  creds de réponse).
-- **Idiome :** services en **Python stdlib + systemd timers**, scripts **idempotents**. Tout nouveau service IA
-  doit suivre ce moule (testable, sans framework lourd, key-person-friendly).
+1. **Cloud LLM scope:** do you accept the principle "local first, cloud LLM only if proven necessary",
+   or is there an imperative (client, management) to integrate cloud LLM from the outset?
+2. **ZDR / sovereignty:** are you ready to commit to a ZDR + DPA agreement with an LLM vendor (Sales negotiation), or does the
+   GDPR/sovereignty constraint impose staying 100% local for the alert data?
+3. **Response actuators:** how far in auto? (proposal: ESET isolation + AD disabling in
+   *reversible auto* with rollback; everything else in human-in-the-loop — like `omni-soar` today).
+4. **Active scan:** is the A.8.8 auditor satisfied with KEV/patch-age + passive (then we push back the active),
+   or does it require an active vulnerability scan (then authenticated OpenVAS, strict OMNITECH scope)?
+5. **Co-managed MDR:** do you want me to cost the "outsourced night/weekend + threat-intel" option as a
+   complement, or does the 24/7 human stay out of budget (and therefore an owned gap)?
+6. **Immediate priority:** do you confirm P0 (git/tests) before any AI? This is my strong recommendation.
 
 ---
-*Document de revue — à verser au dossier de décision (REG_016) et à relier au registre d'amélioration continue
-(clause 10) une fois les décisions §8 tranchées.*
+
+## Appendix — Technical credibility corrections (for any future AI code)
+
+- **Graylog API:** not `:443` but **`https://${SIEM_FQDN}:9000/api`**, end-to-end TLS, `--cacert
+  /etc/graylog/certs/omnitech-rootca.crt`, `X-Requested-By` header on any non-GET. **Reuse
+  `lib-graylog.sh`** (`api_get`/`api_put`/`wrap_entity`/`post_entity`) — the `CreateEntityRequest` envelope
+  (`{"entity":…, "share_request":…}`) is already handled, and `api_put` can return exit 0 on failure → **always
+  check `.id`** (trap documented in CONTEXT §7octies).
+- **Reinjection bus:** GELF `:12201`, `event_source=siem_*` / `*_score` / `incident` / `llm_triage`,
+  routed to the **"OMNI - Interne SIEM"** stream. The LLM verdicts must run on **this** existing bus,
+  not a new one. (GELF reminders: JSON 1 line, custom fields prefixed with `_`, IP in `ip` format without `:port` —
+  `clean_ip()` already exists; booleans ignored at ingestion.)
+- **State machine:** `omni-soar` already implements validate→policy(non-RFC1918/whitelist/threshold)→cap/TTL→
+  execute→GELF audit. The tool-gateway generalization starts from **there**.
+- **Secrets:** today `00-vars.env` (plaintext, 600). Vaultwarden = log source, **not** a secret
+  backend. The docs' "retrieval via Vaultwarden API" = net-new + hardening (a priority for the
+  response creds).
+- **Idiom:** services in **Python stdlib + systemd timers**, **idempotent** scripts. Any new AI service
+  must follow this mold (testable, without a heavy framework, key-person-friendly).
+
+---
+*Review document — to be filed in the decision dossier (REG_016) and linked to the continual improvement register
+(clause 10) once the §8 decisions are settled.*

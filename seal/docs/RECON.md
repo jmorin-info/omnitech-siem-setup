@@ -1,286 +1,286 @@
-# RECON.md — Phase 0 : reconnaissance intégration SEAL → Graylog
+# RECON.md — Phase 0: SEAL → Graylog integration reconnaissance
 
 OMNITECH SECURITY · SIEM (repo `omnitech-siem-setup`) · MISSION_SEAL_GRAYLOG
-Statut : **CHECKPOINT Phase 0 — reconnaissance EXÉCUTÉE (lecture seule).** Infra,
-Graylog, réseau ET sémantique SQL (décodage des codes, chaîne d'identité,
-volumétrie, watermark) vérifiés sur la base SEAL QA via le compte de service
-`svc_graylog_seal` (dérogation temporaire `db_datareader`, cf. §5). Aucune écriture,
-aucun DDL. Décodages proposés au §9 — **à valider avant la Phase 1**.
+Status: **CHECKPOINT Phase 0 — reconnaissance EXECUTED (read-only).** Infrastructure,
+Graylog, network AND SQL semantics (code decoding, identity chain,
+volumetry, watermark) verified against the SEAL QA database via the service account
+`svc_graylog_seal` (temporary `db_datareader` waiver, see §5). No writes,
+no DDL. Proposed decodings in §9 — **to be validated before Phase 1**.
 
-Date : 2026-07-10.
+Date: 2026-07-10.
 
 ---
 
-## 1. Périmètre et cibles (vérifiés)
+## 1. Scope and targets (verified)
 
-| Élément | Valeur | Source |
+| Item | Value | Source |
 |---|---|---|
-| Cible SQL (QA uniquement) | `bx-qa-seal-vm.omnitech.security` → **`10.33.120.2:1433`** | DNS + test TCP |
-| Base | `SEAL` | mission |
-| VM SIEM (source autorisée) | `10.33.220.10` (via passerelle `10.33.220.254`, `eno1`) | `ip route get` |
-| Certificat serveur SQL | TP `E824A448…A4B3`, CN=`bx-qa-seal-vm.omnitech.security`, exp. **2028-07-09** | rapport prereq |
-| Graylog | **7.1.3+c34604d**, **édition Open** | API `/system`, `/system/plugins` |
-| GELF ingest | `10.33.220.10:12201` (input GELF HTTP existant) | inventaire inputs |
+| SQL target (QA only) | `bx-qa-seal-vm.omnitech.security` → **`10.33.120.2:1433`** | DNS + TCP test |
+| Database | `SEAL` | mission |
+| SIEM VM (authorized source) | `10.33.220.10` (via gateway `10.33.220.254`, `eno1`) | `ip route get` |
+| SQL server certificate | TP `E824A448…A4B3`, CN=`bx-qa-seal-vm.omnitech.security`, exp. **2028-07-09** | prereq report |
+| Graylog | **7.1.3+c34604d**, **Open edition** | API `/system`, `/system/plugins` |
+| GELF ingest | `10.33.220.10:12201` (existing GELF HTTP input) | inputs inventory |
 
-> Note : la mission annonçait « Graylog 6.x » ; l'instance réelle est **7.1.3**.
-> Sans incidence majeure (API events/pipelines identiques), signalé pour le dossier.
-
----
-
-## 2. État Graylog vérifié → impacts de conception
-
-- **Édition Open confirmée** (aucun plugin Enterprise/Security/Correlation).
-  → **Pas de Correlation event definitions natives.** Toutes les règles marquées
-  `[SEQ]` (HYP-002, ALM-002, XCO-*) devront être :
-  soit approximées par **état de pipeline** (rule pipeline + champ d'état + event
-  d'agrégation), soit **reportées en v2**, avec la limite documentée. Décision à
-  acter au checkpoint Phase 4.
-- **Convention d'index sets à respecter** : titre `OMNI - <Source>`, préfixe
-  `omni-<source>`, `DeletionRetentionStrategy`. Les 3 streams SEAL suivront ce
-  motif : `OMNI - SEAL Accès` / `OMNI - SEAL Alarmes` / `OMNI - SEAL Audit`
-  (préfixes `omni-seal-access` / `omni-seal-alarm` / `omni-seal-audit`).
-  → *Écart avec le libellé mission « SEAL — Accès physique » : à trancher
-  (cohérence repo vs libellé mission).*
-- **BX-QA-SEAL-VM est déjà une source Windows du SIEM** (~43 000 msgs/h en
-  Winlogbeat). L'identité machine est donc déjà connue : utile pour la
-  corrélation croisée XCO (badge physique ↔ logon Windows) et pour la règle
-  miroir `identity_upn` (Phase 3.4).
+> Note: the mission stated "Graylog 6.x"; the actual instance is **7.1.3**.
+> No major impact (identical events/pipelines API), flagged for the record.
 
 ---
 
-## 3. Conventions repo à respecter (relevées)
+## 2. Verified Graylog state → design impacts
 
-- Scripts d'provisioning : bash numérotés `NN-<theme>.sh`, helpers mutualisés
-  dans `lib-graylog.sh` (`ensure_rule`, `ensure_pipeline`, `ensure_lookup`,
-  `connect_pipeline`, `get_stream_id`, `api_get/post/put`, idempotence
-  create-or-update, recherche par titre avant création).
-- Secrets : `00-vars.env` (gitignoré) + variables d'environnement ; jamais en
-  clair dans les scripts. `TEAMS_WEBHOOK_URL` existe déjà dans `00-vars.env`.
-- Service Python de corrélation : `oms-xdr/` (venv dédié, tests pytest, config
-  YAML, lecture OpenSearch local). L'orchestrateur SEAL reprend ce style.
-- Lookups : adapters `csvfile` régénérés par cron (pas de lookup JDBC natif en
-  Open) — cohérent avec le repli d'enrichissement prévu (Phase 3.3).
-- Arborescence livrable créée : `seal/{docs,sql,logstash/sql,graylog/pipelines,lookups,detections,tests}`
-  + orchestrateur `seal_graylog_setup.py` (racine repo, comme demandé).
+- **Open edition confirmed** (no Enterprise/Security/Correlation plugin).
+  → **No native Correlation event definitions.** All rules tagged
+  `[SEQ]` (HYP-002, ALM-002, XCO-*) will have to be either:
+  approximated by **pipeline state** (rule pipeline + state field + aggregation
+  event), or **deferred to v2**, with the limitation documented. Decision to be
+  taken at the Phase 4 checkpoint.
+- **Index set convention to comply with**: title `OMNI - <Source>`, prefix
+  `omni-<source>`, `DeletionRetentionStrategy`. The 3 SEAL streams will follow this
+  pattern: `OMNI - SEAL Accès` / `OMNI - SEAL Alarmes` / `OMNI - SEAL Audit`
+  (prefixes `omni-seal-access` / `omni-seal-alarm` / `omni-seal-audit`).
+  → *Discrepancy with the mission label "SEAL — Accès physique": to be decided
+  (repo consistency vs mission label).*
+- **BX-QA-SEAL-VM is already a Windows SIEM source** (~43,000 msgs/h in
+  Winlogbeat). The machine identity is therefore already known: useful for
+  cross-correlation XCO (physical badge ↔ Windows logon) and for the mirror rule
+  `identity_upn` (Phase 3.4).
 
 ---
 
-## 4. Préflight (résultats réels — lecture seule)
+## 3. Repo conventions to comply with (observed)
 
-Exécuté via `./seal_graylog_setup.py --phase preflight` (rapport
-`seal/docs/preflight.json`) :
+- Provisioning scripts: numbered bash `NN-<theme>.sh`, shared helpers
+  in `lib-graylog.sh` (`ensure_rule`, `ensure_pipeline`, `ensure_lookup`,
+  `connect_pipeline`, `get_stream_id`, `api_get/post/put`, idempotent
+  create-or-update, lookup by title before creation).
+- Secrets: `00-vars.env` (gitignored) + environment variables; never in
+  plaintext in the scripts. `TEAMS_WEBHOOK_URL` already exists in `00-vars.env`.
+- Python correlation service: `oms-xdr/` (dedicated venv, pytest tests, YAML
+  config, reads local OpenSearch). The SEAL orchestrator follows this style.
+- Lookups: `csvfile` adapters regenerated by cron (no native JDBC lookup in
+  Open) — consistent with the planned enrichment fallback (Phase 3.3).
+- Deliverable tree created: `seal/{docs,sql,logstash/sql,graylog/pipelines,lookups,detections,tests}`
+  + orchestrator `seal_graylog_setup.py` (repo root, as requested).
 
-| Contrôle | Résultat | Détail |
+---
+
+## 4. Preflight (actual results — read-only)
+
+Run via `./seal_graylog_setup.py --phase preflight` (report
+`seal/docs/preflight.json`):
+
+| Check | Result | Detail |
 |---|---|---|
-| Route TCP `10.33.120.2:1433` | **PASS** | ouvert depuis la VM SIEM |
-| Route TCP `10.108.15.143:1433` | **WARN** | fermé/filtré — IP secondaire à écarter |
-| DNS `bx-qa-seal-vm` | **WARN** | **2 enregistrements A** (`10.33.120.2` + `10.108.15.143`) |
-| Édition Graylog | **PASS** | 7.1.3 Open (pas de corrélation native) |
-| Pilote SQL (pyodbc/pymssql) | **FAIL** | **aucun pilote installé** sur la VM SIEM |
-| Client Logstash | **FAIL** | **Logstash non installé** sur la VM SIEM |
-| Variables d'env mission | **FAIL** | toutes absentes sauf `TEAMS_WEBHOOK_URL` |
-| Connexion SQL `SELECT 1` | SKIP | bloqué (pilote + creds absents) |
+| TCP route `10.33.120.2:1433` | **PASS** | open from the SIEM VM |
+| TCP route `10.108.15.143:1433` | **WARN** | closed/filtered — secondary IP to discard |
+| DNS `bx-qa-seal-vm` | **WARN** | **2 A records** (`10.33.120.2` + `10.108.15.143`) |
+| Graylog edition | **PASS** | 7.1.3 Open (no native correlation) |
+| SQL driver (pyodbc/pymssql) | **FAIL** | **no driver installed** on the SIEM VM |
+| Logstash client | **FAIL** | **Logstash not installed** on the SIEM VM |
+| Mission env variables | **FAIL** | all missing except `TEAMS_WEBHOOK_URL` |
+| SQL connection `SELECT 1` | SKIP | blocked (driver + creds missing) |
 
-### 4.1 Diagnostic du FAIL du rapport prereq (côté VM SQL)
+### 4.1 Diagnosis of the prereq report FAIL (SQL VM side)
 
-Le rapport `seal-sql-prereq.json` est **PASS partout sauf le dernier item**
-(« Connexion chiffrée via FQDN » = FAIL). Analyse :
+The `seal-sql-prereq.json` report is **PASS everywhere except the last item**
+("Encrypted connection via FQDN" = FAIL). Analysis:
 
-> `Échec de l'ouverture de session de l'utilisateur 'SECURITY\adm-jmorin'.`
+> `Login failed for user 'SECURITY\adm-jmorin'.`
 
-Ce n'est **pas** un problème TLS/PKI ni de SAN : le handshake chiffré a
-abouti, c'est SQL Server qui **rejette l'authentification Windows** du compte
-`adm-jmorin` (aucun login SQL mappé pour ce compte). Les indices « chaîne PKI
-absente / SAN != FQDN » du script sont ici des **fausses pistes** : le
-certificat est valide (CN=FQDN, Server Authentication, lié à l'instance,
-ForceEncryption=1, tous PASS). **Le chiffrement fonctionne.** Il manque
-uniquement un **login SQL valide** — ce que crée précisément `90_provision.sql`
-(compte de service) en Phase 1, ou un login admin temporaire pour la Phase 0.
+This is **not** a TLS/PKI or SAN issue: the encrypted handshake
+completed, it is SQL Server that **rejects the Windows authentication** of the
+`adm-jmorin` account (no SQL login mapped for this account). The "missing PKI chain
+/ SAN != FQDN" hints from the script are here **red herrings**: the
+certificate is valid (CN=FQDN, Server Authentication, bound to the instance,
+ForceEncryption=1, all PASS). **Encryption works.** All that is missing
+is a **valid SQL login** — which is exactly what `90_provision.sql` creates
+(service account) in Phase 1, or a temporary admin login for Phase 0.
 
 ---
 
-## 5. Blocages à lever avant la Phase 0 (SQL) — action opérateur
+## 5. Blockers to clear before Phase 0 (SQL) — operator action
 
-1. **Pilote SQL absent sur la VM SIEM.** Installer, sur `10.33.220.10`, l'un de :
-   `msodbcsql18` + `python3-pyodbc`, **ou** `pymssql`. (Requis pour `--phase
-   recon` et pour Logstash ensuite.) À valider avant apply — c'est une
-   installation de paquet (action modifiante) : **plan à confirmer**.
-2. **Logstash absent sur la VM SIEM.** À installer (plugin `jdbc` +
-   `mssql-jdbc`) pour la Phase 2. Peut être différé après la Phase 0.
-3. **Aucune variable d'environnement mission fournie** (sauf `TEAMS_WEBHOOK_URL`).
-   Nécessaires pour la suite (valeurs *non* à mettre dans le code) :
-   `SEAL_DB_HOST`, `SEAL_DB_NAME`, `SEAL_DB_ADMIN_USER/PWD` (**recon Phase 0
-   uniquement**, non stockés), puis `SEAL_DB_SVC_USER/PWD` (créés en Phase 1),
+1. **SQL driver missing on the SIEM VM.** Install, on `10.33.220.10`, one of:
+   `msodbcsql18` + `python3-pyodbc`, **or** `pymssql`. (Required for `--phase
+   recon` and for Logstash afterwards.) To validate before apply — it is a package
+   installation (modifying action): **plan to be confirmed**.
+2. **Logstash missing on the SIEM VM.** To install (`jdbc` plugin +
+   `mssql-jdbc`) for Phase 2. Can be deferred after Phase 0.
+3. **No mission environment variable provided** (except `TEAMS_WEBHOOK_URL`).
+   Required for the rest (values *not* to be put in the code):
+   `SEAL_DB_HOST`, `SEAL_DB_NAME`, `SEAL_DB_ADMIN_USER/PWD` (**Phase 0 recon
+   only**, not stored), then `SEAL_DB_SVC_USER/PWD` (created in Phase 1),
    `GRAYLOG_API_URL`, `GRAYLOG_API_TOKEN`, `GRAYLOG_GELF_HOST/PORT`.
-4. **Compte de reconnaissance SQL.** Les requêtes de `seal/sql/00_recon_queries.sql`
-   sont en **lecture seule** mais nécessitent un droit de SELECT de découverte.
-   Le compte de service n'existe pas encore (Phase 1). → fournir un **login
-   admin temporaire** (SQL auth) pour la Phase 0, **ou** m'autoriser à créer
-   d'abord `90_provision.sql` en avance de phase.
-5. **Double enregistrement DNS.** Décider : corriger la zone DNS
-   (retirer `10.108.15.143`) **ou** épingler l'IP `10.33.120.2` dans la chaîne
-   JDBC (`Server=10.33.120.2,1433` + `hostNameInCertificate=<FQDN>` pour garder
-   la validation stricte du certificat). Recommandation : **épingler l'IP** côté
-   Logstash (robuste, sans dépendre d'une correction DNS tierce).
+4. **SQL reconnaissance account.** The queries in `seal/sql/00_recon_queries.sql`
+   are **read-only** but require a discovery SELECT permission.
+   The service account does not exist yet (Phase 1). → provide a **temporary
+   admin login** (SQL auth) for Phase 0, **or** authorize me to create
+   `90_provision.sql` first, ahead of phase.
+5. **Duplicate DNS record.** Decide: fix the DNS zone
+   (remove `10.108.15.143`) **or** pin the IP `10.33.120.2` in the JDBC
+   string (`Server=10.33.120.2,1433` + `hostNameInCertificate=<FQDN>` to keep
+   strict certificate validation). Recommendation: **pin the IP** on the
+   Logstash side (robust, without depending on a third-party DNS fix).
 
 ---
 
-## 6. Plan Phase 0 SQL — **EN ATTENTE** (méthode figée, prête à exécuter)
+## 6. Phase 0 SQL plan — **PENDING** (method frozen, ready to execute)
 
-Dès qu'un accès SQL est disponible, `seal/sql/00_recon_queries.sql` produit :
+As soon as SQL access is available, `seal/sql/00_recon_queries.sql` produces:
 
-- **Décodage des codes** (0.2–0.5) : recherche d'une table référentiel
-  `%REEV%`/`%TYPE%` (code→libellé) ; à défaut, corrélation `REEV_CODE` ↔
-  échantillon `EVEN_DESCRIPTION`. Idem `EVEN_LIFESTAGE`, `REACHED_LIFESTATUS`,
+- **Code decoding** (0.2–0.5): search for a reference table
+  `%REEV%`/`%TYPE%` (code→label); failing that, correlation `REEV_CODE` ↔
+  sample `EVEN_DESCRIPTION`. Same for `EVEN_LIFESTAGE`, `REACHED_LIFESTATUS`,
   `EVEN_LIFESTATUS`, `EVEN_DECLENCHEUR`, `TagMovements.Status` (varchar 3),
   `Operation`/`OperationChannel`.
-- **Fuseau horaire** (0.6) : delta `EVEN_DATEHEURE` vs `EVEN_STORAGE_TIMESTAMP`
-  vs horloge serveur → décision de conversion UTC pour le champ `timestamp`.
-- **Chaîne d'identité** (0.7–0.8) : localisation du catalogue de champs de fiche
-  (`CFIC`/`CHAMP_FICHE`), liste `DISTINCT SYNCHRO_LDAP_HISTORY.ATTRIBUT`,
-  localisation des tables badge (`%TAG%`/`%BADGE%`), puis validation de la
-  résolution `EVEN_PHYSICAL_NUMBER → fiche → matricule → UPN` sur 20 badges réels.
-- **Volumétrie** (0.9) : lignes/jour EVENEMENTS et ALARMES → calibrage du
-  schedule Logstash et des seuils de détection.
-- **Watermark** (0.10) : confirmation `rowversion` (ALARMES.VERSION présent ;
-  EVENEMENTS sans rowversion → `ALTER` en Phase 1) + `MIN_ACTIVE_ROWVERSION()`.
+- **Time zone** (0.6): delta `EVEN_DATEHEURE` vs `EVEN_STORAGE_TIMESTAMP`
+  vs server clock → UTC conversion decision for the `timestamp` field.
+- **Identity chain** (0.7–0.8): locate the record field catalog
+  (`CFIC`/`CHAMP_FICHE`), list `DISTINCT SYNCHRO_LDAP_HISTORY.ATTRIBUT`,
+  locate the badge tables (`%TAG%`/`%BADGE%`), then validate the
+  `EVEN_PHYSICAL_NUMBER → record → matricule → UPN` resolution on 20 real badges.
+- **Volumetry** (0.9): rows/day EVENEMENTS and ALARMES → calibration of the
+  Logstash schedule and detection thresholds.
+- **Watermark** (0.10): confirm `rowversion` (ALARMES.VERSION present;
+  EVENEMENTS without rowversion → `ALTER` in Phase 1) + `MIN_ACTIVE_ROWVERSION()`.
 
-Le résultat sera consigné ici (tableaux code→sens) et **soumis à validation**
-avant toute écriture de règle (règle d'engagement 7).
-
----
-
-## 7. Décisions demandées (checkpoint Phase 0)
-
-1. **Débloquer l'accès SQL** : fournir un login (admin temporaire SQL auth **ou**
-   feu vert pour créer `90_provision.sql` en avance) + autoriser l'installation
-   du pilote SQL sur la VM SIEM (plan : 1 paquet, réversible).
-2. **DNS** : corriger la zone **ou** valider l'épinglage IP `10.33.120.2`.
-3. **Nommage des streams** : convention repo (`OMNI - SEAL …`) **ou** libellé
-   mission (`SEAL — …`) ?
-4. **Rétentions** : 12/12/24 mois (accès/alarmes/audit) par défaut — à confirmer.
-5. **Fournir les variables d'environnement** listées au §5.3 (hors code/commits).
+The result will be recorded here (code→meaning tables) and **submitted for
+validation** before any rule is written (rule of engagement 7).
 
 ---
 
-## 8. Fait / Non-fait à ce stade
+## 7. Decisions requested (Phase 0 checkpoint)
 
-- **Fait (lecture seule)** : arborescence `seal/`, orchestrateur
-  `seal_graylog_setup.py` (`--phase preflight` opérationnel), pack de requêtes de
-  reconnaissance `seal/sql/00_recon_queries.sql`, détection édition/état Graylog,
-  préflight réseau/DNS/TLS/outillage, diagnostic du FAIL prereq.
-- **Non fait (en attente de validation/accès)** : toute requête SQL sur SEAL,
-  tout DDL, toute création d'objet Graylog, toute installation de paquet.
+1. **Unblock SQL access**: provide a login (temporary SQL auth admin **or**
+   green light to create `90_provision.sql` ahead of schedule) + authorize the
+   installation of the SQL driver on the SIEM VM (plan: 1 package, reversible).
+2. **DNS**: fix the zone **or** validate the IP pinning `10.33.120.2`.
+3. **Stream naming**: repo convention (`OMNI - SEAL …`) **or** mission label
+   (`SEAL — …`)?
+4. **Retentions**: 12/12/24 months (access/alarms/audit) by default — to confirm.
+5. **Provide the environment variables** listed in §5.3 (outside code/commits).
 
 ---
 
-## 9. Phase 0 — Résultats de la reconnaissance (exécutée le 2026-07-10)
+## 8. Done / Not done at this stage
 
-Source : `svc_graylog_seal` (pymssql, TLS, IP épinglée 10.33.120.2). Brut :
-`seal/docs/recon-raw.json` (gitignoré). SQL Server **2019 Standard 15.0.2170.1**.
+- **Done (read-only)**: `seal/` tree, orchestrator
+  `seal_graylog_setup.py` (`--phase preflight` operational), reconnaissance
+  query pack `seal/sql/00_recon_queries.sql`, Graylog edition/state detection,
+  network/DNS/TLS/tooling preflight, prereq FAIL diagnosis.
+- **Not done (pending validation/access)**: any SQL query on SEAL,
+  any DDL, any Graylog object creation, any package installation.
 
-### 9.1 Fuseau horaire — DÉCISION
-Horloge serveur : `local_now` = UTC+2 (Europe/Paris CEST). `EVEN_DATEHEURE` est en
-**heure locale serveur** (delta 0–1 min vs `EVEN_STORAGE_TIMESTAMP`, local aussi).
-→ **Conversion UTC requise** dans les vues :
+---
+
+## 9. Phase 0 — Reconnaissance results (executed on 2026-07-10)
+
+Source: `svc_graylog_seal` (pymssql, TLS, pinned IP 10.33.120.2). Raw:
+`seal/docs/recon-raw.json` (gitignored). SQL Server **2019 Standard 15.0.2170.1**.
+
+### 9.1 Time zone — DECISION
+Server clock: `local_now` = UTC+2 (Europe/Paris CEST). `EVEN_DATEHEURE` is in
+**server local time** (delta 0–1 min vs `EVEN_STORAGE_TIMESTAMP`, also local).
+→ **UTC conversion required** in the views:
 `EVEN_DATEHEURE AT TIME ZONE 'Romance Standard Time' AT TIME ZONE 'UTC'`
-(gère l'heure d'été). Les tables `Audit.*` fournissent déjà `OperationDateUtc` → à
-utiliser tel quel. **À valider.**
+(handles daylight saving). The `Audit.*` tables already provide `OperationDateUtc` → to
+be used as-is. **To validate.**
 
-### 9.2 Décodage des codes (proposé — À VALIDER, règle d'engagement 7)
+### 9.2 Code decoding (proposed — TO VALIDATE, rule of engagement 7)
 
-**Référentiel trouvé : `dbo.REF_EVENEMENT`** (`REEV_CODE` → `REEV_LIBELLE`,
-`REEV_DESCRIPTION`, `REEV_DFLT_SEVERITY`, seuils `REEV_INTEMPESTIVE*`). C'est la
-source de vérité du décodage : la normalisation Graylog fera un lookup
-`REEV_CODE → libellé` (Data Adapter CSV régénéré depuis cette table).
+**Reference table found: `dbo.REF_EVENEMENT`** (`REEV_CODE` → `REEV_LIBELLE`,
+`REEV_DESCRIPTION`, `REEV_DFLT_SEVERITY`, thresholds `REEV_INTEMPESTIVE*`). It is the
+source of truth for decoding: the Graylog normalization will perform a
+`REEV_CODE → label` lookup (CSV Data Adapter regenerated from this table).
 
-REEV_CODE réels les plus fréquents (décodés) :
+Most frequent actual REEV_CODEs (decoded):
 
-| REEV_CODE | Libellé (REF_EVENEMENT) | Sév. déf. | Volume | Usage détection |
+| REEV_CODE | Label (REF_EVENEMENT) | Def. sev. | Volume | Detection usage |
 |---|---|---|---|---|
-| SEM0 | « Catégorie inconnue » (générique/accès) | 99 | 527 k | bruit de fond |
-| SEM97 | Perte de connexion module | 113 | 87 k | supervision |
-| SEM218 | Intrusion détectée par la vidéo | 0 | 35 k | — |
-| SEM287/193/187 | Changement d'état capteur / entrée 4-états | 101/113 | 35 k | ALM-004 intempestif |
-| **SEM113** | **Effraction porte** | 113 | 4 k | **ALM-003 porte forcée** |
-| **SEM759** | **Connexion utilisateur sur la console** | 801 | 10 k | contexte HYP |
-| SEM138 / SEM280 | Accès d'un usager / lecteur secondaire | 111 | — | EVT-001 |
-| **SEM805** | **Déclencheur manuel percuté** (bouton panique) | 113 | 165 | alerte |
-| **SEM73** | **Base de données de l'UTL modifiée** | 801 | 158 | falsification config |
-| SEM70 / SEM71 | Signal de vie UTL perdu / UTL démarre | 901/801 | — | dead-man capteur |
-| SEM104/105 | Porte remise normale / ouverture physique signalée | 101 | — | ALM-003 (compl.) |
+| SEM0 | "Unknown category" (generic/access) | 99 | 527 k | background noise |
+| SEM97 | Module connection loss | 113 | 87 k | monitoring |
+| SEM218 | Intrusion detected by video | 0 | 35 k | — |
+| SEM287/193/187 | Sensor state change / 4-state input | 101/113 | 35 k | ALM-004 nuisance |
+| **SEM113** | **Door break-in** | 113 | 4 k | **ALM-003 forced door** |
+| **SEM759** | **User login on the console** | 801 | 10 k | HYP context |
+| SEM138 / SEM280 | User access / secondary reader | 111 | — | EVT-001 |
+| **SEM805** | **Manual trigger struck** (panic button) | 113 | 165 | alert |
+| **SEM73** | **UTL database modified** | 801 | 158 | config tampering |
+| SEM70 / SEM71 | UTL heartbeat lost / UTL starting | 901/801 | — | dead-man sensor |
+| SEM104/105 | Door restored to normal / physical opening reported | 101 | — | ALM-003 (compl.) |
 
-Autres décodages (échantillons DISTINCT+COUNT) :
-- `EVENEMENTS.EVEN_LIFESTAGE` : `INF` (info), `BEG` (début alarme), `END` (fin),
-  `ACK` (acquittée), `NOP`. → cycle de vie alarme.
-- `REACHED_LIFESTATUS` / `ALARMES.EVEN_LIFESTATUS` : `INF`, `LIV` (livrée ?), `END`,
-  `ACK`. → statut courant. **Sens de `LIV` à confirmer.**
-- `EVEN_SEVERITE` (ALARMES) : 99 (dominant, info), 113, 0, 101, 801, 111, 901,
-  112, 110. **Mapping sévérité→niveau SIEM à valider** (proposé : 901/113/801→High,
+Other decodings (DISTINCT+COUNT samples):
+- `EVENEMENTS.EVEN_LIFESTAGE`: `INF` (info), `BEG` (alarm start), `END` (end),
+  `ACK` (acknowledged), `NOP`. → alarm lifecycle.
+- `REACHED_LIFESTATUS` / `ALARMES.EVEN_LIFESTATUS`: `INF`, `LIV` (delivered?), `END`,
+  `ACK`. → current status. **Meaning of `LIV` to be confirmed.**
+- `EVEN_SEVERITE` (ALARMES): 99 (dominant, info), 113, 0, 101, 801, 111, 901,
+  112, 110. **Severity→SIEM level mapping to validate** (proposed: 901/113/801→High,
   111/112/101→Medium, 0/99→Info).
-- `Audit.UserConnections.Operation` : `Connection`, `Deconnection`,
+- `Audit.UserConnections.Operation`: `Connection`, `Deconnection`,
   **`ConnectionFailure`** (→ HYP-001 brute force), `SwitchProfile`.
-- `OperationChannel` : `SEAL Light Wall`, `SEAL Exploitation`, **`SealAdmin`**
-  (console d'admin → HYP-003), `SealMillefeuille`.
-- `Audit.TagMovements.Status` (badge) : `VAL` (valide), `PRE` (préparé/pré-encodé),
-  `ANN` (annulé/désactivé). Transitions observées : `PRE→VAL` (activation),
-  `VAL→ANN` (désactivation), **`ANN→VAL` (réactivation → ACC-004)**,
-  `∅→PRE` (création). **À valider.**
+- `OperationChannel`: `SEAL Light Wall`, `SEAL Exploitation`, **`SealAdmin`**
+  (admin console → HYP-003), `SealMillefeuille`.
+- `Audit.TagMovements.Status` (badge): `VAL` (valid), `PRE` (prepared/pre-encoded),
+  `ANN` (cancelled/disabled). Observed transitions: `PRE→VAL` (activation),
+  `VAL→ANN` (deactivation), **`ANN→VAL` (reactivation → ACC-004)**,
+  `∅→PRE` (creation). **To validate.**
 
-### 9.3 Chaîne d'identité — badge → matricule (UPN différé)
-- Ancrage : `dbo.EVENEMENTS.EVEN_PHYSICAL_NUMBER` = `milf.BADGES.PHYSICAL_NUMBER`
-  (schéma `milf` = « Millefeuille », cohérent avec le canal `SealMillefeuille`).
-- **`milf.BADGES` porte directement `MATRICULE`** → chaîne courte, pas besoin de
-  DETAIL_FICHE/CHAMP_FICHE pour le matricule.
-- **Taux de résolution réel : 153/200 (76,5 %)** sur les événements récents avec
-  badge. ~23 % non résolus (badges hérités `AcApi.TAG`/`dbo`, visiteurs, supports
-  hors `milf.BADGES`) → **source d'identité secondaire à ajouter** (AcApi.TAG) pour
-  améliorer la couverture. À arbitrer.
-- **UPN indisponible en QA** : `SYNCHRO_LDAP_HISTORY` vide et
-  `CHAMP_FICHE.CFIC_LDAP_ATTRIBUT` vide → aucun mapping UPN en base QA.
-  → `identity_upn` sera résolu **côté SIEM** (matricule → AD/M365) via la règle
-  miroir Phase 3.4, pas en SQL. En QA, `identity_matricule` seul est fiable.
+### 9.3 Identity chain — badge → matricule (UPN deferred)
+- Anchor: `dbo.EVENEMENTS.EVEN_PHYSICAL_NUMBER` = `milf.BADGES.PHYSICAL_NUMBER`
+  (schema `milf` = "Millefeuille", consistent with the `SealMillefeuille` channel).
+- **`milf.BADGES` carries `MATRICULE` directly** → short chain, no need for
+  DETAIL_FICHE/CHAMP_FICHE for the matricule.
+- **Actual resolution rate: 153/200 (76.5%)** on recent events with a
+  badge. ~23% unresolved (legacy badges `AcApi.TAG`/`dbo`, visitors, media
+  outside `milf.BADGES`) → **secondary identity source to add** (AcApi.TAG) to
+  improve coverage. To be decided.
+- **UPN unavailable in QA**: `SYNCHRO_LDAP_HISTORY` empty and
+  `CHAMP_FICHE.CFIC_LDAP_ATTRIBUT` empty → no UPN mapping in the QA database.
+  → `identity_upn` will be resolved **on the SIEM side** (matricule → AD/M365) via the
+  mirror rule Phase 3.4, not in SQL. In QA, `identity_matricule` alone is reliable.
 
-### 9.4 Watermark / rowversion — impacts Phase 1
-- `dbo.ALARMES` : rowversion natif `VERSION` **présent** (+ ré-émission sur UPDATE
-  de cycle de vie → flux de transitions exploitable, cf. ALM-001/002).
-- **`dbo.EVENEMENTS` : PAS de rowversion** → `ALTER TABLE ADD rowversion`
-  (réécriture de table ~961 k lignes → **fenêtre de maintenance en prod**).
-- **Les 15 tables `Audit.*` : AUCUNE n'a de rowversion** → `ALTER ADD RowVer` sur
-  les 15 (petites, instantané). Tables : AccessControlPermissionMovements,
+### 9.4 Watermark / rowversion — Phase 1 impacts
+- `dbo.ALARMES`: native rowversion `VERSION` **present** (+ re-emission on UPDATE
+  of the lifecycle → usable transition stream, see ALM-001/002).
+- **`dbo.EVENEMENTS`: NO rowversion** → `ALTER TABLE ADD rowversion`
+  (table rewrite ~961 k rows → **maintenance window in production**).
+- **The 15 `Audit.*` tables: NONE has a rowversion** → `ALTER ADD RowVer` on
+  the 15 (small, instantaneous). Tables: AccessControlPermissionMovements,
   AccountRolesMovements, AccountsMovements, CommandObject, LocalUnitMigrationMovements,
   LogDownload, ObjectDeclarationMovements, ProfileAllowedSwitch,
   ProfileAuthorizedObjectsMovements, ProfileRoleMovements, ProfilesMovements,
   TagGroupMembersMovements, TagGroupMovements, TagMovements, UserConnections.
-- `MIN_ACTIVE_ROWVERSION()` = 667422971 (borne haute sûre du motif watermark).
+- `MIN_ACTIVE_ROWVERSION()` = 667422971 (safe upper bound of the watermark pattern).
 
-### 9.5 Volumétrie (calibrage schedule/seuils)
-- `EVENEMENTS` sur 24 h : **158 lignes** (QA peu actif) → schedule 30 s large,
-  seed des watermarks à la valeur courante sans risque de flood.
-- `ALARMES` total : ~703 k. `EVEN_DECLENCHEUR` : 132 déclencheurs distincts
-  (top : `QA_ULS_*`, lecteurs/détecteurs) → utile pour ALM-004 (flood/capteur).
+### 9.5 Volumetry (schedule/threshold calibration)
+- `EVENEMENTS` over 24 h: **158 rows** (QA lightly active) → generous 30 s schedule,
+  seed the watermarks at the current value with no flood risk.
+- `ALARMES` total: ~703 k. `EVEN_DECLENCHEUR`: 132 distinct triggers
+  (top: `QA_ULS_*`, readers/detectors) → useful for ALM-004 (flood/sensor).
 
-### 9.6 Écart de dérogation à corriger en Phase 1
-Le compte `svc_graylog_seal` est actuellement `db_datareader` (accès large, décidé
-temporairement par l'opérateur pour la recon). `90_provision.sql` devra
-**`ALTER ROLE db_datareader DROP MEMBER svc_graylog_seal` + `REVOKE` explicite sur
-les tables + `GRANT SELECT` sur les seules vues SIEM** (règle d'engagement 5).
+### 9.6 Waiver discrepancy to fix in Phase 1
+The `svc_graylog_seal` account is currently `db_datareader` (broad access, decided
+temporarily by the operator for the recon). `90_provision.sql` will have to
+**`ALTER ROLE db_datareader DROP MEMBER svc_graylog_seal` + explicit `REVOKE` on
+the tables + `GRANT SELECT` on the SIEM views only** (rule of engagement 5).
 
 ---
 
-## 10. Décisions demandées (checkpoint Phase 0) — mise à jour
+## 10. Decisions requested (Phase 0 checkpoint) — update
 
-1. **Valider les décodages** §9.2 (REEV via REF_EVENEMENT, LIFESTAGE/STATUS,
-   Status badge, mapping sévérité) et le sens de `LIV`.
-2. **Fuseau** §9.1 : confirmer conversion `Romance Standard Time → UTC`.
-3. **Identité** §9.3 : accepter matricule-seul en QA (UPN côté SIEM) ; ajouter ou
-   non `AcApi.TAG` comme 2e source pour passer >76 % de résolution.
-4. **Nommage streams** : convention repo `OMNI - SEAL …` (recommandé) vs mission.
-5. **Rétentions** : 12/12/24 mois (accès/alarmes/audit) — confirmer.
-6. **Fenêtre de maintenance** pour le rowversion d'`EVENEMENTS` (prod, plus tard).
-7. **`GRAYLOG_API_TOKEN`** à fournir (token compte de service Graylog) pour la
-   Phase 3 (provisioning streams/pipelines). Non requis avant.
+1. **Validate the decodings** §9.2 (REEV via REF_EVENEMENT, LIFESTAGE/STATUS,
+   badge Status, severity mapping) and the meaning of `LIV`.
+2. **Time zone** §9.1: confirm conversion `Romance Standard Time → UTC`.
+3. **Identity** §9.3: accept matricule-only in QA (UPN on the SIEM side); add or
+   not `AcApi.TAG` as a 2nd source to get resolution above 76%.
+4. **Stream naming**: repo convention `OMNI - SEAL …` (recommended) vs mission.
+5. **Retentions**: 12/12/24 months (access/alarms/audit) — confirm.
+6. **Maintenance window** for the `EVENEMENTS` rowversion (production, later).
+7. **`GRAYLOG_API_TOKEN`** to be provided (Graylog service account token) for
+   Phase 3 (streams/pipelines provisioning). Not required before then.
 
-**→ Arrêt au checkpoint Phase 0. Sur ta validation des décodages (§9.2) et des
-décisions (§10), j'enchaîne la Phase 1 : rédaction du DDL `sql/01..05 + 90_provision`
-(présenté pour validation AVANT toute exécution, règle 8).**
+**→ Stop at the Phase 0 checkpoint. Upon your validation of the decodings (§9.2) and
+the decisions (§10), I proceed to Phase 1: writing the DDL `sql/01..05 + 90_provision`
+(presented for validation BEFORE any execution, rule 8).**

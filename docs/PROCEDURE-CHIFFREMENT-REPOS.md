@@ -1,62 +1,62 @@
-# Chiffrement des données au repos — /data (OpenSearch) · OMNITECH SIEM
+# Encryption of data at rest — /data (OpenSearch) · OMNITECH SIEM
 
-> ISO/IEC 27001 **A.8.24** (cryptographie) / **A.5.33** (protection des enregistrements). · **Réalisé le 2026-06-14.**
-> Dispositif en production : **LUKS2 (header inline) + déverrouillage automatique TPM2**.
+> ISO/IEC 27001 **A.8.24** (cryptography) / **A.5.33** (protection of records). · **Completed on 2026-06-14.**
+> Production mechanism: **LUKS2 (inline header) + automatic TPM2 unlock**.
 
-## Ce qui protège quoi
-- ✅ Vol de disque, mise au rebut / SAV, vol du **serveur éteint** : `/data` illisible sans la clé (le TPM ne la libère jamais hors de cette plateforme ; passphrase de secours au coffre).
-- ❌ Root compromis **machine allumée** (FS monté en clair) → couvert par ailleurs : RBAC (rôle lecture seule), intégrité signée des journaux, TLS console/Beats.
-- Périmètre : seul `/data` (les **logs** OpenSearch) est chiffré. Le rootfs (OS + config) ne l'est pas — la config sensible y vit (`00-vars.env` chmod 600). Durcissement futur possible : chiffrer le rootfs.
+## What protects what
+- ✅ Disk theft, decommissioning / RMA, theft of the **powered-off server**: `/data` unreadable without the key (the TPM never releases it outside this platform; recovery passphrase in the vault).
+- ❌ Root compromised on a **powered-on machine** (FS mounted in clear) → covered elsewhere: RBAC (read-only role), signed log integrity, console/Beats TLS.
+- Scope: only `/data` (the OpenSearch **logs**) is encrypted. The rootfs (OS + config) is not — sensitive config lives there (`00-vars.env` chmod 600). Possible future hardening: encrypt the rootfs.
 
-## Configuration en place (référence)
-| Élément | Valeur |
+## Configuration in place (reference)
+| Item | Value |
 |---|---|
-| Device | `/dev/sda1` (7,3 To) |
-| Conteneur | **LUKS2 header inline**, `aes-xts-plain64`, clé 512 bits, PBKDF argon2id |
+| Device | `/dev/sda1` (7.3 TB) |
+| Container | **LUKS2 inline header**, `aes-xts-plain64`, 512-bit key, PBKDF argon2id |
 | LUKS UUID | `ff2e8939-9317-4932-a120-71113bb9d839` |
 | Mapper | `/dev/mapper/cryptdata` |
 | Filesystem | XFS (label `omni-data`), `path.data: /data/opensearch` + `/data/graylog-journal` |
-| Keyslot 0 | **passphrase de secours** (→ Vaultwarden) |
-| Keyslot 1 | **TPM2** (token `systemd-tpm2`, PCR 7) — déverrouillage auto au boot |
+| Keyslot 0 | **recovery passphrase** (→ Vaultwarden) |
+| Keyslot 1 | **TPM2** (token `systemd-tpm2`, PCR 7) — automatic unlock at boot |
 | `/etc/crypttab` | `cryptdata UUID=ff2e8939-… none luks,tpm2-device=auto,nofail` |
 | `/etc/fstab` | `/dev/mapper/cryptdata /data xfs defaults,noatime,nofail 0 2` |
-| Sauvegarde header | chiffrée AES-256 → `//10.33.50.5/Public/SIEM/luks/omni-luks-header-AAAA-MM-JJ.img.enc` + copie locale `/root/` |
+| Header backup | AES-256 encrypted → `//10.33.50.5/Public/SIEM/luks/omni-luks-header-YYYY-MM-DD.img.enc` + local copy `/root/` |
 
-> ⚠️ **TPM en banque PCR SHA-1** (ce TPM n'expose pas SHA-256) → scellement un peu moins robuste, sans impact sur la protection au repos. Durcissement : activer la banque PCR SHA-256 au BIOS Dell, puis ré-enrôler (cf. *Recovery*).
+> ⚠️ **TPM on SHA-1 PCR bank** (this TPM does not expose SHA-256) → slightly less robust sealing, with no impact on protection at rest. Hardening: enable the SHA-256 PCR bank in the Dell BIOS, then re-enroll (see *Recovery*).
 
-## Sécurité des clés (ordre d'importance)
-1. **Passphrase de secours** (keyslot 0) → **Vaultwarden uniquement**, jamais en clair sur le serveur. Seul moyen de rouvrir `/data` si le TPM / la carte mère change. Le fichier temporaire `/etc/luks/.data-pass` est **détruit (`shred`) après enrôlement TPM + mise au coffre**.
-2. **Sauvegarde du header** (`luksHeaderBackup`, chiffrée, hors-bande SMB) : un header corrompu = `/data` irrécupérable même avec la passphrase. → restaurable (cf. *Recovery*). Re-sauvegarder après **tout** changement de keyslot.
-3. **TPM2** = confort (déverrouillage transparent au boot) ; disque illisible si sorti/volé (autre plateforme).
+## Key security (in order of importance)
+1. **Recovery passphrase** (keyslot 0) → **Vaultwarden only**, never in clear on the server. The only way to reopen `/data` if the TPM / motherboard changes. The temporary file `/etc/luks/.data-pass` is **destroyed (`shred`) after TPM enrollment + vaulting**.
+2. **Header backup** (`luksHeaderBackup`, encrypted, out-of-band SMB): a corrupted header = `/data` unrecoverable even with the passphrase. → restorable (see *Recovery*). Re-back up after **any** keyslot change.
+3. **TPM2** = convenience (transparent unlock at boot); disk unreadable if removed/stolen (another platform).
 
-## Recovery — exploitation courante
+## Recovery — routine operation
 ```bash
-# Ouverture MANUELLE (TPM indisponible) — demande la passphrase de secours (Vaultwarden)
+# MANUAL open (TPM unavailable) — requires the recovery passphrase (Vaultwarden)
 cryptsetup open /dev/sda1 cryptdata
 mount /data
 systemctl start opensearch graylog-server
 
-# Le TPM ne déverrouille plus au boot (MAJ firmware / Secure Boot / banque PCR) :
-#   au boot, saisir la passphrase à l'invite, puis ré-enrôler le TPM :
+# The TPM no longer unlocks at boot (firmware update / Secure Boot / PCR bank):
+#   at boot, enter the passphrase at the prompt, then re-enroll the TPM:
 systemd-cryptenroll /dev/sda1 --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=7
 
-# Restaurer le header depuis la sauvegarde hors-bande (header corrompu) :
-#   1) récupérer le .enc sur le partage SMB, le déchiffrer (BACKUP_PASSPHRASE : 00-vars.env / coffre)
-openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in omni-luks-header-AAAA-MM-JJ.img.enc -out hdr.img
-#   2) restaurer :
+# Restore the header from the out-of-band backup (corrupted header):
+#   1) retrieve the .enc from the SMB share, decrypt it (BACKUP_PASSPHRASE: 00-vars.env / vault)
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in omni-luks-header-YYYY-MM-DD.img.enc -out hdr.img
+#   2) restore:
 cryptsetup luksHeaderRestore /dev/sda1 --header-backup-file hdr.img
 
-# Ajouter / changer la passphrase de secours :
-cryptsetup luksAddKey /dev/sda1            # (puis luksRemoveKey pour l'ancienne)
+# Add / change the recovery passphrase:
+cryptsetup luksAddKey /dev/sda1            # (then luksRemoveKey for the old one)
 
-# Re-sauvegarder le header après TOUT changement de keyslot :
+# Re-back up the header after ANY keyslot change:
 cryptsetup luksHeaderBackup /dev/sda1 --header-backup-file /root/omni-luks-header-$(date +%F).img
 ```
 
-## Comment ç'a été déployé (2026-06-14)
-Méthode **reformatage chiffré à neuf** (rapide, ~10 min) plutôt qu'un rechiffrement in-place (≈ **21 h** pour 7,3 To au niveau bloc). Possible parce que **toute la config est hors `/data`** (MongoDB `/var/lib/mongodb`, scripts `/root/omnitech-siem-setup`, lookups, `data_dir` Graylog `/var/lib/graylog-server`) : seuls les **logs indexés** vivaient sur `/data`, jugés reconstituables (purge/repeuplement déjà pratiqués).
+## How it was deployed (2026-06-14)
+**Fresh encrypted reformat** method (fast, ~10 min) rather than an in-place re-encryption (≈ **21 h** for 7.3 TB at the block level). Possible because **all the config is outside `/data`** (MongoDB `/var/lib/mongodb`, scripts `/root/omnitech-siem-setup`, lookups, Graylog `data_dir` `/var/lib/graylog-server`): only the **indexed logs** lived on `/data`, deemed reconstructible (purge/repopulation already practiced).
 ```bash
-systemctl stop graylog-server opensearch          # /data libéré
+systemctl stop graylog-server opensearch          # /data freed
 umount /data
 cryptsetup luksFormat --type luks2 --cipher aes-xts-plain64 --key-size 512 \
    --pbkdf argon2id --batch-mode --key-file /etc/luks/.data-pass /dev/sda1
@@ -66,19 +66,19 @@ mkfs.xfs -f -L omni-data /dev/mapper/cryptdata
 mkdir -p /data/opensearch /data/graylog-journal
 chown opensearch:opensearch /data/opensearch ; chown graylog:graylog /data/graylog-journal ; chmod 750 /data/*
 systemd-cryptenroll /dev/sda1 --tpm2-device=auto --tpm2-pcrs=7 --unlock-key-file=/etc/luks/.data-pass
-# /etc/crypttab (cf. tableau) ; systemctl daemon-reload
+# /etc/crypttab (see table) ; systemctl daemon-reload
 systemctl start opensearch graylog-server
-bash 54-post-purge-repopulate.sh                  # reconstruit les index ranges + repeuple
-# validation du TPM par reboot (avec opérateur, console accessible)
+bash 54-post-purge-repopulate.sh                  # rebuilds the index ranges + repopulates
+# TPM validation via reboot (with an operator, console accessible)
 ```
 
-## Annexe — alternative « préserver les données » (rechiffrement in-place, **non utilisé ici**)
-Si un jour il faut chiffrer **sans perdre** les données d'un volume, en acceptant la durée (≈ 21 h / 7,3 To) :
-- XFS ne rétrécit pas → **header détaché** obligatoire (jamais `--reduce-device-size`, qui casse le remontage XFS) :
+## Appendix — "preserve the data" alternative (in-place re-encryption, **not used here**)
+If one day it becomes necessary to encrypt a volume **without losing** its data, accepting the duration (≈ 21 h / 7.3 TB):
+- XFS does not shrink → **detached header** mandatory (never `--reduce-device-size`, which breaks the XFS remount):
   `cryptsetup reencrypt --encrypt --header /etc/luks/hdr.img --type luks2 --resilience checksum /dev/sdX`
-  (reprenable via `--resume-only --header …`), puis `open --header` / `mount` / `systemd-cryptenroll --header`.
-- Le **chiffrement online** (`cryptsetup open` d'abord, puis `reencrypt --resume-only --active-name cryptdata`) permet de garder le volume **monté et en service** pendant l'opération.
-- ⚠️ On **ne peut pas annuler nativement** un `--encrypt` partiel (`--decrypt` le refuse : *« option --decrypt conflictuelle »*) : il faut soit le mener à terme, soit recopier la zone de tête en clair via le mapper ouvert. *(Validé sur loopback le 2026-06-14.)*
+  (resumable via `--resume-only --header …`), then `open --header` / `mount` / `systemd-cryptenroll --header`.
+- **Online encryption** (`cryptsetup open` first, then `reencrypt --resume-only --active-name cryptdata`) makes it possible to keep the volume **mounted and in service** during the operation.
+- ⚠️ You **cannot natively cancel** a partial `--encrypt` (`--decrypt` refuses it: *"conflicting --decrypt option"*): you must either see it through, or copy back the head zone in clear via the open mapper. *(Validated on loopback on 2026-06-14.)*
 
-## Complémentaire (transit — priorité moindre, VLAN SIEM isolé = palliatif)
-ESET (1515) / vSphere (1516) / FortiGate-FAZ (1514) en syslog **clair** → migrer en **syslog-over-TLS** (supporté par ESET PROTECT, vSphere, FortiGate) quand possible. Beats (5044) et console (9000) sont déjà en TLS.
+## Complementary (in transit — lower priority, isolated SIEM VLAN = mitigation)
+ESET (1515) / vSphere (1516) / FortiGate-FAZ (1514) in **clear** syslog → migrate to **syslog-over-TLS** (supported by ESET PROTECT, vSphere, FortiGate) where possible. Beats (5044) and the console (9000) are already on TLS.

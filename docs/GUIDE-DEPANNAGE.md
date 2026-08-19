@@ -1,113 +1,113 @@
-# Guide de dépannage — SIEM OMNITECH
+# Troubleshooting Guide — SIEM OMNITECH
 
-*Version 1.1 — révisé le 14/06/2026 — Classification : interne. Format : symptôme → cause → solution.
-Référence technique exhaustive des incidents résolus : `CONTEXT.md` (section « PIÈGE À RETENIR »).*
+*Version 1.1 — revised 14/06/2026 — Classification: internal. Format: symptom → cause → solution.
+Exhaustive technical reference of resolved incidents: `CONTEXT.md` (section "PIÈGE À RETENIR").*
 
-> Sources actuellement collectées : AD/Sysmon (Winlogbeat, Beats TLS 5044), FortiGate (via
-> FortiAnalyzer, syslog 1514 TCP/UDP), Microsoft 365 (GELF HTTP 12201, collecte *pull*),
-> vSphere (syslog 1516 TCP/UDP), Veeam (canal Windows), **ESET PROTECT** (syslog JSON TCP 1515,
-> champs `eset_*`), **BunkerWeb WAF** (Filebeat sur le Beats 5044 partagé, champs `http_*`/`waf_*`).
-> **NPS** est mappé (lookup `win-events.csv`) mais pas encore remonté côté client.
+> Sources currently collected: AD/Sysmon (Winlogbeat, Beats TLS 5044), FortiGate (via
+> FortiAnalyzer, syslog 1514 TCP/UDP), Microsoft 365 (GELF HTTP 12201, *pull* collection),
+> vSphere (syslog 1516 TCP/UDP), Veeam (Windows channel), **ESET PROTECT** (syslog JSON TCP 1515,
+> `eset_*` fields), **BunkerWeb WAF** (Filebeat on the shared Beats 5044, `http_*`/`waf_*` fields).
+> **NPS** is mapped (lookup `win-events.csv`) but not yet forwarded on the client side.
 
-## 1. Collecte — une source ne remonte plus
+## 1. Collection — a source stops reporting
 
-| Symptôme | Cause probable | Solution |
+| Symptom | Probable cause | Solution |
 |---|---|---|
-| Un canal Windows **Security** muet, les autres OK | Liste `event_id` trop longue dans winlogbeat.yml (> ~23 expressions → ERROR_EVT_INVALID_QUERY) | Utiliser des **plages** (`4624-4799`), jamais une liste plate. Redéployer via `Install-OmniSiem-NinjaOne.ps1` |
-| Un hôte n'apparaît plus du tout | Agent arrêté / pare-feu 5044 | Sur l'hôte : `Get-Service winlogbeat` ; tester `Test-NetConnection <siem> -Port 5044` |
-| FortiGate : seul `voip` en UTM, pas virus/IPS/web | Profils UTM non attachés aux policies | `fortigate/05/06-utm-*.conf` ; vérifier `show firewall policy <id>` |
-| FortiGate : `source` = adresse IP au lieu du nom d'équipement | Règle de normalisation non appliquée | Le pipeline pose `source` = champ `host` (règle `omni-forti-06-source-host`, script 12) ; vérifier que la règle est dans le stage FortiGate |
-| FortiGate : horodatage décalé / événements « dans le futur » | `timestamp` non recalé sur l'heure d'origine de l'équipement | Le pipeline pose `timestamp` depuis `eventtime` (epoch ns → ms, règle `omni-forti-05-eventtime`, corrigé 14/06) |
-| vSphere : logs présents mais **0 host/event_action** | Stage pipeline `match either` avec une seule règle conditionnelle → bloque le reste | Mettre la normalisation dans le même stage (corrigé 12/06) |
-| Serveur Veeam : pas de canal « Veeam Backup » | Aucun job depuis le dernier contrôle (normal) **ou** canal non collecté | Attendre un job ; sinon relancer `Install-OmniSiem` (auto-détecte le canal) |
-| M365 : volume très faible / page vide | Collecteur planté **ou** curseur non rejoué après purge | `journalctl -u omni-m365-fetch` (et `omni-m365-activity`) ; reset curseur `/var/lib/omni-m365/state.json` |
-| **ESET** : input 1515 vide alors que la console ESET émet | Redirection 514→1515 absente côté pare-feu, ou syslog ESET désactivé | ESET PROTECT (10.33.50.20) envoie en **514**, redirigé vers 1515 par le pare-feu ; vérifier l'input `ESET (Syslog TCP 1515)` et la règle de redirection |
-| **ESET** : messages reçus mais non parsés (`eset_*` absents) | Format non-JSON ou préfixe syslog non strippé | Le pipeline strip tout avant le 1er `{` puis `set_fields(..., "eset_")` (règle `omni-eset-05-json`) ; vérifier que `event_source=eset` est bien posé |
-| **BunkerWeb** : logs WAF qui atterrissent dans « OMNI - Windows autres » | BunkerWeb partage le **Beats 5044** avec Winlogbeat → routage par `filebeat_event_source` | Filebeat doit poser `filebeat_event_source=bunkerweb` ; une règle d'exclusion (`inverted`) écarte BunkerWeb de « OMNI - Windows autres » (script 52) |
-| **NPS** : rien ne remonte | Normal à ce stade : mappé mais pas encore activé côté client | NPS (10.33.50.247) passera par Winlogbeat/Beats 5044 ; mapping prêt via lookup `win-events.csv` |
-| **Vaultwarden** : logs coffre dans « OMNI - Windows autres » | Même partage Beats 5044 → routage par `filebeat_event_source` | Filebeat doit poser `filebeat_event_source=vaultwarden` ; exclusion (`inverted`) + **index dédié `omni-vaultwarden`** (script 55). Le bruit « too many admin requests » (boucle conteneur) est droppé au pipeline |
-| **`src_hostname` vide** sur les logs FortiGate internes | Attribution DHCP en panne | `systemctl status omni-fortidhcp-fetch.timer` + `journalctl -u omni-fortidhcp-fetch` ; vérifier token RO FortiGate + lookup `omni-dhcp-attribution` (script 56) |
-| **Alerte « Intégrité des logs COMPROMISE »** | Chaîne de hachage rompue (suppression/altération) | `omni-integrity --verify` ; comparer `/var/lib/omni-integrity/chain.jsonl` avec la copie SMB `/SIEM/integrity/` ; figer & investiguer (script 60) |
+| A Windows **Security** channel silent, the others OK | `event_id` list too long in winlogbeat.yml (> ~23 expressions → ERROR_EVT_INVALID_QUERY) | Use **ranges** (`4624-4799`), never a flat list. Redeploy via `Install-OmniSiem-NinjaOne.ps1` |
+| A host no longer appears at all | Agent stopped / firewall 5044 | On the host: `Get-Service winlogbeat`; test `Test-NetConnection <siem> -Port 5044` |
+| FortiGate: only `voip` in UTM, no virus/IPS/web | UTM profiles not attached to policies | `fortigate/05/06-utm-*.conf`; check `show firewall policy <id>` |
+| FortiGate: `source` = IP address instead of device name | Normalization rule not applied | The pipeline sets `source` = `host` field (rule `omni-forti-06-source-host`, script 12); verify the rule is in the FortiGate stage |
+| FortiGate: timestamp shifted / events "in the future" | `timestamp` not realigned on the device's original time | The pipeline sets `timestamp` from `eventtime` (epoch ns → ms, rule `omni-forti-05-eventtime`, fixed 14/06) |
+| vSphere: logs present but **0 host/event_action** | Pipeline stage `match either` with a single conditional rule → blocks the rest | Put the normalization in the same stage (fixed 12/06) |
+| Veeam server: no "Veeam Backup" channel | No job since the last check (normal) **or** channel not collected | Wait for a job; otherwise re-run `Install-OmniSiem` (auto-detects the channel) |
+| M365: very low volume / empty page | Collector crashed **or** cursor not replayed after a purge | `journalctl -u omni-m365-fetch` (and `omni-m365-activity`); reset cursor `/var/lib/omni-m365/state.json` |
+| **ESET**: input 1515 empty while the ESET console is emitting | 514→1515 redirection missing on the firewall side, or ESET syslog disabled | ESET PROTECT (10.33.50.20) sends on **514**, redirected to 1515 by the firewall; check the `ESET (Syslog TCP 1515)` input and the redirection rule |
+| **ESET**: messages received but not parsed (`eset_*` absent) | Non-JSON format or syslog prefix not stripped | The pipeline strips everything before the first `{` then `set_fields(..., "eset_")` (rule `omni-eset-05-json`); verify that `event_source=eset` is correctly set |
+| **BunkerWeb**: WAF logs landing in "OMNI - Windows autres" | BunkerWeb shares the **Beats 5044** with Winlogbeat → routing by `filebeat_event_source` | Filebeat must set `filebeat_event_source=bunkerweb`; an exclusion rule (`inverted`) removes BunkerWeb from "OMNI - Windows autres" (script 52) |
+| **NPS**: nothing reporting | Normal at this stage: mapped but not yet activated on the client side | NPS (10.33.50.247) will go through Winlogbeat/Beats 5044; mapping ready via lookup `win-events.csv` |
+| **Vaultwarden**: vault logs in "OMNI - Windows autres" | Same Beats 5044 sharing → routing by `filebeat_event_source` | Filebeat must set `filebeat_event_source=vaultwarden`; exclusion (`inverted`) + **dedicated index `omni-vaultwarden`** (script 55). The "too many admin requests" noise (container loop) is dropped at the pipeline |
+| **`src_hostname` empty** on internal FortiGate logs | DHCP attribution down | `systemctl status omni-fortidhcp-fetch.timer` + `journalctl -u omni-fortidhcp-fetch`; check FortiGate RO token + lookup `omni-dhcp-attribution` (script 56) |
+| **Alert "Log integrity COMPROMISED"** | Hash chain broken (deletion/tampering) | `omni-integrity --verify`; compare `/var/lib/omni-integrity/chain.jsonl` with the SMB copy `/SIEM/integrity/`; freeze & investigate (script 60) |
 
-## 2. Indexation — messages perdus
+## 2. Indexing — lost messages
 
-| Symptôme | Cause | Solution |
+| Symptom | Cause | Solution |
 |---|---|---|
-| **Indexer failures** > 0 (System → Indexer failures) | Champ typé rejeté (ex `src_ip` = "N/A"/"x.x"/ip:port) | Corriger **à la source ou au pipeline** (jamais assouplir le mapping). Cf. clean_ip / regex IP |
-| Recherche « vide » alors que les logs arrivent | Index range non recalculé (après purge/manip) | `POST /api/system/indices/ranges/rebuild` |
-| Tout semble vide sur 24h/7j après une **purge** | Comportement attendu : l'historique a été effacé, la collecte repart de zéro | Regarder une fenêtre « depuis la purge » ; les agents ne rejouent pas l'historique. La repopulation des dashboards est gérée par `54-post-purge-repopulate.sh` |
-| Une source plus ancienne que sa rétention a disparu | Comportement attendu (rétention par index set) | Rétentions : **FortiGate 180 j** ; Windows/Sysmon/vSphere/M365/ESET **365 j** ; **BunkerWeb 90 j**. Disque `/data` = 7,3 To |
+| **Indexer failures** > 0 (System → Indexer failures) | Typed field rejected (e.g. `src_ip` = "N/A"/"x.x"/ip:port) | Fix **at the source or the pipeline** (never loosen the mapping). Cf. clean_ip / IP regex |
+| Search "empty" while logs are arriving | Index range not recalculated (after purge/manipulation) | `POST /api/system/indices/ranges/rebuild` |
+| Everything looks empty over 24h/7d after a **purge** | Expected behavior: history was wiped, collection restarts from zero | Look at a "since the purge" window; agents do not replay history. Dashboard repopulation is handled by `54-post-purge-repopulate.sh` |
+| A source older than its retention has disappeared | Expected behavior (retention per index set) | Retentions: **FortiGate 180 d**; Windows/Sysmon/vSphere/M365/ESET **365 d**; **BunkerWeb 90 d**. Disk `/data` = 7.3 TB |
 
-## 3. Alertes — trop, ou pas assez
+## 3. Alerts — too many, or not enough
 
-| Symptôme | Cause | Solution |
+| Symptom | Cause | Solution |
 |---|---|---|
-| Tempête de mails identiques | Grâce trop courte / pas de clé / échec service compté comme brute force | `21-alert-hygiene.sh` (grâces ≥ 60 min, clés par compte/IP, exclusion logon type 4/5) |
-| Trop d'alertes par mail (pas que le critique) | Routage 2 tiers non (ré)appliqué | `22-alert-routing.sh` : **Teams = firehose** (toutes les alertes, ~87) ; **mail = critique « réveille-moi » uniquement** (~26 : compromission confirmée + santé SIEM). À relancer après 13/21 |
-| Plus aucune alerte Teams reçue | Flux Power Automate throttlé/cassé (échoue **en silence**, Graylog reçoit 202) | Vérifier l'**historique d'exécution** du flux Power Automate (pas les logs Graylog) |
-| Plus aucun mail critique reçu | Notification mail retirée de toutes les définitions, ou SMTP cassé | Vérifier que `22-alert-routing.sh` a bien conservé le mail sur la liste `KEEP` ; tester l'envoi SMTP depuis Graylog |
-| Une alerte ne se déclenche jamais | Le stream interrogé ne route pas la source ; ou `key_spec` sans `field_spec` | Vérifier les règles du stream ; toute clé doit avoir une entrée `field_spec` |
-| Incident critique compté plusieurs fois | Doublons de kill-chain | Dédup au niveau de la corrélation d'incidents (`omni-incident-correlate`, corrigé 14/06) |
-| Faux positifs récurrents | Détection trop large | Exclusion ciblée **au pipeline** (script 12/13/21), pas en console seule. Exclusions en place : comptes machine `*$` + comptes de service (`ninjaone`, `ADSyncMSA`) pour la force brute ; `wakeup-ssrs.ps1` pour PowerShell ; `vpxuser`/`dcui`/`localhost` pour la force brute vSphere |
+| Storm of identical emails | Grace too short / no key / service failure counted as brute force | `21-alert-hygiene.sh` (grace ≥ 60 min, keys per account/IP, logon type 4/5 exclusion) |
+| Too many alerts by email (not just the critical ones) | 2-tier routing not (re)applied | `22-alert-routing.sh`: **Teams = firehose** (all alerts, ~87); **email = critical "wake-me-up" only** (~26: confirmed compromise + SIEM health). To re-run after 13/21 |
+| No more Teams alerts received | Power Automate flow throttled/broken (fails **silently**, Graylog receives 202) | Check the Power Automate flow's **run history** (not the Graylog logs) |
+| No more critical emails received | Email notification removed from all definitions, or SMTP broken | Verify that `22-alert-routing.sh` did keep email on the `KEEP` list; test SMTP sending from Graylog |
+| An alert never fires | The queried stream does not route the source; or `key_spec` without `field_spec` | Check the stream rules; every key must have a `field_spec` entry |
+| Critical incident counted several times | Kill-chain duplicates | Dedup at the incident correlation level (`omni-incident-correlate`, fixed 14/06) |
+| Recurring false positives | Detection too broad | Targeted exclusion **at the pipeline** (script 12/13/21), not in the console alone. Exclusions in place: machine accounts `*$` + service accounts (`ninjaone`, `ADSyncMSA`) for brute force; `wakeup-ssrs.ps1` for PowerShell; `vpxuser`/`dcui`/`localhost` for vSphere brute force |
 
-## 4. Console / authentification
+## 4. Console / authentication
 
-| Symptôme | Cause | Solution |
+| Symptom | Cause | Solution |
 |---|---|---|
-| « invalid credentials » avec un compte AD admin | Port 636 (LDAPS) bloqué → backend non créé → compte AD inconnu | Ouvrir 636 (règle FortiGate 425) puis `bash 33-ldaps-auth.sh` |
-| Login AD refusé pour un compte admin du domaine | DN du groupe erroné dans le filtre | Récupérer le DN exact (`ldapsearch ... memberOf`) ; le groupe peut être hors `CN=Users` |
-| Console inaccessible / boucle JSON.parse | TLS mal configuré (truststore, http_publish_uri) | CA dans `cacerts-omni.jks`, `http_publish_uri` = FQDN → 127.0.0.1 via /etc/hosts |
+| "invalid credentials" with an AD admin account | Port 636 (LDAPS) blocked → backend not created → AD account unknown | Open 636 (FortiGate rule 425) then `bash 33-ldaps-auth.sh` |
+| AD login refused for a domain admin account | Wrong group DN in the filter | Retrieve the exact DN (`ldapsearch ... memberOf`); the group may be outside `CN=Users` |
+| Console unreachable / JSON.parse loop | TLS misconfigured (truststore, http_publish_uri) | CA in `cacerts-omni.jks`, `http_publish_uri` = FQDN → 127.0.0.1 via /etc/hosts |
 
-## 5. Sauvegarde / capacité / SOAR
+## 5. Backup / capacity / SOAR
 
-| Symptôme | Cause | Solution |
+| Symptom | Cause | Solution |
 |---|---|---|
-| Sauvegarde config échoue (SMB) | Montage CIFS refusé (guest) / pare-feu 445 | `/root/.smb-siem.cred` (compte dédié, chmod 600) ; règle FortiGate Réseau ELK → Files 445 |
-| `/data` se remplit | Volume anormal d'un flux | `32-disk-guard.sh` (timer `omni-disk-guard`) alerte à 80 %, purge d'urgence à 88 % ; revoir `41-retention-iso.sh` |
-| SOAR : `diagnose` CLI échoue sur FortiGate | Commande non supportée par la version | Vérifier via **GUI** (External Connectors → View Entries) ; les logs nginx du SIEM prouvent le poll |
-| SOAR ne bloque pas le portail VPN | Trafic « local-in » non filtré par une firewall policy forward | Utiliser une **`local-in-policy`** (le portail écoute sur le boîtier) |
-| FortiGate ne lit pas le feed (HTTPS) | Root CA OMNITECH absente du FortiGate | Importer la CA (*System → Certificates*) ou servir le feed en HTTP |
-| Certificat console / parc proche de l'expiration | Surveillance permanente | `omni-cert-check` (télémétrie continue) alerte par mail ; renouvellement console automatisé via `omni-cert-renew` (CSR → AD CS via SMB) |
+| Config backup fails (SMB) | CIFS mount refused (guest) / firewall 445 | `/root/.smb-siem.cred` (dedicated account, chmod 600); FortiGate rule Réseau ELK → Files 445 |
+| `/data` filling up | Abnormal volume from a flow | `32-disk-guard.sh` (timer `omni-disk-guard`) alerts at 80%, emergency purge at 88%; review `41-retention-iso.sh` |
+| SOAR: `diagnose` CLI fails on FortiGate | Command not supported by the version | Verify via **GUI** (External Connectors → View Entries); the SIEM nginx logs prove the poll |
+| SOAR does not block the VPN portal | "local-in" traffic not filtered by a forward firewall policy | Use a **`local-in-policy`** (the portal listens on the appliance) |
+| FortiGate does not read the feed (HTTPS) | OMNITECH Root CA missing from the FortiGate | Import the CA (*System → Certificates*) or serve the feed over HTTP |
+| Console / fleet certificate near expiration | Continuous monitoring | `omni-cert-check` (continuous telemetry) alerts by email; console renewal automated via `omni-cert-renew` (CSR → AD CS over SMB) |
 
-## 6. Purge / remise à zéro propre
+## 6. Clean purge / reset
 
-| Symptôme / besoin | Détail | Solution |
+| Symptom / need | Detail | Solution |
 |---|---|---|
-| Repartir sur des index vides sans perdre la config | Après validation des correctifs de faux positifs | `53-purge-clean.sh` : cycle deflector + suppression des anciens index via l'API (streams, pipelines, lookups, inputs, alertes, dashboards conservés ; `gl-system-events` conservé). **DESTRUCTIF** |
-| Dashboards vides juste après une purge | Widgets dérivés non re-calculés tant que les robots n'ont pas re-tourné | `53-` enchaîne automatiquement `54-post-purge-repopulate.sh` (rebuild ranges + re-fetch M365 + relance des robots). Désactiver l'enchaînement : `PURGE_NO_REPOP=1` |
-| Après purge, UEBA/NDR/vulnérabilités restent partiellement vides | Normal : baseline UEBA, motifs NDR sur heures, inventaire vuln quotidien nécessitent de la donnée fraîche | Attendre l'accumulation — ce n'est pas un bug |
+| Restart on empty indices without losing the config | After validating false-positive fixes | `53-purge-clean.sh`: deflector cycle + deletion of old indices via the API (streams, pipelines, lookups, inputs, alerts, dashboards preserved; `gl-system-events` preserved). **DESTRUCTIVE** |
+| Dashboards empty right after a purge | Derived widgets not recomputed until the robots have re-run | `53-` automatically chains `54-post-purge-repopulate.sh` (rebuild ranges + re-fetch M365 + restart the robots). Disable the chaining: `PURGE_NO_REPOP=1` |
+| After a purge, UEBA/NDR/vulnerabilities stay partially empty | Normal: UEBA baseline, NDR patterns over hours, daily vuln inventory all require fresh data | Wait for accumulation — this is not a bug |
 
-## 7. Réflexes de diagnostic (commandes utiles, sur le SIEM)
+## 7. Diagnostic reflexes (useful commands, on the SIEM)
 
 ```bash
-# état général
+# general state
 systemctl status graylog-server opensearch mongod nginx
 systemctl list-timers 'omni-*'
 curl -s '127.0.0.1:9200/_cat/indices/omni-*?h=index,docs.count,store.size&s=index'
 
-# débit d'un flux (5 min) — préfixes : omni-winsec omni-sysmon omni-winother
+# throughput of a flow (5 min) — prefixes: omni-winsec omni-sysmon omni-winother
 #   omni-fortigate omni-m365 omni-vsphere omni-eset omni-bunkerweb
 curl -s "127.0.0.1:9200/omni-<flux>_*/_count" -H 'Content-Type: application/json' \
   -d '{"query":{"range":{"timestamp":{"gte":"now-5m"}}}}'
 
-# un hôte remonte-t-il ?  (recherche source:<hostname> sur 15 min via la console)
+# is a host reporting?  (search source:<hostname> over 15 min via the console)
 
-# journal d'un collecteur
+# collector journal
 journalctl -u omni-m365-fetch -n 20
 journalctl -u omni-m365-activity -n 20
 tail -f /var/log/graylog-server/server.log
 ```
 
-## 8. Pièges API Graylog 7.x (à connaître pour intervenir au pipeline)
+## 8. Graylog 7.x API pitfalls (to know before intervening at the pipeline)
 
-- **Pas de ternaire** dans les règles pipeline : utiliser `if/else`.
-- `contains()` prend **2 arguments** (`contains(valeur, sous-chaîne)`).
-- Sur les `POST` d'entités, encapsuler le corps dans l'**enveloppe** `{entity}` attendue.
-- Cycle du deflector : `POST /system/deflector/{id}/cycle` (utilisé par la purge).
-- Dashboard unique **« OMNI - SOC »** (24 pages) : `requires={}` → 100 % OSS, **pas d'Enterprise**.
+- **No ternary** in pipeline rules: use `if/else`.
+- `contains()` takes **2 arguments** (`contains(value, substring)`).
+- On entity `POST`s, wrap the body in the expected `{entity}` **envelope**.
+- Deflector cycle: `POST /system/deflector/{id}/cycle` (used by the purge).
+- Single dashboard **"OMNI - SOC"** (24 pages): `requires={}` → 100% OSS, **no Enterprise**.
 
 ---
 
-> En cas d'incident non listé : consigner symptôme + résolution dans `CONTEXT.md`
-> (section « PIÈGE À RETENIR ») pour enrichir ce guide.
-> Voir aussi : `INTEGRATION-SOURCES.md`, `POLITIQUE-RETENTION.md`, `PROCEDURE-INCIDENT.md`.
+> For an incident not listed here: record symptom + resolution in `CONTEXT.md`
+> (section "PIÈGE À RETENIR") to enrich this guide.
+> See also: `INTEGRATION-SOURCES.md`, `POLITIQUE-RETENTION.md`, `PROCEDURE-INCIDENT.md`.
