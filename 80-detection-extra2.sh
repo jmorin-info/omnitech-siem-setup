@@ -112,24 +112,39 @@ when
   to_string($message.event_source) == "windows_security"
   AND to_string($message.winlogbeat_winlog_event_id) == "4698"
   AND has_field("winlogbeat_winlog_event_data_TaskContent")
-  AND ( contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "-encodedcommand", true)
-     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), " -enc ", true)
+  AND (
+     // --- Indicateurs FORTS : offensifs par nature -> alertent QUEL QUE SOIT
+     //     l'emplacement (un payload encode depose dans Program Files reste une
+     //     compromission : l'attaquant avait deja les droits d'ecriture).
+        contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "-encodedcommand", true)
+     // "-enc " : espace a DROITE seulement. L'ancien motif " -enc " (espace des deux
+     // cotes) laissait passer <Arguments>-enc PAYLOAD</Arguments> = evasion triviale
+     // (verifie 23/09/2026). Ne matche pas "-encodedcommand" (suivi de 'o'), deja couvert.
+     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "-enc ", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "frombase64string", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "downloadstring", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "downloadfile", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "invoke-expression", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "invoke-webrequest", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "iwr ", true)
-     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "-windowstyle hidden", true)
-     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "-w hidden", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "bitsadmin", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "certutil", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "regsvr32", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "mshta", true)
-     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "rundll32", true)
-     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "\\appdata\\", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "\\users\\public\\", true)
-     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "\\windows\\temp\\", true) )
+     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "\\windows\\temp\\", true)
+     // --- Indicateurs FAIBLES : fenetre masquee / rundll32. Legitimes chez de
+     //     nombreux editeurs (mesure 30 j : 3 alertes, 3 FP -> tache Windows
+     //     BitLocker PCRPF et tache Intel SUR/QUEENCREEK, toutes deux en fenetre
+     //     masquee). On ne les retient donc que HORS emplacement de confiance :
+     //     tache native \Microsoft\Windows\ ou contenu pointant Program Files
+     //     (repertoires proteges, ecriture reservee a l'administrateur).
+     OR ( (  contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "-windowstyle hidden", true)
+          OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "-w hidden", true)
+          OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "rundll32", true) )
+          AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskName), "\\Microsoft\\Windows\\", true)
+          AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "c:\\program files", true) )
+  )
 then
   set_field("alert_tag", "schtask_payload");
   set_field("event_action", "tache_planifiee_charge_suspecte");

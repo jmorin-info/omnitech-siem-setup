@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -21,6 +22,18 @@ from .gelf import Gelf
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("oms-ml")
+
+# Entités NON-actionnables (built-in AD / service / machine / intégrations) : exclues du top-N
+# et de l'émission ml_anomaly, sinon elles écrasent les vraies anomalies utilisateur (adm-*,
+# Administrateur, comptes machine $, SeqDefaultInstance, graph.microsoft...). Extensible via
+# config anomaly.exclude (liste de regex).
+_ML_EXCLUDE_DEFAULT = [
+    r"(?i)^administrat", r"(?i)^administrators?$", r"(?i)^guest$", r"(?i)^invit",
+    r"(?i)^defaultaccount$", r"(?i)^krbtgt$", r"(?i)^system$", r"(?i)^seqdefaultinstance$",
+    r"(?i)^omnitech$", r"(?i)^anonymous$",
+    r"(?i)(^|[._-])adm([._-]|$)", r"(?i)(^|[._-])svc([._-]|$)", r"(?i)(^|[._-])service([._-]|$)",
+    r"\$$", r"(?i)_fgt40f$", r"(?i)graph\.microsoft", r"(?i)^no-?reply$",
+]
 
 
 def load_cfg(path: str) -> dict:
@@ -90,6 +103,13 @@ def cmd_anomaly(cfg: dict, args) -> int:
             log.info("[%s] anomalie segmentée par classe (%d classes)", etype, len(set(classes)))
         else:
             res = anomaly.train_score(names, matrix, ents, model_path=f"{state}/anomaly_{etype}.pkl", **kw)
+        # Filtrer les entités non-actionnables (built-in/service/machine/intégrations) AVANT le
+        # top-N : elles scorent haut par volume/diversité mais ne sont pas des anomalies à traiter.
+        _excl = [re.compile(p) for p in (_ML_EXCLUDE_DEFAULT + list(an.get("exclude", [])))]
+        _before = len(res)
+        res = [r for r in res if not any(p.search(str(r["entity"])) for p in _excl)]
+        if _before != len(res):
+            log.info("[%s] %d entités non-actionnables exclues (allowlist)", etype, _before - len(res))
         top = res[: args.top or an.get("top", 15)]
         thr = an.get("score_threshold", 70)
         print(f"\n=== Anomalies {etype} (window {window}, {len(ents)} entités) ===")

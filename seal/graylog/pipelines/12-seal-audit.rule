@@ -1,0 +1,81 @@
+// =============================================================================
+// 12-seal-audit.rule - Normalisation SEAL "Audit hyperviseur" -> contrat D4
+//
+// Stream cible : "OMNI - SEAL Audit" (route ingest : event_source==seal AND
+//   event_domain==hypervisor_audit). 2 regles / 2 stages (voir provision) :
+//     stage 0 : omni-seal-audit-normalize      (mapping deterministe)
+//     stage 1 : omni-seal-audit-outcome-fail   (override d'issue)
+//
+// Source metier : Audit.* (15 tables, vue vw_SealAudit_SIEM UNION ALL). Champs
+//   bruts GELF attendus (colonnes communes + specifiques, cf CONTRACT D2/D4) :
+//     Usercode, Operation, OperationChannel, Login, IpAddress, UserAgent,
+//     Number, ObjectId, ObjectLabel, ObjectType, DoorId, SourceTable,
+//     WatermarkBig, seal_payload.
+//
+// event_action = Operation (audit) ; le decode REEV ne s'applique PAS ici.
+// timestamp : Audit.* fournit OperationDateUtc (deja UTC) -> pose par le
+//   collecteur (cf D0). NON retouche ici.
+//
+// Deux stages car la deduction d'issue (ConnectionFailure -> failure) est un
+// OVERRIDE : le stage 0 pose un defaut "success", le stage 1 le corrige. On
+// evite ainsi deux set_field concurrents sur event_outcome dans un meme stage
+// (ordre non garanti). Pas de ternaire en pipeline Graylog.
+// =============================================================================
+rule "omni-seal-audit-normalize"
+when
+  to_string($message.event_domain) == "hypervisor_audit"
+then
+  set_field("event_source", "seal");
+  set_field("event_domain", "hypervisor_audit");
+  set_field("event_category", "hypervisor_audit");
+
+  // --- Action = Operation brute (Connection/Deconnection/ConnectionFailure/
+  //     SwitchProfile/ mouvements Tag/Account/Profile...) ---
+  set_field("event_action", to_string($message.Operation));
+  set_field("operation_channel", to_string($message.OperationChannel));
+
+  // --- Issue par defaut : succes (corrige au stage 1 si ConnectionFailure) ---
+  set_field("event_outcome", "success");
+
+  // --- Severite : mapping audit (defaut informationnel ; l'echec releve la
+  //     severite au stage 1). Cf D4 severity_num = mapping audit. ---
+  set_field("severity_num", 0);
+
+  // --- Acteur : usercode (colonne commune, top-level) + login/reseau (issus du
+  //     JSON PayloadJson -> prefixe seal_ pose par Logstash target=>"seal") ---
+  set_field("actor_usercode", to_string($message.Usercode));
+  set_field("actor_login", to_string($message.seal_Login));
+  set_field("src_ip", to_string($message.seal_IpAddress));
+  set_field("user_agent", to_string($message.seal_UserAgent));
+
+  // --- Identite badge (mouvements Tag : Number = badge ; via JSON) ---
+  set_field("badge_number", to_string($message.seal_Number));
+  set_field("identity_upn", "");
+
+  // --- Cible : compte/objet manipule (AccountsMovements.Login = compte cible,
+  //     CommandObject.Object* = objet vise, DoorId = porte ; via JSON seal_) ---
+  set_field("target_login", to_string($message.seal_Login));
+  set_field("target_object_id",    to_string($message.seal_ObjectId));
+  set_field("target_object_label", to_string($message.seal_ObjectLabel));
+  set_field("target_object_type",  to_string($message.seal_ObjectType));
+  set_field("door_id", to_string($message.seal_DoorId));
+
+  // --- Tracabilite (table source d'origine + watermark diagnostic) ---
+  set_field("seal_source_table", to_string($message.SourceTable));
+  set_field("seal_watermark",    to_string($message.WatermarkBig));
+  set_field("seal_payload",      to_string($message.seal_payload));
+end
+
+// ----------------------------------------------------------------------------
+// Stage 1 : override d'issue sur echec d'authentification console (HYP-001).
+// Marque aussi un alert_tag consomme par la couche detection/alertes.
+// ----------------------------------------------------------------------------
+rule "omni-seal-audit-outcome-fail"
+when
+  to_string($message.event_domain) == "hypervisor_audit"
+  AND to_string($message.Operation) == "ConnectionFailure"
+then
+  set_field("event_outcome", "failure");
+  set_field("severity_num", 5);
+  set_field("alert_tag", "seal_console_auth_failure");
+end

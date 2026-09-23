@@ -281,6 +281,10 @@ EOF
 # === Rattacher la regle au pipeline DEDIE existant (cree par 47, deja connecte
 # a OMNI - Windows Security). On RE-DECLARE le pipeline complet avec la nouvelle
 # regle ajoutee au stage 10 (ensure_pipeline est idempotent / met a jour la source). ===
+# DEPENDANCE D'ORDRE : ce stage reference 6 regles definies dans 47-detections-extra.sh
+# (schtask/service/uacbypass/m365brute/discovery/svcstop). 49 DOIT tourner APRES 47 ; sinon
+# le pipeline cablerait des regles inexistantes (Graylog ignore silencieusement -> detections
+# muettes). Ordre de provisioning numerique (47 < 49) garanti par run-all ; ne pas inverser.
 PL="$(ensure_pipeline "OMNI - Detections complementaires" <<'EOF'
 pipeline "OMNI - Detections complementaires"
 stage 10 match either
@@ -292,6 +296,12 @@ rule "omni-extra-10-oauth"
 rule "omni-extra-10-explicit-cred"
 rule "omni-extra-10-masq-path"
 rule "omni-extra-10-masq-name"
+rule "omni-extra-10-schtask"
+rule "omni-extra-10-service"
+rule "omni-extra-10-uacbypass"
+rule "omni-extra-10-m365brute"
+rule "omni-extra-10-discovery"
+rule "omni-extra-10-svcstop"
 end
 EOF
 )"

@@ -79,7 +79,7 @@ when
   AND (
     is_not_null(lookup_value("omni-fp-allowlist",
         lowercase(to_string($message.winlogbeat_winlog_event_data_ServiceName))))
-    ### FAMILLES A SUFFIXE VARIABLE / chemins stables (etendre par une ligne OR) ###
+    // FAMILLES A SUFFIXE VARIABLE / chemins stables (etendre par une ligne OR)
     OR contains(to_string($message.winlogbeat_winlog_event_data_ServiceFileName), "credentialenrollmentmanager.exe", true)
     OR contains(to_string($message.winlogbeat_winlog_event_data_ServiceFileName), "\\winlogbeat\\winlogbeat.exe", true)
     OR contains(to_string($message.winlogbeat_winlog_event_data_ServiceFileName), "\\sysmon64.exe", true)
@@ -112,7 +112,7 @@ when
   AND (
     is_not_null(lookup_value("omni-fp-allowlist",
         lowercase(to_string($message.winlogbeat_winlog_event_data_TaskName))))
-    ### FAMILLES A SUFFIXE VARIABLE / prefixe de chemin stable (etendre par OR) ###
+    // FAMILLES A SUFFIXE VARIABLE / prefixe de chemin stable (etendre par OR)
     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskName), "\\googleuserpeh\\", true)
     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskName), "\\googlesystem\\googleupdater", true)
     OR contains(to_string($message.winlogbeat_winlog_event_data_TaskName), "\\powertoys\\autorun", true)
@@ -196,10 +196,12 @@ when
     OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\explorer.exe", true)
     OR ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\code.exe", true)
     OR contains(to_string($message.winlogbeat_winlog_event_data_SourceImage), "antigravity", true)
+    OR ( ends_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "\\rdpclip.exe", true)
+         AND ends_with(to_string($message.winlogbeat_winlog_event_data_TargetImage), "\\csrss.exe", true) )
   )
 then
   set_field("fp_allowlist", true);
-  set_field("fp_allowlist_reason", "sysmon_injection: injecteur legitime (debugger/programme signe/systeme ; jamais lsass)");
+  set_field("fp_allowlist_reason", "sysmon_injection: injecteur legitime (debugger/programme signe/systeme/presse-papier RDP ; jamais lsass)");
   remove_field("alert_tag");
 end
 EOF
@@ -279,10 +281,13 @@ when
   AND to_long($message.winlogbeat_winlog_event_id, 0) == 25
   AND ( contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\git\\usr\\", true)
      OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\git\\bin\\bash.exe", true)
-     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\claude.exe", true) )
+     OR ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\claude.exe", true)
+     OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\bin\\debug\\", true)
+     OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\bin\\release\\", true)
+     OR contains(to_string($message.winlogbeat_winlog_event_data_Image), "\\source\\repos\\", true) )
 then
   set_field("fp_allowlist", true);
-  set_field("fp_allowlist_reason", "sysmon_injection: ProcessTampering (EventID 25) Git Bash/Claude Code (chemin de confiance, jamais lsass)");
+  set_field("fp_allowlist_reason", "sysmon_injection: ProcessTampering (EventID 25) Git Bash/Claude Code/build dev debug-release (chemin de confiance, jamais lsass)");
   remove_field("alert_tag");
 end
 EOF

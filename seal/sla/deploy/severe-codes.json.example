@@ -1,0 +1,8 @@
+{
+  "_commentaire": "Set de codes REEV severes suivis par le SLA. cls=critical|high (route SLA-001 vs SLA-002), sla=minutes avant breche, label=libelle affiche. Mode 'merge' (defaut) complete le set integre ; 'replace' repart de zero. Decouvrir les codes de VOTRE parc : rechercher event_domain:alarm et regarder REEV_CODE / event_action.",
+  "SEM218": {"cls": "critical", "sla": 15, "label": "Intrusion detectee par la video"},
+  "SEM113": {"cls": "critical", "sla": 15, "label": "Effraction porte"},
+  "SEM805": {"cls": "critical", "sla": 15, "label": "Declencheur manuel"},
+  "SEM118": {"cls": "high", "sla": 60, "label": "Bouton poussoir bloque"},
+  "SEM73":  {"cls": "high", "sla": 60, "label": "Base de donnees UTL modifiee"}
+}

@@ -1,0 +1,291 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-alert-digest - Recapitulatif periodique des alertes RETENUES (non-FP).
+#
+#   Le mail unitaire dit "il se passe quelque chose maintenant". Ce recap dit
+#   "voila ce qui a ete retenu depuis la derniere fois" : il donne la vision
+#   d'ensemble qui manque quand on traite les alertes au fil de l'eau.
+#
+#   Source : les decisions du service de triage reinjectees dans le SIEM
+#   (event_source=alert_triage). On ne garde que triage_decision=mail, c'est-a-dire
+#   les alertes jugees pertinentes -- les faux positifs ecartes n'y figurent pas.
+#
+#   Fenetre : calculee depuis le PRECEDENT envoi (lundi/jeudi 08h00), sans trou
+#   ni recouvrement. Lundi -> 4 jours (depuis jeudi), jeudi -> 3 jours (depuis lundi).
+#
+#   Regroupement : par detection, par entite concernee et par tactique ATT&CK,
+#   avec l'explication retenue pour chaque alerte.
+#
+#   Aucune dependance externe (stdlib). Lance par omni-alert-digest.timer.
+#   Test a blanc : DIGEST_DRYRUN=1 /usr/local/sbin/omni-alert-digest
+# =============================================================================
+import json, os, re, smtplib, sys, time, urllib.request
+from datetime import datetime, timedelta
+from email.message import EmailMessage
+from email.utils import formatdate
+
+OS_URL = os.environ.get("OS_URL", "http://127.0.0.1:9200")
+ENVF   = "/etc/omni-alert-triage.env"
+SOC    = "https://bx-it-graylog-vm.omnitech.security/soc/"
+
+def load_env(path=ENVF):
+    env = {}
+    try:
+        for line in open(path, encoding="utf-8"):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip("'").strip('"')
+    except OSError:
+        pass
+    return env
+
+E = load_env()
+
+def window_hours(now=None):
+    """Heures a couvrir depuis le precedent envoi (lundi=0 ... jeudi=3)."""
+    now = now or datetime.now()
+    # lundi : depuis jeudi (4 j) ; jeudi : depuis lundi (3 j) ; sinon 3,5 j par defaut
+    return {0: 96, 3: 72}.get(now.weekday(), 84)
+
+def search(body):
+    req = urllib.request.Request(f"{OS_URL}/omni-*/_search", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+def count_only(decision, gte, lte=None):
+    """Compte les decisions de triage sur une fenetre (sert au bruit supprime)."""
+    rng = {"gte": gte}
+    if lte: rng["lte"] = lte
+    q = {"bool": {"must": [{"term": {"event_source": "alert_triage"}},
+                           {"term": {"triage_decision": decision}},
+                           {"range": {"timestamp": rng}}]}}
+    try:
+        return search({"size": 0, "query": q, "track_total_hits": True})["hits"]["total"]["value"]
+    except Exception:
+        return 0
+
+def collect(hours, offset=0):
+    """offset=0 : periode courante. offset=hours : periode precedente (tendance)."""
+    gte = f"now-{hours + offset}h"
+    rng = {"gte": gte} if not offset else {"gte": gte, "lte": f"now-{offset}h"}
+    q = {"bool": {"must": [{"term": {"event_source": "alert_triage"}},
+                           {"term": {"triage_decision": "mail"}},
+                           {"range": {"timestamp": rng}}]}}
+    out, after = [], None
+    for _ in range(20):                      # pagination bornee (20 x 500 = 10k max)
+        body = {"size": 500, "query": q, "sort": [{"timestamp": "asc"}]}
+        if after: body["search_after"] = after
+        r = search(body)
+        hits = r.get("hits", {}).get("hits", [])
+        if not hits: break
+        out += [h["_source"] for h in hits]
+        after = hits[-1].get("sort")
+        if len(hits) < 500: break
+    return out
+
+def clean_reason(r):
+    r = str(r or "")
+    r = re.sub(r"^llm:\s*", "", r)
+    r = re.sub(r"\|?score=\d+.*$", "", r).strip()
+    if r.startswith("llm_") or r.startswith("regle:"): return ""
+    return r
+
+# ----------------------------------------------------------------- rendu -----
+INK, BODY, MUT, LAB = "#101828", "#344054", "#667085", "#98a2b3"
+LINE, BOX, BG = "#e4e7ec", "#f9fafb", "#f4f5f7"
+
+def esc(s):
+    import html
+    return html.escape(str(s if s is not None else ""))
+
+def sev_color(tier):
+    return {"CRITICAL": "#d92d20", "GRAY": "#f79009"}.get(tier, "#667085")
+
+def render(rows, hours, since_txt, prev_rows=None, dropped=0):
+    n = len(rows)
+    prev_rows = prev_rows or []
+    by_title, by_entity, by_tac = {}, {}, {}
+    for r in rows:
+        t = r.get("alert_title") or "(sans titre)"
+        d = by_title.setdefault(t, {"n": 0, "score": 0, "tier": "", "why": "", "ents": set()})
+        d["n"] += 1
+        try: sc = int(r.get("triage_score") or 0)
+        except Exception: sc = 0
+        if sc >= d["score"]:
+            d["score"], d["tier"] = sc, r.get("triage_tier") or ""
+        w = clean_reason(r.get("triage_reason"))
+        if w and len(w) > len(d["why"]): d["why"] = w
+        ent = (r.get("triage_entity") or "").strip()
+        if ent and ent != "-": d["ents"].add(ent); by_entity[ent] = by_entity.get(ent, 0) + 1
+        tac = (r.get("triage_tactic") or "").strip()
+        if tac: by_tac[tac] = by_tac.get(tac, 0) + 1
+
+    crit = sum(1 for r in rows if (r.get("triage_tier") == "CRITICAL"))
+
+    # --- Incidents CORRELES : une entite touchee par plusieurs tactiques ATT&CK
+    # decrit une chaine d'attaque, pas une repetition. C'est le signal le plus
+    # dense du recap : il se lit avant la liste des alertes.
+    ent_tacs, ent_titles = {}, {}
+    for r in rows:
+        e = (r.get("triage_entity") or "").strip()
+        if not e or e == "-": continue
+        t = (r.get("triage_tactic") or "").strip()
+        if t: ent_tacs.setdefault(e, set()).add(t)
+        ent_titles.setdefault(e, set()).add(r.get("alert_title") or "")
+    chains = sorted(((e, ts, ent_titles.get(e, set())) for e, ts in ent_tacs.items() if len(ts) >= 2),
+                    key=lambda x: -len(x[1]))
+
+    # --- Nouveautes : types d'alertes absents de la periode precedente.
+    prev_titles = {r.get("alert_title") for r in prev_rows}
+    news = ([t for t in by_title if t not in prev_titles] if prev_titles else [])
+
+    # --- Tendance : compare a la periode PRECEDENTE de meme duree.
+    pn = len(prev_rows)
+    if pn:
+        delta = round((n - pn) / pn * 100)
+        trend = f"{'+' if delta >= 0 else ''}{delta} % vs période précédente ({pn})"
+    else:
+        trend = "première période de référence"
+    total_traite = n + dropped
+    taux = round(dropped / total_traite * 100) if total_traite else 0
+    titles = sorted(by_title.items(), key=lambda kv: (-kv[1]["n"], kv[0]))
+    ents   = sorted(by_entity.items(), key=lambda kv: -kv[1])[:10]
+    tacs   = sorted(by_tac.items(), key=lambda kv: -kv[1])
+
+    def kpi(v, lab):
+        return (f'<td style="padding:0 18px 0 0"><div style="font-size:24px;font-weight:600;color:{INK}">{v}</div>'
+                f'<div style="font-size:11px;color:{LAB};text-transform:uppercase;letter-spacing:.4px">{lab}</div></td>')
+
+    blocks = ""
+    if n == 0:
+        blocks = (f'<tr><td style="padding:22px 32px"><div style="background:{BOX};border:1px solid {LINE};'
+                  f'border-radius:8px;padding:16px;font-size:13px;color:{BODY}">Aucune alerte retenue sur la période. '
+                  f'Les signaux écartés comme non pertinents ne figurent pas dans ce récapitulatif.</div></td></tr>')
+    else:
+        lignes = ""
+        for t, d in titles:
+            ents_txt = ", ".join(sorted(d["ents"])[:3]) + ("…" if len(d["ents"]) > 3 else "")
+            lignes += (
+                f'<tr><td style="padding:11px 0;border-bottom:1px solid {LINE}">'
+                f'<div><span style="display:inline-block;min-width:26px;font-weight:600;color:{INK}">{d["n"]}×</span>'
+                f'<span style="color:{INK};font-weight:600">{esc(re.sub(r"^OMNI\s*-\s*", "", t))}</span>'
+                f'<span style="color:{sev_color(d["tier"])};font-size:11px;margin-left:8px">score {d["score"]}</span></div>'
+                + (f'<div style="font-size:12px;color:{BODY};margin-top:3px;line-height:1.5">{esc(d["why"][:260])}</div>' if d["why"] else "")
+                + (f'<div style="font-size:11px;color:{MUT};margin-top:3px">Concerne : {esc(ents_txt)}</div>' if ents_txt.strip(" ,") else "")
+                + '</td></tr>')
+        if chains:
+            cl = ""
+            for e, ts, tt in chains[:6]:
+                noms = ", ".join(sorted(re.sub(r"^OMNI\s*-\s*", "", x) for x in tt if x)[:4])
+                cl += (f'<tr><td style="padding:9px 0;border-bottom:1px solid {LINE}">'
+                       f'<div style="font-weight:600;color:{INK};font-size:13px">{esc(e)}</div>'
+                       f'<div style="font-size:11.5px;color:#b42318;margin-top:2px">'
+                       f'{len(ts)} tactiques ATT&amp;CK : {esc(" -> ".join(sorted(ts)))}</div>'
+                       f'<div style="font-size:11.5px;color:{BODY};margin-top:2px">{esc(noms)}</div></td></tr>')
+            blocks += (f'<tr><td style="padding:18px 32px 0">'
+                       f'<div style="font-size:11px;color:{LAB};font-weight:600;letter-spacing:.4px;'
+                       f'text-transform:uppercase;margin-bottom:6px">Incidents corrélés — à traiter en priorité</div>'
+                       f'<div style="background:#fffaf5;border:1px solid #fec84b;border-radius:8px;padding:4px 14px">'
+                       f'<table width="100%" cellpadding="0" cellspacing="0">{cl}</table></div></td></tr>')
+        if news:
+            nl = "".join(f'<span style="display:inline-block;background:#eef4ff;border:1px solid #b2ccff;'
+                         f'border-radius:6px;padding:3px 9px;margin:0 6px 6px 0;font-size:11.5px;color:#1849a9">'
+                         f'{esc(re.sub(r"^OMNI\s*-\s*", "", t))}</span>' for t in news[:8])
+            blocks += (f'<tr><td style="padding:16px 32px 0"><div style="font-size:11px;color:{LAB};font-weight:600;'
+                       f'letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Nouveau depuis la période précédente</div>'
+                       f'<div>{nl}</div></td></tr>')
+        blocks += (f'<tr><td style="padding:18px 32px 0"><div style="font-size:11px;color:{LAB};font-weight:600;'
+                   f'letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Alertes retenues</div>'
+                   f'<table width="100%" cellpadding="0" cellspacing="0">{lignes}</table></td></tr>')
+        if tacs:
+            chips = "".join(f'<span style="display:inline-block;background:{BOX};border:1px solid {LINE};'
+                            f'border-radius:6px;padding:3px 9px;margin:0 6px 6px 0;font-size:11.5px;color:{BODY}">'
+                            f'{esc(k)} · {v}</span>' for k, v in tacs)
+            blocks += (f'<tr><td style="padding:16px 32px 0"><div style="font-size:11px;color:{LAB};font-weight:600;'
+                       f'letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Phases ATT&amp;CK observées</div>'
+                       f'<div>{chips}</div></td></tr>')
+        if ents:
+            el = "".join(f'<tr><td style="padding:5px 0;font-size:12.5px;color:{BODY};border-bottom:1px solid {LINE}">'
+                         f'<span style="font-weight:600;color:{INK}">{v}×</span>&nbsp; {esc(k)}</td></tr>' for k, v in ents)
+            blocks += (f'<tr><td style="padding:16px 32px 0"><div style="font-size:11px;color:{LAB};font-weight:600;'
+                       f'letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Entités les plus concernées</div>'
+                       f'<table width="100%" cellpadding="0" cellspacing="0">{el}</table></td></tr>')
+
+    html = (
+        f'<body style="margin:0;background:{BG};font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" style="background:{BG};padding:26px 12px">'
+        f'<tr><td align="center"><table width="640" cellpadding="0" cellspacing="0" '
+        f'style="background:#fff;border:1px solid {LINE};border-radius:10px;border-top:3px solid #101828;overflow:hidden">'
+        f'<tr><td style="padding:24px 32px 0">'
+        f'<div style="font-size:11px;letter-spacing:1.5px;color:{LAB};text-transform:uppercase">SIEM OMNITECH &middot; SOC</div>'
+        f'<div style="font-size:20px;font-weight:600;color:{INK};margin-top:8px">Récapitulatif des alertes retenues</div>'
+        f'<div style="font-size:12px;color:{MUT};margin-top:4px">{esc(since_txt)}</div></td></tr>'
+        f'<tr><td style="padding:16px 32px 0"><table cellpadding="0" cellspacing="0"><tr>'
+        + kpi(n, "retenues") + kpi(crit, "critiques") + kpi(len(by_title), "détections") + kpi(len(by_entity), "entités")
+        + '</tr></table></td></tr>'
+        + (f'<tr><td style="padding:10px 32px 0"><div style="font-size:12px;color:{BODY}">'
+           f'{esc(trend)} &middot; <span style="color:{MUT}">{dropped} signal(aux) écarté(s) comme non pertinents '
+           f'({taux} % du volume traité)</span></div></td></tr>' if (prev_rows or dropped) else '')
+        + blocks +
+        f'<tr><td style="padding:20px 32px 0"><a href="{SOC}" style="display:inline-block;background:#101828;color:#fff;'
+        f'text-decoration:none;padding:9px 16px;border-radius:7px;font-size:13px;font-weight:600">Ouvrir la console SOC</a></td></tr>'
+        f'<tr><td style="padding:18px 32px 24px"><div style="border-top:1px solid {LINE};padding-top:12px;'
+        f'font-size:11px;color:{LAB};line-height:1.6">Ce récapitulatif ne liste que les alertes jugées pertinentes. '
+        f'Les signaux écartés comme faux positifs en sont volontairement absents ; le détail complet reste en console.</div>'
+        f'</td></tr></table></td></tr></table></body>')
+
+    txt = [f"SIEM OMNITECH - Recapitulatif des alertes retenues", since_txt, "",
+           f"{n} alerte(s) retenue(s) | {crit} critique(s) | {len(by_title)} detection(s) | {len(by_entity)} entite(s)",
+           f"{trend} | {dropped} signal(aux) ecarte(s) ({taux} % du volume traite)", ""]
+    if chains:
+        txt.append("INCIDENTS CORRELES (a traiter en priorite) :")
+        for e, ts, tt in chains[:6]:
+            txt.append(f"  - {e} : {len(ts)} tactiques ({', '.join(sorted(ts))})")
+        txt.append("")
+    if news:
+        txt.append("NOUVEAU depuis la periode precedente : " +
+                   ", ".join(re.sub(r"^OMNI\s*-\s*", "", t) for t in news[:8]))
+        txt.append("")
+    for t, d in titles:
+        txt.append(f"- {d['n']}x  {re.sub(r'^OMNI\s*-\s*', '', t)}  (score {d['score']})")
+        if d["why"]: txt.append(f"    {d['why'][:240]}")
+    if tacs:
+        txt += ["", "Phases ATT&CK : " + ", ".join(f"{k} ({v})" for k, v in tacs)]
+    if ents:
+        txt += ["", "Entites les plus concernees :"] + [f"  {v}x  {k}" for k, v in ents]
+    txt += ["", f"Console SOC : {SOC}"]
+    return html, "\n".join(txt)
+
+def main():
+    hours = int(os.environ.get("DIGEST_HOURS") or window_hours())
+    rows = collect(hours)
+    prev_rows = collect(hours, offset=hours)
+    dropped = count_only("drop", f"now-{hours}h")
+    start = datetime.now() - timedelta(hours=hours)
+    since_txt = (f"Période du {start.strftime('%d/%m/%Y %H:%M')} au "
+                 f"{datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    html, txt = render(rows, hours, since_txt, prev_rows, dropped)
+
+    if os.environ.get("DIGEST_DRYRUN"):
+        print(txt); print(f"\n[dry-run] {len(rows)} alerte(s) retenue(s) sur {hours} h ; HTML {len(html)} octets")
+        return 0
+
+    to = [a.strip() for a in (E.get("MAIL_RECIPIENTS", "")).split(",") if a.strip()]
+    if not to:
+        print("aucun destinataire (MAIL_RECIPIENTS)", file=sys.stderr); return 2
+    m = EmailMessage()
+    m["Subject"] = f"{E.get('SMTP_SUBJECT_PREFIX','[SIEM OMNITECH]')} Récapitulatif - {len(rows)} alerte(s) retenue(s)"
+    m["From"] = E.get("SMTP_FROM", "no-reply@omnitech-security.fr")
+    m["To"] = ", ".join(to)
+    m["Date"] = formatdate(localtime=True)
+    m.set_content(txt)
+    m.add_alternative(html, subtype="html")
+    with smtplib.SMTP(E.get("SMTP_HOST", "127.0.0.1"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
+        s.send_message(m)
+    print(f"recap envoye : {len(rows)} alerte(s) retenue(s) sur {hours} h -> {', '.join(to)}")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

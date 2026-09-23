@@ -142,7 +142,7 @@ connect_pipeline "${ST_M365}" "${PL_M365}"
 
 # ----------------------------------------------------------------- 5. Alertes
 echo "==> [5/5] Alertes M365"
-NOTIF_ID="$(api_get "/events/notifications?per_page=100" | jq -r '(.notifications // [])[] | select(.title=="OMNI - Mail equipe IT") | .id')"
+NOTIF_ID="$(api_get "/events/notifications?per_page=100" | jq -r '(.notifications // [])[] | select(.title=="OMNI - Triage (mail critique)") | .id')"  # triage (pas email direct : audit 13/08/2026)
 TEAMS_ID="$(api_get "/events/notifications?per_page=100" | jq -r '(.notifications // [])[] | select(.title=="OMNI - Teams SOC") | .id')"
 NOTIFS="$(jq -n --arg e "${NOTIF_ID}" --arg t "${TEAMS_ID}" \
   '[{notification_id:$e, notification_parameters:null}] + (if $t != "" then [{notification_id:$t, notification_parameters:null}] else [] end)')"
@@ -150,7 +150,7 @@ NOTIFS="$(jq -n --arg e "${NOTIF_ID}" --arg t "${TEAMS_ID}" \
 ensure_event_m365() { # titre prio query group series cond within every
   local TITLE="$1" PRIO="$2" QUERY="$3" GROUPBY="$4" SERIES="$5" COND="$6" WITHIN="$7" EVERY="$8"
   local EXIST ID
-  EXIST="$(api_get "/events/definitions?per_page=100" | jq -r --arg t "${TITLE}" '(.event_definitions // .elements // [])[] | select(.title==$t) | .id')"
+  EXIST="$(event_def_id "${TITLE}")"
   if [[ -n "${EXIST}" ]]; then skip "evenement '${TITLE}' existe"; return 0; fi
   ID="$(jq -n --arg t "${TITLE}" --argjson p "${PRIO}" --arg q "${QUERY}" --arg st "${ST_M365}" \
         --argjson gb "${GROUPBY}" --argjson se "${SERIES}" --argjson co "${COND}" \

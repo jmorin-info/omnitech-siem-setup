@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# =============================================================================
+# omni-fp - Gestion des faux positifs du triage d'alertes (omni-alert-triage).
+#   Marquer un FP = eteindre le MAIL pour (entite [+ sous-chaine de titre]), avec
+#   TTL. JAMAIS applique a un CRITICAL/kill-chain (cote service). Tout est trace.
+#
+#   omni-fp                       # liste les FP actifs
+#   omni-fp add <entite> [titre] [ttl_jours] [par]
+#       ex: omni-fp add src_ip=203.0.113.9 "WAF" 30 jmorin
+#       ex: omni-fp add user=svc-scan                 (toutes alertes de cette entite)
+#   omni-fp del <entite>          # retire la suppression
+# =============================================================================
+set -euo pipefail
+ENV=/etc/omni-alert-triage.env
+URL=http://127.0.0.1:8089/fp
+TOK="$(grep -E '^TRIAGE_TOKEN=' "$ENV" 2>/dev/null | cut -d= -f2- || true)"
+H=(-H "X-Triage-Token: ${TOK}" -H 'Content-Type: application/json')
+
+case "${1:-list}" in
+  list)
+    curl -s "$URL" | jq -r 'if length==0 then "  (aucun FP actif)" else .[] | "  \(.entity)\(if .title_sub!="" then "  [titre~"+.title_sub+"]" else "" end)  par \(.by)  expire \(((.until)|todate))" end' ;;
+  add)
+    [ $# -ge 2 ] || { echo "usage: omni-fp add <entite> [titre] [ttl_jours] [par]"; exit 1; }
+    curl -s "${H[@]}" -X POST "$URL" \
+      -d "$(jq -nc --arg e "$2" --arg t "${3:-}" --argjson d "${4:-30}" --arg b "${5:-${SUDO_USER:-$USER}}" \
+            '{entity:$e,title_sub:$t,ttl_days:$d,by:$b}')" \
+      | jq -r 'if .ok then "  FP ajoute : \(.rule.entity)  (\(.actifs) actifs)" else "  ERREUR: \(.error // .)" end' ;;
+  del)
+    [ $# -ge 2 ] || { echo "usage: omni-fp del <entite>"; exit 1; }
+    curl -s "${H[@]}" -X DELETE "$URL?entity=$2" | jq -r '"  retire: \(.removed_entity)  (\(.restant) restants)"' ;;
+  *) echo "usage: omni-fp [list] | add <entite> [titre] [ttl_jours] [par] | del <entite>"; exit 1 ;;
+esac

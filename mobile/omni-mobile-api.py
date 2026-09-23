@@ -17,10 +17,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import html as _eh
 import json
 import os
 import re
 import ssl
+import sys
 import threading
 import time
 import urllib.request
@@ -45,6 +47,10 @@ GL_URL = CONF.get("GRAYLOG_API", "https://bx-it-graylog-vm.omnitech.security:900
 GL_CACERT = CONF.get("GRAYLOG_CACERT", "/etc/graylog/certs/omnitech-rootca.crt")
 SECRET = CONF.get("MOBILE_SECRET", "change-me").encode()
 PUSH_SECRET = CONF.get("MOBILE_PUSH_SECRET", "change-me-push")
+# Fail-closed : un secret par defaut = n'importe qui forge une session -> refus de demarrer.
+if SECRET == b"change-me" or PUSH_SECRET == "change-me-push":
+    sys.exit("FATAL omni-mobile: MOBILE_SECRET/MOBILE_PUSH_SECRET sur la valeur par defaut "
+             "-> definir un vrai secret dans /etc/default/omni-mobile.")
 SESSION_TTL = int(CONF.get("MOBILE_SESSION_TTL", "43200"))  # 12 h
 SUBS_FILE = CONF.get("MOBILE_SUBS_FILE", "/var/lib/omni-mobile/subscriptions.json")
 VAPID_PUB = CONF.get("VAPID_PUBLIC_KEY", "")
@@ -53,7 +59,20 @@ VAPID_SUBJECT = CONF.get("VAPID_SUBJECT", "mailto:informatique@omnitech-security
 INTERNAL = ["omni-winsec", "omni-sysmon", "omni-winother", "omni-fortigate",
             "omni-m365", "omni-vsphere", "omni-fortimanager"]
 
-_ssl_ctx = ssl.create_default_context(cafile=GL_CACERT) if os.path.exists(GL_CACERT) else ssl._create_unverified_context()
+def _make_ssl_ctx():
+    """Fail-closed : JAMAIS de TLS non verifie — les creds AD de l'utilisateur transitent
+    vers Graylog. Refuse de demarrer plutot que d'exposer au MITM (audit P1-4)."""
+    if GL_URL.startswith("https://"):
+        if not os.path.exists(GL_CACERT):
+            sys.exit(f"FATAL omni-mobile: CA Graylog introuvable ({GL_CACERT}) -> refus de "
+                     "demarrer (TLS non verifie = MITM sur les identifiants AD).")
+        return ssl.create_default_context(cafile=GL_CACERT)
+    host = GL_URL.split("://", 1)[-1].split("/")[0].split(":")[0]
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        sys.exit(f"FATAL omni-mobile: GRAYLOG_API en HTTP clair vers {host} -> refus "
+                 "(les identifiants AD transiteraient en clair). Utiliser https.")
+    return None
+_ssl_ctx = _make_ssl_ctx()
 
 
 # --------------------------------------------------------------------------- util
@@ -407,6 +426,58 @@ def update_case(b, who):
                     {"by": who or "?", "ts": _dt.datetime.now().isoformat(timespec="seconds"), "text": txt[:1000]})
         save_cases(st)
     return {"ok": True, "case": c}
+
+
+# --- Boucle faux positifs : l'analyste marque une alerte FP -> le triage eteint le
+#     mail futur pour (entite [+ titre]). Scope + TTL cote service ; JAMAIS un CRITICAL.
+def triage_fp_add(entity, title_sub, by, tag=""):
+    entity = (entity or "").strip()
+    if not entity:
+        return {"ok": False, "error": "entité requise"}
+    tok = ""
+    try:
+        for line in open("/etc/omni-alert-triage.env"):
+            if line.startswith("TRIAGE_TOKEN="):
+                tok = line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    data = json.dumps({"entity": entity, "tag": (tag or "")[:60],
+                       "title_sub": (title_sub or "")[:80],
+                       "by": (by or "soc")[:60], "ttl_days": 30}).encode()
+    req = urllib.request.Request("http://127.0.0.1:8089/fp", data=data,
+        headers={"Content-Type": "application/json", "X-Triage-Token": tok})
+    try:
+        return json.load(urllib.request.urlopen(req, timeout=8))
+    except Exception as ex:
+        return {"ok": False, "error": type(ex).__name__}
+
+
+def quick_verify(action, entity, tag, exp, sig):
+    """Valide un lien d'action signé (mail) : HMAC(QUICK_SECRET) + non expire."""
+    qs = CONF.get("QUICK_SECRET", "")
+    if not qs or not sig:
+        return False
+    try:
+        if int(exp) < int(time.time()):
+            return False
+    except Exception:
+        return False
+    good = hmac.new(qs.encode(), f"{action}|{entity}|{tag}|{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.compare_digest(good, sig)
+
+
+def soar_block(ip, by):
+    """Bloque une IP au pare-feu via omni-soar (mode manuel ; SOAR refuse les IP non publiques)."""
+    ip = (ip or "").strip()
+    if not ip:
+        return {"ok": False, "error": "ip requise"}
+    data = json.dumps({"ip": ip, "manual": True, "by": (by or "mail-link")[:60]}).encode()
+    req = urllib.request.Request("http://127.0.0.1:8088/block", data=data,
+                                 headers={"Content-Type": "application/json"})
+    try:
+        return json.load(urllib.request.urlopen(req, timeout=8))
+    except Exception as ex:
+        return {"ok": False, "error": type(ex).__name__}
 
 
 # --- Watchlist : entités à surveiller (compromission suspectée, suivi) ----------
@@ -1635,6 +1706,17 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _html_page(self, title, inner, code=200):
+        page = (f'<!doctype html><html lang="fr"><head><meta charset="utf-8">'
+                f'<meta name="viewport" content="width=device-width,initial-scale=1"><title>{_eh.escape(title)}</title></head>'
+                f'<body style="margin:0;background:#eef1f4;font-family:Segoe UI,-apple-system,Roboto,Arial,sans-serif">'
+                f'<div style="max-width:480px;margin:56px auto;background:#fff;border-radius:12px;padding:28px 26px;box-shadow:0 1px 6px rgba(0,0,0,.1)">'
+                f'<div style="font-size:11px;letter-spacing:2px;color:#5f3dc4;text-transform:uppercase;font-weight:700">SIEM OMNITECH</div>'
+                f'<h2 style="margin:8px 0 14px;color:#212529;font-size:20px">{_eh.escape(title)}</h2>{inner}</div></body></html>')
+        b = page.encode("utf-8")
+        self.send_response(code); self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
     def _user(self):
         c = SimpleCookie(self.headers.get("Cookie", ""))
         tok = c["oms_session"].value if "oms_session" in c else ""
@@ -1649,6 +1731,41 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = self.path.split("?")[0]
+        if p == "/m/api/quick":          # lien signe depuis un mail -> page de CONFIRMATION (pas d'action en GET)
+            import urllib.parse as _up
+            q = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            a = q.get("a", [""])[0]; ent = q.get("e", [""])[0]; tag = q.get("tag", [""])[0]
+            exp = q.get("exp", [""])[0]; sig = q.get("sig", [""])[0]
+            if not quick_verify(a, ent, tag, exp, sig):
+                return self._html_page("Lien invalide ou expiré",
+                    '<p style="color:#495057">Ce lien n\'est plus valide (expiré ou altéré). Ouvrez la console SOC pour agir.</p>', 403)
+            who = _eh.escape(ent.split("=", 1)[-1]); t_h = _eh.escape(tag or "(toutes)")
+            payload = json.dumps({"a": a, "e": ent, "tag": tag, "exp": exp, "sig": sig})
+            if a == "block":
+                title = "Bloquer une IP au pare-feu"
+                question = (f'<p style="color:#343a40;line-height:1.5">Bloquer l\'IP <b>{who}</b> au pare-feu '
+                            f'(FortiGate) pendant 24&nbsp;h ?</p>'
+                            f'<p style="font-size:13px;color:#868e96">Action <b>réversible</b> (expiration automatique). '
+                            f'Seules les IP <b>publiques</b> sont acceptées — jamais une IP interne.</p>')
+                btn_txt, btn_bg = "Bloquer l'IP", "#c92a2a"
+                ok_msg = "IP bloquée au pare-feu (24&nbsp;h)."
+            else:
+                title = "Marquer faux positif"
+                question = (f'<p style="color:#343a40;line-height:1.5">Mettre en sourdine le <b>mail</b> de la détection '
+                            f'<b>{t_h}</b> pour <b>{who}</b> pendant 30 jours ?</p>'
+                            f'<p style="font-size:13px;color:#868e96">Les alertes critiques / kill-chain ne sont <b>jamais</b> masquées.</p>')
+                btn_txt, btn_bg = "Confirmer le faux positif", "#5f3dc4"
+                ok_msg = "Faux positif enregistré — vous ne recevrez plus ce mail pour cette entité (30j)."
+            inner = (f'{question}'
+                     f'<button id="b" style="background:{btn_bg};color:#fff;border:0;font-size:14px;font-weight:700;padding:11px 20px;border-radius:8px;cursor:pointer">{btn_txt}</button>'
+                     f'<div id="r" style="margin-top:14px;font-size:14px"></div>'
+                     f'<script>var P={payload};document.getElementById("b").onclick=function(){{this.disabled=true;'
+                     f'fetch("/m/api/quick",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify(P)}})'
+                     f'.then(r=>r.json()).then(r=>{{document.getElementById("r").innerHTML=(r&&r.ok!==false)?'
+                     f'"<b style=color:#2b8a3e>{ok_msg}</b>":'
+                     f'"<b style=color:#e03131>Erreur : "+((r&&r.error)||"?")+"</b>";document.getElementById("b").style.display="none";}})'
+                     f'.catch(function(){{document.getElementById("r").innerHTML="<b style=color:#e03131>Erreur réseau</b>";}});}};</script>')
+            return self._html_page(title, inner)
         if p == "/m/api/vapid":
             return self._json({"publicKey": VAPID_PUB})
         if p == "/m/api/me":
@@ -1814,10 +1931,23 @@ class H(BaseHTTPRequestHandler):
             return self._json({"ok": False}, 401)
         if p == "/m/api/logout":
             return self._json({"ok": True}, cookie="oms_session=; Path=/m; Max-Age=0")
+        if p == "/m/api/quick":          # action signée depuis un mail (token, pas de session)
+            if not quick_verify(str(b.get("a", "")), str(b.get("e", "")), str(b.get("tag", "")),
+                                str(b.get("exp", "")), str(b.get("sig", ""))):
+                return self._json({"ok": False, "error": "lien invalide ou expiré"}, 403)
+            if b.get("a") == "fp":
+                return self._json(triage_fp_add(str(b.get("e", "")), "", "mail-link", str(b.get("tag", ""))))
+            if b.get("a") == "block":
+                return self._json(soar_block(str(b.get("e", "")), "mail-link"))
+            return self._json({"ok": False, "error": "action inconnue"}, 400)
         if p == "/m/api/case":
             if not self._user():
                 return self._json({"error": "auth"}, 401)
             return self._json(update_case(b, self._user()))
+        if p == "/m/api/fp":            # marquer une alerte faux positif -> triage /fp
+            if not self._user():
+                return self._json({"error": "auth"}, 401)
+            return self._json(triage_fp_add(b.get("entity", ""), b.get("title_sub", ""), self._user(), b.get("tag", "")))
         if p == "/m/api/watch":
             if not self._user():
                 return self._json({"error": "auth"}, 401)

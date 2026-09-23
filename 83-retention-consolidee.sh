@@ -12,16 +12,20 @@
 #     (a) eset/bunkerweb/vaultwarden documentes mais absents de 31/41 -> ajoutes.
 #     (b) 31 vs 41 contradictoires -> ce script devient l'unique reference.
 #
-#   *** APPLIQUER UNE RETENTION SUPPRIME LES INDEX AU-DELA DU SEUIL. ***
-#   Ce script est en DRY-RUN par defaut : il imprime, par prefixe, le nombre
-#   EXACT d'index qui seraient supprimes (et leurs noms) et N'ECRIT RIEN.
-#   Pour appliquer reellement : APPLY=1 ./81-retention-consolidee.sh
-#   Garde-fou : refuse de supprimer > MAX_DELETE index d'un coup sans FORCE=1.
+#   MISE A JOUR 09/2026 (incident "max shards 1000") : ce script migre desormais
+#   la ROTATION des index sets omni-* de "quotidienne (P1D)" vers
+#   TimeBasedSizeOptimizing + suppression par AGE (data_tiering, index_lifetime_max
+#   = retention). La DUREE de retention est INCHANGEE ; seul le mecanisme change
+#   (age, plus "nombre d'index"), ce qui divise par ~30 le nombre de shards.
 #
-#   Mesure terrain 2026-06-22 : chaque prefixe a <= 8 index (~36 j), plus petit
-#   seuil = 90 -> 0 index supprime aujourd'hui. Effet de suppression purement
-#   FUTUR (quand les donnees depasseront le seuil) ; le disk-guard (32) reste le
-#   backstop a 88 %.
+#   *** LA SUPPRESSION SE FAIT PAR AGE : un index n'est supprime que si sa date
+#       de creation depasse la retention. Aucune suppression anticipee. ***
+#   DRY-RUN par defaut : imprime, par prefixe, la rotation cible et le nombre
+#   d'index deja plus vieux que la retention (donc supprimes a l'application).
+#   Appliquer : APPLY=1 ./83-retention-consolidee.sh
+#   Garde-fou : refuse si un prefixe supprimerait > MAX_DELETE index sans FORCE=1.
+#   La recuperation IMMEDIATE des index quotidiens deja crees (sources muettes)
+#   est traitee separement par reclaim-shards-reindex.sh (reindexation, 0 perte).
 #
 #   Volet 1 de 41 (regles drop_message stage 30 de reduction de bruit) N'EST PAS
 #   repris ici : il reste gere par 41. Ce script ne touche QUE la retention, le
@@ -43,11 +47,20 @@ MAX_DELETE="${MAX_DELETE:-5}"  # garde-fou : refus si un seuil supprime plus que
 
 # --- SOURCE UNIQUE DE VERITE (alignee docs/POLITIQUE-RETENTION.md) ------------
 # prefixe -> retention en NOMBRE D'INDEX (rotation P1D => 1 index = 1 jour)
+# RECALIBRE 14/08/2026 (arbitrage risque x CAPACITE) : 365j partout = ~9 To >
+# disque 7,3 To -> irrealiste. Paliers : 180j sources securite volume moyen
+# (winsec/eset/vsphere/fortigate = 6 mois forensic), 90j sources gros volume
+# ou faible valeur (sysmon/winother/bunkerweb/vaultwarden/fortimanager/interne),
+# 365j haute-valeur faible-volume (m365). Projection ~5,3 To = 72%. NB : 31- et
+# 41-retention-iso.sh sont OBSOLETES (contradictoires) -> ce script fait foi.
 declare -A PLAN=(
-  [omni-winsec]=365      [omni-winother]=365   [omni-sysmon]=365
-  [omni-m365]=365        [omni-vsphere]=365     [omni-eset]=365
+  [omni-winsec]=180      [omni-winother]=90     [omni-sysmon]=90
+  [omni-m365]=365        [omni-vsphere]=180     [omni-eset]=180
   [omni-fortigate]=180   [omni-bunkerweb]=90    [omni-vaultwarden]=90
-  [omni-fortimanager]=365 [omni-interne]=90
+  [omni-fortimanager]=90 [omni-interne]=90      [omni-aruba]=90
+  [omni-linux]=90        [omni-cert]=90         [omni-fortidhcp]=90
+  [omni-fortiems]=90     [omni-seal-access]=365 [omni-seal-alarm]=365
+  [omni-seal-audit]=730
 )
 # Affectation stream -> prefixe d'index set attendu (controle de routage)
 declare -A STREAM_IS=(
@@ -74,60 +87,77 @@ echo "==========================================================================
 echo " 81-retention-consolidee.sh  (mode : $([[ $APPLY == 1 ]] && echo 'APPLY (ecriture)' || echo 'DRY-RUN (lecture seule)'))"
 echo "=============================================================================="
 
-# --- [1/4] Impact de suppression + (option) application -----------------------
-echo "==> [1/4] Retention POLITIQUE.md + impact de suppression (par prefixe)"
-printf "    %-20s %-7s %-7s %-9s %s\n" PREFIXE ACTUEL CIBLE SUPPRIMES ETAT
+# --- [1/4] Migration rotation -> SizeOptimizing (suppression par AGE) ----------
+# CAUSE RACINE de l'explosion de shards (incident 09/2026) : rotation P1D =>
+# 1 index (= 1 shard) par JOUR et par source, y compris sources quasi muettes
+# (aruba/linux/cert/fortiems ~1 Mo pour 50+ index). En regime permanent ce design
+# reclamait ~3500 shards pour un plafond de 1000 -> mur atteint a ~54 j, UI lente.
+# CORRECTIF : TimeBasedSizeOptimizingStrategy (comme les index sets natifs) +
+# suppression par AGE via data_tiering hot_only (index_lifetime_max = RETENTION).
+# La DUREE de retention est PRESERVEE a l'identique (PLAN, aligne POLITIQUE.md) ;
+# seul le MECANISME change (age, pas nombre d'index) -> 1 a quelques index par
+# source au lieu de 90/180/365/730. Aucune suppression anticipee : un index n'est
+# supprime que lorsque sa date de creation depasse la retention.
+echo "==> [1/4] Rotation SizeOptimizing (age-based) + impact suppression par age"
+printf "    %-20s %-8s %-11s %-9s %s\n" PREFIXE "CIBLE(j)" ROTATION "AGE>CIBLE" ETAT
+NOW_MS=$(( $(date +%s) * 1000 ))
+SET_MIN="P30D"
 TOTAL_SUPPR=0; ABORT=0
-declare -a TO_DELETE_ALL=()
 for PREFIX in $(printf '%s\n' "${!PLAN[@]}" | sort); do
-  TARGET="${PLAN[$PREFIX]}"
+  TARGET="${PLAN[$PREFIX]}"; MAXP="P${TARGET}D"
   ID="$(is_id "$PREFIX")"
   if [[ -z "$ID" || "$ID" == null ]]; then
-    printf "    %-20s %-7s %-7s %-9s %s\n" "$PREFIX" "-" "$TARGET" "-" "index set ABSENT (ignore)"
+    printf "    %-20s %-8s %-11s %-9s %s\n" "$PREFIX" "$TARGET" "-" "-" "index set ABSENT (ignore)"
     continue
   fi
-  CUR="$(is_curret "$PREFIX")"
-  mapfile -t IDX < <(idx_list "$PREFIX")
-  NB="${#IDX[@]}"
-  SUPPR=$(( NB > TARGET ? NB - TARGET : 0 ))
-  TOTAL_SUPPR=$(( TOTAL_SUPPR + SUPPR ))
-  ETAT="ret=${CUR}"
-  [[ "$CUR" == "$TARGET" ]] && ETAT="${ETAT} (deja conforme)" || ETAT="${ETAT} -> ${TARGET}"
-  printf "    %-20s %-7s %-7s %-9s %s\n" "$PREFIX" "$NB" "$TARGET" "$SUPPR" "$ETAT"
-  if (( SUPPR > 0 )); then
-    # les SUPPR plus ANCIENS seraient supprimes (la liste est triee asc.)
-    for ((i=0; i<SUPPR; i++)); do
-      echo "         -> serait supprime : ${IDX[$i]}"
-      TO_DELETE_ALL+=("${IDX[$i]}")
-    done
-    (( SUPPR > MAX_DELETE )) && ABORT=1
+  ROTCLASS="$(echo "$SETS" | jq -r --arg p "$PREFIX" '.index_sets[]|select(.index_prefix==$p)|.rotation_strategy_class|sub(".*\\.";"")')"
+  CURMAX="$(echo "$SETS" | jq -r --arg p "$PREFIX" '.index_sets[]|select(.index_prefix==$p)|(.data_tiering.index_lifetime_max // .rotation_strategy.index_lifetime_max // "-")')"
+  # index plus vieux que TARGET jours -> supprimes par l'age au prochain passage
+  CUT_MS=$(( NOW_MS - TARGET*86400000 ))
+  OLD=$(curl -s "${OS}/_cat/indices/${PREFIX}_*?h=index,creation.date" 2>/dev/null | awk -v c="$CUT_MS" '$2<c{n++} END{print n+0}')
+  TOTAL_SUPPR=$(( TOTAL_SUPPR + OLD ))
+  if [[ "$ROTCLASS" == "TimeBasedSizeOptimizingStrategy" && "$CURMAX" == "$MAXP" ]]; then
+    ETAT="deja conforme"
+  else
+    ETAT="${ROTCLASS:-?} -> SizeOptimizing(max ${MAXP})"
   fi
+  printf "    %-20s %-8s %-11s %-9s %s\n" "$PREFIX" "$TARGET" "${ROTCLASS:0:11}" "$OLD" "$ETAT"
+  (( OLD > MAX_DELETE )) && ABORT=1
 done
 echo "    ------------------------------------------------------------------"
-echo "    TOTAL index omni-* qui seraient supprimes a l'application : ${TOTAL_SUPPR}"
+echo "    Index deja plus vieux que leur retention (supprimes par age a l'apply) : ${TOTAL_SUPPR}"
 
 if (( ABORT == 1 && FORCE != 1 )); then
-  warn "Au moins un prefixe supprimerait > ${MAX_DELETE} index. ARRET (securite)."
-  warn "Verifier la liste ci-dessus. Pour passer outre : FORCE=1 APPLY=1 ./81-retention-consolidee.sh"
+  warn "Au moins un prefixe supprimerait > ${MAX_DELETE} index par age. ARRET (securite)."
+  warn "Verifier ci-dessus. Passer outre : FORCE=1 APPLY=1 ./83-retention-consolidee.sh"
   exit 2
 fi
 
 if [[ "$APPLY" != "1" ]]; then
   echo
-  warn "DRY-RUN : aucune ecriture effectuee. Pour appliquer : APPLY=1 ./81-retention-consolidee.sh"
+  warn "DRY-RUN : aucune ecriture. Pour appliquer : APPLY=1 ./83-retention-consolidee.sh"
 else
   echo
-  echo "    APPLY=1 -> ecriture de la retention (idempotent)"
+  echo "    APPLY=1 -> migration rotation + retention (idempotent)"
   for PREFIX in $(printf '%s\n' "${!PLAN[@]}" | sort); do
-    TARGET="${PLAN[$PREFIX]}"; ID="$(is_id "$PREFIX")"
+    TARGET="${PLAN[$PREFIX]}"; MAXP="P${TARGET}D"; ID="$(is_id "$PREFIX")"
     [[ -z "$ID" || "$ID" == null ]] && continue
-    CUR="$(is_curret "$PREFIX")"
-    if [[ "$CUR" == "$TARGET" ]]; then skip "${PREFIX} deja a ${TARGET}"; continue; fi
-    REP="$(echo "$SETS" | jq --arg p "$PREFIX" --argjson j "$TARGET" \
-            '.index_sets[]|select(.index_prefix==$p)|.retention_strategy.max_number_of_indices=$j' \
-          | api_put "/system/indices/index_sets/${ID}")"
+    ROTCLASS="$(echo "$SETS" | jq -r --arg p "$PREFIX" '.index_sets[]|select(.index_prefix==$p)|.rotation_strategy_class|sub(".*\\.";"")')"
+    CURMAX="$(echo "$SETS" | jq -r --arg p "$PREFIX" '.index_sets[]|select(.index_prefix==$p)|(.data_tiering.index_lifetime_max // .rotation_strategy.index_lifetime_max // "-")')"
+    if [[ "$ROTCLASS" == "TimeBasedSizeOptimizingStrategy" && "$CURMAX" == "$MAXP" ]]; then
+      skip "${PREFIX} deja SizeOptimizing(max ${MAXP})"; continue
+    fi
+    REP="$(echo "$SETS" | jq --arg p "$PREFIX" --arg min "$SET_MIN" --arg max "$MAXP" --argjson keep "$TARGET" '
+      .index_sets[]|select(.index_prefix==$p)
+      | .use_legacy_rotation=false
+      | .rotation_strategy_class="org.graylog2.indexer.rotation.strategies.TimeBasedSizeOptimizingStrategy"
+      | .rotation_strategy={type:"org.graylog2.indexer.rotation.strategies.TimeBasedSizeOptimizingStrategyConfig",index_lifetime_min:$min,index_lifetime_max:$max}
+      | .retention_strategy_class="org.graylog2.indexer.retention.strategies.DeletionRetentionStrategy"
+      | .retention_strategy={type:"org.graylog2.indexer.retention.strategies.DeletionRetentionStrategyConfig",max_number_of_indices:$keep}
+      | .data_tiering={type:"hot_only",index_lifetime_min:$min,index_lifetime_max:$max}
+    ' | api_put "/system/indices/index_sets/${ID}")"
     echo "$REP" | jq -e '.id' >/dev/null 2>&1 \
-      && ok "${PREFIX} -> retention ${TARGET} (etait ${CUR})" \
+      && ok "${PREFIX} -> SizeOptimizing(min ${SET_MIN}/max ${MAXP}), age-based" \
       || warn "${PREFIX} : echec maj -> $(echo "$REP" | head -c 200)"
   done
 fi

@@ -292,9 +292,10 @@ cat > /usr/local/sbin/omni-ueba-geo <<'NDREOF'
 # Lance par timer (toutes les 30 min). Config : UEBA_GEO_SPEED (900 km/h),
 #   UEBA_GEO_MINKM (500), UEBA_GEO_WINDOW_H (24).
 # =============================================================================
-import json, math, os, re, sys, urllib.request
+import json, math, os, re, sys, time, urllib.request
 from datetime import datetime, timezone
 
+GEO_STATE = "/var/lib/omni-ueba/geo-travel-emitted.json"  # dedup 1/compte/jour
 OS_URL   = "http://127.0.0.1:9200"
 GELF_URL = "http://127.0.0.1:12201/gelf"
 SIEM     = "bx-it-graylog-vm"
@@ -315,6 +316,27 @@ SPEED_KMH = float(ENV.get("UEBA_GEO_SPEED", "900"))    # > vitesse d'un avion de
 MAX_SPEED_KMH = float(ENV.get("UEBA_GEO_MAXSPEED", "4000"))
 MIN_KM    = float(ENV.get("UEBA_GEO_MINKM", "500"))    # ignore les petits ecarts (bruit centroide)
 WINDOW_H  = int(ENV.get("UEBA_GEO_WINDOW_H", "24"))
+GEO_TTL   = int(ENV.get("UEBA_GEO_DEDUP_S", "86400"))  # 1 alerte / compte / 24h
+
+def dedup_ok(user):
+    """Emet au plus 1 alerte/compte/jour (anti-spam : cumule les trajets)."""
+    if os.environ.get("UEBA_DRY"):
+        return True
+    now = time.time()
+    try:
+        st = json.load(open(GEO_STATE))
+    except Exception:
+        st = {}
+    if now - st.get(user, 0) < GEO_TTL:
+        return False
+    st[user] = now
+    st = {u: t for u, t in st.items() if now - t < GEO_TTL}
+    try:
+        os.makedirs(os.path.dirname(GEO_STATE), exist_ok=True)
+        tmp = GEO_STATE + ".tmp"; json.dump(st, open(tmp, "w")); os.replace(tmp, GEO_STATE)
+    except Exception as e:
+        print("geo dedup state KO:", e, file=sys.stderr)
+    return True
 
 def es(path, body):
     req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
@@ -402,13 +424,42 @@ def main():
                 continue
             if speed > MAX_SPEED_KMH:        # jitter geo-IP (egress O365), pas un humain -> FP ecarte
                 continue
+            # FP dominant : une extremite VPN geolocalise la SORTIE DU TUNNEL, pas
+            # l'utilisateur. Un salarie a Paris qui ouvre le VPN dont l'egress est aux
+            # Etats-Unis produit "FR->US 8817km en 2.6h (3394km/h)" sans aucun
+            # deplacement (cas reels vleguilly FR->US, souanounou FR->DE, 23/09/2026).
+            # L'ancienne regle n'ecartait que VPN<->VPN et laissait donc passer tout
+            # M365<->VPN. Le voyage impossible n'a de sens qu'entre deux positions
+            # REELLES : on exige DEUX extremites non-VPN. Une connexion VPN depuis
+            # l'etranger reste couverte par sa detection dediee ("VPN monte depuis
+            # l'etranger") et par la reputation d'IP (vpn_malicious_ip).
+            if s1 == "VPN" or s2 == "VPN":
+                continue
+            # Jitter geo-IP INTRA-PAYS : M365 geolocalise les connexions sur des
+            # points de sortie Microsoft differents -> le meme salarie apparait
+            # "Paris puis Bordeaux" (voire Paris->Paris) a quelques minutes, d'ou
+            # des vitesses absurdes (cas reels : cvigier FR->FR 2020 km/h,
+            # gbertiner Paris->Bordeaux 3814 km/h, 23/09/2026). Un voyage impossible
+            # n'a de valeur de detection que s'il FRANCHIT UNE FRONTIERE : c'est le
+            # scenario "compte utilise depuis un autre pays pendant que l'utilisateur
+            # est chez lui". On exige donc deux pays differents et connus.
+            if not c1 or not c2 or c1 == c2:
+                continue
+            if not dedup_ok(user):           # 1 alerte / compte / jour
+                continue
             found += 1
             gelf({"event_source": "ueba_geo", "alert_tag": "impossible_travel",
                   "user": user, "geo_km": round(km), "geo_hours": round(hours, 2),
                   "geo_speed_kmh": round(speed),
                   "geo_from": f"{city1 or '?'}/{c1 or '?'} ({s1})", "geo_from_ip": ip1,
                   "geo_to": f"{city2 or '?'}/{c2 or '?'} ({s2})", "geo_to_ip": ip2,
-                  "short_message": f"IMPOSSIBLE TRAVEL {user}: {c1}->{c2} {round(km)}km en {round(hours,1)}h ({round(speed)}km/h)"})
+                  # Message LISIBLE : l'analyste doit comprendre sans decoder une
+                  # vitesse brute. La vitesse reste disponible en champ (geo_speed_kmh)
+                  # pour la chasse, mais ne porte plus le titre de l'alerte.
+                  "short_message": (f"Voyage impossible - {user} : {city1 or c1 or '?'} ({c1 or '?'})"
+                                    f" puis {city2 or c2 or '?'} ({c2 or '?'}) a "
+                                    f"{round(hours,1)} h d'intervalle, soit {round(km)} km"
+                                    f" - incompatible avec un deplacement reel")})
             print(f"  [impossible_travel] {user}: {c1}->{c2} {round(km)}km / {round(hours,1)}h = {round(speed)}km/h")
     print(f"[ueba-geo] comptes={len(by_user)} connexions={len(rows)} impossible_travel={found}")
 

@@ -87,6 +87,18 @@ def run_cycle(cfg: dict, gl: GraylogClient, corr: Correlator, resp: Responder) -
     incidents = corr.evaluate()
     processed = 0
     for inc in incidents:
+        # Deduplication + seuil de notification EN PREMIER (F.5).
+        # Ces deux tests etaient evalues APRES enrich() et resp.execute() : un incident
+        # deja notifie, ou sous le seuil, payait quand meme la narration LLM (Ollama
+        # qwen2.5:3b, CPU) et declenchait toutes les actions de reponse, a chaque cycle
+        # de 5 min. Un incident ecarte ici ne doit RIEN declencher : ni LLM, ni action.
+        key = inc.key()
+        if now - state.get(key, 0) < dedup:
+            log.info("Incident %s déjà notifié récemment — ignoré.", key)
+            continue
+        if _SEV_ORDER[inc.severity] < min_sev:
+            continue
+
         # remédiation
         rem = build_remediation(inc.rule_id, inc.mitre)
         inc.evidence["remediation_text"] = rem["text"]
@@ -97,14 +109,6 @@ def run_cycle(cfg: dict, gl: GraylogClient, corr: Correlator, resp: Responder) -
         for action in dict.fromkeys(rem["actions"]):
             action_log += resp.execute(action, inc.entities)
         inc.evidence["actions"] = action_log
-
-        # déduplication + seuil de notification
-        key = inc.key()
-        if now - state.get(key, 0) < dedup:
-            log.info("Incident %s déjà notifié récemment — ignoré.", key)
-            continue
-        if _SEV_ORDER[inc.severity] < min_sev:
-            continue
 
         # réinjection SIEM + Teams
         gl.send_gelf(inc.to_gelf())

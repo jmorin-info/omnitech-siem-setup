@@ -22,6 +22,8 @@ echo "==> [1/5] Config /etc/default/omni-leak (ajout cles fuites/dark web)"
 add_key() { grep -q "^$1=" /etc/default/omni-leak || echo "$1=$2" >> /etc/default/omni-leak; }
 add_key RANSOMLOOK_TERMS "omnitech,omnitech-security"
 add_key RANSOMLOOK_STATE "/var/lib/omni-leak/ransomlook.json"
+add_key RANSOMWARELIVE_TERMS "omnitech,omnitech-security"
+add_key RANSOMWARELIVE_STATE "/var/lib/omni-leak/ransomwarelive.json"
 add_key HIBP_API_KEY ""
 add_key HIBP_DOMAIN "omnitech-security.fr"
 add_key DEHASHED_EMAIL ""
@@ -73,6 +75,63 @@ print("ransomlook: %d posts analyses, %d mention(s) OMNITECH" % (len(posts), new
 PYEOF
 chmod 755 /usr/local/sbin/omni-leak-ransomlook
 /usr/local/sbin/omni-leak-ransomlook && ok "ransomlook OK" || warn "ransomlook KO"
+
+# --- ransomware.live : 2e source d'extorsion (gratuit, sans cle) ---------------
+cat > /usr/local/sbin/omni-leak-ransomwarelive <<'PYEOF'
+#!/usr/bin/env python3
+"""ransomware.live -> GELF : OMNITECH/partenaires nommes comme victime d'un groupe
+de rancongiciel (2e source d'extorsion, complementaire de RansomLook). Stdlib, gratuit, sans cle."""
+import json, os, urllib.request
+ENV = {}
+for l in open("/etc/default/omni-leak"):
+    if "=" in l and not l.lstrip().startswith("#"):
+        k, v = l.strip().split("=", 1); ENV[k] = v.strip()
+GELF = ENV.get("GELF_URL", "http://127.0.0.1:12201/gelf")
+TERMS = [t.strip().lower() for t in ENV.get("RANSOMWARELIVE_TERMS", ENV.get("RANSOMLOOK_TERMS", "omnitech")).split(",") if t.strip()]
+STATE = ENV.get("RANSOMWARELIVE_STATE", "/var/lib/omni-leak/ransomwarelive.json")
+API = ENV.get("RANSOMWARELIVE_URL", "https://api.ransomware.live/v2/recentvictims")
+def gelf(f):
+    # robuste : un échec d'émission ne casse pas la boucle (sinon `seen` non persisté
+    # -> ré-émission de toutes les victimes au prochain run = flood). Retourne True/False.
+    f.update({"version": "1.1", "host": "ransomware.live"})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF, data=json.dumps(f).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10).read()
+        return True
+    except Exception as e:
+        print("gelf KO:", e); return False
+try:
+    victims = json.load(urllib.request.urlopen(urllib.request.Request(
+        API, headers={"User-Agent": "omni-siem/1.0"}), timeout=30))
+except Exception as e:
+    print("ransomwarelive KO:", e); raise SystemExit(0)
+if isinstance(victims, dict):
+    victims = victims.get("victims") or victims.get("data") or []
+try:
+    seen = set(json.load(open(STATE)))
+except Exception:
+    seen = set()
+new = 0
+for v in victims:
+    vic = str(v.get("victim") or "")
+    blob = " ".join(str(v.get(k) or "") for k in ("victim", "domain", "description")).lower()
+    if any(t in blob for t in TERMS):
+        key = vic + str(v.get("discovered") or "") + str(v.get("group") or "")
+        if key in seen:
+            continue
+        seen.add(key); new += 1
+        gelf({"short_message": "RANSOMWARE: '%s' victime revendiquee par le groupe '%s'" % (vic, v.get("group")),
+              "level": 2, "_event_source": "leak_intel", "_leak_source": "ransomwarelive",
+              "_alert_tag": "ransomware_mention", "_leak_victim": vic,
+              "_leak_group": v.get("group"), "_leak_country": v.get("country"),
+              "_leak_url": v.get("claim_url"), "_leak_discovered": v.get("discovered"),
+              "_event_action": "ransomware_leak_site"})
+os.makedirs(os.path.dirname(STATE), exist_ok=True)
+json.dump(sorted(seen), open(STATE + ".tmp", "w")); os.replace(STATE + ".tmp", STATE)
+print("ransomwarelive: %d victimes analysees, %d mention(s) OMNITECH" % (len(victims), new))
+PYEOF
+chmod 755 /usr/local/sbin/omni-leak-ransomwarelive
+/usr/local/sbin/omni-leak-ransomwarelive && ok "ransomwarelive OK" || warn "ransomwarelive KO"
 
 echo "==> [3/5] Collecteurs HIBP + Dehashed (prets-a-brancher)"
 cat > /usr/local/sbin/omni-leak-hibp <<'PYEOF'
@@ -144,7 +203,7 @@ chmod 755 /usr/local/sbin/omni-leak-hibp /usr/local/sbin/omni-leak-dehashed
 ok "HIBP + Dehashed installes (en attente de cles)"
 
 echo "==> [4/5] Timers quotidiens"
-for svc in ransomlook hibp dehashed; do
+for svc in ransomlook ransomwarelive hibp dehashed; do
   cat > /etc/systemd/system/omni-leak-${svc}.service <<EOF
 [Unit]
 Description=OMNI - Leak intel ${svc}
@@ -165,7 +224,7 @@ WantedBy=timers.target
 EOF
 done
 systemctl daemon-reload
-systemctl enable --now omni-leak-ransomlook.timer omni-leak-hibp.timer omni-leak-dehashed.timer >/dev/null 2>&1 && ok "timers actifs"
+systemctl enable --now omni-leak-ransomlook.timer omni-leak-ransomwarelive.timer omni-leak-hibp.timer omni-leak-dehashed.timer >/dev/null 2>&1 && ok "timers actifs"
 
 echo "==> [5/5] MITRE + alertes"
 CSV="lookups/mitre-attack.csv"
@@ -187,7 +246,7 @@ mk_leak_alert() {
     | post_entity "/events/definitions?schedule=true" | jqr '.id' >/dev/null && ok "alerte '$T'" || warn "alerte '$T' KO"
 }
 mk_leak_alert "OMNI - RANSOMWARE : OMNITECH nomme sur un site d'extorsion" "alert_tag:ransomware_mention" 3
-mk_leak_alert "OMNI - Comptes/données OMNITECH exposés (fuite / dark web)" "alert_tag:credential_leak OR alert_tag:github_leak" 3
+mk_leak_alert "OMNI - Comptes/données OMNITECH exposés (fuite / dark web)" "alert_tag:credential_leak" 3
 
 echo
 echo "=== 72 termine. RansomLook actif (gratuit). Pour HIBP/Dehashed : renseigner les"
