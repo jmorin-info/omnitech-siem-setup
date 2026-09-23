@@ -16,43 +16,51 @@
          FortiClient EMS, NinjaOne). Les mettre a jour en local creerait une
          divergence avec la console qui en a la charge.
 
-.PARAMETER Apply
-    SANS ce commutateur le script SIMULE et n'ecrit rien. C'est le mode par defaut :
-    on deploie d'abord en simulation sur un groupe pilote, on lit le rapport, puis
-    on rejoue avec -Apply.
+.CONFIGURATION
+    NinjaOne execute le fichier sans argument : tout se regle dans le bloc
+    CONFIGURATION situe juste sous cet en-tete.
 
-.PARAMETER Scope
-    All        : desinstallation + mises a jour (defaut)
-    Uninstall  : desinstallation seule
-    Update     : mises a jour applicatives seules
-    Windows    : correctifs Windows seuls
+      $SIMULATION          $false = agit reellement (defaut) | $true = liste sans rien faire
+      $SCOPE               'All' | 'Uninstall' | 'Update' | 'Windows'
+      $INCLUDE_DOTNET_EOL  $true pour retirer aussi les runtimes .NET 5.0/6.0/7.0
+                           (fin de support). Laisse a $false : une application
+                           metier peut en dependre.
+      $ALLOW_REBOOT        $true pour autoriser un redemarrage si un correctif l'exige
 
-.PARAMETER IncludeDotNetEol
-    Ajoute la desinstallation des runtimes .NET en FIN DE SUPPORT (5.0, 6.0, 7.0).
-    NON active par defaut : une application metier peut en dependre. A tester sur
-    un pilote avant generalisation.
-
-.PARAMETER AllowReboot
-    Autorise un redemarrage si un correctif l'exige. Par defaut aucun redemarrage.
-
-.EXAMPLE
-    .\Invoke-ParcHygiene.ps1
-    Simulation complete, aucun changement.
-
-.EXAMPLE
-    .\Invoke-ParcHygiene.ps1 -Apply -Scope Uninstall
-    Desinstalle uniquement le superflu.
+.OUTPUTS
+    Journal horodate dans %ProgramData%\OMNITECH\ParcHygiene_<date>.log
+    et sortie console reprise par NinjaOne.
 
 .NOTES
     Codes de sortie : 0 = OK | 1 = erreur bloquante | 2 = redemarrage requis
+
+    PREMIER DEPLOIEMENT : passer $SIMULATION a $true et lancer sur UNE machine,
+    lire le rapport, puis repasser a $false pour le deploiement de masse.
+    Les serveurs sensibles (controleurs de domaine bx-ad-01/02-it-vm, bx-pki2022,
+    bx-files-it-vm) sont a traiter en derniere vague.
 #>
-[CmdletBinding()]
-param(
-    [switch]$Apply,
-    [ValidateSet('All','Uninstall','Update','Windows')][string]$Scope = 'All',
-    [switch]$IncludeDotNetEol,
-    [switch]$AllowReboot
-)
+# =============================================================================
+# CONFIGURATION  --  NinjaOne execute le fichier tel quel, sans argument.
+# Tout se regle ICI, en modifiant les valeurs ci-dessous avant de televerser.
+# =============================================================================
+
+# $true  = SIMULATION : n'ecrit rien, se contente de lister ce qui serait fait.
+#          A utiliser pour un premier passage sur UNE machine de test.
+# $false = ACTION : desinstalle et met a jour reellement.  <-- valeur par defaut
+$SIMULATION = $false
+
+# Perimetre : 'All' | 'Uninstall' | 'Update' | 'Windows'
+$SCOPE = 'All'
+
+# Desinstaller aussi les runtimes .NET en FIN DE SUPPORT (5.0, 6.0, 7.0).
+# Laisse a $false : une application metier peut en dependre. A basculer a $true
+# seulement apres validation sur un groupe pilote.
+$INCLUDE_DOTNET_EOL = $false
+
+# Autoriser un redemarrage si un correctif l'exige (sinon simplement signale).
+$ALLOW_REBOOT = $false
+
+# =============================================================================
 
 $ErrorActionPreference = 'Continue'
 $script:Changes = 0; $script:Errors = 0; $script:RebootNeeded = $false
@@ -96,7 +104,7 @@ $DotNetEol = @(
     @{ Pattern = 'Windows Desktop Runtime - 6\.0'; Raison = '.NET 6.0 : fin de support Microsoft (novembre 2024).'; Service = $null }
     @{ Pattern = 'Windows Desktop Runtime - 7\.0'; Raison = '.NET 7.0 : fin de support Microsoft (mai 2024).'; Service = $null }
 )
-if ($IncludeDotNetEol) { $ToRemove += $DotNetEol }
+if ($INCLUDE_DOTNET_EOL) { $ToRemove += $DotNetEol }
 
 # =============================================================================
 # 2. NECESSAIRE -> mise a jour via winget (identifiants officiels).
@@ -139,7 +147,7 @@ function Invoke-Uninstall {
     Write-Log "Cible : $($App.DisplayName) $($App.DisplayVersion)" 'ACTION'
     Write-Log "   Motif : $Raison"
 
-    if (-not $Apply) { Write-Log "   [SIMULATION] aucune action"; return }
+    if ($SIMULATION) { Write-Log "   [SIMULATION] aucune action"; return }
 
     # Le service doit etre arrete avant la desinstallation, sinon l'installeur
     # echoue ou reclame un redemarrage.
@@ -205,7 +213,7 @@ function Invoke-Updates {
             Write-Log "$($app.Nom) : non installe, ignore"; continue
         }
         Write-Log "Mise a jour : $($app.Nom)" 'ACTION'
-        if (-not $Apply) { Write-Log "   [SIMULATION] aucune action"; continue }
+        if ($SIMULATION) { Write-Log "   [SIMULATION] aucune action"; continue }
         $out = & $winget upgrade --id $app.Id --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity 2>&1
         if ($LASTEXITCODE -eq 0) { Write-Log "   a jour" 'OK'; $script:Changes++ }
         elseif ($out -match 'No available upgrade|Aucune mise') { Write-Log "   deja a jour" }
@@ -216,7 +224,7 @@ function Invoke-Updates {
     $c2r = "$env:ProgramFiles\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe"
     if (Test-Path $c2r) {
         Write-Log "Mise a jour : Microsoft 365 Apps (ClickToRun)" 'ACTION'
-        if ($Apply) {
+        if (-not $SIMULATION) {
             Start-Process $c2r -ArgumentList '/update user updatepromptuser=false forceappshutdown=false displaylevel=false' -ErrorAction SilentlyContinue
             Write-Log "   demandee (execution en arriere-plan)" 'OK'; $script:Changes++
         } else { Write-Log "   [SIMULATION] aucune action" }
@@ -232,7 +240,7 @@ function Invoke-WindowsUpdate {
         if ($result.Updates.Count -eq 0) { Write-Log "   aucun correctif en attente" 'OK'; return }
         Write-Log "   $($result.Updates.Count) correctif(s) en attente :"
         foreach ($u in $result.Updates) { Write-Log "     - $($u.Title)" }
-        if (-not $Apply) { Write-Log "   [SIMULATION] aucune installation"; return }
+        if ($SIMULATION) { Write-Log "   [SIMULATION] aucune installation"; return }
 
         $toInstall = New-Object -ComObject Microsoft.Update.UpdateColl
         foreach ($u in $result.Updates) {
@@ -256,41 +264,41 @@ function Invoke-WindowsUpdate {
 # =============================================================================
 Write-Log "=============================================================="
 Write-Log " OMNITECH - Hygiene du parc   |   $env:COMPUTERNAME"
-Write-Log " Mode : $(if ($Apply) { 'APPLICATION' } else { 'SIMULATION (aucun changement)' })   Perimetre : $Scope"
+Write-Log " Mode : $(if ($SIMULATION) { 'SIMULATION (aucun changement)' } else { 'APPLICATION' })   Perimetre : $SCOPE"
 Write-Log " Journal : $LogFile"
 Write-Log "=============================================================="
 
-if (-not $Apply) {
-    Write-Log "Rien ne sera modifie. Relancer avec -Apply apres lecture du rapport." 'WARN'
+if ($SIMULATION) {
+    Write-Log "Mode simulation : rien ne sera modifie. Passer $SIMULATION a $false pour agir." 'WARN'
 }
 
 $inventory = Get-InstalledSoftware
 Write-Log "$($inventory.Count) logiciel(s) recense(s)"
 
-if ($Scope -in 'All','Uninstall') {
+if ($SCOPE -in 'All','Uninstall') {
     Write-Log "--- Desinstallation du superflu ---"
     foreach ($t in $ToRemove) {
         $found = $inventory | Where-Object { $_.DisplayName -match $t.Pattern }
         if (-not $found) { continue }
         foreach ($app in $found) { Invoke-Uninstall -App $app -Raison $t.Raison -ServiceName $t.Service }
     }
-    if (-not $IncludeDotNetEol) {
+    if (-not $INCLUDE_DOTNET_EOL) {
         $eol = $inventory | Where-Object { $_.DisplayName -match 'Windows Desktop Runtime - [567]\.0' }
         if ($eol) {
             Write-Log "$($eol.Count) runtime(s) .NET en fin de support detecte(s) mais NON traite(s)." 'WARN'
-            Write-Log "   Relancer avec -IncludeDotNetEol apres validation sur un pilote (risque de dependance applicative)."
+            Write-Log "   Passer $INCLUDE_DOTNET_EOL a $true apres validation sur un pilote (risque de dependance applicative)."
         }
     }
 }
 
-if ($Scope -in 'All','Update')  { Write-Log "--- Mises a jour applicatives ---"; Invoke-Updates }
-if ($Scope -in 'All','Windows') { Write-Log "--- Correctifs systeme ---"; Invoke-WindowsUpdate }
+if ($SCOPE -in 'All','Update')  { Write-Log "--- Mises a jour applicatives ---"; Invoke-Updates }
+if ($SCOPE -in 'All','Windows') { Write-Log "--- Correctifs systeme ---"; Invoke-WindowsUpdate }
 
 Write-Log "=============================================================="
 Write-Log " Changements : $script:Changes   Erreurs : $script:Errors"
 if ($script:RebootNeeded) {
     Write-Log " REDEMARRAGE REQUIS" 'WARN'
-    if ($Apply -and $AllowReboot) { Write-Log " Redemarrage dans 5 minutes"; shutdown.exe /r /t 300 /c "Maintenance OMNITECH" }
+    if ((-not $SIMULATION) -and $ALLOW_REBOOT) { Write-Log " Redemarrage dans 5 minutes"; shutdown.exe /r /t 300 /c "Maintenance OMNITECH" }
 }
 Write-Log "=============================================================="
 
