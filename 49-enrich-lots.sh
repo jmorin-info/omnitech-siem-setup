@@ -262,18 +262,46 @@ WD="winlogbeat_winlog_event_data"
 ensure_rule "omni-extra-10-explicit-cred" <<EOF
 rule "omni-extra-10-explicit-cred"
 when
-  to_string(\$message.event_source) == "windows_security"
-  AND to_long(\$message.event_id, 0) == 4648
-  AND has_field("${WD}_TargetUserName")
-  AND has_field("${WD}_SubjectUserName")
-  AND NOT ends_with(to_string(\$message.${WD}_TargetUserName), "\$")
-  AND NOT ends_with(to_string(\$message.${WD}_SubjectUserName), "\$")
-  AND to_string(\$message.${WD}_SubjectUserName) != "-"
-  AND lowercase(to_string(\$message.${WD}_TargetUserName)) != lowercase(to_string(\$message.${WD}_SubjectUserName))
+  to_string($message.event_source) == "windows_security"
+  AND to_long($message.event_id, 0) == 4648
+  AND has_field("winlogbeat_winlog_event_data_TargetUserName")
+  AND has_field("winlogbeat_winlog_event_data_SubjectUserName")
+  AND NOT ends_with(to_string($message.winlogbeat_winlog_event_data_TargetUserName), "$")
+  AND NOT ends_with(to_string($message.winlogbeat_winlog_event_data_SubjectUserName), "$")
+  AND to_string($message.winlogbeat_winlog_event_data_SubjectUserName) != "-"
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_TargetUserName)) != lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName))
+
+  // --- Exclusions mesurees le 24/09/2026 (2 000 evenements analyses : 1 962 de
+  //     bruit structurel, 38 reellement interessants). Sans elles la detection
+  //     produisait ~3 700 evenements/30 j, presque tous benins.
+
+  // 1. Authentification vers SOI-MEME : par definition pas un deplacement lateral
+  //    (SQL Server sur vm-bdx-nav2018 = 1 135 evenements a lui seul).
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_TargetServerName)) != "localhost"
+
+  // 2. Processus STRUCTURELS : lsass est le processus d'authentification de Windows
+  //    lui-meme (2 046 evts) ; sqlservr s'authentifie pour ses connexions liees ;
+  //    les navigateurs font de l'authentification integree vers l'intranet.
+  AND NOT ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ProcessName)), "\\lsass.exe")
+  AND NOT ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ProcessName)), "\\sqlservr.exe")
+  AND NOT ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ProcessName)), "\\chrome.exe")
+  AND NOT ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ProcessName)), "\\msedge.exe")
+  AND NOT ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ProcessName)), "\\firefox.exe")
+  AND NOT ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ProcessName)), "\\vivaldi.exe")
+
+  // 3. Redirecteur SMB du noyau : PID 0x4 = processus "System", nom de processus
+  //    vide. C'est ainsi que Windows porte un acces reseau lance par une TACHE
+  //    PLANIFIEE (cas confirme : recapitulatif planifie sur bx-veeam-it-sv vers
+  //    BX-FILES-IT-VM). Ce n'est pas un processus qu'un attaquant peut piloter :
+  //    un outil offensif (cmd, powershell, psexec, wmic) apparait avec SON propre
+  //    PID et reste donc detecte.
+  AND NOT ( to_string($message.winlogbeat_winlog_event_data_ProcessId) == "0x4"
+            AND ( to_string($message.winlogbeat_winlog_event_data_ProcessName) == ""
+                  OR to_string($message.winlogbeat_winlog_event_data_ProcessName) == "-" ) )
 then
   set_field("alert_tag", "explicit_cred_use");
-  set_field("explicit_cred_src", to_string(\$message.${WD}_SubjectUserName));
-  set_field("explicit_cred_target", to_string(\$message.${WD}_TargetUserName));
+  set_field("explicit_cred_src", to_string($message.winlogbeat_winlog_event_data_SubjectUserName));
+  set_field("explicit_cred_target", to_string($message.winlogbeat_winlog_event_data_TargetUserName));
 end
 EOF
 
