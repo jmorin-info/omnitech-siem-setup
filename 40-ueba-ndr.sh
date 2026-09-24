@@ -341,7 +341,7 @@ def dedup_ok(user):
 def es(path, body):
     req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=180) as r:
         return json.load(r)
 
 def gelf(fields):
@@ -370,13 +370,19 @@ def parse_geo(v):
     except Exception:
         return None
 
-def collect(query, geo_field, country_field, city_field, ip_field, source_label):
-    """Renvoie [(ts_ms, (lat,lon), country, city, ip, source)]"""
+def collect(query, geo_field, country_field, city_field, ip_field, source_label,
+            index="omni-*"):
+    """Renvoie [(ts_ms, (lat,lon), country, city, ip, source)]
+
+    index : motif d'index CIBLE. Interroger "omni-*" faisait porter un tri sur
+    10 000 documents a TOUS les index (fortigate/winsec/sysmon, plusieurs
+    centaines de Go) alors que seules deux sources sont utiles -> le robot
+    depassait son delai une execution sur deux (mesure 24/09/2026)."""
     out = []
     body = {"size": 10000, "query": query,
             "sort": [{"timestamp": "asc"}],
             "_source": ["timestamp", "user", geo_field, country_field, city_field, ip_field]}
-    for hgt in es("/omni-*/_search", body)["hits"]["hits"]:
+    for hgt in es(f"/{index}/_search", body)["hits"]["hits"]:
         s = hgt["_source"]
         geo = parse_geo(s.get(geo_field, "")) if s.get(geo_field) else None
         if not geo:
@@ -395,12 +401,14 @@ def main():
     rows += collect({"bool": {"must": [{"term": {"m365_type": "signin"}}, rng,
                                        {"exists": {"field": "user"}}],
                               "must_not": [{"term": {"event_action": "echec_connexion"}}]}},
-                    "src_ip_geolocation", "src_country", "src_city", "src_ip", "M365")
+                    "src_ip_geolocation", "src_country", "src_city", "src_ip", "M365",
+                    index="omni-m365_*")
     # VPN SSL : connexions avec compte
     rows += collect({"bool": {"must": [{"term": {"subtype": "vpn"}}, rng,
                                        {"exists": {"field": "user"}},
                                        {"exists": {"field": "remip_geolocation"}}]}},
-                    "remip_geolocation", "remip_country_code", "remip_city_name", "remip", "VPN")
+                    "remip_geolocation", "remip_country_code", "remip_city_name", "remip", "VPN",
+                    index="omni-fortigate_*")
 
     # regroupe par compte
     by_user = {}

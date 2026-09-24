@@ -273,7 +273,12 @@ def country_map(base_query, gte, lt, country_f, city_f, ip_f, source_label):
     body = {"size": 10000, "query": q,
             "_source": ["user", country_f, city_f, ip_f, "timestamp"]}
     out = {}
-    for h in es("/omni-*/_search", body)["hits"]["hits"]:
+    # Index CIBLE deduit de la source : interroger "omni-*" faisait porter la
+    # requete sur TOUS les index (fortigate/winsec/sysmon, plusieurs centaines de
+    # Go) alors qu'une seule source est concernee -> depassement systematique du
+    # delai (mesure 24/09/2026 : 99 s pour un delai de 90 s). Cible = < 1 s.
+    idx = "omni-m365_*" if source_label == "M365" else "omni-fortigate_*"
+    for h in es(f"/{idx}/_search", body)["hits"]["hits"]:
         s = h["_source"]
         user = s.get("user")
         ctry = s.get(country_f)
