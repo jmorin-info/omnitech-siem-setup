@@ -176,7 +176,20 @@ function Invoke-Uninstall {
         # Cas EXE : on privilegie la chaine silencieuse fournie par l'editeur
         $cmd = if ($App.QuietUninstallString) { $App.QuietUninstallString } else { $App.UninstallString }
         if (-not $cmd) { Write-Log "   aucune commande de desinstallation" 'ERREUR'; return }
-        if (-not $App.QuietUninstallString) { $cmd = "$cmd /S /silent /qn" }
+        if (-not $App.QuietUninstallString) {
+            # Beaucoup de produits MSI exposent une UninstallString de la forme
+            # "MsiExec.exe /X{GUID}" alors que leur cle de registre n'est PAS le
+            # code produit : on tombait alors dans cette branche et on ajoutait
+            # "/S /silent /qn". Or msiexec REJETTE /S et /silent (options propres
+            # aux installeurs NSIS / Inno Setup) -> la desinstallation echouait
+            # silencieusement (constate en production le 24/09/2026).
+            if ($cmd -match 'msiexec') {
+                if ($cmd -notmatch '/qn')       { $cmd = "$cmd /qn" }
+                if ($cmd -notmatch '/norestart'){ $cmd = "$cmd /norestart" }
+            } else {
+                $cmd = "$cmd /S /silent /qn"
+            }
+        }
         try {
             $p = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$cmd`"" -Wait -PassThru -ErrorAction Stop
             if ($p.ExitCode -in 0,3010,1605) { $ok = $true; if ($p.ExitCode -eq 3010) { $script:RebootNeeded = $true } }
