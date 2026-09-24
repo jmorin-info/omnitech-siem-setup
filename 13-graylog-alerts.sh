@@ -566,7 +566,7 @@ ensure_event "OMNI - Force brute portail VPN (>=30 échecs / IP / h)" 2 \
   '["remip"]' "${COUNT_SERIES}" "$(count_ge 30)" 60 15
 
 ensure_event "OMNI - IP malveillante (Tor / Spamhaus)" 3 \
-  'alert_tag:threat_intel' "[\"${ST_FORTI}\"]" \
+  'alert_tag:threat_intel AND action:accept AND src_ip_reserved_ip:true' "[\"${ST_FORTI}\"]" \
   '[]' '[]' "${NOCOND}" 5 1
 
 # GeoIP s'execute APRES les pipelines -> detection par requete (pas par tag)
