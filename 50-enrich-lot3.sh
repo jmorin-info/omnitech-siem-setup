@@ -231,7 +231,7 @@ def dedup_ok(user):
 def es(path, body):
     req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=90) as r:
+    with urllib.request.urlopen(req, timeout=300) as r:
         return json.load(r)
 
 def gelf(fields):
