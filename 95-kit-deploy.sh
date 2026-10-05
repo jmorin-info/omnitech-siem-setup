@@ -34,9 +34,17 @@ echo "==> [2/3] Substitution FQDN/IP reels (${SIEM_FQDN} / ${SIEM_IP}) dans les 
 sed -i "s|bx-it-graylog-vm\.omnitech\.security|${SIEM_FQDN}|g" "$KIT/install.sh" "$KIT/install.ps1"
 sed -i "s|10\.33\.220\.10|${SIEM_IP}|g" "$KIT/install.sh"
 
+# Alias historique : certaines taches NinjaOne telechargent /kit/agent.ps1.
+# Il etait copie A LA MAIN (date du 13/06 contre le 23/06 pour le script reel) :
+# il aurait diverge silencieusement a la prochaine modification, et une machine
+# aurait deploye une version perimee sans que rien ne le signale. On le regenere
+# donc a chaque publication a partir de la source unique.
+install -m 644 "$KIT/Install-OmniSiem-NinjaOne.ps1" "$KIT/agent.ps1"
+echo "    [+] agent.ps1 (alias de Install-OmniSiem-NinjaOne.ps1)"
+
 echo "==> [3/3] Checksums d'integrite (SHA256SUMS)"
 ( cd "$KIT" && sha256sum \
-    install.sh install.ps1 linux-omni.sh \
+    install.sh install.ps1 linux-omni.sh agent.ps1 \
     Install-OmniSiem-NinjaOne.ps1 Get-OmniInventory.ps1 winlogbeat.yml \
     audit-baseline.csv sysmonconfig-omnitech.xml omnitech-rootca.pem \
     Sysmon64.exe winlogbeat-oss-*.zip 2>/dev/null > SHA256SUMS ) || true

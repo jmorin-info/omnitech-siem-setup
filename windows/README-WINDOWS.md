@@ -59,63 +59,60 @@ Notes DC : les sous-catégories *DS Access/DS Changes* ne produisent des
 fonctionne avec la SACL par défaut de la partition. Les 5136 exhaustifs
 peuvent demander un élargissement de SACL (optionnel, plus tard).
 
-## 2. Déploiement Sysmon + Winlogbeat sur TOUT le domaine
+## 2. Déploiement des agents sur le parc
 
-### Option A (recommandée) : GPO, depuis l'AD — `Deploy-AgentsGPO.ps1`
+### Voie unique recommandée : `Install-OmniSiem-NinjaOne.ps1`
 
-```powershell
-cd <kit>\windows
-# Lie par défaut à omnitech.security/Entreprise :
-.\Deploy-AgentsGPO.ps1
-```
+**Un seul script, pour toutes les machines Windows** — postes, serveurs,
+contrôleurs de domaine, machines hors domaine. Dans NinjaOne :
+*Administration > Scripting* → nouveau script PowerShell, coller le fichier,
+exécution **SYSTEM**, **64 bits**, planification **quotidienne**.
 
-La GPO `OMNI-SIEM-Agents` pousse une **tâche planifiée SYSTEM** sur chaque
-machine (au boot +5 min, + tous les jours 12h00 avec délai aléatoire 0-2 h)
-qui exécute `\\omnitech.security\NETLOGON\SIEM\Deploy-SysmonWinlogbeat.ps1`.
-Comme ce script est idempotent, la GPO sert aussi de canal de **maintenance** :
-remplacer `winlogbeat.yml` ou `sysmonconfig-omnitech.xml` dans NETLOGON\SIEM
-suffit, le parc converge en moins de 24 h.
+Il converge vers l'état cible et vérifie chaque étape :
 
-Suivi du déploiement (sur le SIEM) : compter les hôtes qui remontent —
-recherche Graylog `streams:OMNI - Sysmon`, agrégation sur `host`, ou
-dashboard *OMNI - Windows Securite*.
+| Étape | Ce qu'elle fait |
+|---|---|
+| Root CA | installe la CA OMNITECH si absente (TOFU au premier contact) |
+| Audit | baseline `auditpol`, ligne de commande dans les 4688, ScriptBlock 4104, politique avancée forcée, journal Security 2 Go |
+| Sysmon | installe, ou met à jour la configuration **seulement si son hash a changé** |
+| Winlogbeat | version cible, configuration et CA ; ajoute automatiquement le canal `Veeam Backup` si le journal existe sur la machine |
+| Santé | `test config` avant démarrage, `test output` vers 5044, lecture des logs pour détecter une erreur d'ouverture de canal |
+| Inventaire | tâche quotidienne `OMNI-Inventory` (alimente la détection de vulnérabilités) |
 
-### IMPORTANT si tu déploies par NinjaOne (et non par GPO)
+Il est **idempotent** : il ne redémarre un service que si quelque chose a
+réellement changé, et peut donc tourner tous les jours comme mécanisme
+d'auto-réparation. Codes de sortie : `0` = tout OK, `1` = au moins un composant
+en échec (le résumé par composant est affiché dans NinjaOne, le détail dans
+`C:\ProgramData\OMNI-SIEM\install.log`).
 
-La GPO `OMNI-AUDIT-Baseline` ne s'applique **pas** aux postes pilotés par
-NinjaOne hors du périmètre GPO → ils envoient Sysmon/PowerShell mais **0
-événement Security** (Windows n'audite presque rien par défaut). Pousse alors
-la politique d'audit **en local** avec un 2ᵉ script NinjaOne :
+Tout est téléchargé depuis le SIEM (`https://bx-it-graylog-vm.omnitech.security/kit/`) :
+ni AD, ni NETLOGON, ni accès Internet requis sur la machine.
 
-`Set-OmniAudit-NinjaOne.ps1` (SYSTEM, 64 bits, quotidien) applique exactement
-la même baseline que la GPO (auditpol /restore + cmdline 4688 + ScriptBlock
-4104 + SCENoApplyLegacyAuditPolicy + journal Security 2 Go). Idempotent, la
-baseline CSV est embarquée dans le script (aucune dépendance réseau).
-Vérification sur le poste : `auditpol /get /category:*` puis, après quelques
-minutes, l'hôte remonte les 4624/4625/4688 dans Graylog (page *Identité AD*).
+> Les scripts `Deploy-SiemAgents-NinjaOne.ps1` et `Set-OmniAudit-NinjaOne.ps1`
+> sont **remplacés** par celui-ci et déplacés dans `archive/`. Ne pas les
+> déployer : ils font la même chose en deux fois.
 
-À enchaîner avec `Deploy-SiemAgents-NinjaOne.ps1` : deux scripts NinjaOne
-distincts (agents + audit), ou appelle l'audit en fin du script agents.
+### Cas particuliers
 
-### Option B : NinjaOne (parc hors domaine, VIP, rattrapage)
+- **Contrôleurs de domaine** : le script applique la baseline d'audit en local.
+  Si la GPO `OMNI-AUDIT-Baseline` s'applique aussi, elle prime au refresh —
+  la configuration étant identique, il n'y a aucun conflit.
+- **Serveur Veeam** : rien à faire, le canal `Veeam Backup` est détecté et
+  ajouté automatiquement à la configuration de cette machine uniquement.
+- **Linux** : non couvert par ce script PowerShell. Utiliser `kit/install.sh`
+  (ou `linux-omni.sh`), distribué par le même kit.
 
-Dans NinjaOne : *Administration > Scripting* → nouveau script PowerShell,
-coller `Deploy-SysmonWinlogbeat.ps1`, exécution **SYSTEM**, 64 bits.
-L'affecter en tâche planifiée (ex. quotidienne) sur les groupes
-PILOTE puis PRODUCTION_POSTES / PRODUCTION_SERVEURS — il est idempotent :
-il installe, met à jour la config, ou ne fait rien si tout est conforme.
-Les deux canaux peuvent coexister sans conflit (même script, même source).
+### Alternative : déploiement par GPO
 
-Cibler aussi les serveurs sensibles : **BX-AD02, WSUS, PKI (BX-PKI2022),
-NPS, serveurs de fichiers** — le DC1 ayant déjà Winlogbeat, le script le
-mettra simplement au niveau (même conf pour tout le monde).
+`Deploy-AgentsGPO.ps1` pousse une tâche planifiée SYSTEM qui exécute
+`Deploy-SysmonWinlogbeat.ps1` depuis NETLOGON. Cette voie **ne couvre que
+Sysmon et Winlogbeat** : la politique d'audit doit alors être poussée
+séparément par la GPO `OMNI-AUDIT-Baseline` (`Deploy-AuditGPO.ps1`).
+À réserver aux parcs sans NinjaOne — sinon la voie unique ci-dessus est
+préférable, puisqu'elle couvre audit et agents en une seule exécution.
 
-Vérification sur un poste :
-```powershell
-Get-Service Sysmon64, winlogbeat
-Get-WinEvent -LogName "Microsoft-Windows-Sysmon/Operational" -MaxEvents 3
-Get-Content "C:\ProgramData\winlogbeat\logs\winlogbeat*" -Tail 20   # "Connection to backoff(...) established"
-```
+Suivi du déploiement, côté SIEM : recherche Graylog `streams:OMNI - Sysmon`
+avec agrégation sur `host`, ou tableau de bord *OMNI - Windows Securite*.
 
 ## 3. Côté FortiAnalyzer (10.33.80.253)
 
