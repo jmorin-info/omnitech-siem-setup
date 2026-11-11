@@ -49,6 +49,7 @@
 - [Sauvegarde et restauration](#sauvegarde-et-restauration)
 - [Dépannage](#dépannage)
 - [Supervision du SIEM](#supervision-du-siem)
+- [Exploitation courante](#exploitation-courante)
 - [Limites connues](#limites-connues)
 - [Sécurité et secrets](#sécurité-et-secrets)
 - [Conformité ISO 27001:2022](#conformité-iso-270012022)
@@ -61,7 +62,7 @@
 
 ## Présentation et objectifs
 
-Plateforme **SIEM + XDR + console SOC** complète et reproductible, déployée sur une VM Debian durcie (`bx-it-graylog-vm`), avec un kit d'enrôlement Windows/AD et Linux. Elle collecte Windows Security/Sysmon, FortiGate/FortiAnalyzer (3 sites), Microsoft 365, vSphere, ESET, Vaultwarden, Veeam, DNS, Linux, Aruba et Entra ID ; normalise tout dans un **schéma commun** ; exécute **234 règles de pipeline** et **142 définitions d'alerte** mappées **MITRE ATT&CK** ; ajoute une **analyse comportementale (UEBA/NDR)**, un **scoring ML (`oms-ml`)**, une **corrélation d'incidents kill-chain (`oms-xdr`)**, un **triage d'alertes intelligent** (scoring multi-signaux + LLM local — mail réservé au critique, boucle de faux positifs), un **SOAR léger** (blocage FortiGate multi-site BDX/IV/LC), une **console SOC web + PWA mobile** bilingue et **115 playbooks d'action** — le tout provisionné par des scripts **idempotents** et documenté pour l'**audit ISO 27001:2022**.
+Plateforme **SIEM + XDR + console SOC** complète et reproductible, déployée sur un serveur physique Debian 13 durci (`bx-it-graylog-vm`, le nom est historique), avec un kit d'enrôlement Windows/AD et Linux. Elle collecte Windows Security/Sysmon, FortiGate/FortiAnalyzer (3 sites), Microsoft 365, vSphere, ESET, Vaultwarden, Veeam, DNS, Linux, Aruba et Entra ID ; normalise tout dans un **schéma commun** ; exécute **234 règles de pipeline** et **142 définitions d'alerte** mappées **MITRE ATT&CK** ; ajoute une **analyse comportementale (UEBA/NDR)**, un **scoring ML (`oms-ml`)**, une **corrélation d'incidents kill-chain (`oms-xdr`)**, un **triage d'alertes intelligent** (scoring multi-signaux + LLM local — mail réservé au critique, boucle de faux positifs), un **SOAR léger** (blocage FortiGate multi-site BDX/IV/LC), une **console SOC web + PWA mobile** bilingue et **115 playbooks d'action** — le tout provisionné par des scripts **idempotents** et documenté pour l'**audit ISO 27001:2022**.
 
 Objectifs de conception :
 
@@ -71,7 +72,7 @@ Objectifs de conception :
 
 ## Overview (English)
 
-A complete, reproducible **SIEM + XDR + SOC console** deployed on a single hardened Debian VM, with a Windows/AD enrolment kit. It ingests Windows Security/Sysmon, FortiGate/FortiAnalyzer, Microsoft 365, vSphere, ESET, Vaultwarden and Veeam; normalises everything into a common schema; runs **234 pipeline rules** and **142 alert definitions** mapped to **MITRE ATT&CK**; adds behavioural analytics (UEBA/NDR), an ML scoring layer (`oms-ml`), kill-chain incident correlation (`oms-xdr`), an intelligent alert-triage layer (multi-signal scoring + local LLM — mail reserved for the critical few, false-positive feedback loop), light SOAR (multi-site FortiGate auto-block), a bilingual SOC web console + mobile PWA, and 115 action playbooks — all provisioned by idempotent scripts and documented for ISO 27001:2022 evidence. The rest of this document is in French; the SOC console itself is fully bilingual FR/EN.
+A complete, reproducible **SIEM + XDR + SOC console** deployed on a single hardened Debian 13 server, with a Windows/AD enrolment kit. It ingests Windows Security/Sysmon, FortiGate/FortiAnalyzer, Microsoft 365, vSphere, ESET, Vaultwarden and Veeam; normalises everything into a common schema; runs **234 pipeline rules** and **142 alert definitions** mapped to **MITRE ATT&CK**; adds behavioural analytics (UEBA/NDR), an ML scoring layer (`oms-ml`), kill-chain incident correlation (`oms-xdr`), an intelligent alert-triage layer (multi-signal scoring + local LLM — mail reserved for the critical few, false-positive feedback loop), light SOAR (multi-site FortiGate auto-block), a bilingual SOC web console + mobile PWA, and 115 action playbooks — all provisioned by idempotent scripts and documented for ISO 27001:2022 evidence. The rest of this document is in French; the SOC console itself is fully bilingual FR/EN.
 
 ## Aperçu visuel
 
@@ -147,7 +148,7 @@ flowchart LR
 
 ## Architecture
 
-Tout tient sur une seule VM Debian 13 durcie, données au repos chiffrées (`/data` en LUKS2/TPM2) :
+Tout tient sur un seul serveur physique Debian 13 durci (le nom `bx-it-graylog-vm` date d'une première version virtualisée), données au repos chiffrées (`/data` en LUKS2/TPM2, déverrouillé au démarrage par le TPM) :
 
 ```
  Postes / Serveurs ───Winlogbeat TLS 5044──┐      GPO OMNI-AUDIT-Baseline (DC)
@@ -168,7 +169,7 @@ Tout tient sur une seule VM Debian 13 durcie, données au repos chiffrées (`/da
         └──  UEBA · NDR · oms-ml · oms-xdr · SOAR · triage · rapports ─┘
 ```
 
-Composants sur la VM :
+Composants sur le serveur :
 
 - **Graylog 7.1** (ingestion, streams, pipelines, alertes) — API en TLS sur `:9000`, derrière nginx.
 - **OpenSearch 2.19** (indexation) et **MongoDB 8.0** (configuration Graylog), liés à `127.0.0.1` uniquement ; données OpenSearch sur `/data` chiffré LUKS2.
@@ -300,6 +301,7 @@ Tout hôte s'enrôle en **une commande**, depuis la page **Déploiement** de la 
 | `oms-ml/` · `oms-xdr/` · `oms-graph/` | Couche ML (anomalie + réduction FP) · moteur de corrélation XDR · graphe |
 | `triage/` · `tools/` | Service de **triage d'alertes** (`omni-alert-triage` : scoring multi-signaux + LLM + boucle FP `/fp`) · outils CLI (`omni-fp`...) |
 | `mobile/` | Backend console SOC + **PWA** (`omni-mobile-api.py`, stdlib), fronts `soc/` et `www/` |
+| `deploye/` · `sync-deploye.sh` | État de **production** des robots (`/usr/local/sbin`), unités systemd, épinglage APT et configuration Logstash, recopié depuis le serveur (voir [Exploitation courante](#exploitation-courante)) |
 | `docker/` | **Déploiement conteneurisé** (DR/staging) : stack 6 services + secrets durcis + restore (`docker/README-DOCKER.md`) |
 | `kit/` | Installeurs d'enrôlement (`install.ps1`, `install.sh`) publiés sous `/kit/` par `95-kit-deploy.sh` |
 | `lib-graylog.sh` | Helpers API Graylog (TLS, `api_get`/`api_post`, `ensure_rule`/`ensure_pipeline`/`ensure_lookup`, `wrap_entity`...) |
@@ -345,7 +347,8 @@ Compléments : la page **Santé et collecte** de la console `/soc/` (cluster, SL
 
 Deux mécanismes complémentaires, installés par le provisioning :
 
-- **`08-backup.sh`** — sauvegardes applicatives quotidiennes (timer `siem-backup`, 02:30) : `mongodump` (toute la configuration Graylog) vers `/home/siem-backup/mongo`, **snapshot OpenSearch** (dépôt `graylog_fs`, incrémental, données indexées) et tar des configurations (`/etc/graylog`, opensearch, mongod, nginx, nftables), avec rétention locale.
+- **`08-backup.sh`** — historique : sauvegarde applicative complète (timer `siem-backup`) avec un snapshot de **tous** les index. Le volume indexé ne tient plus sur `/home`, ce timer est donc désactivé depuis août 2026. Ne pas le réactiver tel quel.
+- **`oms-snap-siem`** — snapshots OpenSearch **sélectifs** et incrémentaux, chaque nuit à 01:30, dans le dépôt `graylog_fs` (sur `/home`, un disque distinct de `/data`). La sélection est réglée dans `/etc/oms-snap-siem.conf` : fenêtres glissantes pour les gros index (Windows Security, FortiGate, vSphere), petits index conservés en entier, trois snapshots gardés. Un test de restauration tourne chaque semaine dans un index temporaire. À la restauration, toujours passer `include_aliases=false`, pour ne jamais déplacer l'alias d'écriture (deflector) de Graylog.
 - **`30-backup-config.sh`** — sauvegarde **config** complète (timer `omni-backup-config`, 03:15) : dump MongoDB + configurations + collecteurs `omni-*` + unités systemd + kit + le dépôt IaC lui-même (arbre de travail complet, fichiers non commités inclus), dans une **archive chiffrée AES-256**, vérifiée (test de restaurabilité à chaque run) puis exportée vers le partage SMB `${SMB_BACKUP_UNC}` avec rétention `${BACKUP_RETENTION_J}` jours et **alerte GELF en cas d'échec ou d'absence** (alertes provisionnées par le script 21). Cette archive n'inclut **pas** les indices OpenSearch (logs).
 
 Points d'attention sur les snapshots OpenSearch :
@@ -359,7 +362,7 @@ Procédures de restauration :
 - **`docs/PRA-RECONSTRUCTION-SIEM.md`** — plan de reconstruction (objectifs de continuité, scénarios, rôles, validation), référence ISO A.8.13 / A.5.30.
 - **`docker/README-DOCKER.md`** — restauration de la configuration dans la stack conteneurisée (DR/staging).
 
-La VM est par ailleurs sauvegardée entière par Veeam ; les dumps applicatifs garantissent en plus une restauration cohérente et granulaire. Une restauration MongoDB seule (corruption de la configuration) a déjà été validée en production depuis `/home/siem-backup/mongo`.
+Le serveur est physique : il n'est **pas** sauvegardé en image par Veeam. La reprise repose donc sur l'archive chiffrée (configuration), les snapshots sélectifs (historique récent) et le PRA. Une restauration MongoDB seule (corruption de la configuration) a déjà été validée en production.
 
 ## Dépannage
 
@@ -379,6 +382,11 @@ Guide complet symptôme / cause / solution : **`docs/GUIDE-DEPANNAGE.md`**. Réf
 | **Re-run des alertes** | Relancer `21-alert-hygiene.sh` après chaque re-run de `13-graylog-alerts.sh` (qui recrée grace/clés par défaut) |
 | **Commentaires dans `00-vars.env`** | Sur des lignes séparées uniquement : les collecteurs Python (`load_env`) ne strippent pas les commentaires en ligne |
 | **Dépôt de snapshots perdu** | Après migration de `path.data` ou wipe : ré-enregistrer `graylog_fs` (voir [Sauvegarde et restauration](#sauvegarde-et-restauration)) |
+| **Logstash en boucle après une mise à jour** | La mise à jour du paquet `logstash` supprime le plugin `logstash-output-gelf`, ajouté à la main, et le pipeline SEAL refuse alors de démarrer. Réinstaller avec `JRUBY_OPTS="-J-Xmx2g" /usr/share/logstash/bin/logstash-plugin install logstash-output-gelf` (sans l'option mémoire, l'installeur plante sur un manque de mémoire). `oms-maj-siem` le fait tout seul |
+| **Logstash : TLS refusé vers SQL Server** | Le Java embarqué de Logstash ne connaît pas la CA interne. Le magasin de confiance est donc hors paquet (`/etc/logstash/cacerts-omni.jks`, déclaré dans `jvm.options`) et survit aux mises à jour. Côté SQL Server, vérifier que l'instance est liée au certificat machine **en cours** : après un renouvellement automatique, SQL reste lié à l'ancienne empreinte |
+| **Connexion à la console en 503 « Authentication service unavailable »** | Le backend AD de Graylog (LDAPS, vérification du certificat) ne reconnaît pas la CA qui signe le certificat des DC. Typiquement après un renouvellement de CA : ajouter la nouvelle racine au magasin de confiance de Graylog (`keytool -importcert` dans le JKS déclaré par `GRAYLOG_SERVER_JAVA_OPTS`), puis redémarrer `graylog-server`. Tant que le backend est en échec, **toutes** les connexions sont refusées, comptes locaux compris |
+| **OpenSearch rouge après un redémarrage** | Normal pendant quelques minutes : il faut environ 4 min pour réallouer plus de 1 200 shards. Les migrations Graylog lancées pendant ce temps peuvent journaliser des erreurs de rotation, sans conséquence si `index_failures` reste vide. Attendre le vert avant tout diagnostic |
+| **`git log` bloqué dans une session distante** | Dans un shell sans terminal complet, git ouvre son pager et attend une touche : exporter `GIT_PAGER=cat` |
 
 ## Supervision du SIEM
 
@@ -391,13 +399,44 @@ Le SIEM se surveille lui-même ; tout remonte en GELF (`event_source=siem_*`) da
 - **`09-snmpd.sh`** — exposition SNMP pour la supervision d'infrastructure existante.
 - **Console** — page Santé et collecte de `/soc/` (cluster, SLA, robots) et tableaux de bord Graylog associés.
 
+## Exploitation courante
+
+### Mises à jour automatiques
+
+- **Système** : les correctifs de sécurité Debian passent par `unattended-upgrades`.
+- **Socle SIEM** : il est mis à jour par `oms-maj-siem`, chaque dimanche à 04:30 (timer `oms-maj-siem.timer`). Le script :
+  1. vérifie l'état du serveur : `/data` monté, OpenSearch vert, API Graylog, place libre ;
+  2. sauvegarde : archive chiffrée et `mongodump` ;
+  3. installe ce qui est en attente ;
+  4. répare les points connus : plugin GELF de Logstash, magasins de confiance ;
+  5. redémarre si le noyau l'exige, puis refait le contrôle complet au démarrage (`oms-maj-siem-postboot`) ;
+  6. envoie un compte rendu par mail, seulement s'il y a eu quelque chose à faire.
+- **Pas de saut de version majeure** : les séries sont verrouillées dans `/etc/apt/preferences.d/oms-siem-series` (Graylog 7.1, OpenSearch 2.19, MongoDB 8.0, Logstash 8.19). Changer de série reste une décision humaine : lire les notes de version, puis modifier ce fichier.
+- **Simuler** sans rien toucher : `oms-maj-siem --simuler`.
+
+### SOAR : blocage et déblocage
+
+- **Fonctionnement** : le SIEM publie une liste d'IP malveillantes. Les FortiGate des sites la lisent toutes les 2 minutes et la refusent en entrée WAN. Chaque blocage dure 24 h, puis il est levé automatiquement.
+- **Ne sont jamais bloquées** :
+  - une IP qui s'est authentifiée avec succès dans les 90 derniers jours (VPN, Microsoft 365) ;
+  - les plages des sites et des partenaires ;
+  - un échec isolé, qui ne suffit jamais à déclencher un blocage.
+
+  C'est ce qui évite de bloquer l'IP fixe du domicile d'un collaborateur qui s'est trompé de mot de passe.
+- **Débloquer une IP** (effet en 2 minutes), sur le serveur SIEM : `sudo omni-soar-debloquer <ip>`. Ajouter `--exclure "motif"` pour qu'elle ne soit plus jamais bloquée.
+- **Récapitulatif** des blocages et des IP épargnées : un mail chaque matin, seulement les jours où il y a eu de l'activité.
+
+### Garder le dépôt à jour
+
+Une partie des robots est corrigée directement en production, dans `/usr/local/sbin`, les unités systemd et `/opt`. `sync-deploye.sh` recopie cet état dans `deploye/` et neutralise toute URL contenant des identifiants. Il lance ensuite un scan de secrets et refuse de committer si quelque chose ressort. À lancer en simulation d'abord (`--simuler`).
+
 ## Limites connues
 
-- **Mono-nœud = SPOF** : Graylog, OpenSearch et MongoDB tournent sur une seule VM, sans haute disponibilité. La reprise repose sur les sauvegardes (archive chiffrée, snapshots, Veeam) et le PRA (`docs/PRA-RECONSTRUCTION-SIEM.md`), pas sur un basculement automatique.
+- **Mono-nœud = SPOF** : Graylog, OpenSearch et MongoDB tournent sur un seul serveur, sans haute disponibilité. La reprise repose sur les sauvegardes (archive chiffrée, snapshots sélectifs) et sur le PRA (`docs/PRA-RECONSTRUCTION-SIEM.md`), pas sur un basculement automatique.
 - **Réponse AD non armée** : la désactivation de compte via LDAPS reste en dry-run (double verrou), en attente d'accès API / délégation AD.
 - **OpenSearch 3.x incompatible** avec Graylog 7.1 : rester en 2.19.x (paquets tenus en hold, voir [Stack et versions épinglées](#stack-et-versions-épinglées)).
 - **Fenêtre TOFU** : le CA interne n'est épinglé qu'après le premier contact HTTPS du kit d'enrôlement (fenêtre MITM au premier appel uniquement, réseau interne).
-- **Les logs ne sont pas dans la sauvegarde config** : l'archive chiffrée quotidienne couvre la configuration complète, pas les indices OpenSearch ; la profondeur d'historique repose sur les snapshots OpenSearch (`08-backup.sh`, à re-vérifier après toute intervention sur le cluster) et la sauvegarde VM Veeam. Après une restauration config seule, l'historique repart de zéro (voir `RESTORE.md`).
+- **Les logs ne sont pas dans la sauvegarde config** : l'archive chiffrée quotidienne couvre la configuration complète, pas les indices OpenSearch ; la profondeur d'historique repose sur les snapshots sélectifs (`oms-snap-siem`), qui ne couvrent pas tout : Sysmon et les autres journaux Windows en sont exclus, et seules les fenêtres récentes des gros index sont gardées. Après une restauration config seule, l'historique repart de zéro (voir `RESTORE.md`).
 - **Numérotation des scripts** : plusieurs numéros sont partagés (38, 40, 48, 49, 84, 85, 97) — se référer au [tableau des doublons](#numéros-dupliqués--ordre-correct-dexécution) et à l'en-tête de chaque script.
 
 ## Sécurité et secrets
@@ -426,7 +465,7 @@ Preuves Annexe A produites par la plateforme : **A.8.15/8.16** (journalisation e
 
 ## Stack et versions épinglées
 
-Debian 13 · Graylog 7.1 · OpenSearch 2.19.x (3.x casse Graylog) · MongoDB 8.0 · Winlogbeat OSS 8.x. Montées de version contrôlées uniquement : `apt-mark unhold`, vérification de la matrice de compatibilité Graylog, upgrade, puis re-hold.
+Debian 13 · Graylog 7.1 · OpenSearch 2.19.x (3.x casse Graylog) · MongoDB 8.0 · Logstash 8.19 (collecte SQL SEAL) · Winlogbeat OSS 8.x. Les correctifs à l'intérieur de ces séries s'installent automatiquement chaque semaine (voir [Exploitation courante](#exploitation-courante)). Un changement de série majeure reste manuel : vérifier la matrice de compatibilité Graylog, puis mettre à jour `/etc/apt/preferences.d/oms-siem-series`.
 
 ## Documentation associée
 

@@ -44,6 +44,7 @@ traceability. It is authoritative for audit purposes.
 - [GUIDE-DEPANNAGE.md](GUIDE-DEPANNAGE.md) — troubleshooting
 - [PROCEDURE-CHIFFREMENT-REPOS.md](PROCEDURE-CHIFFREMENT-REPOS.md) — volume encryption
 - [../RESTORE.md](../RESTORE.md) — restore procedure
+- [../README.md](../README.md) §11 — automatic updates (`oms-maj-siem`), selective snapshots, SOAR unblocking, common pitfalls
 
 **Compliance &amp; governance (ISO/IEC 27001)**
 - [ISO27001-MAPPING.md](ISO27001-MAPPING.md) · [REGISTRE-CONFORMITE-ISO27001.md](REGISTRE-CONFORMITE-ISO27001.md) — control mapping &amp; register

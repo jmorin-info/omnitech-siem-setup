@@ -42,10 +42,15 @@
 | `GUIDE.md` | « Comprendre le SIEM en 15 min » : schéma de flux, rôle des pages, analyses expliquées |
 | `CONTEXT.md` | Mémoire technique complète : historique, pièges connus (API 7.x), incidents résolus |
 | `RESTORE.md` | Restauration complète du SIEM depuis une sauvegarde config |
+| `README.fr.md` § Exploitation courante | Mises à jour automatiques (`oms-maj-siem`), snapshots sélectifs (`oms-snap-siem`), SOAR et déblocage d'une IP, synchronisation `deploye/` |
 | `VEEAM.md` | Intégration Veeam Backup & Replication |
 | `VSPHERE.md` | Intégration ESXi / vCenter |
 | `windows/README-WINDOWS.md` | Volet Windows/AD : agents, GPO, NinjaOne |
 | `fortigate/0*.conf` | Configurations FortiGate (UTM, VPN, proxy, policies) |
+
+## Documentation de présentation en anglais
+
+Pour un lecteur extérieur, la même plateforme est décrite en anglais par [00-INDEX.en.md](00-INDEX.en.md) : [ARCHITECTURE.md](ARCHITECTURE.md), [DATA-SOURCES.md](DATA-SOURCES.md), [DETECTIONS.md](DETECTIONS.md), [ALERTING-AND-TRIAGE.md](ALERTING-AND-TRIAGE.md), [OPERATIONS.md](OPERATIONS.md) et [DEPLOYMENT.md](DEPLOYMENT.md). Les documents français ci-dessus restent la référence pour l'audit.
 
 ## Correspondance ISO 27001:2022 (Annexe A)
 

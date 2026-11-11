@@ -6,7 +6,7 @@
 
 **A self-hosted, on-premise SIEM/SOC platform for OMNITECH Security**
 Built on Graylog · OpenSearch · MongoDB, extended with a custom detection engine,
-an AI-assisted alert-triage service, automated response (SOAR), a purpose-built SOC
+a scoring-based alert-triage service, automated response (SOAR), a purpose-built SOC
 console, and full physical-access-control (SEAL) correlation.
 
 `~20 log sources` · `197 detections` · `250 pipeline rules` · `40 pipelines` · `22 streams` · `MITRE ATT&CK-mapped` · `ISO 27001-aligned`
@@ -80,6 +80,39 @@ It is **not** a vanilla Graylog install. On top of the ingest/search core it add
 ---
 
 ## 3. Architecture
+
+Everything runs on a single hardened Debian 13 server (a physical box; the
+`bx-it-graylog-vm` hostname is a leftover from an earlier virtualised version).
+
+```mermaid
+flowchart LR
+  subgraph Sources
+    WIN[Windows / Sysmon<br/>Winlogbeat TLS]
+    FGT[FortiGate x3<br/>via FortiAnalyzer]
+    M365[Microsoft 365 / Entra ID]
+    OTH[vSphere · ESET · EMS · Aruba<br/>Linux · WAF · Vaultwarden]
+    SEAL[SEAL access control<br/>SQL via Logstash]
+  end
+  subgraph SIEM[SIEM server]
+    IN[Graylog inputs] --> PIPE[Pipelines<br/>normalise · enrich · tag]
+    PIPE --> OS[(OpenSearch<br/>encrypted /data)]
+    PIPE --> DEF[Event definitions<br/>MITRE-mapped]
+    ROB[Analytics robots<br/>UEBA · NDR · health] -->|GELF| IN
+    DEF --> TRI[omni-alert-triage<br/>score · correlate · dedup]
+    DEF --> SOAR[omni-soar<br/>IP blocklist]
+    MDB[(MongoDB<br/>configuration)]
+  end
+  WIN --> IN
+  FGT --> IN
+  M365 --> IN
+  OTH --> IN
+  SEAL --> IN
+  TRI --> MAIL[E-mail · Teams]
+  TRI --> CON[SOC console · mobile PWA]
+  SOAR -->|threat feed| FW[FortiGate WAN block]
+```
+
+The detailed view:
 
 ```
                          ┌──────────────────────────────────────────────────────┐
@@ -218,8 +251,10 @@ micro-service, to which every mailing detection is wired (a single HTTP notifica
    the window, across sources — a lateral-moving attacker lights up several).
 3. **Correlate** across sources on canonical keys (identity / host / IP / badge), so that a
    SEAL console login and a Windows brute-force on the same account join up.
-4. **Grey zone → LLM judge.** For ambiguous alerts, a Claude (Haiku) judge is asked, over a
-   **redacted** context, whether the alert deserves an immediate e-mail. Critical alerts are
+4. **Grey zone → LLM judge.** For ambiguous alerts, a small hosted LLM is asked, over a
+   **redacted** context, whether the alert deserves an immediate e-mail. If the judge is
+   unreachable it backs off for an hour and the alert is sent "as a precaution", clearly
+   labelled as such. Critical alerts are
    never suppressed; noise is dropped unless it escalates by score.
 5. **De-duplicate** and honour **learned false-positive rules** (analysts flag FPs from the
    console; rules are scoped, time-boxed, and never silence a Critical).
@@ -236,12 +271,19 @@ alerts additionally carry site / zone / door / badge.
 ## 7. Automated response (SOAR)
 
 `omni-soar` exposes a webhook that the platform calls when an attacking **public** IP is
-confirmed (brute force, scanning, WAF attacker). It pushes the IP into a FortiGate address
-group consumed by a block policy. The action is:
+confirmed (brute force, scanning, WAF attacker). It publishes the IP in a threat feed that
+the FortiGate of each site pulls every two minutes and drops at the WAN edge. The action is:
 
-- **guarded** — public IPs only, with a whitelist (never blocks internal or partner ranges);
-- **reversible** — entries carry a TTL (24 h) and can be cleared;
-- **auditable** — every block is re-injected as an event and shown on the console.
+- **guarded** — public IPs only. An IP that has authenticated successfully in the last 90
+  days (VPN, Microsoft 365) is never blocked, nor are site and partner ranges, and a single
+  failure is never enough. This is what keeps an employee's home IP from being locked out
+  after a typo;
+- **reversible** — entries carry a TTL (24 h) and expire on their own;
+- **auditable** — every block is re-injected as an event, shown on the console and
+  summarised in a morning digest.
+
+To lift a block by hand (effective within two minutes): `sudo omni-soar-debloquer <ip>`,
+optionally with `--exclure "reason"` to make the exclusion permanent.
 
 A **manual block** path lets an analyst block an IP straight from an alert e-mail via an
 HMAC-signed, time-boxed link.
@@ -332,8 +374,46 @@ variant exists for DR / staging.
         correlation · multi-site SOAR · index templates · cert orchestrator
 ```
 
-Prerequisites, variables, and secrets are described in `docs/` and `SECRETS.example.md`
-(no secret is committed). See [`docs/PRA-RECONSTRUCTION-SIEM.md`](docs/PRA-RECONSTRUCTION-SIEM.md)
+### Prerequisites
+
+Checked by `./00-preflight.sh`, which prints a PASS / WARN / FAIL report:
+
+- Debian 13, root access, reachable apt mirrors;
+- a CPU with **AVX** (required by MongoDB 8);
+- at least 30 GB of RAM (OpenSearch and Graylog heaps are sized in `00-vars.env`);
+- a dedicated data disk for `/data`, encrypted with LUKS2 and unlocked by the TPM;
+- a resolvable FQDN and free input ports (443, 5044, 1514–1520, 12201).
+
+### Quick start
+
+```bash
+git clone https://github.com/jmorin-info/omnitech-siem-setup.git
+cd omnitech-siem-setup && chmod +x *.sh
+
+cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env
+$EDITOR 00-vars.env              # replace every CHANGEME, check every "A VERIFIER" line
+
+./00-preflight.sh --gen-vars     # host checks + suggested values
+./01-base.sh && ./02-mongodb.sh && ./03-opensearch.sh && ./04-graylog.sh
+./05-nginx-tls.sh && ./06-firewall.sh && ./07-inputs.sh && ./08-backup.sh
+./10-graylog-model.sh && ./11-graylog-enrichment.sh && ./12-graylog-pipelines.sh
+./13-graylog-alerts.sh && ./21-alert-hygiene.sh && ./14-graylog-dashboards.sh
+```
+
+Then run the functional groups (detections, UEBA/NDR, SOAR, triage, reports, extra
+sources). A few numbers are shared by two scripts (38, 40, 48, 49, 84, 85, 97): always go by
+the full script name and its header. The French README has the exact order.
+
+### Configuration
+
+All settings live in a single file, `00-vars.env`, which is never committed. Start from the
+commented template `00-vars.env.example`. Keep comments on their own lines: some Python
+collectors read this file and do not strip trailing comments. Every script sources
+`00-vars.env` first, then `lib-graylog.sh`. In the other order the API URL is empty and calls
+fail silently.
+
+Service secrets (webhooks, API keys, service accounts) are listed in `SECRETS.example.md`;
+the real `SECRETS.md` is git-ignored. See [`docs/PRA-RECONSTRUCTION-SIEM.md`](docs/PRA-RECONSTRUCTION-SIEM.md)
 for a full rebuild procedure and [`docs/PROCEDURE-EXPLOITATION-SIEM.md`](docs/PROCEDURE-EXPLOITATION-SIEM.md)
 for operations.
 
@@ -341,8 +421,24 @@ for operations.
 
 ## 11. Operations &amp; resilience
 
-- **Backups** — nightly application backup (MongoDB dump + OpenSearch snapshot + configs),
-  restore procedure validated ([`RESTORE.md`](RESTORE.md)).
+- **Backups** — a nightly encrypted archive of the full configuration (MongoDB dump, configs,
+  robots, systemd units, this repository), checked for restorability on every run and copied
+  off the host. Indexed logs are covered by **selective, incremental OpenSearch snapshots**
+  (`oms-snap-siem`, 01:30): rolling windows for the big indices, small ones in full, plus a
+  weekly test restore. Restore with `include_aliases=false` so the Graylog write alias is
+  never moved. Full procedure: [`RESTORE.md`](RESTORE.md).
+- **Automatic updates** — Debian security fixes through `unattended-upgrades`. The SIEM stack
+  is handled by `oms-maj-siem` every Sunday at 04:30:
+  1. pre-checks (`/data` mounted, OpenSearch green, Graylog API up, free space);
+  2. backup;
+  3. upgrade;
+  4. known fixes re-applied;
+  5. reboot if the kernel asks for it, with a full post-boot check;
+  6. an e-mail report.
+
+  Upgrades stay inside pinned series (Graylog 7.1, OpenSearch 2.19, MongoDB 8.0,
+  Logstash 8.19, see `/etc/apt/preferences.d/oms-siem-series`). Moving to a new major series
+  is a deliberate, manual decision. Dry run: `oms-maj-siem --simuler`.
 - **Retention** — ISO-aligned per-source retention tiers (e.g. FortiGate/Sysmon 90 d,
   Windows Security / vSphere / ESET 180 d, M365 365 d) — see
   [`docs/POLITIQUE-RETENTION.md`](docs/POLITIQUE-RETENTION.md).
@@ -352,6 +448,29 @@ for operations.
 - **Encryption** — the data volume is LUKS-encrypted; TLS everywhere; SSH locked down.
 - **Alerting hygiene** — one clean mail per real alert; the triage service is the single mail
   path (no legacy double-notifications).
+
+### Troubleshooting — the ones that bite
+
+| Symptom | Cause and fix |
+|---|---|
+| Console login returns **503 "Authentication service unavailable"** for everyone | Graylog's AD backend (LDAPS with certificate checks) does not trust the CA that now signs the domain controllers' certificates, typically after a CA renewal. Import the new root into the Java truststore set in `GRAYLOG_SERVER_JAVA_OPTS`, then restart `graylog-server`. While the backend fails, even local accounts are refused |
+| **Logstash restarts in a loop** after a package upgrade | The upgrade removes the hand-installed `logstash-output-gelf` plugin. Reinstall it with `JRUBY_OPTS="-J-Xmx2g" logstash-plugin install logstash-output-gelf`; without the memory flag the installer runs out of heap. `oms-maj-siem` does it for you |
+| Logstash **TLS errors to SQL Server** | Logstash ships its own JVM, which does not know the internal CA: use a truststore outside the package (`/etc/logstash/cacerts-omni.jks`, referenced in `jvm.options`). On the SQL side, check the instance is bound to the *current* machine certificate; after auto-renewal it keeps the old thumbprint |
+| **OpenSearch red** right after a reboot | Expected for a few minutes while 1,200+ shards are reallocated. Graylog migrations running in that window may log rotation errors; they are harmless as long as `index_failures` stays empty. Wait for green before digging |
+| Snapshots silently stopped | The `graylog_fs` repository registration lives in the cluster state and is lost if `path.data` is migrated or wiped. Re-register it |
+
+More in [`docs/GUIDE-DEPANNAGE.md`](docs/GUIDE-DEPANNAGE.md) and the French README.
+
+### Security & secrets
+
+- No secret is committed. `.gitignore` excludes `00-vars.env`, `SECRETS.md`, keys,
+  certificates and credential files; only `*.example` templates are versioned.
+- Internal services (OpenSearch, MongoDB, the Graylog API, the console backend) listen on
+  `127.0.0.1` only. Nginx (443) and the inputs are the only exposed ports, behind nftables
+  and the perimeter firewall.
+- Production robots that are patched in place are copied back into `deploye/` with
+  `sync-deploye.sh`. It strips credentials from URLs, runs a secret scan and refuses to
+  commit if anything shows up.
 
 ---
 
@@ -378,6 +497,7 @@ management). See [`docs/ISO27001-MAPPING.md`](docs/ISO27001-MAPPING.md),
 ├── lookups/                                     # 20 lookup tables (guidance, MITRE, allow-lists…)
 ├── kit/  windows/  fortigate/                   # collector kits & source configs
 ├── docker/                                      # Docker variant (DR / staging)
+├── deploye/  sync-deploye.sh                    # production state of robots, units, APT pins (copied back from the server)
 ├── tests/  run-tests.sh                         # test harness
 └── docs/                                        # full documentation set (see below)
 ```
