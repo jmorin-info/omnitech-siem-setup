@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+# omni-integrity - registre d'integrite haché-en-chaine + signe des logs.
+#   defaut : ajoute un maillon quotidien. --verify : re-verifie toute la chaine.
+#   Genere par 60-integrity.sh - ne pas editer a la main.
+import json, hashlib, hmac, os, sys, urllib.request, datetime
+
+ES      = "http://127.0.0.1:9200"
+KEYFILE = "/etc/graylog/omni-integrity.key"
+CHAIN   = "/var/lib/omni-integrity/chain.jsonl"
+GELF    = "http://127.0.0.1:12201/gelf"
+SIEM    = "bx-it-graylog-vm"
+
+def key():
+    with open(KEYFILE) as f: return f.read().strip().encode()
+
+def canon(obj):  # JSON canonique (tri des cles) -> hash stable
+    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()
+
+def sha(b): return hashlib.sha256(b).hexdigest()
+def sign(b): return hmac.new(key(), b, hashlib.sha256).hexdigest()
+
+def gelf(fields):
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.pop("short_message", "integrity")}
+    base.update({("_" + k): v for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def indices():
+    url = (ES + "/_cat/indices/omni-*,graylog*,gl-events*"
+           "?format=json&h=index,uuid,docs.count,store.size&bytes=b")
+    with urllib.request.urlopen(url, timeout=30) as r:
+        data = json.load(r)
+    rows = [{"index": d["index"], "uuid": d.get("uuid", ""),
+             "docs": int(d.get("docs.count") or 0), "bytes": int(d.get("store.size") or 0)}
+            for d in data if not d["index"].startswith(".")]
+    return sorted(rows, key=lambda x: x["index"])
+
+def read_chain():
+    if not os.path.exists(CHAIN): return []
+    return [json.loads(l) for l in open(CHAIN) if l.strip()]
+
+def append_link(now_iso):
+    os.makedirs(os.path.dirname(CHAIN), exist_ok=True)
+    chain = read_chain()
+    prev_hash = chain[-1]["manifest_hash"] if chain else ("0" * 64)
+    seq = (chain[-1]["seq"] + 1) if chain else 1
+    idx = indices()
+    manifest = {"seq": seq, "ts": now_iso, "prev_hash": prev_hash,
+                "index_count": len(idx),
+                "total_docs": sum(i["docs"] for i in idx),
+                "total_bytes": sum(i["bytes"] for i in idx),
+                "indices": idx}
+    mh = sha(canon(manifest))
+    rec = dict(manifest); rec["manifest_hash"] = mh; rec["hmac"] = sign(mh.encode())
+    with open(CHAIN, "a") as f: f.write(json.dumps(rec) + "\n")
+    os.chmod(CHAIN, 0o600)
+    gelf({"event_source": "siem_integrity", "event_action": "manifeste_ajoute",
+          "integrity_seq": seq, "integrity_total_docs": manifest["total_docs"],
+          "integrity_index_count": len(idx), "integrity_hash": mh[:16],
+          "short_message": f"Integrite: maillon #{seq} ({manifest['total_docs']} docs, {len(idx)} index) hash {mh[:12]}"})
+    print(f"[integrity] maillon #{seq} ajoute - {manifest['total_docs']} docs / {len(idx)} index - hash {mh[:16]}")
+    return rec
+
+def verify():
+    chain = read_chain(); ok = True; prev = "0" * 64
+    for rec in chain:
+        body = {k: rec[k] for k in ("seq","ts","prev_hash","index_count","total_docs","total_bytes","indices")}
+        mh = sha(canon(body))
+        if mh != rec["manifest_hash"]:
+            print(f"[!] maillon #{rec['seq']} : HASH ALTERE"); ok = False
+        if not hmac.compare_digest(sign(mh.encode()), rec["hmac"]):
+            print(f"[!] maillon #{rec['seq']} : SIGNATURE INVALIDE"); ok = False
+        if rec["prev_hash"] != prev:
+            print(f"[!] maillon #{rec['seq']} : CHAINAGE ROMPU (prev attendu {prev[:12]})"); ok = False
+        prev = rec["manifest_hash"]
+    msg = f"chaine OK ({len(chain)} maillons)" if ok else "CHAINE COMPROMISE"
+    gelf({"event_source": "siem_integrity", "event_action": "verification",
+          "integrity_state": "ok" if ok else "compromis", "integrity_links": len(chain),
+          "short_message": f"Integrite verification: {msg}"})
+    print(f"[integrity] {msg}")
+    return 0 if ok else 2
+
+if __name__ == "__main__":
+    try:
+        if "--verify" in sys.argv: sys.exit(verify())
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        append_link(now)
+    except Exception as e:
+        print("omni-integrity KO:", e, file=sys.stderr); sys.exit(1)

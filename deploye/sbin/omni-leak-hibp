@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""HIBP domain search -> GELF : comptes @domaine dans des fuites connues. Stdlib."""
+import json, urllib.request, urllib.error
+ENV = {}
+for l in open("/etc/default/omni-leak"):
+    if "=" in l and not l.lstrip().startswith("#"):
+        k, v = l.strip().split("=", 1); ENV[k] = v.strip()
+TOK = ENV.get("HIBP_API_KEY", ""); DOM = ENV.get("HIBP_DOMAIN", "")
+GELF = ENV.get("GELF_URL", "http://127.0.0.1:12201/gelf")
+if not TOK:
+    print("HIBP_API_KEY absent -> arret propre (cle + domaine verifie requis)."); raise SystemExit(0)
+def gelf(f):
+    f.update({"version": "1.1", "host": "haveibeenpwned.com"})
+    urllib.request.urlopen(urllib.request.Request(GELF, data=json.dumps(f).encode(),
+        headers={"Content-Type": "application/json"}), timeout=10).read()
+try:
+    doc = json.load(urllib.request.urlopen(urllib.request.Request(
+        "https://haveibeenpwned.com/api/v3/breacheddomain/%s" % DOM,
+        headers={"hibp-api-key": TOK, "User-Agent": "omni-siem"}), timeout=30))
+except urllib.error.HTTPError as e:
+    print("HIBP HTTP", e.code, "(cle/abonnement/domaine non verifie ?)"); raise SystemExit(0)
+n = 0
+for alias, breaches in (doc or {}).items():
+    n += 1
+    gelf({"short_message": "Compte expose: %s@%s dans %d fuite(s)" % (alias, DOM, len(breaches)),
+          "level": 4, "_event_source": "leak_intel", "_leak_source": "hibp",
+          "_alert_tag": "credential_leak", "_leak_account": "%s@%s" % (alias, DOM),
+          "_leak_breaches": ", ".join(breaches), "_event_action": "breached_account"})
+print("HIBP: %d compte(s) expose(s) pour %s" % (n, DOM))

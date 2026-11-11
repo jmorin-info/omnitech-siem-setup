@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-self-health - Auto-supervision des robots d'analyse du SIEM.
+#   Verifie que chaque collecteur (UEBA/NDR/incidents/collecte/vuln/carte) a bien
+#   TOURNE et REUSSI recemment (etat systemd). Si un job a echoue ou ne tourne plus
+#   (timer mort), la detection s'arrete EN SILENCE -> on emet une alerte. C'est le
+#   filet de securite "qui surveille les surveillants".
+#   Emet GELF event_source=siem_health : 1 synthese + 1 par job en panne
+#   (alert_tag=siem_job_fail).
+# Lance par timer (toutes les 30 min). Sans config.
+# =============================================================================
+import json, os, subprocess, sys, urllib.request
+
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM = "bx-it-graylog-vm"
+
+# unit : age max tolere (s) = ~3x la cadence du timer (rate un cycle = OK, deux = alerte)
+JOBS = {
+    "omni-collect-health":     7200,
+    "omni-vuln-scan":        180000,
+    "omni-ueba-volume":        7200,
+    "omni-ueba-geo":           4500,
+    "omni-ndr-beacon":        43200,
+    "omni-ndr-dns":            7200,
+    "omni-ueba-score":         4500,
+    # omni-incident-correlate RETIRE de la surveillance (02/07/2026) :
+    # deprecie volontairement le 28/06 (remplace par oms-xdr, cf 44-incidents.sh).
+    # Le garder ici generait un faux [PANNE] permanent dans self-health.
+    "omni-ndr-scan":           2400,
+    "omni-ndr-exfil":          7200,
+    "omni-ueba-geo-newcountry": 14400,
+    "omni-ldap-recon":         2400,
+    "omni-ndr-lateral":        3600,
+    "omni-geo-flux":            300,
+    "omni-fortidhcp-fetch":    2700,
+    "omni-m365-fetch":         1800,
+    "omni-m365-activity":      3600,
+    "omni-integrity":        172800,
+    # Veille de version (timer quotidien) : 2x la cadence. La veille doit elle-meme
+    # etre supervisee, sinon son silence serait pris pour "aucune version en retard"
+    # -- exactement le trou qui a laisse Graylog 7.1.4 passer 11 jours inapercu.
+    # ORDRE DE DEPLOIEMENT IMPERATIF : DE-COMMENTER cette ligne qu'APRES avoir
+    # installe ET lance omni-version-watch.timer. Active avant le timer, elle genere
+    # un faux [PANNE] permanent toutes les 30 min (unite absente -> alert_tag=
+    # siem_job_fail, qui EST alerte par 13-graylog-alerts.sh) -- meme piege que
+    # omni-incident-correlate ci-dessus, donc meme traitement : commentee par defaut.
+    "omni-version-watch":    172800,
+}
+
+def gelf(fields):
+    if os.environ.get("UEBA_DRY"):
+        return
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "siem_health")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def uptime():
+    return float(open("/proc/uptime").read().split()[0])
+
+def show(unit):
+    p = subprocess.run(["systemctl", "show", unit + ".service",
+                        "-p", "LoadState", "-p", "Result", "-p", "ExecMainStatus",
+                        "-p", "ActiveState",
+                        "-p", "ExecMainExitTimestampMonotonic",
+                        "-p", "InactiveEnterTimestampMonotonic"],
+                       capture_output=True, text=True, timeout=10)
+    d = {}
+    for line in p.stdout.splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1); d[k] = v
+    return d
+
+def main():
+    up = uptime()
+    ok_n, bad, maint = 0, [], []   # bad = PANNES réelles (robots/infra) ; maint = rappels maintenance (reboot)
+    for unit, maxage in JOBS.items():
+        d = show(unit)
+        load = d.get("LoadState", "")
+        result = d.get("Result", "")
+        # On prend le PLUS RECENT de 2 horodatages monotones : ExecMainExit (fin du
+        # main process) ET InactiveEnter (passage inactif = fin de run). Robuste aux
+        # oneshots rapides (geo-flux/30s) captes a chaud et aux daemon-reload qui
+        # remettent ExecMainExit a 0 -> evite les FAUX "robot en panne".
+        def _us(k):
+            try: return int(d.get(k, "0") or 0)
+            except ValueError: return 0
+        last_us = max(_us("ExecMainExitTimestampMonotonic"), _us("InactiveEnterTimestampMonotonic"))
+        active = d.get("ActiveState", "")
+        if last_us:
+            age = up - last_us / 1e6
+        elif active in ("active", "activating", "reloading"):
+            age = 0          # en cours d'execution -> sain (pas encore d'horodatage de fin)
+        else:
+            age = up         # jamais execute depuis le boot -> grace = uptime
+        reason = None
+        if load != "loaded":
+            reason = f"unite absente ({load})"
+        elif result not in ("success",):
+            reason = f"dernier resultat={result}"
+        elif age > maxage:
+            reason = f"pas execute depuis {int(age/60)} min (max {int(maxage/60)})"
+        if reason:
+            bad.append((unit, reason, int(age)))
+            gelf({"event_source": "siem_health", "health_type": "job_fail",
+                  "alert_tag": "siem_job_fail", "health_job": unit, "health_reason": reason,
+                  "health_age_s": int(age),
+                  "short_message": f"ROBOT SIEM EN PANNE : {unit} - {reason}"})
+            print(f"  [PANNE] {unit}: {reason}")
+        else:
+            ok_n += 1
+
+    # Infra : volume /data (chiffre LUKS) bien ouvert + monte ? Nouvelle surface
+    # depuis le chiffrement au repos -> si le TPM echoue au boot ou si /data est
+    # demonte, la collecte s'arrete. Signale via le meme canal que les robots.
+    infra = []
+    if not os.path.ismount("/data"):
+        infra.append("/data NON monte")
+    if not os.path.exists("/dev/mapper/cryptdata"):
+        infra.append("mapper LUKS 'cryptdata' absent (volume non dechiffre)")
+    if infra:
+        msg = "; ".join(infra)
+        bad.append(("stockage-chiffre", msg, 0))
+        gelf({"event_source": "siem_health", "health_type": "infra_fail",
+              "alert_tag": "siem_job_fail", "health_job": "stockage-chiffre",
+              "health_reason": msg,
+              "short_message": f"STOCKAGE SIEM DEGRADE : {msg}"})
+        print(f"  [INFRA] {msg}")
+
+    # MAJ securite : reboot en attente (noyau/lib patche non encore actif) = vulnerabilite
+    # si oublie. Reboot du SIEM = MANUEL en fenetre (/data chiffre LUKS2/TPM2). On signale.
+    reboot_req = os.path.exists("/var/run/reboot-required") or os.path.exists("/run/reboot-required")
+    if not reboot_req:
+        try:
+            r = subprocess.run(["needrestart", "-b", "-k"], capture_output=True, text=True, timeout=30)
+            for ln in r.stdout.splitlines():
+                if ln.startswith("NEEDRESTART-KSTA:") and int(ln.split(":")[1]) >= 3:
+                    reboot_req = True
+        except Exception:
+            pass
+    if reboot_req:
+        # Reboot = RAPPEL DE MAINTENANCE, PAS une panne de robot (sinon faux "1 en panne").
+        maint.append("reboot requis (MAJ securite)")
+        gelf({"event_source": "siem_health", "health_type": "reboot_required",
+              "alert_tag": "siem_maintenance", "health_job": "maj-securite",
+              "health_reason": "reboot requis apres MAJ securite - planifier en fenetre + valider TPM",
+              "short_message": "MAJ SECURITE : reboot du SIEM requis (fenetre + valider le TPM)"})
+        print("  [PATCH] reboot requis (MAJ securite)")
+
+    # Synthese : on distingue les PANNES (robots/infra = action immediate) des
+    # RAPPELS de maintenance (reboot planifie) -> plus de faux "robot en panne".
+    note = ""
+    if bad:
+        note += f", {len(bad)} en panne"
+    if maint:
+        note += f" · {len(maint)} maintenance (reboot securite)"
+    gelf({"event_source": "siem_health", "health_type": "summary",
+          "health_ok": ok_n, "health_fail": len(bad), "health_total": len(JOBS),
+          "health_maint": len(maint),
+          "short_message": f"Auto-supervision SIEM : {ok_n}/{len(JOBS)} robots OK{note}"})
+    print(f"[self-health] {ok_n}/{len(JOBS)} robots OK{note}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-self-health KO:", e, file=sys.stderr); sys.exit(1)

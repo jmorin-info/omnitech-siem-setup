@@ -1,0 +1,126 @@
+#!/bin/bash
+# =============================================================================
+# oms-snap-siem : snapshots OpenSearch SELECTIFS et incrementaux du SIEM Graylog
+# OMNITECH 2026-11-11. Installe dans /usr/local/sbin/oms-snap-siem.
+#
+# Pourquoi selectif : 3,6 To d'index pour ~760 Go libres sur /home (disque physique distinct de /data).
+# L'ancien siem-backup.timer (snapshot de TOUT) a echoue le 14/08/2026 et est desactive : il n'est pas reactive.
+#
+# Depot : graylog_fs (/home/siem-backup/opensearch-snapshots, deja declare dans path.repo).
+# Snapshots nommes oms-sel-AAAAMMJJ-HHMM ; la rotation ne supprime QUE ces snapshots-la (via l'API, jamais via find).
+# Selection : /etc/oms-snap-siem.conf (prefixe:jours ; 0 = tous les index du prefixe). Restauration toujours SANS alias
+# (include_aliases=false) pour ne jamais deplacer un deflector Graylog.
+#
+# Modes : (defaut) snapshot + controle + rotation ; --simuler (liste ce qui serait sauvegarde) ;
+#         --test-restauration (restaure le plus petit index du dernier snapshot sous oms-restoretest-*, compare, supprime) ;
+#         --etat (resume des snapshots).
+# =============================================================================
+set -u
+export LANG=C.UTF-8
+OS=http://127.0.0.1:9200
+REPO=graylog_fs
+CONF=/etc/oms-snap-siem.conf
+JOURNAL=/var/log/oms-snap-siem.log
+ETAT=/var/lib/oms-snap-siem; mkdir -p "$ETAT"
+MODE="${1:-normal}"
+# valeurs par defaut, surchargees par $CONF
+GARDER=3
+LIBRE_MIN_PCT=15
+SELECTION="omni-winsec:21 omni-fortigate:7 omni-vsphere:14 omni-m365:0 omni-interne:0 omni-eset:0 omni-seal-access:0 omni-seal-alarm:0 omni-seal-audit:0 omni-fortiems:0 omni-fortimanager:0 omni-fortidhcp:0 omni-linux:0 omni-vaultwarden:0 omni-cert:0 omni-aruba:0 omni-bunkerweb:0 gl-events:0 gl-system-events:0"
+[ -f "$CONF" ] && . "$CONF"
+# destinataire des alertes : le meme que la mise a jour hebdomadaire (pas de second endroit a maintenir)
+MAIL_A=$(grep -oE '^MAIL_A="[^"]+"' /usr/local/sbin/oms-maj-siem 2>/dev/null | cut -d'"' -f2)
+MAIL_DE="no-reply@omnitech-security.fr"; SMTP="smtp://smtp-internal.omnitech-security.fr:25"
+
+log(){ echo "$(date '+%F %T') $*" | tee -a "$JOURNAL"; logger -t oms-snap-siem -- "$*"; }
+alerte(){ # $1 objet, $2 texte
+  log "ALERTE : $1 - $2"
+  [ -n "$MAIL_A" ] || return 0
+  local f; f=$(mktemp)
+  printf 'From: SIEM OMNITECH <%s>\nTo: %s\nSubject: [SIEM OMNITECH] Snapshots OpenSearch : %s\nContent-Type: text/plain; charset=UTF-8\n\n%s\n\nJournal : %s (serveur %s)\n' \
+    "$MAIL_DE" "$MAIL_A" "$1" "$2" "$JOURNAL" "$(hostname)" > "$f"
+  curl -s --max-time 30 --url "$SMTP" --mail-from "$MAIL_DE" --mail-rcpt "$MAIL_A" --upload-file "$f" >/dev/null || log "envoi du mail impossible"
+  rm -f "$f"
+}
+libre_pct(){ df --output=pcent /home | tail -1 | tr -dc 0-9 | awk '{print 100-$1}'; }
+
+selection_index(){ # affiche la liste des index retenus (un par ligne)
+  local maintenant_ms; maintenant_ms=$(( $(date +%s) * 1000 ))
+  local tous; tous=$(curl -s "$OS/_cat/indices?h=index,creation.date")
+  for e in $SELECTION; do
+    local p=${e%%:*} j=${e##*:}
+    echo "$tous" | awk -v p="$p" -v j="$j" -v now="$maintenant_ms" '
+      $1 ~ ("^" p "_[0-9]+$") { if (j==0 || $2 >= now - (j+1)*86400000) print $1 }'
+  done | sort -u
+}
+
+if [ "$MODE" = "--etat" ]; then
+  curl -s "$OS/_snapshot/$REPO/_all" | jq -r '.snapshots[] | [.snapshot, .state, (.indices|length), .start_time, ((.duration_in_millis/60000)|floor|tostring)+" min", (.shards.failed|tostring)+" echec(s)"] | @tsv'
+  echo "/home libre : $(libre_pct) %"; exit 0
+fi
+
+if [ "$MODE" = "--test-restauration" ]; then
+  DERNIER=$(curl -s "$OS/_snapshot/$REPO/_all" | jq -r '[.snapshots[] | select(.snapshot|startswith("oms-sel-")) | select(.state=="SUCCESS")] | sort_by(.start_time_in_millis) | last | .snapshot // empty')
+  [ -n "$DERNIER" ] || { log "Test de restauration : aucun snapshot oms-sel- reussi"; exit 1; }
+  # plus petit index NON actif (pas un deflector) present dans le snapshot ET contenant au moins 1000 documents
+  # (un index vide ne prouverait rien)
+  ACTIFS=$(curl -s "$OS/_cat/aliases?h=index" | sort -u)
+  DANS_SNAP=$(curl -s "$OS/_snapshot/$REPO/$DERNIER" | jq -r '.snapshots[0].indices[]' | sort -u)
+  IDX=$(curl -s "$OS/_cat/indices?h=index,docs.count,store.size&bytes=b" | awk '$2>=1000 {print $3, $1}' | sort -n | while read -r t i; do
+          echo "$DANS_SNAP" | grep -qxF "$i" || continue; echo "$ACTIFS" | grep -qxF "$i" && continue; echo "$i"; break; done)
+  [ -n "$IDX" ] || { log "Test de restauration : aucun index candidat"; exit 1; }
+  CIBLE="oms-restoretest-$IDX"
+  curl -s -X DELETE "$OS/$CIBLE" >/dev/null 2>&1
+  R=$(curl -s -X POST "$OS/_snapshot/$REPO/$DERNIER/_restore?wait_for_completion=true" -H 'Content-Type: application/json' -d "{
+        \"indices\":\"$IDX\",\"include_aliases\":false,\"include_global_state\":false,
+        \"rename_pattern\":\"(.+)\",\"rename_replacement\":\"oms-restoretest-\$1\",
+        \"index_settings\":{\"index.number_of_replicas\":0}}")
+  sleep 5; curl -s -X POST "$OS/$CIBLE/_refresh" >/dev/null
+  N_SRC=$(curl -s "$OS/$IDX/_count" | jq -r .count); N_RES=$(curl -s "$OS/$CIBLE/_count" | jq -r '.count // "ERREUR"')
+  ALIAS=$(curl -s "$OS/$CIBLE/_alias" | jq -r ".\"$CIBLE\".aliases | keys | length" 2>/dev/null)
+  curl -s -X DELETE "$OS/$CIBLE" >/dev/null
+  if [ "$N_SRC" = "$N_RES" ] && [ "${ALIAS:-0}" = 0 ]; then
+    log "Test de restauration OK : $IDX depuis $DERNIER -> $CIBLE ($N_RES documents = source, sans alias), index de test supprime"
+    date +%s > "$ETAT/dernier-test-ok"; exit 0
+  else
+    alerte "test de restauration EN ECHEC" "$IDX depuis $DERNIER : source=$N_SRC restaure=$N_RES alias=$ALIAS ; reponse=${R:0:300}"; exit 1
+  fi
+fi
+
+# ---------------- snapshot ----------------
+exec 9>/run/oms-snap-siem.lock; flock -n 9 || { log "deja en cours"; exit 0; }
+LISTE=$(selection_index); NB=$(echo "$LISTE" | grep -c .)
+TAILLE=$(for i in $LISTE; do curl -s "$OS/_cat/indices/$i?h=store.size&bytes=b"; done | awk '{s+=$1} END{printf "%.0f", s/1073741824}')
+if [ "$MODE" = "--simuler" ]; then
+  echo "$NB index retenus, ~${TAILLE} Go (taille brute, le depot deduplique les segments deja sauvegardes) ; /home libre $(libre_pct) %"
+  for e in $SELECTION; do p=${e%%:*}; printf '  %-20s %s index\n' "$p" "$(echo "$LISTE" | grep -cE "^${p}_[0-9]+$")"; done
+  exit 0
+fi
+log "=== snapshot selectif : $NB index, ~${TAILLE} Go bruts ==="
+ST=$(curl -s "$OS/_cluster/health" | jq -r .status)
+[ "$ST" = red ] && { alerte "snapshot annule" "OpenSearch est rouge"; exit 1; }
+curl -s "$OS/_snapshot/$REPO" | grep -q "\"$REPO\"" || { alerte "snapshot annule" "depot $REPO absent (voir /root/omnitech-siem-setup/08-backup.sh etape 1)"; exit 1; }
+[ "$(curl -s "$OS/_snapshot/_status" | jq '.snapshots|length')" = 0 ] || { log "un snapshot est deja en cours : abandon"; exit 0; }
+[ "$(libre_pct)" -ge "$LIBRE_MIN_PCT" ] || { alerte "snapshot annule" "/home n'a plus que $(libre_pct) % libres (minimum $LIBRE_MIN_PCT %)"; exit 1; }
+NOM="oms-sel-$(date +%Y%m%d-%H%M)"
+CORPS=$(jq -n --arg i "$(echo $LISTE | tr ' ' ',')" '{indices:$i, ignore_unavailable:true, include_global_state:false, partial:false,
+          metadata:{auteur:"oms-snap-siem", motif:"sauvegarde selective quotidienne OMNITECH"}}')
+R=$(curl -s -X PUT "$OS/_snapshot/$REPO/$NOM?wait_for_completion=false" -H 'Content-Type: application/json' -d "$CORPS")
+echo "$R" | grep -q '"accepted":true' || { alerte "snapshot refuse" "${R:0:300}"; exit 1; }
+log "snapshot $NOM lance"
+FIN=$(( $(date +%s) + 10*3600 )); ETATS=IN_PROGRESS
+while [ "$(date +%s)" -lt "$FIN" ]; do
+  sleep 60
+  ETATS=$(curl -s "$OS/_snapshot/$REPO/$NOM" | jq -r '.snapshots[0].state // "INCONNU"')
+  [ "$ETATS" = IN_PROGRESS ] || break
+  [ "$(libre_pct)" -lt 5 ] && { curl -s -X DELETE "$OS/_snapshot/$REPO/$NOM" >/dev/null; alerte "snapshot interrompu" "/home sous 5 % libres : $NOM annule"; exit 1; }
+done
+INFO=$(curl -s "$OS/_snapshot/$REPO/$NOM" | jq -r '.snapshots[0] | "\(.state) \(.shards.successful)/\(.shards.total) shards, \(.shards.failed) echec(s), \((.duration_in_millis/60000)|floor) min"')
+if [ "$ETATS" != SUCCESS ]; then alerte "snapshot $NOM en echec" "$INFO"; exit 1; fi
+log "snapshot $NOM : $INFO ; /home libre $(libre_pct) %"
+date +%s > "$ETAT/dernier-snapshot-ok"
+# ---------------- rotation (uniquement oms-sel-*, uniquement apres un succes) ----------------
+for S in $(curl -s "$OS/_snapshot/$REPO/_all" | jq -r --argjson g "$GARDER" '[.snapshots[] | select(.snapshot|startswith("oms-sel-"))] | sort_by(.start_time_in_millis) | if length > $g then .[0:(length-$g)] else [] end | .[] | .snapshot'); do
+  curl -s -X DELETE "$OS/_snapshot/$REPO/$S" >/dev/null && log "rotation : $S supprime (on garde les $GARDER derniers)"
+done
+log "fin : $(curl -s "$OS/_snapshot/$REPO/_all" | jq -r '[.snapshots[]|select(.snapshot|startswith("oms-sel-"))|.snapshot]|join(" ")')"

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# omni-postboot-check - verification automatique au demarrage du SIEM.
+#   Confirme que /data s'est dechiffre tout seul (TPM2) et que les services sont up.
+#   Journalise /var/log/omni-postboot.log + emet un GELF (event_source=siem_boot).
+#   Lance par omni-postboot-check.service (oneshot, a chaque boot).
+sleep 45   # laisser les services finir de demarrer
+CD=$([ -e /dev/mapper/cryptdata ] && echo actif || echo ABSENT)
+DM=$(mountpoint -q /data && echo monte || echo NON-MONTE)
+MO=$(systemctl is-active mongod); OS=$(systemctl is-active opensearch); GL=$(systemctl is-active graylog-server)
+CL=$(curl -s --max-time 10 http://127.0.0.1:9200/_cluster/health 2>/dev/null | python3 -c 'import sys,json;print(json.load(sys.stdin)["status"])' 2>/dev/null || echo injoignable)
+VERDICT="OK"
+[ "$DM" = "NON-MONTE" ] && VERDICT="DEGRADE: /data non monte (TPM ?) -> cryptsetup open + passphrase"
+[ "$GL" != "active" ] && VERDICT="DEGRADE: graylog=$GL"
+printf '%s | cryptdata=%s /data=%s mongod=%s opensearch=%s graylog=%s cluster=%s | %s\n' \
+  "$(date -u +%FT%TZ)" "$CD" "$DM" "$MO" "$OS" "$GL" "$CL" "$VERDICT" >> /var/log/omni-postboot.log
+# GELF best-effort (ne marche que si graylog est up).
+# Succes -> evenement de SANTE (health_type=boot_ok) SANS alert_tag : un boot reussi
+# est un signal POSITIF, il ne doit pas polluer le namespace de detection (alert_tag).
+# Echec -> alert_tag=siem_job_fail (vraie alerte : faute interne SIEM, alerte existante).
+# Dans les deux cas le statut reste tracable via event_source=siem_boot + boot_verdict.
+if [ "$VERDICT" = "OK" ]; then TAGF="\"_health_type\":\"boot_ok\""; else TAGF="\"_alert_tag\":\"siem_job_fail\""; fi
+curl -s -m 10 -X POST http://127.0.0.1:12201/gelf -H 'Content-Type: application/json' \
+  -d "{\"version\":\"1.1\",\"host\":\"bx-it-graylog-vm\",\"short_message\":\"SIEM post-boot: ${VERDICT} (/data=${DM}, graylog=${GL}, cluster=${CL})\",\"_event_source\":\"siem_boot\",${TAGF},\"_boot_verdict\":\"${VERDICT}\"}" >/dev/null 2>&1 || true

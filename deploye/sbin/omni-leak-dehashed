@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Dehashed -> GELF : enregistrements fuites/combolists pour le domaine. Stdlib."""
+import base64, json, urllib.request, urllib.error
+ENV = {}
+for l in open("/etc/default/omni-leak"):
+    if "=" in l and not l.lstrip().startswith("#"):
+        k, v = l.strip().split("=", 1); ENV[k] = v.strip()
+EM = ENV.get("DEHASHED_EMAIL", ""); KEY = ENV.get("DEHASHED_KEY", ""); DOM = ENV.get("DEHASHED_DOMAIN", "")
+GELF = ENV.get("GELF_URL", "http://127.0.0.1:12201/gelf")
+if not (EM and KEY):
+    print("DEHASHED_EMAIL/KEY absents -> arret propre."); raise SystemExit(0)
+def gelf(f):
+    f.update({"version": "1.1", "host": "dehashed.com"})
+    urllib.request.urlopen(urllib.request.Request(GELF, data=json.dumps(f).encode(),
+        headers={"Content-Type": "application/json"}), timeout=10).read()
+auth = base64.b64encode(("%s:%s" % (EM, KEY)).encode()).decode()
+try:
+    doc = json.load(urllib.request.urlopen(urllib.request.Request(
+        "https://api.dehashed.com/search?query=domain:%s&size=100" % DOM,
+        headers={"Authorization": "Basic " + auth, "Accept": "application/json", "User-Agent": "omni-siem"}), timeout=30))
+except urllib.error.HTTPError as e:
+    print("Dehashed HTTP", e.code); raise SystemExit(0)
+n = 0
+for e in (doc.get("entries") or [])[:100]:
+    em = e.get("email") or e.get("username")
+    if not em:
+        continue
+    n += 1
+    gelf({"short_message": "Fuite dark web: %s (Dehashed)" % em, "level": 4,
+          "_event_source": "leak_intel", "_leak_source": "dehashed", "_alert_tag": "credential_leak",
+          "_leak_account": em, "_leak_db": e.get("database_name"), "_event_action": "darkweb_record"})
+print("Dehashed: %d enregistrement(s) pour %s" % (n, DOM))

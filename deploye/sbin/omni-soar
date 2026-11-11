@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-soar - Service SOAR-light OMNITECH (v2, 11/11/2026, go jmorin)
+#   Graylog (notification HTTP "OMNI - SOAR auto-block") -> POST 127.0.0.1:8088/block
+#   -> garde-fous -> /var/lib/omni-soar/blocklist.json {ip: expiration}
+#   -> /var/www/siem-kit/soar/blocklist.txt (lu par les FortiGate BX + IV,
+#      connecteur "OMNI_SOAR_Blocklist", refus en local-in et en entree WAN)
+#
+# Garde-fous v2 (cause : des IP fixes de domicile de collaborateurs se faisaient bloquer) :
+#   - jamais d'IP non publique ;
+#   - jamais une IP de la liste d'exclusion : authentification reussie < 90 j (VPN IPsec/SSL,
+#     activite M365), sites, partenaires IPsec, Microsoft EOP, liste fixe
+#     (/etc/omni-soar/exclusions-statiques.txt, CIDR acceptes) ; voir omni-soar-exclusions ;
+#   - seuil d'occurrences : SOAR_MIN_HITS (5), SOAR_MIN_HITS_PAYS_NORMAL (10) pour une IP d'un
+#     pays habituel (FR et voisins) : jamais de blocage sur un echec isole ;
+#   - duree limitee (SOAR_TTL_HOURS, 24 h) + plafond (SOAR_MAX) ; expiration : omni-soar-expire ;
+#   - chaque decision est journalisee (GELF event_source=siem_soar + /var/log/omni-soar/decisions.log).
+# Deblocage : omni-soar-debloquer <ip> [--exclure "motif"]
+# =============================================================================
+import ipaddress, json, os, re, time, urllib.request
+from collections import Counter
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+ENVFILE  = "/root/omnitech-siem-setup/00-vars.env"
+SOARENV  = "/etc/omni-soar/soar.env"
+STATE    = "/var/lib/omni-soar/blocklist.json"
+META     = "/var/lib/omni-soar/blocklist-meta.json"
+EXCL_DYN = "/var/lib/omni-soar/exclusions.json"
+EXCL_FIX = "/etc/omni-soar/exclusions-statiques.txt"
+FEED     = "/var/www/siem-kit/soar/blocklist.txt"
+DECISIONS = "/var/log/omni-soar/decisions.log"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+LISTEN   = ("127.0.0.1", 8088)
+PAYS_NORMAUX_DEFAUT = "FR,BE,CH,LU,MC,ES,PT,IT,DE,GB,NL,IE,AT"
+
+def env():
+    e = {}
+    for f in (ENVFILE, SOARENV):
+        try:
+            for line in open(f):
+                m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+                if m: e[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+        except OSError: pass
+    return e
+
+def gelf(action, ip, msg, **extra):
+    try:
+        d = {"version": "1.1", "host": "bx-it-graylog-vm", "short_message": f"SOAR {action}: {ip} ({msg})",
+             "_event_source": "siem_soar", "_event_action": action, "_soar_ip": ip}
+        for k, v in extra.items(): d["_soar_" + k] = v
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(d).encode(),
+            headers={"Content-Type": "application/json"}), timeout=8)
+    except Exception: pass
+
+def journal(action, ip, **kw):
+    try:
+        os.makedirs(os.path.dirname(DECISIONS), exist_ok=True)
+        with open(DECISIONS, "a") as f:
+            f.write(json.dumps({"t": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "action": action, "ip": ip, **kw}, ensure_ascii=False) + "\n")
+    except Exception: pass
+
+def load(p=STATE):
+    try: return json.load(open(p))
+    except Exception: return {}
+
+def save(d, p=STATE):
+    tmp = p + ".tmp"
+    with open(tmp, "w") as f: json.dump(d, f)
+    os.replace(tmp, p)
+
+def render(d):
+    now = time.time()
+    lines = ["# OMNITECH SIEM SOAR blocklist - auto-genere - ne pas editer"] + [ip for ip, exp in sorted(d.items()) if exp > now]
+    tmp = FEED + ".tmp"
+    open(tmp, "w").write("\n".join(lines) + "\n")
+    os.replace(tmp, FEED)
+
+def is_public(ip):
+    try:
+        a = ipaddress.ip_address(ip)
+        return a.version == 4 and a.is_global
+    except ValueError:
+        return False
+
+def exclusions():
+    """Renvoie (dict ip->motif, liste (reseau, motif)). Lus a chaque alerte (fichiers petits)."""
+    ips, nets = {}, []
+    dyn = load(EXCL_DYN)
+    for ip, motif in (dyn.get("ips") or {}).items(): ips[ip] = motif
+    try:
+        for line in open(EXCL_FIX):
+            line = line.split("#", 1)
+            val = line[0].strip(); motif = (line[1].strip() if len(line) > 1 else "liste fixe")
+            if not val: continue
+            try:
+                n = ipaddress.ip_network(val, strict=False)
+                if n.num_addresses == 1: ips[str(n.network_address)] = "fixe : " + motif
+                else: nets.append((n, "fixe : " + motif))
+            except ValueError: pass
+    except OSError: pass
+    return ips, nets
+
+def motif_exclusion(ip, ips, nets, wl):
+    if ip in wl: return "SOAR_WHITELIST"
+    if ip in ips: return ips[ip]
+    a = ipaddress.ip_address(ip)
+    for n, m in nets:
+        if a in n: return m
+    return None
+
+def extract(payload):
+    """IP candidates + pays (si present dans le backlog)."""
+    c, pays = Counter(), {}
+    def scan(d):
+        if not isinstance(d, dict): return
+        for key in ("remip", "src_ip", "srcip"):
+            v = d.get(key)
+            if v not in (None, "", "-"):
+                v = str(v); c[v] += 1
+                cc = d.get(key + "_country_code") or d.get("src_country")
+                if cc: pays[v] = str(cc).upper()
+    for m in (payload.get("backlog") or []):
+        if isinstance(m, dict):
+            scan(m); scan(m.get("fields")); scan(m.get("message"))
+    ev = payload.get("event") or {}
+    scan(ev.get("fields"))
+    for v in (ev.get("key_tuple") or []):
+        if isinstance(v, str) and is_public(v): c[v] += 1
+    return c, pays
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def reply(self, o, code=200):
+        self.send_response(code); self.end_headers(); self.wfile.write(json.dumps(o, ensure_ascii=False).encode())
+    def do_POST(self):
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            payload = json.loads(self.rfile.read(n) or b"{}")
+        except Exception:
+            return self.reply({"error": "json"}, 400)
+        e = env()
+        ttl = int(e.get("SOAR_TTL_HOURS", "24")) * 3600
+        cap = int(e.get("SOAR_MAX", "500"))
+        minh = int(e.get("SOAR_MIN_HITS", "5"))
+        minh_n = int(e.get("SOAR_MIN_HITS_PAYS_NORMAL", "10"))
+        normaux = {x.strip().upper() for x in e.get("SOAR_PAYS_NORMAUX", PAYS_NORMAUX_DEFAUT).split(",") if x.strip()}
+        actif = e.get("SOAR_MODE", "actif").lower() != "simulation"
+        wl = {x.strip() for x in e.get("SOAR_WHITELIST", "").split(",") if x.strip()}
+        ips_ex, nets_ex = exclusions()
+        detection = str(payload.get("event_definition_title") or (payload.get("event") or {}).get("message") or "?")[:120]
+
+        # --- blocage MANUEL (action analyste) : refuse aussi les IP exclues sauf force ---
+        if payload.get("manual") and payload.get("ip"):
+            ip = str(payload["ip"]).strip(); by = str(payload.get("by", "manuel"))[:60]
+            if not is_public(ip): return self.reply({"ok": False, "error": "IP non publique - refuse"})
+            m = motif_exclusion(ip, ips_ex, nets_ex, wl)
+            if m and not payload.get("force"): return self.reply({"ok": False, "error": f"IP exclue ({m}) - refuse (force=true pour passer outre)"})
+            d = load(); now = time.time(); d[ip] = now + ttl
+            d = {i: x for i, x in d.items() if x > now}; save(d); render(d)
+            meta = load(META); meta[ip] = {"detection": f"manuel ({by})", "hits": 0, "debut": now}; save(meta, META)
+            gelf("ip_bloquee_manuel", ip, f"par {by}, TTL {ttl//3600}h", detection="manuel", par=by)
+            journal("ip_bloquee_manuel", ip, par=by, ttl_h=ttl // 3600)
+            return self.reply({"ok": True, "blocked": ip, "active": len(d), "ttl_h": ttl // 3600})
+
+        d = load(); meta = load(META); now = time.time(); blocked, ignores = [], []
+        cand, pays = extract(payload)
+        for ip, hits in cand.most_common():
+            if not is_public(ip): continue
+            cc = pays.get(ip, "")
+            m = motif_exclusion(ip, ips_ex, nets_ex, wl)
+            if m:
+                ignores.append(ip); gelf("ip_exclue", ip, m, detection=detection, hits=hits, pays=cc, motif=m)
+                journal("ip_exclue", ip, detection=detection, hits=hits, pays=cc, motif=m); continue
+            seuil = minh_n if (cc in normaux) else minh
+            if hits < seuil:
+                journal("sous_seuil", ip, detection=detection, hits=hits, seuil=seuil, pays=cc); continue
+            if ip in d and d[ip] > now:
+                d[ip] = now + ttl; continue                      # prolonge
+            if len([1 for x, exp in d.items() if exp > now]) >= cap:
+                gelf("cap_atteint", ip, "blocklist pleine"); journal("cap_atteint", ip); break
+            if not actif:
+                gelf("simulation", ip, f"aurait ete bloquee ({hits} hits)", detection=detection, hits=hits, pays=cc)
+                journal("simulation", ip, detection=detection, hits=hits, pays=cc); continue
+            d[ip] = now + ttl; blocked.append(ip)
+            meta[ip] = {"detection": detection, "hits": hits, "pays": cc, "debut": now}
+            gelf("ip_bloquee", ip, f"{hits} hits, TTL {ttl//3600}h, {detection}", detection=detection, hits=hits, pays=cc, ttl_h=ttl // 3600)
+            journal("ip_bloquee", ip, detection=detection, hits=hits, pays=cc, ttl_h=ttl // 3600)
+        d = {ip: x for ip, x in d.items() if x > now}
+        meta = {ip: v for ip, v in meta.items() if ip in d}
+        save(d); save(meta, META); render(d)
+        return self.reply({"blocked": blocked, "excluded": ignores, "active": len(d), "mode": "actif" if actif else "simulation"})
+
+if __name__ == "__main__":
+    os.makedirs("/var/lib/omni-soar", exist_ok=True)
+    render(load())
+    HTTPServer(LISTEN, Handler).serve_forever()

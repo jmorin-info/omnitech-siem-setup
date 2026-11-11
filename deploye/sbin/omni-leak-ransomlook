@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""RansomLook -> GELF : OMNITECH/partenaires nommes sur un site d'extorsion. Stdlib."""
+import json, os, urllib.request
+ENV = {}
+for l in open("/etc/default/omni-leak"):
+    if "=" in l and not l.lstrip().startswith("#"):
+        k, v = l.strip().split("=", 1); ENV[k] = v.strip()
+GELF = ENV.get("GELF_URL", "http://127.0.0.1:12201/gelf")
+TERMS = [t.strip().lower() for t in ENV.get("RANSOMLOOK_TERMS", "omnitech").split(",") if t.strip()]
+STATE = ENV.get("RANSOMLOOK_STATE", "/var/lib/omni-leak/ransomlook.json")
+def gelf(f):
+    f.update({"version": "1.1", "host": "ransomlook.io"})
+    urllib.request.urlopen(urllib.request.Request(GELF, data=json.dumps(f).encode(),
+        headers={"Content-Type": "application/json"}), timeout=10).read()
+try:
+    posts = json.load(urllib.request.urlopen(urllib.request.Request(
+        "https://www.ransomlook.io/api/recent", headers={"User-Agent": "omni-siem/1.0"}), timeout=30))
+except Exception as e:
+    print("ransomlook KO:", e); raise SystemExit(0)
+try:
+    seen = set(json.load(open(STATE)))
+except Exception:
+    seen = set()
+new = 0
+for p in posts:
+    blob = ((p.get("post_title") or "") + " " + (p.get("description") or "")).lower()
+    if any(t in blob for t in TERMS):
+        key = (p.get("post_title") or "") + (p.get("discovered") or "")
+        if key in seen:
+            continue
+        seen.add(key); new += 1
+        gelf({"short_message": "RANSOMWARE: '%s' apparait sur un site d'extorsion" % p.get("post_title"),
+              "level": 2, "_event_source": "leak_intel", "_leak_source": "ransomlook",
+              "_alert_tag": "ransomware_mention", "_leak_victim": p.get("post_title"),
+              "_leak_discovered": p.get("discovered"), "_event_action": "ransomware_leak_site"})
+os.makedirs(os.path.dirname(STATE), exist_ok=True)
+json.dump(sorted(seen), open(STATE + ".tmp", "w")); os.replace(STATE + ".tmp", STATE)
+print("ransomlook: %d posts analyses, %d mention(s) OMNITECH" % (len(posts), new))

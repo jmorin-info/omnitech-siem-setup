@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-ueba-volume - Detection d'anomalie de VOLUME par source (z-score).
+#   Au-dela de Graylog : compare le volume de la DERNIERE HEURE COMPLETE de chaque
+#   source a sa baseline statistique MEME-HEURE-DU-JOUR sur N jours (moyenne +
+#   ecart-type) -> z-score. Capte pics (exfil, scan, boucle) ET chutes (audit
+#   coupe, agent tue) que l'agregation Graylog ne sait pas reperer.
+#   Emet GELF event_source=ueba_volume, alert_tag=volume_spike|volume_drop.
+# Lance par timer horaire. Config : UEBA_VOL_Z (defaut 4), UEBA_VOL_MIN (20).
+# =============================================================================
+import json, os, re, sys, statistics, urllib.request
+from datetime import datetime, timezone
+
+OS_URL   = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM     = "bx-it-graylog-vm"
+IDX      = "omni-*"
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+ENV = load_env()
+Z_HIGH   = float(ENV.get("UEBA_VOL_Z", "4"))       # sigmas pour un pic
+Z_DROP   = float(ENV.get("UEBA_VOL_ZDROP", "3"))   # sigmas pour une chute
+MIN_MEAN = float(ENV.get("UEBA_VOL_MIN", "20"))    # ignore les sources peu actives
+# Baseline MEME-HEURE-DU-JOUR : il faut N jours d'historique (1 echantillon/jour).
+# Abaisse a 3 car la retention actuelle est courte (~1-5 j selon la source). Le
+# detecteur ne couvre que les sources ayant >= MIN_SAMP jours et s'ETEND tout seul
+# quand la retention grandit. A remonter (7-14) des que l'historique le permet.
+MIN_SAMP = int(ENV.get("UEBA_VOL_MINSAMP", "3"))   # min d'echantillons (jours)
+HIST_DAYS = int(ENV.get("UEBA_VOL_HISTDAYS", "21"))
+
+def es(path, body):
+    req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+def gelf(fields):
+    if os.environ.get("UEBA_DRY"):
+        return                      # test a blanc : pas d'emission GELF
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "ueba_volume")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def main():
+    # sources actives sur la fenetre d historique
+    srcs = [b["key"] for b in es(f"/{IDX}/_search", {"size": 0,
+        "query": {"range": {"timestamp": {"gte": f"now-{HIST_DAYS}d"}}},
+        "aggs": {"s": {"terms": {"field": "event_source", "size": 50}}}})["aggregations"]["s"]["buckets"]]
+
+    now = datetime.now(timezone.utc)
+    # heure complete a analyser = [debut_heure_courante - 1h ; debut_heure_courante)
+    cur_floor = now.replace(minute=0, second=0, microsecond=0)
+    obs_start = cur_floor.timestamp() - 3600
+    obs_hod   = datetime.fromtimestamp(obs_start, tz=timezone.utc).hour
+
+    anomalies = 0
+    for src in srcs:
+        h = es(f"/{IDX}/_search", {"size": 0,
+            "query": {"bool": {"must": [{"term": {"event_source": src}},
+                                        {"range": {"timestamp": {"gte": f"now-{HIST_DAYS}d"}}}]}},
+            "aggs": {"t": {"date_histogram": {"field": "timestamp", "fixed_interval": "1h",
+                                              "min_doc_count": 0}}}})["aggregations"]["t"]["buckets"]
+        observed = None
+        baseline = []
+        for b in h:
+            ksec = b["key"] / 1000.0
+            hod = datetime.fromtimestamp(ksec, tz=timezone.utc).hour
+            if abs(ksec - obs_start) < 1:
+                observed = b["doc_count"]
+            elif hod == obs_hod and ksec < obs_start:
+                baseline.append(b["doc_count"])
+        if observed is None or len(baseline) < MIN_SAMP:
+            continue
+        mean = statistics.mean(baseline)
+        std  = statistics.pstdev(baseline)
+        if mean < MIN_MEAN or std < 1:
+            continue
+        z = (observed - mean) / std
+        tag = None
+        if z >= Z_HIGH:
+            tag = "volume_spike"
+        elif z <= -Z_DROP and mean >= 50:
+            tag = "volume_drop"
+        if tag:
+            anomalies += 1
+            gelf({"event_source": "ueba_volume", "alert_tag": tag,
+                  "anomaly_entity": src, "anomaly_kind": "source",
+                  "vol_observed": observed, "vol_mean": round(mean, 1),
+                  "vol_std": round(std, 1), "vol_zscore": round(z, 2),
+                  "short_message": f"{tag} {src}: {observed} vs baseline {round(mean)}+-{round(std)} (z={round(z,1)})"})
+            print(f"  [{tag}] {src}: obs={observed} mean={round(mean)} std={round(std)} z={round(z,1)}")
+    print(f"[ueba-volume] sources={len(srcs)} heure_analysee={obs_hod}h UTC anomalies={anomalies}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-ueba-volume KO:", e, file=sys.stderr); sys.exit(1)

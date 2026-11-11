@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# omni-cert-check - alerte avant expiration des certificats du SIEM (timer hebdo)
+# Envoie un GELF (event_source=siem_cert) si un cert expire dans < SEUIL jours
+# -> alerte "OMNI - Certificat SIEM expire bientot". Seuil par defaut 45 j.
+set -u
+SEUIL="${CERT_ALERT_DAYS:-45}"
+GELF="http://127.0.0.1:12201/gelf"
+
+check() {  # check <fichier> <label>
+  local f="$1" label="$2" end days state action
+  [ -f "$f" ] || return
+  end="$(openssl x509 -in "$f" -noout -enddate 2>/dev/null | cut -d= -f2)"
+  [ -z "$end" ] && return
+  days=$(( ( $(date -d "$end" +%s) - $(date +%s) ) / 86400 ))
+  echo "  ${label}: ${days} j (expire ${end})"
+  # Etat courant : ok / proche / critique (sert au triage + couleur dashboard)
+  if   [ "$days" -lt 15 ]; then state="critique"
+  elif [ "$days" -lt "$SEUIL" ]; then state="proche"
+  else state="ok"; fi
+  # cert_expire_proche = declenche l'alerte (seulement si sous le seuil) ;
+  # cert_status = telemetrie permanente (a CHAQUE run) -> la page Certificat
+  # affiche toujours l'etat courant des certs SIEM, meme apres une purge.
+  [ "$days" -lt "$SEUIL" ] && action="cert_expire_proche" || action="cert_status"
+  curl -s -m 10 -X POST "$GELF" -H 'Content-Type: application/json' -d "{
+    \"version\":\"1.1\",\"host\":\"bx-it-graylog-vm\",
+    \"short_message\":\"certificat ${label} : ${days} jours restants (${state})\",
+    \"_event_source\":\"siem_cert\",\"_event_action\":\"${action}\",
+    \"_cert\":\"${label}\",\"_cert_days\":${days},\"_cert_state\":\"${state}\",\"_cert_expiry\":\"${end}\"}" >/dev/null 2>&1
+}
+
+echo "Verification des certificats SIEM (seuil ${SEUIL} j) :"
+check /etc/nginx/ssl/graylog.crt           "console-nginx"
+check /etc/graylog/certs/graylog.crt        "graylog-api"
+check /etc/graylog/certs/omnitech-rootca.crt "root-ca"

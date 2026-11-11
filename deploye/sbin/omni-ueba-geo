@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-ueba-geo - Detection "impossible travel" (geo-velocite).
+#   Au-dela de Graylog : correle les connexions REUSSIES d'un meme compte (M365
+#   + VPN SSL) et calcule, entre deux connexions consecutives, la distance
+#   haversine et la vitesse requise. Si vitesse > seuil (avion) ET distance
+#   significative -> deplacement physiquement impossible = compte compromis.
+#   Graylog ne calcule ni distance ni vitesse : c'est un vrai cran au-dessus.
+#   Emet GELF event_source=ueba_geo, alert_tag=impossible_travel (entite=user).
+#   NB : geoloc = centroide pays -> conservateur (intra-pays = distance ~0, pas
+#   de faux positif ; ne leve que sur des pays reellement distants).
+# Lance par timer (toutes les 30 min). Config : UEBA_GEO_SPEED (900 km/h),
+#   UEBA_GEO_MINKM (500), UEBA_GEO_WINDOW_H (24).
+# =============================================================================
+import json, math, os, re, sys, time, urllib.request
+from datetime import datetime, timezone
+
+GEO_STATE = "/var/lib/omni-ueba/geo-travel-emitted.json"  # dedup 1/compte/jour
+OS_URL   = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM     = "bx-it-graylog-vm"
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+ENV = load_env()
+SPEED_KMH = float(ENV.get("UEBA_GEO_SPEED", "900"))    # > vitesse d'un avion de ligne
+# Au-dela de ce plafond, ce n'est plus un deplacement humain mais du JITTER geo-IP
+# (egress datacenter O365 : 2 IP Microsoft geolocalisees dans des villes/pays differents
+# a quelques secondes -> vitesse absurde). On ecarte ces faux positifs (ex FR->FR 30543 km/h).
+MAX_SPEED_KMH = float(ENV.get("UEBA_GEO_MAXSPEED", "4000"))
+MIN_KM    = float(ENV.get("UEBA_GEO_MINKM", "500"))    # ignore les petits ecarts (bruit centroide)
+WINDOW_H  = int(ENV.get("UEBA_GEO_WINDOW_H", "24"))
+GEO_TTL   = int(ENV.get("UEBA_GEO_DEDUP_S", "86400"))  # 1 alerte / compte / 24h
+
+def dedup_ok(user):
+    """Emet au plus 1 alerte/compte/jour (anti-spam : cumule les trajets)."""
+    if os.environ.get("UEBA_DRY"):
+        return True
+    now = time.time()
+    try:
+        st = json.load(open(GEO_STATE))
+    except Exception:
+        st = {}
+    if now - st.get(user, 0) < GEO_TTL:
+        return False
+    st[user] = now
+    st = {u: t for u, t in st.items() if now - t < GEO_TTL}
+    try:
+        os.makedirs(os.path.dirname(GEO_STATE), exist_ok=True)
+        tmp = GEO_STATE + ".tmp"; json.dump(st, open(tmp, "w")); os.replace(tmp, GEO_STATE)
+    except Exception as e:
+        print("geo dedup state KO:", e, file=sys.stderr)
+    return True
+
+def es(path, body):
+    req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        return json.load(r)
+
+def gelf(fields):
+    if os.environ.get("UEBA_DRY"):
+        return
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "ueba_geo")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def haversine(a, b):
+    R = 6371.0
+    lat1, lon1, lat2, lon2 = map(math.radians, [a[0], a[1], b[0], b[1]])
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    h = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
+    return 2 * R * math.asin(math.sqrt(h))
+
+def parse_geo(v):
+    try:
+        lat, lon = v.split(",")
+        return (float(lat), float(lon))
+    except Exception:
+        return None
+
+def collect(query, geo_field, country_field, city_field, ip_field, source_label,
+            index="omni-*"):
+    """Renvoie [(ts_ms, (lat,lon), country, city, ip, source)]
+
+    index : motif d'index CIBLE. Interroger "omni-*" faisait porter un tri sur
+    10 000 documents a TOUS les index (fortigate/winsec/sysmon, plusieurs
+    centaines de Go) alors que seules deux sources sont utiles -> le robot
+    depassait son delai une execution sur deux (mesure 24/09/2026)."""
+    out = []
+    body = {"size": 10000, "query": query,
+            "sort": [{"timestamp": "asc"}],
+            "_source": ["timestamp", "user", geo_field, country_field, city_field, ip_field]}
+    for hgt in es(f"/{index}/_search", body)["hits"]["hits"]:
+        s = hgt["_source"]
+        geo = parse_geo(s.get(geo_field, "")) if s.get(geo_field) else None
+        if not geo:
+            continue
+        out.append((s.get("user"), s.get("timestamp"), geo,
+                    s.get(country_field), s.get(city_field), s.get(ip_field), source_label))
+    return out
+
+def to_ms(iso):
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000
+
+def main():
+    rng = {"range": {"timestamp": {"gte": f"now-{WINDOW_H}h"}}}
+    rows = []
+    # M365 : connexions REUSSIES
+    rows += collect({"bool": {"must": [{"term": {"m365_type": "signin"}}, rng,
+                                       {"exists": {"field": "user"}}],
+                              "must_not": [{"term": {"event_action": "echec_connexion"}}]}},
+                    "src_ip_geolocation", "src_country", "src_city", "src_ip", "M365",
+                    index="omni-m365_*")
+    # VPN SSL : connexions avec compte
+    rows += collect({"bool": {"must": [{"term": {"subtype": "vpn"}}, rng,
+                                       {"exists": {"field": "user"}},
+                                       {"exists": {"field": "remip_geolocation"}}]}},
+                    "remip_geolocation", "remip_country_code", "remip_city_name", "remip", "VPN",
+                    index="omni-fortigate_*")
+
+    # regroupe par compte
+    by_user = {}
+    for user, ts, geo, country, city, ip, srcl in rows:
+        if not user or not ts:
+            continue
+        by_user.setdefault(user, []).append((to_ms(ts), geo, country, city, ip, srcl))
+
+    found = 0
+    for user, evs in by_user.items():
+        evs.sort()
+        for (t1, g1, c1, city1, ip1, s1), (t2, g2, c2, city2, ip2, s2) in zip(evs, evs[1:]):
+            if ip1 == ip2:
+                continue
+            km = haversine(g1, g2)
+            if km < MIN_KM:
+                continue
+            hours = max((t2 - t1) / 3600000.0, 0.001)
+            speed = km / hours
+            if speed < SPEED_KMH:
+                continue
+            if speed > MAX_SPEED_KMH:        # jitter geo-IP (egress O365), pas un humain -> FP ecarte
+                continue
+            # FP dominant : une extremite VPN geolocalise la SORTIE DU TUNNEL, pas
+            # l'utilisateur. Un salarie a Paris qui ouvre le VPN dont l'egress est aux
+            # Etats-Unis produit "FR->US 8817km en 2.6h (3394km/h)" sans aucun
+            # deplacement (cas reels vleguilly FR->US, souanounou FR->DE, 23/09/2026).
+            # L'ancienne regle n'ecartait que VPN<->VPN et laissait donc passer tout
+            # M365<->VPN. Le voyage impossible n'a de sens qu'entre deux positions
+            # REELLES : on exige DEUX extremites non-VPN. Une connexion VPN depuis
+            # l'etranger reste couverte par sa detection dediee ("VPN monte depuis
+            # l'etranger") et par la reputation d'IP (vpn_malicious_ip).
+            if s1 == "VPN" or s2 == "VPN":
+                continue
+            # Jitter geo-IP INTRA-PAYS : M365 geolocalise les connexions sur des
+            # points de sortie Microsoft differents -> le meme salarie apparait
+            # "Paris puis Bordeaux" (voire Paris->Paris) a quelques minutes, d'ou
+            # des vitesses absurdes (cas reels : cvigier FR->FR 2020 km/h,
+            # gbertiner Paris->Bordeaux 3814 km/h, 23/09/2026). Un voyage impossible
+            # n'a de valeur de detection que s'il FRANCHIT UNE FRONTIERE : c'est le
+            # scenario "compte utilise depuis un autre pays pendant que l'utilisateur
+            # est chez lui". On exige donc deux pays differents et connus.
+            if not c1 or not c2 or c1 == c2:
+                continue
+            if not dedup_ok(user):           # 1 alerte / compte / jour
+                continue
+            found += 1
+            gelf({"event_source": "ueba_geo", "alert_tag": "impossible_travel",
+                  "user": user, "geo_km": round(km), "geo_hours": round(hours, 2),
+                  "geo_speed_kmh": round(speed),
+                  "geo_from": f"{city1 or '?'}/{c1 or '?'} ({s1})", "geo_from_ip": ip1,
+                  "geo_to": f"{city2 or '?'}/{c2 or '?'} ({s2})", "geo_to_ip": ip2,
+                  # Message LISIBLE : l'analyste doit comprendre sans decoder une
+                  # vitesse brute. La vitesse reste disponible en champ (geo_speed_kmh)
+                  # pour la chasse, mais ne porte plus le titre de l'alerte.
+                  "short_message": (f"Voyage impossible - {user} : {city1 or c1 or '?'} ({c1 or '?'})"
+                                    f" puis {city2 or c2 or '?'} ({c2 or '?'}) a "
+                                    f"{round(hours,1)} h d'intervalle, soit {round(km)} km"
+                                    f" - incompatible avec un deplacement reel")})
+            print(f"  [impossible_travel] {user}: {c1}->{c2} {round(km)}km / {round(hours,1)}h = {round(speed)}km/h")
+    print(f"[ueba-geo] comptes={len(by_user)} connexions={len(rows)} impossible_travel={found}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-ueba-geo KO:", e, file=sys.stderr); sys.exit(1)

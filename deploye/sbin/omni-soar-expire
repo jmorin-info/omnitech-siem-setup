@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+# omni-soar-expire - retire les IP expirees de la blocklist SOAR (timer horaire)
+import json, os, time, urllib.request
+STATE="/var/lib/omni-soar/blocklist.json"; FEED="/var/www/siem-kit/soar/blocklist.txt"
+try: d=json.load(open(STATE))
+except Exception: d={}
+now=time.time()
+keep={ip:exp for ip,exp in d.items() if exp>now}
+removed=len(d)-len(keep)
+json.dump(keep, open(STATE,"w"))
+lines=["# OMNITECH SIEM SOAR blocklist - auto-genere - ne pas editer"]+[ip for ip,exp in sorted(keep.items()) if exp>now]
+open(FEED+".tmp","w").write("\n".join(lines)+"\n"); os.replace(FEED+".tmp", FEED)
+if removed:
+    try:
+        data=json.dumps({"version":"1.1","host":"bx-it-graylog-vm",
+            "short_message":f"SOAR expiration: {removed} IP debloquees, {len(keep)} actives",
+            "_event_source":"siem_soar","_event_action":"ip_expiree"}).encode()
+        urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:12201/gelf",data=data,
+            headers={"Content-Type":"application/json"}),timeout=8)
+    except Exception: pass
+print(f"SOAR expire: {removed} retirees, {len(keep)} actives")

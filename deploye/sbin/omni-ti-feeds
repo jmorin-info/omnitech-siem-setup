@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Telecharge les feeds IOC abuse.ch -> CSV lookups Graylog. Stdlib only."""
+import csv, io, json, os, urllib.request
+from urllib.parse import urlparse
+LOOKUP = "/etc/graylog/lookup"
+
+def fetch(url, timeout=60):
+    req = urllib.request.Request(url, headers={"User-Agent": "omni-siem-ti/1.0"})
+    return urllib.request.urlopen(req, timeout=timeout).read().decode("utf-8", "replace")
+
+def write_csv(path, header, rows):
+    tmp = path + ".tmp"
+    with open(tmp, "w", newline="") as f:
+        w = csv.writer(f); w.writerow(header)
+        for r in rows: w.writerow(r)
+    os.replace(tmp, path)
+    try: os.chmod(path, 0o644)
+    except OSError: pass
+
+def feodo():
+    out = {}
+    try:
+        txt = fetch("https://feodotracker.abuse.ch/downloads/ipblocklist.csv")
+    except Exception as e:
+        print("feodo KO:", e); return out
+    for row in csv.reader(io.StringIO(txt)):
+        if not row or row[0].startswith("#") or row[0] == "first_seen_utc":
+            continue
+        # first_seen,dst_ip,dst_port,c2_status,last_online,malware
+        if len(row) >= 6 and row[1]:
+            out[row[1].strip()] = row[5].strip() or "C2"
+    return out
+
+def threatfox():
+    """ThreatFox (abuse.ch) -> IP C2. Bien plus riche que Feodo (reduit). Cle GRATUITE
+    requise (compte auth.abuse.ch) dans THREATFOX_AUTH_KEY ; sans cle = ignore proprement."""
+    out = {}
+    key = os.environ.get("THREATFOX_AUTH_KEY", "").strip()
+    if not key:
+        print("threatfox: pas de cle (THREATFOX_AUTH_KEY) -> ignore (cle gratuite sur auth.abuse.ch)")
+        return out
+    try:
+        req = urllib.request.Request("https://threatfox-api.abuse.ch/api/v1/",
+            data=json.dumps({"query": "get_iocs", "days": 1}).encode(),
+            headers={"User-Agent": "omni-siem-ti/1.0", "Auth-Key": key,
+                     "Content-Type": "application/json"})
+        data = json.load(urllib.request.urlopen(req, timeout=60))
+    except Exception as e:
+        print("threatfox KO:", e); return out
+    if data.get("query_status") != "ok":
+        print("threatfox:", data.get("query_status")); return out
+    for ioc in (data.get("data") or []):
+        if ioc.get("ioc_type") == "ip:port":
+            ip = str(ioc.get("ioc", "")).split(":")[0].strip()
+            if ip:
+                out[ip] = (ioc.get("malware_printable") or ioc.get("malware") or "ThreatFox")
+    return out
+
+# Domaines d'INFRA PARTAGEE : le malware y vit a une URL/chemin precis, jamais "tout le
+# domaine". Un match DNS sur le domaine NU = 100% FP inexploitable (tout le monde interroge
+# github/drive.google/discord...). La detection de ces plateformes appartient a la couche
+# URL/proxy (FortiGate web filter / qhash), pas au DNS -> on les EXCLUT du lookup qname.
+# (Audit FP : 3460 events/7j = 9 domaines, tous d'infra partagee.)
+TI_SHARED_INFRA = {
+    "github.com", "raw.githubusercontent.com", "githubusercontent.com", "gist.github.com",
+    "objects.githubusercontent.com", "codeload.github.com", "gitlab.com", "bitbucket.org",
+    "drive.google.com", "drive.usercontent.google.com", "docs.google.com",
+    "storage.googleapis.com", "firebasestorage.googleapis.com",
+    # Grands fournisseurs a tres haute reputation : URLhaus les liste pour un ABUS
+    # ponctuel (redirection open-redirect google.com/url, page Sites/Firebase piegee).
+    # Le domaine NU (www.google.com, login.microsoftonline.com...) = 100% FP DNS. La
+    # detection de l'abus appartient a la couche URL/proxy. (FP www.google.com 8108
+    # events, constat Julien 06/07/2026.) endswith(".<d>") couvre tous les sous-domaines.
+    "google.com", "gstatic.com", "googleusercontent.com", "googleapis.com",
+    "youtube.com", "ytimg.com", "googlevideo.com", "google-analytics.com",
+    "microsoft.com", "microsoftonline.com", "office.com", "office365.com",
+    "live.com", "outlook.com", "windows.net", "windowsupdate.com", "azureedge.net",
+    "apple.com", "icloud.com", "cloudflare.com", "cloudflare.net", "cloudflareinsights.com",
+    "akamai.net", "akamaized.net", "fastly.net", "fbcdn.net", "facebook.com",
+    "cloudfront.net", "gvt1.com", "gvt2.com", "wikipedia.org", "mozilla.org", "mozilla.net",
+    "share.google", "g.co", "goo.gl", "google.fr", "bing.com", "linkedin.com", "licdn.com",
+    "cdn.discordapp.com", "media.discordapp.net", "discord.com",
+    "cdn.jsdelivr.net", "jsdelivr.net", "res.cloudinary.com",
+    "dropbox.com", "dl.dropboxusercontent.com", "dropboxusercontent.com",
+    "1drv.ms", "onedrive.live.com", "sharepoint.com",
+    "amazonaws.com", "blob.core.windows.net",
+    "pastebin.com", "paste.ee", "mega.nz", "mediafire.com", "anonfiles.com",
+    "t.me", "telegram.org", "bit.ly", "tinyurl.com",
+    # hebergeurs d'images / paste (malware a une URL precise -> match domaine = FP)
+    "postimg.cc", "i.postimg.cc", "imgur.com", "i.imgur.com", "ibb.co", "imgbb.com",
+    "catbox.moe", "files.catbox.moe", "transfer.sh", "filebin.net", "gofile.io",
+}
+
+def _shared_infra(h):
+    return any(h == d or h.endswith("." + d) for d in TI_SHARED_INFRA)
+
+def urlhaus():
+    out = {}
+    try:
+        txt = fetch("https://urlhaus.abuse.ch/downloads/text_recent/")
+    except Exception as e:
+        print("urlhaus KO:", e); return out
+    skipped = 0
+    for line in txt.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        host = urlparse(line).hostname
+        if not (host and "." in host and not host.replace(".", "").isdigit()):
+            continue
+        h = host.lower()
+        if _shared_infra(h):       # infra partagee : match DNS inexploitable -> on saute
+            skipped += 1
+            continue
+        out[h] = "urlhaus"
+    if skipped:
+        print(f"urlhaus: {skipped} domaine(s) d'infra partagee exclus (detection -> couche URL, pas DNS)")
+    return out
+
+c2 = feodo(); feodo_n = len(c2)
+tfox = threatfox(); c2.update(tfox)   # ThreatFox augmente/complete Feodo
+dom = urlhaus()
+if c2:  write_csv(f"{LOOKUP}/ti-c2-ip.csv", ["ip", "malware"], sorted(c2.items()))
+if dom: write_csv(f"{LOOKUP}/ti-mal-domain.csv", ["domain", "source"], sorted(dom.items()))
+print(f"IOC: {len(c2)} IP C2 (Feodo {feodo_n} + ThreatFox {len(tfox)}), {len(dom)} domaines (URLhaus)")

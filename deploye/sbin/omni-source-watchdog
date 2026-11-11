@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Watchdog fraicheur des sources -> GELF si une source decroche. Stdlib."""
+import json, time, urllib.request
+ENV = {}
+for l in open("/etc/default/omni-watchdog"):
+    if "=" in l and not l.lstrip().startswith("#"):
+        k, v = l.strip().split("=", 1); ENV[k] = v.strip()
+OS = ENV.get("OPENSEARCH", "http://127.0.0.1:9200")
+GELF = ENV.get("GELF_URL", "http://127.0.0.1:12201/gelf")
+TH = {}
+for part in ENV.get("WATCHDOG_SOURCES", "").split(","):
+    if ":" in part:
+        s, m = part.split(":", 1)
+        try: TH[s.strip()] = float(m)
+        except ValueError: pass
+
+def gelf(f):
+    f.update({"version": "1.1", "host": "siem-watchdog"})
+    urllib.request.urlopen(urllib.request.Request(GELF, data=json.dumps(f).encode(),
+        headers={"Content-Type": "application/json"}), timeout=10).read()
+
+body = {"size": 0, "query": {"range": {"timestamp": {"gte": "now-30d"}}},
+        "aggs": {"src": {"terms": {"field": "event_source", "size": 60},
+                         "aggs": {"last": {"max": {"field": "timestamp"}}}}}}
+req = urllib.request.Request(OS + "/omni-*,graylog_*/_search", data=json.dumps(body).encode(),
+                            headers={"Content-Type": "application/json"})
+res = json.load(urllib.request.urlopen(req, timeout=30))
+now = time.time() * 1000
+seen = {}
+for b in res.get("aggregations", {}).get("src", {}).get("buckets", []):
+    last = (b.get("last", {}) or {}).get("value")
+    if last:
+        seen[b["key"]] = last
+alerts = 0
+for src, thr in TH.items():
+    last = seen.get(src)
+    if last is None:
+        gap = None
+    else:
+        gap = (now - last) / 60000.0
+    if last is None or gap > thr:
+        alerts += 1
+        gap_txt = ">30j" if last is None else ("%d min" % int(gap))
+        gelf({"short_message": "Source de collecte SILENCIEUSE: %s (silence %s, seuil %d min)" % (src, gap_txt, int(thr)),
+              "level": 3, "_event_source": "siem_watchdog", "_alert_tag": "source_silent",
+              "_silent_source": src, "_silent_gap_min": (-1 if last is None else int(gap)),
+              "_silent_threshold_min": int(thr), "_event_action": "collection_gap"})
+print("watchdog: %d source(s) surveillee(s), %d silencieuse(s)" % (len(TH), alerts))

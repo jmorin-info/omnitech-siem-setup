@@ -1,0 +1,151 @@
+#!/bin/bash
+# =============================================================================
+# oms-maj-siem : mise a jour automatique CONTROLEE du SIEM Graylog (BX-IT-GRAYLOG-VM)
+# OMNITECH 2026-11-11 (go jmorin). Installe dans /usr/local/sbin/oms-maj-siem.
+#
+# Ce que fait le script (timer oms-maj-siem.timer, dimanche 04:30) :
+#   1. Controles prealables : /data monte, OpenSearch vert, API Graylog, place libre /var.
+#   2. Sauvegarde : omni-backup-config (archive chiffree -> partage) + mongodump local.
+#   3. Mise a jour de TOUT ce qui est en attente (Debian + pile SIEM) dans les series
+#      autorisees par /etc/apt/preferences.d/oms-siem-series (pas de saut de version majeure).
+#      Les paquets geles (apt-mark hold) sont degeles le temps de l'operation puis regeles.
+#   4. Reparations connues : plugin logstash-output-gelf (efface par la maj du paquet),
+#      magasin de confiance Logstash, racine OMNITECH 4096 dans le JKS de Graylog.
+#   5. Redemarrage si /var/run/reboot-required ; le controle final est fait au boot par
+#      oms-maj-siem-postboot.service (meme script, mode --apres-boot).
+#   6. Compte rendu par mail (smtp-internal:25) + journal /var/log/oms-maj-siem.log.
+#
+# Modes : --simuler (aucune modification), --apres-boot (controle final seul), --force (meme sans maj).
+# Retour arriere : sauvegardes dans /data/backups/maj-AAAAMMJJ-HHMM (mongodump, etc.tgz, dpkg-l.txt).
+# =============================================================================
+set -u
+export LANG=C.UTF-8 DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+JOURNAL=/var/log/oms-maj-siem.log
+ETAT=/var/lib/oms-maj-siem; mkdir -p "$ETAT"
+MAIL_A="jmorin@omnitech-security.fr"
+MAIL_DE="no-reply@omnitech-security.fr"
+SMTP="smtp://smtp-internal.omnitech-security.fr:25"
+PILE_HOLD="mongodb-org mongodb-org-database mongodb-org-database-tools-extra mongodb-org-mongos mongodb-org-server mongodb-org-tools opensearch"
+MODE="${1:-normal}"
+HORO=$(date +%Y%m%d-%H%M)
+RAPPORT="$ETAT/rapport-en-cours.txt"
+
+log(){ echo "$(date '+%F %T') $*" | tee -a "$JOURNAL" >> "$RAPPORT"; }
+envoyer_mail(){ # $1 = objet
+  local f; f=$(mktemp)
+  { echo "From: SIEM OMNITECH <$MAIL_DE>"; echo "To: $MAIL_A"; echo "Subject: [SIEM OMNITECH] $1"
+    echo "Content-Type: text/plain; charset=UTF-8"; echo; cat "$RAPPORT"; } > "$f"
+  curl -s --max-time 30 --url "$SMTP" --mail-from "$MAIL_DE" --mail-rcpt "$MAIL_A" --upload-file "$f" || log "ATTENTION : envoi du mail impossible"
+  rm -f "$f"
+}
+os_statut(){ curl -s --max-time 5 http://127.0.0.1:9200/_cluster/health | grep -oE '"status":"[a-z]+"' | cut -d'"' -f4; }
+attendre_vert(){ local i; for i in $(seq 1 120); do [ "$(os_statut)" = green ] && return 0; sleep 15; done; return 1; }
+api_graylog(){ curl -sk -o /dev/null -w '%{http_code}' --max-time 5 https://127.0.0.1:9000/api/system/lbstatus; }
+attendre_api(){ local i; for i in $(seq 1 60); do [ "$(api_graylog)" = 200 ] && return 0; sleep 5; done; return 1; }
+
+reparations(){
+  # 1. plugin GELF de Logstash (collecte SEAL) : efface a chaque maj du paquet logstash
+  if ! /usr/share/logstash/bin/logstash-plugin list 2>/dev/null | grep -q '^logstash-output-gelf'; then
+    log "Reparation : reinstallation du plugin logstash-output-gelf"
+    JRUBY_OPTS="-J-Xmx2g" LS_JAVA_OPTS="-Xmx2g" /usr/share/logstash/bin/logstash-plugin install logstash-output-gelf >> "$JOURNAL" 2>&1 \
+      && log "  plugin GELF reinstalle" || log "  ECHEC reinstallation plugin GELF"
+  fi
+  # 2. magasin de confiance de Logstash hors paquet (SQL SEAL en TLS)
+  if ! grep -q "cacerts-omni.jks" /etc/logstash/jvm.options; then
+    printf '\n# OMNITECH : magasin de confiance hors paquet\n-Djavax.net.ssl.trustStore=/etc/logstash/cacerts-omni.jks\n-Djavax.net.ssl.trustStorePassword=changeit\n' >> /etc/logstash/jvm.options
+    log "Reparation : magasin de confiance remis dans /etc/logstash/jvm.options"
+  fi
+  [ -f /etc/logstash/cacerts-omni.jks ] || { cp /etc/graylog/server/cacerts-omni.jks /etc/logstash/cacerts-omni.jks; chown root:logstash /etc/logstash/cacerts-omni.jks; chmod 640 /etc/logstash/cacerts-omni.jks; log "Reparation : /etc/logstash/cacerts-omni.jks recree"; }
+  # 3. racine OMNITECH 4096 dans le JKS de Graylog (LDAPS vers les DC)
+  if ! /usr/share/graylog-server/jvm/bin/keytool -list -keystore /etc/graylog/server/cacerts-omni.jks -storepass changeit -alias omnitech-root-ca-4096 >/dev/null 2>&1; then
+    /usr/share/graylog-server/jvm/bin/keytool -importcert -noprompt -trustcacerts -alias omnitech-root-ca-4096 \
+      -file /etc/graylog/server/root-ca-omnitech-4096.pem -keystore /etc/graylog/server/cacerts-omni.jks -storepass changeit >/dev/null 2>&1 \
+      && log "Reparation : racine 4096 remise dans le JKS Graylog" || log "ECHEC : racine 4096 absente du JKS Graylog"
+  fi
+}
+
+controle_final(){
+  local ok=1 st api failed lsr
+  attendre_vert || ok=0; st=$(os_statut)
+  attendre_api || ok=0; api=$(api_graylog)
+  sleep 90
+  for u in graylog-server opensearch mongod nginx logstash eraagent efs ninjarmm-agent nftables; do
+    [ "$(systemctl is-active $u)" = active ] || { log "  service $u : $(systemctl is-active $u)"; ok=0; }
+  done
+  lsr=$(systemctl show logstash -p NRestarts --value); [ "${lsr:-0}" -gt 3 ] && { log "  logstash redemarre en boucle (NRestarts=$lsr)"; ok=0; }
+  failed=$(systemctl --failed --no-legend | wc -l)
+  findmnt -n /data >/dev/null || { log "  /data NON MONTE (deverrouillage TPM2 ?)"; ok=0; }
+  log "Etat : noyau $(uname -r), OpenSearch=$st, API Graylog=$api, unites en echec=$failed, /var=$(df --output=pcent /var | tail -1 | tr -d ' ')"
+  log "Versions : $(dpkg-query -W -f='${Package} ${Version}\n' graylog-server opensearch mongodb-org-server logstash 2>/dev/null | tr '\n' ';')"
+  [ "$ok" = 1 ] && return 0 || return 1
+}
+
+: > "$RAPPORT"
+exec 9>/run/oms-maj-siem.lock; flock -n 9 || { echo "deja en cours"; exit 0; }
+
+# ---------------- mode apres redemarrage ----------------
+if [ "$MODE" = "--apres-boot" ]; then
+  [ -f "$ETAT/reboot-en-attente" ] || exit 0
+  cat "$ETAT/reboot-en-attente" >> "$RAPPORT"; rm -f "$ETAT/reboot-en-attente"
+  log "=== Controle apres redemarrage ==="
+  reparations
+  if controle_final; then log "RESULTAT : OK"; envoyer_mail "Mise a jour hebdomadaire OK (apres redemarrage)"
+  else log "RESULTAT : A VERIFIER"; envoyer_mail "Mise a jour hebdomadaire A VERIFIER"; fi
+  exit 0
+fi
+
+log "=== oms-maj-siem $MODE ($(hostname)) ==="
+# ---------------- 1. controles prealables ----------------
+PRE=1
+findmnt -n /data >/dev/null || { log "Prealable KO : /data non monte"; PRE=0; }
+[ "$(os_statut)" = green ] || { log "Prealable KO : OpenSearch $(os_statut)"; PRE=0; }
+[ "$(api_graylog)" = 200 ] || { log "Prealable KO : API Graylog $(api_graylog)"; PRE=0; }
+LIBRE=$(df --output=avail -BG /var | tail -1 | tr -dc 0-9); [ "${LIBRE:-0}" -ge 3 ] || { log "Prealable KO : /var ${LIBRE} Go libres"; PRE=0; }
+apt-get update -qq >> "$JOURNAL" 2>&1 || { log "Prealable KO : apt-get update"; PRE=0; }
+if [ "$PRE" = 0 ]; then log "RESULTAT : ANNULE (prealables)"; [ "$MODE" = --simuler ] || envoyer_mail "Mise a jour hebdomadaire ANNULEE"; exit 1; fi
+
+# ---------------- 2. inventaire ----------------
+apt-mark unhold $PILE_HOLD >/dev/null 2>&1
+ATTENTE=$(apt-get -s -o Dpkg::Options::=--force-confold dist-upgrade 2>/dev/null | awk '/^Inst /{print $2" "$4}' | tr -d '(' )
+[ "$MODE" = --simuler ] && apt-mark hold $PILE_HOLD >/dev/null 2>&1
+NB=$(printf '%s' "$ATTENTE" | grep -c . || true)
+log "Paquets en attente : $NB"; [ "$NB" -gt 0 ] && printf '%s\n' "$ATTENTE" | sed 's/^/  - /' | tee -a "$JOURNAL" >> "$RAPPORT"
+REBOOT_AVANT=0; [ -f /var/run/reboot-required ] && REBOOT_AVANT=1
+if [ "$MODE" = --simuler ]; then log "Simulation : rien n'est modifie (reboot requis deja : $REBOOT_AVANT)"; cat "$RAPPORT"; exit 0; fi
+if [ "$NB" = 0 ] && [ "$REBOOT_AVANT" = 0 ] && [ "$MODE" != --force ]; then
+  apt-mark hold $PILE_HOLD >/dev/null 2>&1; log "RESULTAT : rien a faire"; exit 0
+fi
+
+# ---------------- 3. sauvegarde ----------------
+SAUV=/data/backups/maj-$HORO; mkdir -p "$SAUV"; chmod 700 "$SAUV"
+systemctl start omni-backup-config && log "Sauvegarde chiffree omni-backup-config OK" || log "ATTENTION : omni-backup-config en echec"
+URI=$(grep -E "^mongodb_uri" /etc/graylog/server/server.conf | sed 's/^mongodb_uri *= *//')
+mongodump --quiet --uri="$URI" --out "$SAUV/mongodump" && log "mongodump OK ($SAUV)" || { log "ECHEC mongodump : arret"; apt-mark hold $PILE_HOLD >/dev/null; envoyer_mail "Mise a jour hebdomadaire ANNULEE (sauvegarde)"; exit 1; }
+tar czf "$SAUV/etc.tgz" /etc/graylog /etc/opensearch /etc/mongod.conf /etc/logstash /etc/nginx /etc/default/graylog-server /etc/apt 2>/dev/null
+dpkg -l > "$SAUV/dpkg-l.txt"
+ls -1dt /data/backups/maj-* 2>/dev/null | tail -n +5 | xargs -r rm -rf   # garde les 4 dernieres
+
+# ---------------- 4. mise a jour ----------------
+if [ "$NB" -gt 0 ]; then
+  systemctl stop graylog-server logstash
+  if apt-get -y -q -o Dpkg::Options::=--force-confold dist-upgrade >> "$JOURNAL" 2>&1; then log "Mise a jour apt OK"; else log "ECHEC apt (voir $JOURNAL)"; fi
+  dpkg --audit | head -5 | tee -a "$JOURNAL" >> "$RAPPORT"
+  apt-get -y -q autoremove --purge >> "$JOURNAL" 2>&1
+  apt-get -q clean   # le cache des .deb (plusieurs Go) remplissait /var
+fi
+apt-mark hold $PILE_HOLD >/dev/null 2>&1
+reparations
+for f in /etc/graylog/server/server.conf.dpkg-dist /etc/opensearch/opensearch.yml.dpkg-dist /etc/mongod.conf.dpkg-dist; do
+  [ -f "$f" ] && [ "$f" -nt "$SAUV" ] && log "A lire : nouveau modele de configuration $f (la configuration en place est conservee)"
+done
+
+# ---------------- 5. redemarrage ou relance ----------------
+if [ -f /var/run/reboot-required ]; then
+  log "Redemarrage necessaire ($(cat /var/run/reboot-required.pkgs 2>/dev/null | tr '\n' ' ')) : reboot dans 1 min, controle au demarrage"
+  cp "$RAPPORT" "$ETAT/reboot-en-attente"   # recopie pour inclure la ligne ci-dessus
+  systemd-run --on-active=60 --unit=oms-maj-siem-reboot /bin/systemctl reboot
+  exit 0
+fi
+systemctl start mongod opensearch graylog-server logstash
+if controle_final; then log "RESULTAT : OK"; envoyer_mail "Mise a jour hebdomadaire OK"
+else log "RESULTAT : A VERIFIER"; envoyer_mail "Mise a jour hebdomadaire A VERIFIER"; fi

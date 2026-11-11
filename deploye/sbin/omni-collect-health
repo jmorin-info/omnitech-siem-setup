@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-collect-health - Supervision de la COLLECTE (couverture SLA + go-dark).
+#   Sans CMDB : le parc "gere" est derive du baseline -> tout hote ayant emis
+#   recemment (< COLLECT_MANAGED_DAYS) est cense continuer a emettre.
+#     - last_seen par hote (max timestamp) sur la fenetre baseline ;
+#     - go-dark = hote gere silencieux depuis > COLLECT_GO_DARK_HOURS ;
+#     - couverture = hotes actifs 24h / hotes geres * 100.
+#   Resultats en GELF (event_source=collecte_sla) -> page Sante collecte + alerte.
+#   Le host cible (reserve GELF) part en champ custom 'dark_host'.
+# Lance par omni-collect-health.timer (horaire). Config dans 00-vars.env.
+# =============================================================================
+import json, os, re, sys, urllib.request
+from datetime import datetime, timezone
+
+OS_URL   = "http://127.0.0.1:9200"
+GELF_URL = "http://127.0.0.1:12201/gelf"
+SIEM     = "bx-it-graylog-vm"
+# Indices des sources a AGENT (hotes physiques). On EXCLUT M365 (cloud, pas d'hote)
+# et l'interne SIEM (auto-genere). FortiGate/vSphere = equipements, mais leur
+# "host" = nom d'equipement : legitime a superviser aussi.
+IDX = "omni-winsec*,omni-sysmon*,omni-winother*,omni-fortigate*,omni-vsphere*"
+
+def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+    env = {}
+    try:
+        for line in open(path):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: env[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return env
+ENV = load_env()
+GO_DARK_HOURS = float(ENV.get("COLLECT_GO_DARK_HOURS", "26"))   # tolere une nuit + marge
+MANAGED_DAYS  = int(ENV.get("COLLECT_MANAGED_DAYS", "14"))      # au-dela = decommissionne
+BASELINE_DAYS = max(MANAGED_DAYS, 30)
+
+def es(path, body):
+    req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+def gelf(fields):
+    # GELF 'host' reserve = emetteur (-> 'source'). Les champs custom sont prefixes '_'.
+    base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "collecte_sla")}
+    base.update({("_" + k if not k.startswith(("_", "version", "short_message")) else k): v
+                 for k, v in fields.items()})
+    try:
+        urllib.request.urlopen(urllib.request.Request(GELF_URL, data=json.dumps(base).encode(),
+            headers={"Content-Type": "application/json"}), timeout=10)
+    except Exception as e:
+        print("gelf KO:", e, file=sys.stderr)
+
+def main():
+    now = datetime.now(timezone.utc)
+    # last_seen + volume par hote sur la fenetre baseline
+    agg = es(f"/{IDX}/_search", {
+        "size": 0,
+        "query": {"range": {"timestamp": {"gte": f"now-{BASELINE_DAYS}d"}}},
+        "aggs": {"h": {"terms": {"field": "host", "size": 5000},
+                       "aggs": {"last": {"max": {"field": "timestamp"}},
+                                "first": {"min": {"field": "timestamp"}}}}}})
+    buckets = agg["aggregations"]["h"]["buckets"]
+
+    managed = active24 = go_dark = decommissioned = 0
+    dark_hosts = []
+    for b in buckets:
+        host = b["key"]
+        last_ms = b["last"]["value"]
+        if last_ms is None:
+            continue
+        last = datetime.fromtimestamp(last_ms / 1000.0, tz=timezone.utc)
+        hours_silent = (now - last).total_seconds() / 3600.0
+        days_silent = hours_silent / 24.0
+        if days_silent > MANAGED_DAYS:
+            decommissioned += 1
+            continue                          # hors SLA (probablement retire)
+        managed += 1
+        if hours_silent <= 24:
+            active24 += 1
+        if hours_silent > GO_DARK_HOURS:
+            go_dark += 1
+            first = datetime.fromtimestamp(b["first"]["value"] / 1000.0, tz=timezone.utc)
+            dark_hosts.append((host, last, round(hours_silent, 1), b["doc_count"], first))
+
+    coverage = round(active24 / managed * 100.0, 1) if managed else 0.0
+
+    # 1) evenement de synthese (le KPI couverture lit sla_coverage_pct)
+    gelf({"event_source": "collecte_sla", "sla_type": "summary",
+          "sla_expected": managed, "sla_active_24h": active24,
+          "sla_go_dark": go_dark, "sla_decommissioned": decommissioned,
+          "sla_coverage_pct": coverage,
+          "short_message": f"Couverture collecte {coverage}% - {active24}/{managed} actifs, {go_dark} go-dark"})
+
+    # 2) un evenement par hote go-dark (alert_tag pour coloration + alerte)
+    for host, last, hrs, vol, first in sorted(dark_hosts, key=lambda x: -x[2]):
+        gelf({"event_source": "collecte_sla", "sla_type": "go_dark",
+              "alert_tag": "host_go_dark", "dark_host": host,
+              "last_seen": last.strftime("%Y-%m-%d %H:%M:%S UTC"),
+              "hours_silent": hrs, "host_volume_30d": vol,
+              "first_seen": first.strftime("%Y-%m-%d %H:%M:%S UTC"),
+              "short_message": f"GO-DARK {host} - muet depuis {hrs}h (dernier log {last.strftime('%d/%m %H:%M')})"})
+
+    print(f"[collecte] geres={managed} actifs24h={active24} go-dark={go_dark} "
+          f"decommissionnes={decommissioned} couverture={coverage}%")
+    if dark_hosts:
+        print("  go-dark:", ", ".join(f"{h}({hrs}h)" for h, _, hrs, _, _ in dark_hosts))
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print("omni-collect-health KO:", e, file=sys.stderr)
+        sys.exit(1)

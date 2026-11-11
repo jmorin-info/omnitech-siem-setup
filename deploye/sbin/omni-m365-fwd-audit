@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Audit des transferts mail M365 (regles inbox forward/redirect vers externe).
+Stdlib only. Permissions Graph : User.Read.All + MailboxSettings.Read (app)."""
+import json, os, time, urllib.request, urllib.parse, urllib.error
+from datetime import datetime, timezone
+
+ENV = {}
+with open("/etc/default/omni-m365") as f:
+    for line in f:
+        if "=" in line and not line.startswith("#"):
+            k, v = line.strip().split("=", 1); ENV[k] = v
+
+GRAPH = "https://graph.microsoft.com/v1.0"
+INTERNAL = {d.strip().lower() for d in ENV.get("M365_INTERNAL_DOMAINS",
+            "omnitech-security.fr,omnitech.security").split(",") if d.strip()}
+
+def log(m): print(f"{datetime.now(timezone.utc).isoformat()} {m}", flush=True)
+
+def token():
+    data = urllib.parse.urlencode({
+        "client_id": ENV["M365_CLIENT_ID"], "client_secret": ENV["M365_CLIENT_SECRET"],
+        "scope": "https://graph.microsoft.com/.default", "grant_type": "client_credentials"}).encode()
+    req = urllib.request.Request(
+        f"https://login.microsoftonline.com/{ENV['M365_TENANT_ID']}/oauth2/v2.0/token", data=data)
+    return json.load(urllib.request.urlopen(req, timeout=30))["access_token"]
+
+def graph_get(tok, url):
+    req = urllib.request.Request(url.replace(" ", "%20"), headers={"Authorization": f"Bearer {tok}"})
+    return json.load(urllib.request.urlopen(req, timeout=60))
+
+def graph_pages(tok, url, cap=200):
+    n = 0
+    while url and n < cap:
+        try:
+            doc = graph_get(tok, url)
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                time.sleep(int(e.headers.get("Retry-After", "10"))); continue
+            if e.code == 403:
+                log(f"403 (permission manquante : User.Read.All ?) sur {url.split('?')[0]}"); return
+            raise
+        yield from doc.get("value", [])
+        url = doc.get("@odata.nextLink"); n += 1
+
+def gelf(fields):
+    fields.setdefault("version", "1.1"); fields.setdefault("host", "graph.microsoft.com")
+    fields.setdefault("timestamp", time.time())
+    req = urllib.request.Request(ENV["GELF_URL"], data=json.dumps(fields).encode(),
+                                 headers={"Content-Type": "application/json"})
+    urllib.request.urlopen(req, timeout=10).read()
+
+def is_external(addr):
+    return bool(addr) and "@" in addr and addr.rsplit("@", 1)[1].lower() not in INTERNAL
+
+def recipients(lst):
+    return [(r.get("emailAddress") or {}).get("address") for r in (lst or [])
+            if (r.get("emailAddress") or {}).get("address")]
+
+def main():
+    tok = token()
+    scanned = found = 0
+    for u in graph_pages(tok, GRAPH + "/users?$select=id,userPrincipalName,mail&$top=999"):
+        uid = u.get("id"); upn = u.get("userPrincipalName") or u.get("mail")
+        if not uid or not u.get("mail"):
+            continue
+        scanned += 1
+        try:
+            rules = graph_get(tok, f"{GRAPH}/users/{uid}/mailFolders/inbox/messageRules").get("value", [])
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                log("403 : permission MailboxSettings.Read manquante (admin consent ?) - arret."); return
+            if e.code in (400, 404):
+                continue  # pas de boite / inbox accessible
+            raise
+        for rule in rules:
+            act = rule.get("actions", {}) or {}
+            tgts = (recipients(act.get("forwardTo")) + recipients(act.get("redirectTo"))
+                    + recipients(act.get("forwardAsAttachmentTo")))
+            ext = sorted({t for t in tgts if is_external(t)})
+            if ext:
+                found += 1
+                gelf({
+                    "short_message": f"M365 transfert EXISTANT: {upn} -> {', '.join(ext)} "
+                                     f"(regle '{rule.get('displayName')}')",
+                    "level": 4,
+                    "_event_source": "m365_fwd_audit", "_m365_type": "fwd_audit",
+                    "_alert_tag": "m365_fwd_existing", "_event_action": "forward_rule_external",
+                    "_upn": upn, "_user": (upn.split("@")[0] if upn else None),
+                    "_fwd_rule": rule.get("displayName"), "_fwd_to": ", ".join(ext),
+                    "_fwd_enabled": bool(rule.get("isEnabled")),
+                })
+        time.sleep(0.05)  # menagement du throttling Graph
+    gelf({"short_message": f"M365 audit transferts: {scanned} boites scannees, {found} transferts externes",
+          "level": 6, "_event_source": "siem_m365_fwd_audit", "_event_action": "audit_done",
+          "_audit_scanned": scanned, "_audit_found": found})
+    log(f"termine: {scanned} boites, {found} transferts externes")
+
+if __name__ == "__main__":
+    main()
