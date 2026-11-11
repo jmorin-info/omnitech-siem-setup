@@ -50,6 +50,7 @@ docker/geoip/*.gz
 # Docker : fichiers de secrets (override docker-compose.secrets.yml)
 docker/secrets/*
 !docker/secrets/README.md
+!docker/secrets/README.en.md
 
 # SEAL : venv local + sorties de reconnaissance (donnees personnelles) + rapports
 seal/.venv/
