@@ -85,6 +85,21 @@ def collect(hours, offset=0):
         if len(hits) < 500: break
     return out
 
+def collect_recap(hours):
+    """Decisions "digest" (11/11/2026) : detections heuristiques et tempetes sans mail
+    unitaire, regroupees par detection avec les entites les plus touchees."""
+    q = {"bool": {"must": [{"term": {"event_source": "alert_triage"}},
+                           {"term": {"triage_decision": "digest"}},
+                           {"range": {"timestamp": {"gte": f"now-{hours}h"}}}]}}
+    try:
+        r = search({"size": 0, "query": q, "aggs": {"t": {"terms": {"field": "alert_title", "size": 25},
+                    "aggs": {"e": {"terms": {"field": "triage_entity", "size": 4}},
+                             "n": {"cardinality": {"field": "triage_entity"}}}}}})
+        return [(b["key"], b["doc_count"], b["n"]["value"], [x["key"] for x in b["e"]["buckets"]])
+                for b in r["aggregations"]["t"]["buckets"]]
+    except Exception:
+        return []
+RECAP = []
 def clean_reason(r):
     r = str(r or "")
     r = re.sub(r"^llm:\s*", "", r)
@@ -213,6 +228,17 @@ def render(rows, hours, since_txt, prev_rows=None, dropped=0):
                        f'letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Entités les plus concernées</div>'
                        f'<table width="100%" cellpadding="0" cellspacing="0">{el}</table></td></tr>')
 
+    if RECAP:
+        rl = "".join(
+            f'<tr><td style="padding:8px 0;border-bottom:1px solid {LINE};font-size:12.5px;color:{BODY}">'
+            f'<span style="font-weight:600;color:{INK}">{n}×</span>&nbsp; {esc(re.sub(r"^OMNI\s*-\s*", "", t))}'
+            f'<div style="font-size:11px;color:{MUT};margin-top:2px">{ne} entité(s) : {esc(", ".join(es))}'
+            f'{"…" if ne > len(es) else ""}</div></td></tr>' for t, n, ne, es in RECAP)
+        blocks += (f'<tr><td style="padding:18px 32px 0"><div style="font-size:11px;color:{LAB};font-weight:600;'
+                   f'letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Signaux regroupés (sans mail unitaire)</div>'
+                   f'<div style="font-size:11.5px;color:{MUT};margin-bottom:4px">Détections heuristiques à fort volume '
+                   f'et rafales : à parcourir, pas d\'urgence. Détail en console.</div>'
+                   f'<table width="100%" cellpadding="0" cellspacing="0">{rl}</table></td></tr>')
     html = (
         f'<body style="margin:0;background:{BG};font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'
         f'<table width="100%" cellpadding="0" cellspacing="0" style="background:{BG};padding:26px 12px">'
@@ -255,11 +281,16 @@ def render(rows, hours, since_txt, prev_rows=None, dropped=0):
         txt += ["", "Phases ATT&CK : " + ", ".join(f"{k} ({v})" for k, v in tacs)]
     if ents:
         txt += ["", "Entites les plus concernees :"] + [f"  {v}x  {k}" for k, v in ents]
+    if RECAP:
+        txt += ["", "SIGNAUX REGROUPES (sans mail unitaire) :"] + [
+            f"  {n}x  {re.sub(r'^OMNI\s*-\s*', '', t)}  ({ne} entite(s))" for t, n, ne, es in RECAP]
     txt += ["", f"Console SOC : {SOC}"]
     return html, "\n".join(txt)
 
 def main():
     hours = int(os.environ.get("DIGEST_HOURS") or window_hours())
+    global RECAP
+    RECAP = collect_recap(hours)
     rows = collect(hours)
     prev_rows = collect(hours, offset=hours)
     dropped = count_only("drop", f"now-{hours}h")

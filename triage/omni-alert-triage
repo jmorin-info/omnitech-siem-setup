@@ -39,6 +39,16 @@ STATE     = "/var/lib/omni-alert-triage/state.json"
 GUIDANCE  = "/root/omnitech-siem-setup/lookups/alert-guidance.json"
 GELF_URL  = "http://127.0.0.1:12201/gelf"
 LISTEN    = ("127.0.0.1", 8089)
+# 11/11/2026 : pause du juge LLM apres un echec (credit epuise, panne API) -> plus
+# d'appel a chaque alerte pendant LLM_PAUSE_SECONDS ; la decision retombe sur le
+# score / defaut documente exactement comme avant.
+_LLM_DOWN_UNTIL = 0.0
+# Detections heuristiques a fort volume : PAS de mail unitaire en zone grise, elles
+# vont dans le recapitulatif lundi/jeudi (decision "digest", tracee dans le SIEM).
+# Surchargeable par DIGEST_TITLES_REGEX dans le .env. Jamais applique a un CRITICAL
+# ni a une kill-chain.
+DIGEST_TITLES_DEFAULT = (r"exfiltration par volume|service expos. sur internet|"
+                         r"reconnaissance ldap \(.num.ration|anomalie de volume \(z-score\)")
 
 _GUIDE_CACHE = {"mtime": 0, "data": {}}
 _SEAL_ID_RE = re.compile(r'\bSEAL\s+([A-Z]{2,3})-(\d{3})\b', re.I)
@@ -333,6 +343,9 @@ def rationale(tier, reason, score):
         # On restitue l'analyse reelle plutot qu'une phrase passe-partout.
         expl = (reason or "")[4:].strip()
         return expl if len(expl) > 20 else "Signal qualifié comme pertinent après analyse contextuelle."
+    if r.startswith("llm_erreur"):
+        return (f"Analyse contextuelle automatique indisponible : alerte transmise par "
+                f"précaution (score {score}/100). À qualifier par un analyste.")
     return f"Niveau de risque élevé ({score}/100)."
 
 def quick_sign(secret, action, entity, tag, exp):
@@ -807,6 +820,8 @@ def redact_ctx(ctx):
 def llm_relevant(e, ctx):
     key = e.get("ANTHROPIC_API_KEY","")
     if not key: return None, "llm_absent"
+    global _LLM_DOWN_UNTIL
+    if time.time() < _LLM_DOWN_UNTIL: return None, "llm_erreur:pause"
     if e.get("OMNI_TRIAGE_LLM_REDACT","true").lower() != "false": ctx = redact_ctx(ctx)
     model = e.get("OMNI_TRIAGE_LLM_MODEL","claude-haiku-4-5-20251001")
     prompt = (
@@ -864,7 +879,13 @@ def llm_relevant(e, ctx):
               flush=True)
         return verdict, "llm:" + (expl or str(j.get("raison",""))[:60])
     except Exception as ex:
-        print(f"[juge] echec {type(ex).__name__}", flush=True)
+        _LLM_DOWN_UNTIL = time.time() + int(e.get("LLM_PAUSE_SECONDS", "3600") or 3600)
+        _det = ""
+        try:
+            if hasattr(ex, "read"):
+                _det = json.loads(ex.read().decode("utf-8", "replace")).get("error", {}).get("message", "")[:120]
+        except Exception: pass
+        print(f"[juge] echec {type(ex).__name__} {_det} -> pause {int(_LLM_DOWN_UNTIL - time.time())} s", flush=True)
         return None, f"llm_erreur:{type(ex).__name__}"
 
 def sev_label(tier, reason):
@@ -1183,7 +1204,11 @@ def send_mail(e, ctx, decision_reason):
     body += "-- Triage automatique (omni-alert-triage).\n"
     msg = MIMEMultipart("alternative")
     # sujet encode RFC 2047 (accents corrects sur tous les MUA) ; pas d'emoji
-    subj = f"{pfx} {level} — {titre}" + (f" · {ent_short}" if ent_short else "")
+    _r = (decision_reason or "").lower()
+    _tag = ("CRITIQUE" if (ctx.get("tier") == "CRITICAL" or "killchain" in _r)
+            else "INFO" if ctx.get("tier") == "NOISE" else "ÉLEVÉ")
+    _pre = "Incident corrélé — " if "killchain" in _r else ""
+    subj = f"{pfx} [{_tag}] {_pre}{titre}" + (f" · {ent_short}" if ent_short else "")
     msg["Subject"] = Header(subj, "utf-8")
     msg["From"] = frm; msg["To"] = ", ".join(to)
     msg.attach(MIMEText(body, "plain", "utf-8"))
@@ -1432,6 +1457,8 @@ class Handler(BaseHTTPRequestHandler):
             want_mail, reason = True, "critical"   # CRITICAL jamais supprime par un FP appris
         elif dyn_rule:
             decision, reason = "drop", f"fp_soc({dyn_rule.get('by','?')})"
+        elif tier == "GRAY" and re.search(e.get("DIGEST_TITLES_REGEX") or DIGEST_TITLES_DEFAULT, title or "", re.I):
+            decision, reason = "digest", f"recapitulatif(score={score})"
         elif tier == "NOISE":
             if score >= mail_thr: want_mail, reason = True, f"noise_escalade(score={score})"
             else: decision, reason = "drop", f"noise(score={score})"
@@ -1452,15 +1479,26 @@ class Handler(BaseHTTPRequestHandler):
                     decision, reason = "drop", f"{why}|score={score}<{gray_thr}"
 
         win = int(e.get("TRIAGE_DEDUP_SECONDS","3600"))
+        _gris = tier != "CRITICAL" and not reason.startswith("killchain")
+        if want_mail and _gris:
+            win = int(e.get("TRIAGE_DEDUP_GRAY_SECONDS", str(win)) or win)
         if want_mail:
             # Filet de securite dedup : si l'entite primaire est un 'source=' (collecteur,
             # pas le sujet), on deduplique plutot sur la 1re cle de correlation (ckeys
             # exclut deja 'source=' par construction) -> deux sujets distincts collectes
             # par le meme hote ne s'ecrasent plus. Sinon comportement inchange.
             key = "dedup:" + title + "|" + (ckeys[0] if entity.startswith("source=") and ckeys else entity)
+            _cap = int(e.get("GRAY_STORM_CAP_PER_HOUR", "0") or 0)
+            _bk = "burst:" + title
+            _rafale = [x for x in d.get(_bk, []) if isinstance(x, (int, float)) and now - x < 3600]
             if key in d and (now - d[key]) < win:
                 decision, reason = "dedup", reason + "+dedup"
+            elif _gris and _cap > 0 and len(_rafale) >= _cap:
+                # tempete : la meme detection a deja mailé _cap fois dans l'heure ->
+                # recapitulatif (trace SIEM), pas de mail supplementaire.
+                decision, reason = "digest", reason + f"+tempete(>{_cap}/h)"; d[key] = now
             else:
+                if _gris and _cap > 0: d[_bk] = _rafale + [now]
                 try:
                     send_mail(e, ctx, reason); decision = "mail"; d[key] = now
                 except Exception as ex:
@@ -1476,6 +1514,8 @@ class Handler(BaseHTTPRequestHandler):
             k.startswith("vel:") and isinstance(v, list)
             and not any(isinstance(x, (list, tuple)) and len(x) == 2
                         and (now - (x[1] or 0)) < _velmax for x in v))}
+        d = {k: v for k, v in d.items() if not (k.startswith("burst:") and isinstance(v, list)
+             and not any(isinstance(x, (int, float)) and now - x < 3600 for x in v))}
         bump(d, decision); save(d)
         gelf(decision, title, tier, score, signals, reason,
              entity, f.get("mitre_tactic", ""), corr_key, tspan)
