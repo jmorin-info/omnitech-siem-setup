@@ -1,0 +1,21 @@
+# OMNITECH 2026-11-11 : mises a jour automatiques limitees aux series validees (pas de saut de version majeure).
+# Pour changer de serie (ex. Graylog 7.2), modifier ce fichier APRES lecture des notes de version.
+Package: graylog-server
+Pin: version 7.1.*
+Pin-Priority: 500
+
+Package: opensearch
+Pin: version 2.19.*
+Pin-Priority: 500
+
+Package: mongodb-org*
+Pin: version 8.0.*
+Pin-Priority: 500
+
+Package: logstash
+Pin: version 1:8.19.*
+Pin-Priority: 500
+
+Package: graylog-server opensearch mongodb-org* logstash
+Pin: version *
+Pin-Priority: -1
