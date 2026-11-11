@@ -169,6 +169,40 @@ Tout tient sur un seul serveur physique Debian 13 durci (le nom `bx-it-graylog-v
         └──  UEBA · NDR · oms-ml · oms-xdr · SOAR · triage · rapports ─┘
 ```
 
+Vue simplifiée du traitement :
+
+```mermaid
+flowchart LR
+  subgraph Sources
+    WIN[Windows / Sysmon<br/>Winlogbeat TLS]
+    FGT[FortiGate<br/>via FortiAnalyzer]
+    M365[Microsoft 365 / Entra ID]
+    OTH[vSphere · ESET · EMS · Aruba<br/>Linux · WAF · Vaultwarden]
+    SEAL[Contrôle d'accès SEAL<br/>SQL via Logstash]
+  end
+  subgraph SIEM[Serveur SIEM]
+    IN[Entrées Graylog] --> PIPE[Pipelines<br/>normalisation · enrichissement]
+    PIPE --> V3[Corrélation v3<br/>actifs critiques]
+    PIPE --> OS[(OpenSearch<br/>/data chiffré)]
+    PIPE --> DEF[Définitions d'alertes<br/>MITRE]
+    V3 --> DEF
+    ROB[Robots UEBA · NDR · santé] -->|GELF| IN
+    DEF --> TRI[Tri des alertes<br/>score · corrélation · dédoublonnage]
+    DEF --> SOAR[SOAR<br/>liste de blocage]
+    OS -.->|snapshots sélectifs la nuit| SNAP[(Dépôt de snapshots<br/>disque séparé)]
+  end
+  WIN --> IN
+  FGT --> IN
+  M365 --> IN
+  OTH --> IN
+  SEAL --> IN
+  TRI --> MAIL[Mail · Teams]
+  TRI --> DIG[Récapitulatif quotidien<br/>08:00 en semaine]
+  TRI --> CON[Console SOC · PWA]
+  CON -->|demande de déblocage<br/>journalisée| SOAR
+  SOAR -->|flux de menaces externe<br/>lu toutes les 2 min| FW[FortiGate<br/>refus en entrée WAN]
+```
+
 Composants sur le serveur :
 
 - **Graylog 7.1** (ingestion, streams, pipelines, alertes) — API en TLS sur `:9000`, derrière nginx.
@@ -426,9 +460,33 @@ Le SIEM se surveille lui-même ; tout remonte en GELF (`event_source=siem_*`) da
 - **Débloquer une IP** (effet en 2 minutes), sur le serveur SIEM : `sudo omni-soar-debloquer <ip>`. Ajouter `--exclure "motif"` pour qu'elle ne soit plus jamais bloquée.
 - **Récapitulatif** des blocages et des IP épargnées : un mail chaque matin, seulement les jours où il y a eu de l'activité.
 
+### Détection et corrélation (couche v3)
+Une seconde couche de détection s'ajoute aux règles historiques sans les modifier. Elle a son propre étage de pipeline et une table des actifs critiques (contrôleurs de domaine, PKI, sauvegarde, SIEM, serveurs de sécurité physique). Elle couvre :
+- la lecture du mot de passe d'un gMSA par un compte utilisateur ;
+- le retour de tickets Kerberos RC4/DES ;
+- l'administration du pare-feu depuis une IP publique, l'usage du compte local de secours, les rafales d'échecs de connexion admin ;
+- une menace EDR non traitée, plus grave sur un actif critique ;
+- la suppression de jobs ou de points de sauvegarde, et les restaurations faites par un compte inattendu ;
+- une corrélation : menace EDR puis connexion admin sur la même machine dans l'heure.
+
+Chaque règle a été rejouée sur 30 jours avant la mise en production, et le coût à l'ingestion reste de 3 à 4 ms par message. Sources et retour arrière : `tools/omni-v3/`.
+
+### Tri des alertes et récapitulatifs
+- Les faux positifs structurels sont écartés par des signatures précises (compte + machine + processus), jamais par une exclusion large. Les événements restent indexés : recherche `_exists_:fp_signature`.
+- Les alertes ÉLEVÉ sont regroupées, un mail par heure au plus, avec l'historique de l'entité sur 7 jours. Les CRITIQUES partent tout de suite.
+- Un récapitulatif part chaque jour ouvré à 08:00, avec une section « activité légitime écartée ».
+- Si le juge LLM ne répond pas, il est mis en pause une heure au lieu d'être rappelé à chaque alerte.
+
+Sources : `tools/alertes-v2/`.
+
+### Console SOC et tableaux de bord
+- La console `/soc/` affiche en tête une bande « À traiter » : incidents ouverts, incidents jamais qualifiés, hôtes silencieux, robots en panne, IP bloquées.
+- Une page SOAR liste les IP bloquées et permet de demander un déblocage, journalisé et traité par un service dédié. Une page Exploitation montre les mises à jour, les snapshots, la sauvegarde, les disques et les certificats.
+- Quatre dashboards Graylog complètent l'existant : vue SOC direction, identités et AD, réseau FortiGate et VPN, santé du SIEM. Scripts de création et de réparation : `tools/dashboards/`.
+
 ### Garder le dépôt à jour
 
-Une partie des robots est corrigée directement en production, dans `/usr/local/sbin`, les unités systemd et `/opt`. `sync-deploye.sh` recopie cet état dans `deploye/` et neutralise toute URL contenant des identifiants. Il lance ensuite un scan de secrets et refuse de committer si quelque chose ressort. À lancer en simulation d'abord (`--simuler`).
+Une partie des robots est corrigée directement en production, dans `/usr/local/sbin`, les unités systemd et `/opt`. `sync-deploye.sh` recopie cet état dans `deploye/` et neutralise toute URL contenant des identifiants. Il lance ensuite un scan de secrets et refuse de committer si quelque chose ressort. À lancer en simulation d'abord (`--simuler`). Le mode `--sans-commit` recopie et scanne sans committer, pour regrouper les changements dans un seul commit fait à la main. Le script reprend aussi la console `/soc`, `soar-v2/`, la couche v3, les alertes v2 et les scripts des dashboards.
 
 ## Limites connues
 

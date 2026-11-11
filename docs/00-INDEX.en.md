@@ -62,3 +62,11 @@ traceability. It is authoritative for audit purposes.
 - [GLOSSAIRE.md](GLOSSAIRE.md) — glossary
 - [CHANGELOG.md](CHANGELOG.md) — change log
 - [MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md](MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md) — co-managed MDR costing
+
+## Recently updated (November 2026)
+
+- [ALERTING-AND-TRIAGE.md](ALERTING-AND-TRIAGE.md) — noise control, hourly grouping, daily digest
+- [DETECTIONS.md](DETECTIONS.md) — correlation layer v3
+- [CONSOLE-SOC.en.md](CONSOLE-SOC.en.md) — "Action needed" band, SOAR unblock, operations page
+- [SOAR-PLAYBOOKS.en.md](SOAR-PLAYBOOKS.en.md) — external threat feed and guardrails
+- [CHANGELOG.en.md](CHANGELOG.en.md) — dated changes

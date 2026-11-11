@@ -1,7 +1,16 @@
 # Changelog — SIEM OMNITECH
 
 All notable changes to the platform. Format: date — change.
-*Last review: 2026-06-22.*
+*Last review: 2026-11-11.*
+
+## 2026-11-11 (stack, v3 detection, alert triage, SOAR, console)
+- Stack updated (Graylog 7.1.12, OpenSearch 2.19.7, MongoDB 8.0.38, Logstash 8.19.25) and weekly automatic updates inside pinned series (`oms-maj-siem`).
+- Nightly selective, incremental OpenSearch snapshots with a weekly test restore (`oms-snap-siem`).
+- v3 correlation layer: 14 rules, 11 event definitions, critical-asset lookup.
+- Alert triage: false-positive signatures, hourly grouping of HIGH alerts, daily digest.
+- SOAR back on both sites, with automatic exclusion of legitimate IPs and 24-hour expiry.
+- SOC console: "Action needed" band, SOAR page with unblock, operations page. Four new dashboards.
+- Fixes: Logstash GELF plugin, truststore outside the package, DHCP robot (encoding), drift check (nftables read).
 
 ## 2026-06-22 (ML layer, enriched console, quality)
 

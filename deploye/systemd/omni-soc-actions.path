@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI - surveille les demandes d'action de la console /soc
+[Path]
+DirectoryNotEmpty=/var/lib/omni-mobile/soc-requests/pending
+MakeDirectory=yes
+[Install]
+WantedBy=paths.target

@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-soar-simulation - rejoue les decisions SOAR des N derniers jours (defaut 30)
+# avec les garde-fous v2 (exclusions dynamiques + fixes). Source : evenements
+# event_source:siem_soar / event_action:ip_bloquee produits par le moteur en place
+# (memes 4 detections Graylog), relus dans OpenSearch.
+# Pour chaque IP : aurait-elle ete bloquee aujourd'hui ? sinon, pourquoi (motif d'exclusion).
+#   omni-soar-simulation [jours] [--detail]
+# =============================================================================
+import ipaddress, json, sys, urllib.request
+sys.path.insert(0, "/usr/local/sbin")
+from importlib.machinery import SourceFileLoader
+soar = SourceFileLoader("soar", "/usr/local/sbin/omni-soar").load_module()
+
+jours = int(next((a for a in sys.argv[1:] if a.isdigit()), "30"))
+def q(body):
+    r = urllib.request.Request("http://127.0.0.1:9200/omni-*/_search", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+    return json.load(urllib.request.urlopen(r, timeout=120))
+r = q({"size": 0, "query": {"bool": {"filter": [{"term": {"event_source": "siem_soar"}}, {"terms": {"event_action": ["ip_bloquee"]}},
+      {"range": {"timestamp": {"gte": f"now-{jours}d"}}}]}}, "aggs": {"ip": {"terms": {"field": "soar_ip", "size": 5000}}}})
+ips = [(b["key"], b["doc_count"]) for b in r["aggregations"]["ip"]["buckets"]]
+e = soar.env(); wl = {x.strip() for x in e.get("SOAR_WHITELIST", "").split(",") if x.strip()}
+ex_ips, ex_nets = soar.exclusions()
+garde, exclues = [], []
+for ip, n in ips:
+    m = soar.motif_exclusion(ip, ex_ips, ex_nets, wl) if soar.is_public(ip) else "non publique"
+    (exclues if m else garde).append((ip, n, m))
+print(f"Simulation SOAR v2 sur {jours} jours")
+print(f"  IP distinctes bloquees par le moteur actuel : {len(ips)}")
+print(f"  -> encore bloquees avec les garde-fous v2   : {len(garde)}")
+print(f"  -> desormais EXCLUES (non bloquees)          : {len(exclues)}")
+for ip, n, m in sorted(exclues, key=lambda x: -x[1]):
+    print(f"     {ip:16} {n:3}x  {m}")
+if "--detail" in sys.argv:
+    print("  IP qui resteraient bloquees :")
+    for ip, n, m in sorted(garde, key=lambda x: -x[1]): print(f"     {ip:16} {n:3}x")

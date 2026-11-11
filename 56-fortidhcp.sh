@@ -78,7 +78,7 @@ def main():
     req = urllib.request.Request(url, headers={"Accept": "application/json",
                                                "Authorization": f"Bearer {TOKEN}"})
     with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
-        data = json.load(r)
+        data = json.loads(r.read().decode("utf-8", errors="replace"))  # OMNITECH 2026-11-11 : noms DHCP en Latin-1 (0xe9) faisaient planter le collecteur
     leases = data.get("results", []) or []
     rows, n = {}, 0
     for l in leases:

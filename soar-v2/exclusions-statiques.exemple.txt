@@ -1,0 +1,41 @@
+# Liste d'exclusion FIXE du SOAR OMNITECH (11/11/2026). Une IP ou un reseau CIDR par ligne, puis # motif.
+# Ces adresses ne sont JAMAIS bloquees automatiquement. Ajout rapide : omni-soar-debloquer <ip> --exclure "motif"
+# NinjaOne et ESET : connexions sortantes uniquement (agents -> cloud), aucun blocage entrant possible ; rien a exclure.
+# Plages internes (RFC1918, CGNAT, etc.) : toujours exclues par le code (is_global).
+82.210.42.170     # BX interface WAN1 + VIP
+82.210.42.171     # BX WAN1 secondaire + VIP ZTNA
+82.210.42.172     # BX WAN1 secondaire + VIP ZTNA/VPN
+82.210.42.173     # BX WAN1 secondaire + VIP reverse proxy
+82.210.42.174     # BX WAN1 secondaire + VIP EMS
+176.12.10.254     # BX interface MAQUETTES secondaire
+81.255.193.130    # IV VIP VPN Windows
+81.255.193.131    # IV interface wan1
+81.255.193.132    # IV VIP ERYMA
+159.180.234.120   # lien BX-IV OMS-WAN_1_4
+82.66.240.249     # lien OMS-WAN_3 (Freebox)
+90.85.7.186       # site PACA (Lancon)
+81.250.211.248    # site Loges (OMSLOGES/IVLOGES)
+109.3.146.154     # site St-Gervais
+93.20.63.230      # site St-Priest
+132.220.181.141   # partenaire IPsec Loreal-Azure2
+81.255.154.206    # partenaire IPsec Loreal
+159.135.166.39    # partenaire IPsec YARA
+185.60.8.212      # partenaire IPsec ADL
+193.251.93.196    # partenaire IPsec AirLiquide-LOG
+195.68.83.218     # partenaire IPsec AirLiquide-PTC
+81.255.15.129     # partenaire IPsec AirLiquide-HEM
+193.253.51.42     # partenaire IPsec DGAC
+194.5.170.3       # partenaire IPsec MEDDE
+194.5.172.152     # partenaire IPsec MINISTERE
+195.200.174.229   # partenaire IPsec GNB
+90.82.74.33       # partenaire IPsec SAMAC
+94.198.183.163    # partenaire IPsec SAMAC-SECOURS
+90.83.55.129      # partenaire IPsec MADIC
+92.154.119.134    # partenaire IPsec SFPI
+92.184.107.14     # ancienne SOAR_WHITELIST
+92.184.96.118     # ancienne SOAR_WHITELIST
+40.92.0.0/15      # Microsoft Exchange Online Protection (mail entrant)
+40.107.0.0/16     # Microsoft Exchange Online Protection (mail entrant)
+52.100.0.0/14     # Microsoft Exchange Online Protection (mail entrant)
+104.47.0.0/17     # Microsoft Exchange Online Protection (mail entrant)
+92.184.0.0/16     # Orange mobile 4G (CGNAT : IP partagees, nombreux collaborateurs en 4G) - ajout 11/11/2026

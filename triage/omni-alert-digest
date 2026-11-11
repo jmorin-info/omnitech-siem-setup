@@ -46,7 +46,8 @@ def window_hours(now=None):
     """Heures a couvrir depuis le precedent envoi (lundi=0 ... jeudi=3)."""
     now = now or datetime.now()
     # lundi : depuis jeudi (4 j) ; jeudi : depuis lundi (3 j) ; sinon 3,5 j par defaut
-    return {0: 96, 3: 72}.get(now.weekday(), 84)
+    # v2-20261111 : recapitulatif QUOTIDIEN (lundi = depuis vendredi 08:00)
+    return {0: 72}.get(now.weekday(), 24)
 
 def search(body):
     req = urllib.request.Request(f"{OS_URL}/omni-*/_search", data=json.dumps(body).encode(),
@@ -71,7 +72,7 @@ def collect(hours, offset=0):
     gte = f"now-{hours + offset}h"
     rng = {"gte": gte} if not offset else {"gte": gte, "lte": f"now-{offset}h"}
     q = {"bool": {"must": [{"term": {"event_source": "alert_triage"}},
-                           {"term": {"triage_decision": "mail"}},
+                           {"terms": {"triage_decision": ["mail", "lot"]}},   # v2-20261111 : lot ELEVE inclus
                            {"range": {"timestamp": rng}}]}}
     out, after = [], None
     for _ in range(20):                      # pagination bornee (20 x 500 = 10k max)
@@ -100,6 +101,31 @@ def collect_recap(hours):
     except Exception:
         return []
 RECAP = []
+FP_LIBELLES = {   # v2-20261111 : libelles lisibles des signatures (pipeline omni-fp-26-*)
+    "webshell_dev_central6_sealwebmvc": "Environnement de DEV : VM-DEV-CENTRAL6, SealWebMvc cmd /c ping (injection connue, decision jmorin 11/11)",
+    "schtask_oms": "Taches planifiees OMS (GPP NETLOGON/SYSVOL, adm-jmorin), PDF24, LvfCleanup",
+    "zerologon_mdp_machine": "Rotation du mot de passe machine (postes/gMSA, pas un DC)",
+    "wbadmin_retention_dc": "Retention Windows Server Backup sur les DC (keepVersions >= 3)",
+    "ntds_surebackup_mh": "Lecture d'en-tete NTDS (esentutl /mh) sur copie SureBackup",
+    "webshell_proactive_pamsgbox": "Centrale Pro-Active : message pamsgbox (IV-TECH-FFE-LT2)",
+    "lsass_defender": "Microsoft Defender / MRT qui analyse LSASS",
+    "injection_outils_build": "Outils de build : TeamCity, Upsource, Bitwarden",
+    "explicit_cred_admin_connu": "jmorin -> adm-jmorin depuis BX-IT-JMO-LT ; bailloud -> labo seal.dev",
+    "adminshare_veeam_dc": "Partages admin : gMSA Veeam, adm-jmorin depuis BX-AD-01",
+    "outlook_lien_chrome_zed": "Lien Outlook ouvert dans Chrome, piece jointe Zed!",
+}
+def fp_lib(sig): return FP_LIBELLES.get(sig, sig)
+FPSIG = []   # v2-20261111
+def collect_fp(hours):
+    q = {"bool": {"filter": [{"exists": {"field": "fp_signature"}}, {"range": {"timestamp": {"gte": f"now-{hours}h"}}}]}}
+    try:
+        req = urllib.request.Request(f"{OS_URL}/omni-winsec*,omni-sysmon*/_search", data=json.dumps({"size": 0, "query": q,
+              "aggs": {"s": {"terms": {"field": "fp_signature", "size": 20}, "aggs": {"h": {"cardinality": {"field": "host"}}}}}}).encode(),
+              headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r: res = json.load(r)
+        return [(b["key"], b["doc_count"], b["h"]["value"]) for b in res["aggregations"]["s"]["buckets"]]
+    except Exception:
+        return []
 def clean_reason(r):
     r = str(r or "")
     r = re.sub(r"^llm:\s*", "", r)
@@ -239,6 +265,15 @@ def render(rows, hours, since_txt, prev_rows=None, dropped=0):
                    f'<div style="font-size:11.5px;color:{MUT};margin-bottom:4px">Détections heuristiques à fort volume '
                    f'et rafales : à parcourir, pas d\'urgence. Détail en console.</div>'
                    f'<table width="100%" cellpadding="0" cellspacing="0">{rl}</table></td></tr>')
+    if FPSIG:   # v2-20261111
+        fl = "".join(f'<tr><td style="padding:6px 0;border-bottom:1px solid {LINE};font-size:12.5px;color:{BODY}">'
+                     f'<span style="font-weight:600;color:{INK}">{n}&times;</span>&nbsp; {esc(fp_lib(sig))}'
+                     f'<span style="color:{MUT}"> &middot; {nh} machine(s)</span></td></tr>' for sig, n, nh in FPSIG)
+        blocks += (f'<tr><td style="padding:18px 32px 0"><div style="font-size:11px;color:{LAB};font-weight:600;'
+                   f'letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Activité légitime connue écartée (faux positifs)</div>'
+                   f'<div style="font-size:11.5px;color:{MUT};margin-bottom:4px">Événements reconnus par signature précise '
+                   f'(compte + machine + processus). Recherche Graylog : <code>_exists_:fp_signature</code>.</div>'
+                   f'<table width="100%" cellpadding="0" cellspacing="0">{fl}</table></td></tr>')
     html = (
         f'<body style="margin:0;background:{BG};font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'
         f'<table width="100%" cellpadding="0" cellspacing="0" style="background:{BG};padding:26px 12px">'
@@ -284,13 +319,16 @@ def render(rows, hours, since_txt, prev_rows=None, dropped=0):
     if RECAP:
         txt += ["", "SIGNAUX REGROUPES (sans mail unitaire) :"] + [
             f"  {n}x  {re.sub(r'^OMNI\s*-\s*', '', t)}  ({ne} entite(s))" for t, n, ne, es in RECAP]
+    if FPSIG:   # v2-20261111
+        txt += ["", "ACTIVITE LEGITIME CONNUE ECARTEE (faux positifs, signatures) :"] + [f"  {n}x  {fp_lib(sig)}  ({nh} machine(s))" for sig, n, nh in FPSIG]
     txt += ["", f"Console SOC : {SOC}"]
     return html, "\n".join(txt)
 
 def main():
     hours = int(os.environ.get("DIGEST_HOURS") or window_hours())
-    global RECAP
+    global RECAP, FPSIG
     RECAP = collect_recap(hours)
+    FPSIG = collect_fp(hours)
     rows = collect(hours)
     prev_rows = collect(hours, offset=hours)
     dropped = count_only("drop", f"now-{hours}h")

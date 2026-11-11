@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-soc-actions - traite les demandes d'action deposees par la console /soc
+#   (omni-mobile-api, confine, ne peut ecrire que dans /var/lib/omni-mobile).
+#   Seule action : deblocage SOAR, via l'outil officiel omni-soar-debloquer.
+#   Declenche par omni-soc-actions.path (depot d'un fichier) + timer de secours.
+#   Chaque demande est revalidee ici (IP publique, motif propre) et journalisee (GELF + fichier).
+# OMNITECH 11/11/2026
+# =============================================================================
+import glob, ipaddress, json, os, subprocess, time, urllib.request
+
+BASE = "/var/lib/omni-mobile/soc-requests"
+PEND, DONE = os.path.join(BASE, "pending"), os.path.join(BASE, "done")
+TOOL = "/usr/local/sbin/omni-soar-debloquer"
+LOG = "/var/log/omni-soc-actions.log"
+MAX_PAR_HEURE = 30
+
+def journal(d):
+    d = dict(d, t_traitement=time.strftime("%Y-%m-%dT%H:%M:%S%z"))
+    with open(LOG, "a") as f:
+        f.write(json.dumps(d, ensure_ascii=False) + "\n")
+    try:
+        b = json.dumps({"version": "1.1", "host": "bx-it-graylog-vm",
+                        "short_message": f"SOC action {d.get('action')} {d.get('ip')} par {d.get('user')} : {d.get('status')}",
+                        "_source_type": "soc_action", "_soc_user": d.get("user"), "_soc_action": d.get("action"),
+                        "_ip": d.get("ip"), "_status": d.get("status")}).encode()
+        urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:12201/gelf", data=b,
+                               headers={"Content-Type": "application/json"}), timeout=5)
+    except Exception:
+        pass
+
+def recentes():
+    n = 0; lim = time.time() - 3600
+    for p in glob.glob(os.path.join(DONE, "*.json")):
+        if os.path.getmtime(p) > lim:
+            n += 1
+    return n
+
+def main():
+    os.makedirs(PEND, exist_ok=True); os.makedirs(DONE, exist_ok=True)
+    for p in sorted(glob.glob(os.path.join(PEND, "*.json")))[:20]:
+        try:
+            r = json.load(open(p))
+        except Exception:
+            os.replace(p, os.path.join(DONE, os.path.basename(p) + ".illisible")); continue
+        r.setdefault("action", "debloquer")
+        ip = str(r.get("ip", "")); user = str(r.get("user", ""))[:64]
+        motif = " ".join(str(r.get("motif", "")).replace("#", " ").split())[:80]
+        err = None
+        try:
+            if not ipaddress.ip_address(ip).is_global:
+                err = "IP non publique"
+        except ValueError:
+            err = "IP invalide"
+        if not user:
+            err = "utilisateur absent"
+        if r.get("action") != "debloquer":
+            err = "action non autorisee"
+        if recentes() >= MAX_PAR_HEURE:
+            err = "limite horaire atteinte"
+        if err:
+            r.update(status="refusee", resultat=err)
+        else:
+            cmd = [TOOL, ip] + (["--exclure", f"{motif} (via /soc par {user})"] if r.get("exclure") and motif else [])
+            env = dict(os.environ, SUDO_USER=f"soc:{user}")
+            try:
+                out = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=env)
+                r.update(status="faite" if out.returncode == 0 else "echec",
+                         resultat=(out.stdout + out.stderr).strip()[-400:])
+            except Exception as ex:
+                r.update(status="echec", resultat=type(ex).__name__)
+        journal(r)
+        tmp = os.path.join(DONE, "." + os.path.basename(p))
+        json.dump(r, open(tmp, "w"), ensure_ascii=False)
+        os.replace(tmp, os.path.join(DONE, os.path.basename(p)))
+        os.remove(p)
+    # retention : 60 jours de demandes traitees
+    lim = time.time() - 60 * 86400
+    for p in glob.glob(os.path.join(DONE, "*.json*")):
+        if os.path.getmtime(p) < lim:
+            os.remove(p)
+
+if __name__ == "__main__":
+    main()

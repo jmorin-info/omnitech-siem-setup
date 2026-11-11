@@ -1692,6 +1692,203 @@ def get_sentinel_sim(entity):
 
 
 # ------------------------------------------------------------------------- handler
+
+# =============================================================================
+# OMNITECH-SOC-20261111 : SOAR, exploitation du SIEM et actions /soc
+# =============================================================================
+import ipaddress as _ipa, subprocess as _sp, uuid as _uuid, glob as _glob
+_SOAR_STATE = "/var/lib/omni-soar/blocklist.json"
+_SOAR_META = "/var/lib/omni-soar/blocklist-meta.json"
+_SOAR_EXCL = "/var/lib/omni-soar/exclusions.json"
+_SOAR_FIX = "/etc/omni-soar/exclusions-statiques.txt"
+_SOAR_FEED = "/var/www/siem-kit/soar/blocklist.txt"
+_SOAR_DEC = "/var/log/omni-soar/decisions.log"
+SOC_REQ_DIR = CONF.get("SOC_REQ_DIR", "/var/lib/omni-mobile/soc-requests")
+SOC_ADMINS = {u.strip().lower() for u in CONF.get("SOC_ADMINS", "").split(",") if u.strip()}
+SOC_ORIGINS = {h.strip().lower() for h in CONF.get("SOC_ORIGINS", "bx-it-graylog-vm.omnitech.security,10.33.220.10").split(",") if h.strip()}
+
+def _jl(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+def _tail_jsonl(path, n=300):
+    out = []
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2); size = f.tell(); f.seek(max(0, size - 200000))
+            for line in f.read().decode("utf-8", "replace").splitlines()[-n:]:
+                try:
+                    out.append(json.loads(line))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return out
+
+def origin_ok(headers):
+    """Defense en profondeur CSRF (le cookie est deja SameSite=Strict) : Origin/Referer du meme hote."""
+    o = headers.get("Origin") or headers.get("Referer") or ""
+    if not o:
+        return True   # client non navigateur (curl local) : la session reste exigee
+    import urllib.parse as _uparse
+    host = _uparse.urlparse(o).netloc.split(":")[0].lower()
+    return host in SOC_ORIGINS
+
+def soc_is_admin(user):
+    return bool(user) and (not SOC_ADMINS or user.lower() in SOC_ADMINS)
+
+def get_soar():
+    now = time.time()
+    bl = _jl(_SOAR_STATE, {}); meta = _jl(_SOAR_META, {})
+    dec = _tail_jsonl(_SOAR_DEC, 400)
+    lastb = {}
+    for e in dec:
+        a = str(e.get("action", ""))
+        if "bloq" in a and "debloq" not in a and e.get("ip"):
+            lastb[e["ip"]] = e
+    active = []
+    for ip, until in bl.items():
+        try:
+            until = float(until)
+        except Exception:
+            continue
+        if until <= now:
+            continue
+        m = dict(meta.get(ip, {})); b = lastb.get(ip, {})
+        active.append({"ip": ip, "until": int(until), "remaining_h": round((until - now) / 3600, 1),
+                       "since": b.get("t"), "detection": m.get("detection") or b.get("detection") or "",
+                       "pays": m.get("pays") or b.get("pays") or "", "hits": m.get("hits") or b.get("hits"),
+                       "motif": b.get("motif") or ""})
+    active.sort(key=lambda x: -x["until"])
+    excl = _jl(_SOAR_EXCL, {})
+    fix = 0
+    try:
+        fix = sum(1 for l in open(_SOAR_FIX) if l.strip() and not l.lstrip().startswith("#"))
+    except Exception:
+        pass
+    try:
+        feed_age = int(now - os.path.getmtime(_SOAR_FEED))
+    except Exception:
+        feed_age = None
+    reqs = []
+    for st in ("pending", "done"):
+        for p in sorted(_glob.glob(os.path.join(SOC_REQ_DIR, st, "*.json")), key=os.path.getmtime, reverse=True)[:15]:
+            r = _jl(p, {}); r["status"] = r.get("status") or st; reqs.append(r)
+    hist = [e for e in reversed(dec)][:40]
+    return {"active": active, "count": len(active), "history": hist,
+            "exclusions": {"dynamic_stats": excl.get("stats", {}), "dynamic_generated": excl.get("genere"),
+                           "dynamic_days": excl.get("jours"), "static": fix},
+            "feed_age_s": feed_age, "requests": reqs[:20], "is_admin": None}
+
+def soc_soar_request(body, user):
+    if not soc_is_admin(user):
+        return {"ok": False, "error": "action réservée aux administrateurs SOC"}
+    ip = str(body.get("ip", "")).strip()
+    try:
+        ipo = _ipa.ip_address(ip)
+    except ValueError:
+        return {"ok": False, "error": "adresse IP invalide"}
+    if not ipo.is_global:
+        return {"ok": False, "error": "seules les IP publiques sont gérées par le SOAR"}
+    exclure = bool(body.get("exclure"))
+    motif = " ".join(str(body.get("motif", "")).replace("#", " ").split())[:80]
+    if exclure and len(motif) < 4:
+        return {"ok": False, "error": "motif obligatoire (4 caractères min.) pour une exclusion définitive"}
+    pend = os.path.join(SOC_REQ_DIR, "pending")
+    os.makedirs(pend, exist_ok=True)
+    if len(_glob.glob(os.path.join(pend, "*.json"))) >= 20:
+        return {"ok": False, "error": "trop de demandes en attente"}
+    rid = time.strftime("%Y%m%d-%H%M%S") + "-" + _uuid.uuid4().hex[:8]
+    req = {"id": rid, "t": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "user": str(user)[:64], "action": "debloquer",
+           "ip": str(ipo), "exclure": exclure, "motif": motif, "status": "pending"}
+    tmp = os.path.join(pend, "." + rid + ".tmp")
+    with open(tmp, "w") as f:
+        json.dump(req, f)
+    os.replace(tmp, os.path.join(pend, rid + ".json"))
+    return {"ok": True, "id": rid, "message": "Demande enregistrée : déblocage appliqué sous 1 min, effet sur les FortiGate sous 2 min."}
+
+def _run(cmd, timeout=8):
+    try:
+        return _sp.run(cmd, capture_output=True, text=True, timeout=timeout).stdout.strip()
+    except Exception:
+        return ""
+
+def _readf(path, n=4000):
+    try:
+        with open(path, errors="replace") as f:
+            return f.read()[-n:]
+    except Exception:
+        return ""
+
+def get_siem_ops():
+    now = time.time(); items = []
+    def add(k, label, status, value, detail=""):
+        items.append({"k": k, "label": label, "status": status, "value": value, "detail": detail})
+    # mises a jour automatiques
+    log = _readf("/var/log/oms-maj-siem.log", 20000).splitlines()
+    res = [l for l in log if "RESULTAT" in l]
+    last = res[-1] if res else ""
+    nxt = _run(["systemctl", "show", "oms-maj-siem.timer", "-p", "NextElapseUSecRealtime", "--value"])
+    st = "ok" if ("OK" in last or "rien a faire" in last) else ("warn" if not last else ("crit" if ("ECHEC" in last or "VERIFIER" in last or "ANNULE" in last) else "ok"))
+    add("maj", "Mises à jour automatiques", st, (last[:19] if last else "pas encore exécutée"),
+        (last[20:] if last else "") + (f" · prochaine : {nxt}" if nxt else ""))
+    rb = os.path.exists("/var/run/reboot-required")
+    add("reboot", "Redémarrage en attente", "warn" if rb else "ok", "oui" if rb else "non",
+        _readf("/var/run/reboot-required.pkgs", 300).replace("\n", " ") if rb else "")
+    # snapshots OpenSearch
+    def _dt(v):
+        v = v.strip()
+        return time.strftime("%d/%m/%Y %H:%M", time.localtime(int(v))) if v.isdigit() else v
+    snap = _dt(_readf("/var/lib/oms-snap-siem/dernier-snapshot-ok", 100))
+    test = _dt(_readf("/var/lib/oms-snap-siem/dernier-test-ok", 100))
+    def age_h(p):
+        try:
+            return (now - os.path.getmtime(p)) / 3600
+        except Exception:
+            return None
+    a = age_h("/var/lib/oms-snap-siem/dernier-snapshot-ok")
+    add("snap", "Snapshot des index (quotidien)", "ok" if a is not None and a < 30 else ("crit" if a is None else "warn"),
+        snap or "aucun", f"il y a {a:.0f} h" if a is not None else "")
+    at = age_h("/var/lib/oms-snap-siem/dernier-test-ok")
+    add("snaptest", "Test de restauration (hebdo)", "ok" if at is not None and at < 8 * 24 else "warn",
+        test or "aucun", f"il y a {at / 24:.0f} j" if at is not None else "")
+    # sauvegarde chiffree de la configuration
+    bk = sorted(_glob.glob("/var/backups/siem/omni-siem-config_*.tar.gz.enc"), key=os.path.getmtime)
+    if bk:
+        ab = (now - os.path.getmtime(bk[-1])) / 3600
+        add("backup", "Sauvegarde configuration (quotidienne)", "ok" if ab < 30 else "warn",
+            os.path.basename(bk[-1]).replace("omni-siem-config_", "").replace(".tar.gz.enc", ""),
+            f"{os.path.getsize(bk[-1]) // 1048576} Mo · il y a {ab:.0f} h")
+    else:
+        add("backup", "Sauvegarde configuration (quotidienne)", "crit", "aucune", "")
+    # disques
+    for mp in ("/", "/var", "/data", "/home"):
+        try:
+            s = os.statvfs(mp); tot = s.f_blocks * s.f_frsize; free = s.f_bavail * s.f_frsize
+            pct = round(100 * (tot - free) / tot) if tot else 0
+            add("disk" + mp, f"Disque {mp}", "crit" if pct >= 90 else ("warn" if pct >= 80 else "ok"),
+                f"{pct} %", f"{free // 1073741824} Go libres sur {tot // 1073741824} Go")
+        except Exception:
+            pass
+    # unites en echec
+    failed = [l.split()[0] for l in _run(["systemctl", "--failed", "--no-legend", "--plain"]).splitlines() if l.strip()]
+    add("failed", "Services en échec", "crit" if failed else "ok", str(len(failed)), ", ".join(failed[:8]))
+    # certificat de la console
+    end = _run(["openssl", "x509", "-enddate", "-noout", "-in", "/etc/nginx/ssl/graylog.crt"]).replace("notAfter=", "")
+    try:
+        days = int((time.mktime(time.strptime(end, "%b %d %H:%M:%S %Y %Z")) - now) / 86400)
+        add("cert", "Certificat de la console", "crit" if days < 15 else ("warn" if days < 45 else "ok"), f"{days} j", end)
+    except Exception:
+        pass
+    vers = _run(["dpkg-query", "-W", "-f", "${Package} ${Version}\n", "graylog-server", "opensearch", "mongodb-org-server", "logstash"])
+    sev = {"ok": 0, "warn": 1, "crit": 2}
+    worst = max((sev.get(i["status"], 0) for i in items), default=0)
+    return {"items": items, "status": ["ok", "warn", "crit"][worst], "versions": vers.splitlines(),
+            "kernel": os.uname().release, "generated": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silencieux
         pass
@@ -1773,6 +1970,11 @@ class H(BaseHTTPRequestHandler):
             return self._json({"user": u} if u else {"user": None}, 200 if u else 401)
         if not self._user():
             return self._json({"error": "auth"}, 401)
+        if p == "/m/api/soar":
+            d = get_soar(); d["is_admin"] = soc_is_admin(self._user())
+            return self._json(d)
+        if p == "/m/api/siem-ops":
+            return self._json(get_siem_ops())
         if p == "/m/api/alerts":
             return self._json({"alerts": get_alerts()})
         if p == "/m/api/incidents":
@@ -1940,9 +2142,19 @@ class H(BaseHTTPRequestHandler):
             if b.get("a") == "block":
                 return self._json(soar_block(str(b.get("e", "")), "mail-link"))
             return self._json({"ok": False, "error": "action inconnue"}, 400)
+        if p == "/m/api/soar/unblock":
+            u = self._user()
+            if not u:
+                return self._json({"error": "auth"}, 401)
+            if not origin_ok(self.headers):
+                return self._json({"ok": False, "error": "origine refusée"}, 403)
+            r = soc_soar_request(b, u)
+            return self._json(r, 200 if r.get("ok") else 403)
         if p == "/m/api/case":
             if not self._user():
                 return self._json({"error": "auth"}, 401)
+            if not origin_ok(self.headers):
+                return self._json({"ok": False, "error": "origine refusée"}, 403)
             return self._json(update_case(b, self._user()))
         if p == "/m/api/fp":            # marquer une alerte faux positif -> triage /fp
             if not self._user():
@@ -1951,6 +2163,8 @@ class H(BaseHTTPRequestHandler):
         if p == "/m/api/watch":
             if not self._user():
                 return self._json({"error": "auth"}, 401)
+            if not origin_ok(self.headers):
+                return self._json({"ok": False, "error": "origine refusée"}, 403)
             return self._json(update_watch(b, self._user()))
         if p == "/m/api/subscribe":
             if not self._user():
@@ -2059,5 +2273,23 @@ get_entity_timeline = cached()(get_entity_timeline)   # chronologie unifiée
 get_entities_browse = cached()(get_entities_browse)   # page Entités (top comptes/machines)
 
 
+# OMNITECH-SOC-20261111 : pages lentes prechargees en tache de fond (deploy ~17 s, report ~6 s)
+get_siem_ops = cached(60)(get_siem_ops)
+try:
+    get_deploy = cached(300)(get_deploy)
+    get_report = cached(300)(get_report)
+except NameError:
+    pass
+def _soc_warm():
+    import time as _t
+    _t.sleep(20)
+    while True:
+        for fn in ("get_deploy", "get_report", "get_siem_ops"):
+            try:
+                globals()[fn]()
+            except Exception:
+                pass
+        _t.sleep(240)
 if __name__ == "__main__":
+    threading.Thread(target=_soc_warm, daemon=True).start()
     ThreadingHTTPServer(LISTEN, H).serve_forever()

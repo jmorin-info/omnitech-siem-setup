@@ -33,7 +33,19 @@ MAIL_A=$(grep -oE '^MAIL_A="[^"]+"' /usr/local/sbin/oms-maj-siem 2>/dev/null | c
 MAIL_DE="no-reply@omnitech-security.fr"; SMTP="smtp://smtp-internal.omnitech-security.fr:25"
 
 log(){ echo "$(date '+%F %T') $*" | tee -a "$JOURNAL"; logger -t oms-snap-siem -- "$*"; }
+# Evenements GELF IDENTIQUES a l'ancien siem-backup.sh : les definitions Graylog existantes
+# « OMNI - Sauvegarde quotidienne SIEM absente (>26h) » (event_action:backup_daily_ok) et
+# « ... en echec » (event_action:backup_daily_echec) surveillent ainsi oms-snap-siem sans etre modifiees.
+gelf(){ # gelf <ok|echec> <message>
+  local m; m=$(printf '%s' "$2" | tr -d '"\\' | cut -c1-400)
+  curl -s -m 10 -X POST "http://127.0.0.1:12201/gelf" -H 'Content-Type: application/json' -d "{
+    \"version\":\"1.1\",\"host\":\"bx-it-graylog-vm\",
+    \"short_message\":\"sauvegarde quotidienne SIEM ${1}: ${m}\",
+    \"_event_source\":\"siem_backup\",\"_event_action\":\"backup_daily_${1}\",
+    \"_alert_tag\":\"backup_daily_${1}\",\"_backup_outil\":\"oms-snap-siem\"}" >/dev/null || true
+}
 alerte(){ # $1 objet, $2 texte
+  gelf echec "oms-snap-siem : $1 - $2"
   log "ALERTE : $1 - $2"
   [ -n "$MAIL_A" ] || return 0
   local f; f=$(mktemp)
@@ -119,6 +131,7 @@ INFO=$(curl -s "$OS/_snapshot/$REPO/$NOM" | jq -r '.snapshots[0] | "\(.state) \(
 if [ "$ETATS" != SUCCESS ]; then alerte "snapshot $NOM en echec" "$INFO"; exit 1; fi
 log "snapshot $NOM : $INFO ; /home libre $(libre_pct) %"
 date +%s > "$ETAT/dernier-snapshot-ok"
+gelf ok "oms-snap-siem snapshot $NOM : $INFO ; /home libre $(libre_pct) %"
 # ---------------- rotation (uniquement oms-sel-*, uniquement apres un succes) ----------------
 for S in $(curl -s "$OS/_snapshot/$REPO/_all" | jq -r --argjson g "$GARDER" '[.snapshots[] | select(.snapshot|startswith("oms-sel-"))] | sort_by(.start_time_in_millis) | if length > $g then .[0:(length-$g)] else [] end | .[] | .snapshot'); do
   curl -s -X DELETE "$OS/_snapshot/$REPO/$S" >/dev/null && log "rotation : $S supprime (on garde les $GARDER derniers)"

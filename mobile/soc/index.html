@@ -529,6 +529,29 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
   header{box-shadow:0 1px 0 rgba(120,150,210,.10)}
   .card::before{opacity:.4}
   .iconbtn:hover{box-shadow:0 0 0 2px rgba(34,211,238,.07)}
+
+  /* OMNITECH-SOC-20261111 : bande A traiter, formulaires SOAR, theme clair */
+  .todo{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border:1px solid var(--bd);border-left:4px solid var(--cy);border-radius:12px;padding:10px 14px;margin:0 0 16px}
+  .todo b{margin-right:6px}
+  .tdi{cursor:pointer;border-radius:999px;padding:4px 10px;font-size:12.5px;border:1px solid var(--bd2);color:var(--fg);text-decoration:none;user-select:none}
+  .tdi:focus-visible,.iconbtn:focus-visible,#nav a:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+  .tdi-crit{border-color:var(--red);color:var(--red)}.tdi-warn{border-color:var(--amb);color:var(--amb)}.tdi-info{border-color:var(--cy);color:var(--cy)}.tdi-ok{border-color:var(--grn);color:var(--grn);cursor:default}
+  .socform{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  .socform input.motif{flex:1;min-width:220px;margin:0}
+  .socform label{display:flex;align-items:center;gap:6px;color:var(--fg);font-size:13px}
+  .socform input[type=checkbox]{width:auto;margin:0}
+  .inc .meta a,a.gl{color:var(--cy);text-decoration:none}
+  .inc .meta a:hover,a.gl:hover{text-decoration:underline}
+  .opsgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  html[data-theme=light]{--bg:#f4f6fa;--bg2:#eef1f6;--card:#ffffff;--card2:#f7f9fc;--bd:#d9dfe8;--bd2:#c5cedb;--fg:#17202e;--mut:#55627a;--dim:#6b778c;--cy:#0b7a8f;--cy2:#0b6a7c;--red:#c62839;--amb:#9a5c00;--grn:#13805b;--vio:#6741c4;--blu:#2457c5;--ring:rgba(11,122,143,.45)}
+  html[data-theme=light] body{background:var(--bg)}
+  html[data-theme=light] body::before{display:none}
+  html[data-theme=light] input{background:#fff;color:var(--fg)}
+  html[data-theme=light] .iconbtn{background:#fff!important;color:var(--fg);backdrop-filter:none}
+  html[data-theme=light] aside,html[data-theme=light] header{background:var(--card)!important;border-color:var(--bd)!important}
+  html[data-theme=light] .card,html[data-theme=light] .kpi,html[data-theme=light] .lcard,html[data-theme=light] .threat{background:var(--card)!important;box-shadow:0 1px 3px rgba(20,30,50,.08)}
+  html[data-theme=light] .inc{background:var(--card2)!important}
+  @media (max-width:760px){.todo{font-size:12px;padding:8px 10px}.opsgrid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -588,6 +611,8 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
       <a data-p="globe"><span class="ic"><svg class="svi"><use href="#i-globe"></use></svg></span><span data-i18n="nav_globe">Carte mondiale</span></a>
       <a data-p="leaks"><span class="ic"><svg class="svi"><use href="#i-unlock"></use></svg></span><span data-i18n="nav_leaks">Fuites & Dark Web</span></a>
       <a data-p="health"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span><span data-i18n="nav_health">Santé & Collecte</span></a>
+      <a data-p="soar"><span class="ic"><svg class="svi"><use href="#i-unlock"></use></svg></span><span>SOAR — blocages</span></a>
+      <a data-p="ops"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span><span>Exploitation SIEM</span></a>
       <a data-p="report"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span><span data-i18n="nav_report">Rapport</span></a>
       <a data-p="playbooks"><span class="ic"><svg class="svi"><use href="#i-help"></use></svg></span><span data-i18n="nav_playbooks">Playbooks</span></a>
     </nav>
@@ -596,7 +621,7 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
 
   <header>
     <h2 id="ptitle">Vue d'ensemble</h2>
-    <span class="spacer"></span>
+    <span class="spacer"></span><button class="iconbtn" id="themeBtn" type="button" style="margin-right:8px" onclick="socTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light')" aria-label="Basculer thème clair / sombre">☀ Clair</button>
     <span class="pill"><span class="dot"></span> <span data-i18n="cluster_ok">Cluster opérationnel</span></span>
     <span class="pill mono" id="clock">--:--:--</span>
     <span class="pill upd" id="updPill" title="Fraîcheur des données"><span class="updtxt">Mis à jour…</span></span>
@@ -620,7 +645,7 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
         <div class="tinner"><span class="tdot"></span><div><div class="tlvl" id="tlabel">ANALYSE…</div><div class="tsub" id="tsub">Niveau de menace</div></div></div>
         <div class="tstats" id="tstats"></div>
       </div>
-      <div class="grid kpis" id="kpis"></div>
+      <div id="todo" aria-live="polite"></div><div class="grid kpis" id="kpis"></div>
       <div class="card" id="sentinelCard" style="margin-bottom:16px;display:none;cursor:pointer" onclick="goNav('twin')">
         <h3><svg class="svi"><use href="#i-target"></use></svg> <span data-i18n="card_sentinel">OMNI Sentinel — Posture proactive</span><span class="tag" data-i18n="tag_sentinel">jumeau d'attaque · cliquer</span></h3>
         <div id="sentinelBody" class="grid kpis"></div>
@@ -726,6 +751,19 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
         <div class="card"><h3><svg class="svi"><use href="#i-antenna"></use></svg> <span data-i18n="card_collect">Sources de collecte (24 h)</span><span class="tag" data-i18n="tag_collect">volume · dernier événement</span></h3><div class="feed" id="hsrc"></div></div>
         <div class="card"><h3><svg class="svi"><use href="#i-eyeoff"></use></svg> <span data-i18n="card_dark">Hôtes silencieux (go‑dark)</span><span class="tag" data-i18n="tag_dark">muets &gt; 26 h · à vérifier</span></h3><div class="feed" id="hdark"></div></div>
       </div>
+    </section>
+    <section class="page" id="p-soar">
+      <div class="grid kpis" id="skpis"></div>
+      <div class="card" style="margin-top:16px"><h3><svg class="svi"><use href="#i-unlock"></use></svg> <span>IP bloquées au pare-feu</span><span class="tag">liste lue par les FortiGate toutes les 2 min · levée automatique à 24 h</span></h3><div class="feed" id="sactive"><div class="muted">Chargement…</div></div></div>
+      <div class="grid cols" style="margin-top:16px">
+        <div class="card"><h3><svg class="svi"><use href="#i-doc"></use></svg> <span>Demandes depuis la console</span><span class="tag">journalisées · traitées en moins d'une minute</span></h3><div class="feed" id="sreq"></div></div>
+        <div class="card"><h3><svg class="svi"><use href="#i-pulse"></use></svg> <span>Dernières décisions du SOAR</span><span class="tag">blocages, déblocages, exclusions</span></h3><div class="feed" id="shist"></div></div>
+      </div>
+    </section>
+    <section class="page" id="p-ops">
+      <div id="ostatus"></div>
+      <div class="opsgrid" id="oitems"></div>
+      <div class="card" style="margin-top:16px"><h3><svg class="svi"><use href="#i-cpu"></use></svg> <span>Versions du socle</span><span class="tag">mises à jour automatiques le dimanche 04:30 · séries épinglées</span></h3><div id="overs" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
     </section>
     <section class="page" id="p-report">
       <div style="display:flex;align-items:center;margin-bottom:14px"><h3 class="sec" style="margin:0" data-i18n="card_posture">Rapport de posture</h3>
@@ -853,8 +891,8 @@ function start(){$("#login").style.display="none";$("#app").style.display="grid"
 
 // nav
 const titles={
-  fr:{overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",entities:"Recherche d'entités",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",twin:"Jumeau d'attaque — Exposition",ems:"Endpoint — FortiClient EMS",network:"Réseau & Infra — Aruba / Linux / DNS",deploy:"Déploiement / Agents",globe:"Carte mondiale — Flux temps réel",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
-  en:{overview:"Overview",incidents:"Incidents",detections:"Detections",entities:"Entity search",attack:"MITRE ATT&CK",graph:"Attack graph",twin:"Attack twin — Exposure",ems:"Endpoint — FortiClient EMS",network:"Network & Infra — Aruba / Linux / DNS",deploy:"Deployment / Agents",globe:"World map — Live flows",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
+  fr:{soar:"SOAR — Blocages pare-feu",ops:"Exploitation du SIEM",overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",entities:"Recherche d'entités",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",twin:"Jumeau d'attaque — Exposition",ems:"Endpoint — FortiClient EMS",network:"Réseau & Infra — Aruba / Linux / DNS",deploy:"Déploiement / Agents",globe:"Carte mondiale — Flux temps réel",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
+  en:{soar:"SOAR — Firewall blocks",ops:"SIEM operations",overview:"Overview",incidents:"Incidents",detections:"Detections",entities:"Entity search",attack:"MITRE ATT&CK",graph:"Attack graph",twin:"Attack twin — Exposure",ems:"Endpoint — FortiClient EMS",network:"Network & Infra — Aruba / Linux / DNS",deploy:"Deployment / Agents",globe:"World map — Live flows",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
 const PDESC={
  fr:{
   overview:"<b>Posture en un coup d'œil</b> — indicateurs clés, activité des dernières 24 h, tactiques ATT&CK et flux d'événements en temps réel. Chaque indicateur est cliquable.",
@@ -904,6 +942,8 @@ document.querySelectorAll("#nav a").forEach(a=>a.onclick=()=>{
   if(pg==="ems"){j("/fortiems").then(d=>renderEms(d)).catch(()=>{});}
   if(pg==="network"){j("/network").then(d=>renderNetwork(d)).catch(()=>{});}
   if(pg==="deploy"){j("/deploy").then(d=>renderDeploy(d)).catch(()=>{});}
+  if(pg==="soar"&&window.loadSoar){loadSoar();}
+  if(pg==="ops"&&window.loadOps){loadOps();}
   if(pg==="globe"){const gw=$("#globeCanvas");if(gw&&!window.Globe)gw.innerHTML='<div class="muted" style="position:absolute;inset:0;display:grid;place-items:center">Chargement de la carte 3D…</div>';
     loadScript("/soc/globe.gl.min.js").then(()=>j("/geo-flows")).then(d=>{renderGlobe(d);setTimeout(()=>{if(GLOBE&&GLOBE.width){const el=$("#globeCanvas");GLOBE.width(el.clientWidth).height(el.clientHeight);}},120);}).catch(()=>{});}});
 document.querySelectorAll("#nav a").forEach((a,i)=>{if(i<9)a.title=(LANG==="en"?"Shortcut ":"Raccourci ")+(i+1);});
@@ -1101,6 +1141,7 @@ async function loadAll(){
     j("/health").then(h=>renderHealth(h)).catch(()=>{});
     j("/risk").then(r=>renderRisk(r)).catch(()=>{});
     j("/kpi-trend").then(t=>renderKpiTrend(t.trend)).catch(()=>{});
+    if(window.loadTodo)loadTodo();
     j("/geo").then(g=>renderGeo(g)).catch(()=>{});
     j("/attack-graph").then(a=>renderSentinelPosture(a)).catch(()=>{});
     // /graph et /report : charges a l'ouverture de leur onglet (cf. routeur #nav) -
@@ -1486,7 +1527,7 @@ function addLive(ev){const el=$("#liveFeed");if(!el)return;if(liveN===0)el.inner
   const b=$("#liveCount");if(b)b.textContent=liveN+" évén.";}
 
 // --- Command palette (Cmd/Ctrl+K) ---
-const CMDPAGES=["overview","incidents","detections","entities","attack","graph","twin","ems","network","deploy","globe","leaks","health","report","playbooks"];
+const CMDPAGES=["overview","soar","ops","incidents","detections","entities","attack","graph","twin","ems","network","deploy","globe","leaks","health","report","playbooks"];
 function CMDLIST(){return CMDPAGES.map(p=>({k:(titles[LANG]||titles.fr)[p],p:p}));}
 function goNav(p){const a=document.querySelector('#nav a[data-p="'+p+'"]');if(a)a.click();}
 function openPal(){$("#pal").classList.add("on");const i=$("#palIn");i.value="";renderPal("");setTimeout(()=>i.focus(),30);}
@@ -1996,7 +2037,7 @@ function renderCases(list){CASES=list||[];const el=$("#incFeed");
     return `<div class="inc sev-${c}" onclick="openCase(${i})"><div class="top">
       <span class="chip ${chipCls(c)}">${esc((x.severity||'?').toUpperCase())}</span>
       <span class="ttl">${esc(x.title)}</span>
-      <span class="cstat ${s[1]}">${s[0]}</span><span class="ts">${ago(x.ts)}</span></div>
+      <span class="cstat ${s[1]}">${s[0]}</span><span class="ts">${ago(x.ts)}</span>${window.glSearch?`<a class="gl" style="margin-left:8px" href="${glSearch(caseQuery(x))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Ouvrir la recherche Graylog (7 j)">Graylog ↗</a>`:""}</div>
       <div class="meta">${esc(((x.entities||'')+' · '+(x.mitre||'')).toString())}${x.assignée?' · 👤 '+esc(x.assignée):''}${x.notes&&x.notes.length?' · 📝 '+x.notes.length:''}${x.disposition?' · '+(x.disposition==='true_positive'?'<b style="color:var(--red)">✓ VP</b>':'<b style="color:var(--grn)">✕ FP</b>'):''}</div></div>`;}).join("");}
 function openCase(i){const x=CASES[i];if(!x)return;
   const notes=(x.notes||[]).map(n=>`<div class="erow"><span class="ts">${esc((n.ts||'').slice(0,16).replace('T',' '))} · ${esc(n.by||'')}</span><div>${esc(n.text)}</div></div>`).join("")||'<div class="muted">Aucune note</div>';
@@ -2206,6 +2247,66 @@ j("/me").then(d=>{if(d.user)start();}).catch(()=>{});
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", a11yBoot);
   else a11yBoot();
+})();
+</script>
+<script>
+/* OMNITECH-SOC-20261111 : pages SOAR et Exploitation, bande « À traiter », liens Graylog, thème clair */
+(function(){
+const SEVC={ok:"var(--grn)",warn:"var(--amb)",crit:"var(--red)"};
+const SEVL={ok:"Tout va bien",warn:"À surveiller",crit:"Critique"};
+const fmtAge=s=>{if(s==null)return"?";if(s<120)return s+" s";if(s<7200)return Math.round(s/60)+" min";return Math.round(s/3600)+" h";};
+const fmtUntil=e=>new Date(e*1000).toLocaleString("fr",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+const d16=v=>String(v||"").slice(0,16).replace("T"," ");
+window.glSearch=function(q,sec){return "/search?q="+encodeURIComponent(q||"*")+"&rangetype=relative&relative="+(sec||604800);};
+window.caseQuery=function(x){const t=String((x&&x.entities)||"").split(/[,;\s]+/).map(v=>v.replace(/^[a-z_]+:/i,"").replace(/"/g,"")).filter(v=>v&&v.length>2).slice(0,4);
+  return t.length?t.map(v=>'"'+v+'"').join(" OR "):String((x&&(x.rule||x.title))||"*");};
+let SOARD={};
+window.loadSoar=function(){j("/soar").then(renderSoar).catch(e=>{if(e==="auth")location.reload();else toastNet();});};
+window.renderSoar=function(d){SOARD=d||{};const a=SOARD.active||[],ex=SOARD.exclusions||{},st=ex.dynamic_stats||{};
+  $("#skpis").innerHTML=[
+    [a.length?"amb":"grn","IP bloquées",a.length,"Bordeaux + Ivry"],
+    [(SOARD.feed_age_s!=null&&SOARD.feed_age_s<600)?"cy":"red","Liste publiée",fmtAge(SOARD.feed_age_s),"âge du flux lu par les FortiGate"],
+    ["vio","Exclusions automatiques",((st.vpn||0)+(st.m365||0)).toLocaleString("fr"),"IP légitimes (VPN, M365) sur "+(ex.dynamic_days||90)+" j"],
+    ["cy","Exclusions fixes",ex.static||0,"sites, partenaires, prestataires"]
+  ].map(([c,l,v,s])=>`<div class="kpi ${c}"><div class="lab">${l}</div><div class="val mono">${esc(String(v))}</div><div class="sub">${s}</div></div>`).join("");
+  const adm=!!SOARD.is_admin;
+  $("#sactive").innerHTML=a.length?a.map((x,i)=>`<div class="inc sev-high"><div class="top"><span class="ttl mono">${esc(x.ip)}</span>${x.pays?`<span class="pchip">${esc(x.pays)}</span>`:""}<span class="ts" style="margin-left:auto">jusqu'au ${fmtUntil(x.until)} · reste ${esc(String(x.remaining_h))} h</span>${adm?`<button class="iconbtn" type="button" style="margin-left:10px" onclick="event.stopPropagation();socUnblockForm(${i})" aria-expanded="false">Débloquer</button>`:""}</div><div class="meta">${esc(x.detection||x.motif||"détection SOAR")}${x.hits?" · "+esc(String(x.hits))+" occurrences":""}${x.since?" · depuis "+esc(d16(x.since)):""} · <a href="${glSearch('"'+x.ip+'"')}" target="_blank" rel="noopener">voir dans Graylog ↗</a></div><div id="sub${i}"></div></div>`).join(""):'<div class="empty">Aucune IP bloquée actuellement ✅</div>';
+  const rq=SOARD.requests||[];
+  $("#sreq").innerHTML=rq.length?rq.map(r=>`<div class="inc"><div class="top"><span class="ttl mono">${esc(r.ip||"")}</span><span class="pchip">${esc(r.status||"")}</span><span class="ts" style="margin-left:auto">${esc(d16(r.t))} · ${esc(r.user||"")}</span></div>${r.resultat?`<div class="meta">${esc(r.resultat)}</div>`:""}</div>`).join(""):'<div class="empty">Aucune demande depuis la console</div>';
+  const hi=SOARD.history||[];
+  $("#shist").innerHTML=hi.length?hi.map(e=>`<div class="inc"><div class="top"><span class="chip">${esc(String(e.action||"").replace(/_/g," "))}</span><span class="ttl mono">${esc(e.ip||"")}</span><span class="ts" style="margin-left:auto">${esc(d16(e.t))}</span></div><div class="meta">${esc(e.motif||e.detection||"")}${e.par?" · par "+esc(e.par):""}</div></div>`).join(""):'<div class="empty">—</div>';
+};
+window.socUnblockForm=function(i){const x=(SOARD.active||[])[i];if(!x)return;const el=$("#sub"+i);if(!el)return;if(el.innerHTML){el.innerHTML="";return;}
+  el.innerHTML=`<div class="socform"><label><input type="checkbox" id="sx${i}"> Ne plus jamais bloquer cette IP</label><input class="motif" id="sm${i}" maxlength="80" placeholder="Motif (obligatoire pour une exclusion), ex. : domicile d'un collaborateur" aria-label="Motif de l'exclusion"><button class="iconbtn" type="button" onclick="socUnblock(${i})">Confirmer le déblocage de ${esc(x.ip)}</button></div>`;
+  const m=$("#sm"+i);if(m)m.focus();};
+window.socUnblock=function(i){const x=(SOARD.active||[])[i];if(!x)return;const ex=!!($("#sx"+i)&&$("#sx"+i).checked),m=(($("#sm"+i)||{}).value||"").trim();
+  if(ex&&m.length<4){toastWarn("Indiquez un motif pour l'exclusion définitive.");return;}
+  fetch(API+"/soar/unblock",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({ip:x.ip,exclure:ex,motif:m})})
+    .then(r=>{if(r.status===401)throw"auth";return r.json();})
+    .then(r=>{if(r.ok){toastOk(r.message||"Demande enregistrée");loadSoar();setTimeout(loadSoar,15000);}else toastErr(r.error||"Refusé");})
+    .catch(e=>{if(e==="auth")location.reload();else toastNet();});};
+window.loadOps=function(){j("/siem-ops").then(renderOps).catch(()=>toastNet());};
+window.renderOps=function(d){d=d||{};const it=d.items||[];const c=SEVC[d.status]||"var(--mut)";const nb=it.filter(x=>x.status!=="ok").length;
+  $("#ostatus").innerHTML=`<div class="todo" style="border-left-color:${c}"><b style="color:${c}">${SEVL[d.status]||"?"}</b><span>${nb?nb+" point(s) à regarder":"aucun point à regarder"} sur ${it.length} · noyau ${esc(d.kernel||"")} · calculé à ${esc(String(d.generated||"").slice(11,16))}</span></div>`;
+  $("#oitems").innerHTML=it.map(x=>`<div class="kpi" style="border-left:4px solid ${SEVC[x.status]||"var(--bd)"}"><div class="lab">${esc(x.label)}</div><div class="val mono" style="font-size:18px">${esc(x.value)}</div><div class="sub">${esc(x.detail||"")}</div></div>`).join("");
+  $("#overs").innerHTML=(d.versions||[]).map(v=>`<span class="pchip mono">${esc(v)}</span>`).join("")||'<div class="empty">—</div>';};
+window.loadTodo=function(){Promise.all([j("/siem-ops").catch(()=>null),j("/soar").catch(()=>null),j("/health").catch(()=>null),j("/cases").catch(()=>null)]).then(([o,s,h,c])=>{
+  const L=[];const cs=(c&&c.cases)||[];
+  const open=x=>x.status!=="closed"&&x.status!=="resolved";
+  const cr=cs.filter(x=>x.severity==="critical"&&open(x)).length,hi=cs.filter(x=>x.severity==="high"&&open(x)).length,nw=cs.filter(x=>x.status==="new").length;
+  if(cr)L.push(["crit",cr+" incident(s) critique(s) ouvert(s)","incidents"]);
+  if(hi)L.push(["warn",hi+" incident(s) élevé(s) ouvert(s)","incidents"]);
+  if(nw&&nw>=10)L.push(["warn",nw+" incidents jamais qualifiés","incidents"]);
+  const dk=(h&&h.dark_hosts)||[];if(dk.length)L.push(["warn",dk.length+" hôte(s) silencieux","health"]);
+  const rb=(h&&h.robots)||{};if(rb.health_fail>0)L.push(["warn",rb.health_fail+" robot(s) SIEM en panne","health"]);
+  ((o&&o.items)||[]).filter(x=>x.status!=="ok").forEach(x=>L.push([x.status,x.label+" : "+x.value,"ops"]));
+  if(s&&s.count)L.push(["info",s.count+" IP bloquée(s) par le SOAR","soar"]);
+  const el=$("#todo");if(!el)return;
+  el.innerHTML=`<div class="todo"><b>À traiter</b>`+(L.length?L.map(([v,t,p])=>`<span class="tdi tdi-${v}" role="button" tabindex="0" onclick="goNav('${p}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goNav('${p}')}">${esc(t)}</span>`).join(""):`<span class="tdi tdi-ok">Rien d'urgent ✅</span>`)+`</div>`;});};
+window.socTheme=function(v){if(v){try{localStorage.setItem("soc_theme",v)}catch(e){}}
+  let th=v;if(!th){try{th=localStorage.getItem("soc_theme")}catch(e){}}th=th||"dark";
+  document.documentElement.setAttribute("data-theme",th);const b=document.getElementById("themeBtn");if(b)b.textContent=th==="light"?"☾ Sombre":"☀ Clair";};
+socTheme();
 })();
 </script>
 </body>

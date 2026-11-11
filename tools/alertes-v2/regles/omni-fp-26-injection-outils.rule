@@ -1,0 +1,22 @@
+rule "omni-fp-26-injection-outils"
+// "Injection de processus (Sysmon 8/25)" : 130 evenements / 30 j, dont 117 = agents de build TeamCity (compte local
+// teamcity des 3 postes BX-DEV-TCA*, binaires sous C:\autocompil\TeamCity), 4 = Upsource (jstack -> java du meme
+// dossier), 3 = Bitwarden (Electron qui s'ouvre lui-meme). LSASS en cible est TOUJOURS exclu de cette allowlist.
+when
+  to_string($message.alert_tag) == "sysmon_injection"
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TargetImage), "\\lsass.exe", true)
+  AND (
+    ( regex("(?i)^BX-DEV-TCA[1-3]-PC(\\.|$)", to_string($message.host)).matches == true
+      AND regex("(?i)^BX-DEV-TCA[1-3]-PC\\\\teamcity$", to_string($message.winlogbeat_winlog_event_data_SourceUser)).matches == true
+      AND starts_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "C:\\autocompil\\TeamCity\\", true) )
+    OR ( starts_with(to_string($message.winlogbeat_winlog_event_data_SourceImage), "D:\\upsource\\upsource-2020.1.1992\\internal\\java\\", true)
+      AND starts_with(to_string($message.winlogbeat_winlog_event_data_TargetImage), "D:\\upsource\\upsource-2020.1.1992\\internal\\java\\", true) )
+    OR ( regex("(?i)^C:\\\\Users\\\\[^\\\\]+\\\\AppData\\\\Local\\\\Programs\\\\Bitwarden\\\\Bitwarden\\.exe$", to_string($message.winlogbeat_winlog_event_data_SourceImage)).matches == true
+      AND lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == lowercase(to_string($message.winlogbeat_winlog_event_data_TargetImage)) )
+  )
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "injection_outils_build");
+  set_field("fp_allowlist_reason", "sysmon_injection: TeamCity (BX-DEV-TCA*), Upsource, Bitwarden (auto-injection Electron) - v2 11/11/2026");
+  remove_single_field("alert_tag");
+end

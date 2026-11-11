@@ -1,0 +1,7 @@
+[Unit]
+Description=SOAR OMNITECH - rafraichissement horaire des exclusions
+[Timer]
+OnBootSec=3min
+OnCalendar=*-*-* *:10:00
+[Install]
+WantedBy=timers.target

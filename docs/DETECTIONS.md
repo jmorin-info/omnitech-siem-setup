@@ -71,3 +71,13 @@ IP / badge). When enough *distinct* detection types hit the same entity inside t
 **kill-chain incident** is raised (`event_source:alert_correlation`) — this is what turns a
 scatter of single alerts into one prioritised incident, and it feeds the console's Incidents
 and Attack-graph views.
+
+## Correlation layer v3 (November 2026)
+
+An additive layer: its own pipeline stage, its own event definitions (prefix "OMNI v3 - ") and a
+lookup table of critical assets. Highlights: gMSA password read by a user account, Kerberos
+RC4/DES coming back, firewall administration from a public IP or with the local break-glass
+account, unremediated EDR detection (critical on a tier-0 asset), backup job or restore-point
+deletion, and EDR detection followed by an admin logon on the same host within the hour.
+Each rule was replayed over 30 days before activation. Build, test and rollback scripts:
+[`../tools/omni-v3/`](../tools/omni-v3/).

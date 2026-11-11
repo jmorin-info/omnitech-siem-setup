@@ -2,7 +2,7 @@
 Description=OMNI SIEM - Recapitulatif des alertes (lundi et jeudi 08h00)
 
 [Timer]
-OnCalendar=Mon,Thu *-*-* 08:00:00
+OnCalendar=Mon..Fri *-*-* 08:00:00
 Persistent=true
 RandomizedDelaySec=120
 

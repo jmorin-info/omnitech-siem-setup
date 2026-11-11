@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-soar-rapport - recapitulatif quotidien du SOAR par mail (08:05)
+# Contenu : IP bloquees sur 24 h (detection, occurrences, pays, expiration), IP qui auraient
+# ete bloquees mais sont exclues (collaborateurs, partenaires...), blocages actifs, deblocage.
+# Destinataire : SOAR_MAIL_TO (/etc/omni-soar/soar.env). Relais : SMTP_HOST/SMTP_FROM de
+# /etc/omni-alert-triage.env. Aucun mail si rien ne s'est passe et qu'aucune IP n'est bloquee.
+#   omni-soar-rapport --test   : affiche le mail sans l'envoyer
+# =============================================================================
+import json, re, smtplib, sys, time
+from email.mime.text import MIMEText
+from email.header import Header
+
+def env(f):
+    e = {}
+    try:
+        for line in open(f):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: e[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return e
+
+s = env("/etc/omni-soar/soar.env"); t = env("/etc/omni-alert-triage.env")
+now = time.time(); depuis = now - 86400
+dec = []
+try:
+    for line in open("/var/log/omni-soar/decisions.log"):
+        try:
+            x = json.loads(line)
+            if time.mktime(time.strptime(x["t"][:19], "%Y-%m-%dT%H:%M:%S")) >= depuis: dec.append(x)
+        except Exception: pass
+except OSError: pass
+try: bl = json.load(open("/var/lib/omni-soar/blocklist.json"))
+except Exception: bl = {}
+try: meta = json.load(open("/var/lib/omni-soar/blocklist-meta.json"))
+except Exception: meta = {}
+act = {i: x for i, x in bl.items() if x > now}
+bloq = [x for x in dec if x["action"] in ("ip_bloquee", "ip_bloquee_manuel")]
+excl = {}
+for x in dec:
+    if x["action"] == "ip_exclue": excl.setdefault(x["ip"], x)
+simu = [x for x in dec if x["action"] == "simulation"]
+deb = [x for x in dec if x["action"] == "ip_debloquee"]
+if not (bloq or excl or simu or deb or act) and "--test" not in sys.argv:
+    sys.exit(0)
+L = [f"SOAR OMNITECH - recapitulatif du {time.strftime('%d/%m/%Y %H:%M')} (24 dernieres heures)", "",
+     f"Mode : {s.get('SOAR_MODE', 'actif')}   |   IP bloquees actuellement sur les FortiGate Bordeaux + Ivry : {len(act)}", ""]
+L.append(f"Nouveaux blocages (24 h) : {len(bloq)}")
+for x in bloq:
+    L.append(f"  - {x['ip']:16} {x.get('pays',''):3} {x.get('hits','')!s:>4} occurrences  {x.get('detection', x.get('par',''))}  (TTL {x.get('ttl_h',24)} h)")
+if simu:
+    L.append(""); L.append(f"Aurait ete bloque (mode simulation) : {len(simu)}")
+    for x in simu: L.append(f"  - {x['ip']:16} {x.get('pays',''):3} {x.get('hits','')!s:>4}  {x.get('detection','')}")
+L.append(""); L.append(f"Detections NON bloquees car IP exclue (collaborateur, partenaire, site...) : {len(excl)}")
+for ip, x in list(excl.items())[:40]:
+    L.append(f"  - {ip:16} {x.get('detection','')}  -> exclue : {x.get('motif','')}")
+if deb:
+    L.append(""); L.append(f"Deblocages manuels : {', '.join(x['ip'] + ' (' + x.get('par','') + ')' for x in deb)}")
+if act:
+    L.append(""); L.append("Blocages actifs (expiration) :")
+    for i, x in sorted(act.items(), key=lambda kv: kv[1]):
+        m = meta.get(i, {})
+        L.append(f"  - {i:16} jusqu'a {time.strftime('%d/%m %H:%M', time.localtime(x))}  {m.get('detection','')}")
+L += ["", "Debloquer une IP (effet en 2 min) : sur BX-IT-GRAYLOG-VM, sudo omni-soar-debloquer <ip>",
+      "Debloquer + ne plus jamais bloquer : sudo omni-soar-debloquer <ip> --exclure \"motif\"",
+      "Liste : sudo omni-soar-debloquer --liste   |   Graylog : event_source:siem_soar"]
+corps = "\n".join(L)
+dest = s.get("SOAR_MAIL_TO", "")
+if "--test" in sys.argv or not dest:
+    print(corps); sys.exit(0)
+msg = MIMEText(corps, "plain", "utf-8")
+msg["Subject"] = Header(f"{t.get('SMTP_SUBJECT_PREFIX', '[SIEM OMNITECH]')} [INFO] SOAR : {len(bloq)} blocage(s), {len(excl)} exclusion(s), {len(act)} actif(s)", "utf-8")
+msg["From"] = t.get("SMTP_FROM", "no-reply@omnitech-security.fr"); msg["To"] = dest
+with smtplib.SMTP(t.get("SMTP_HOST", "smtp-internal.omnitech-security.fr"), int(t.get("SMTP_PORT", "25")), timeout=30) as c:
+    c.sendmail(msg["From"], [x.strip() for x in dest.split(",") if x.strip()], msg.as_string())
+print(f"rapport SOAR envoye ({len(bloq)} blocages, {len(excl)} exclusions, {len(act)} actifs)")

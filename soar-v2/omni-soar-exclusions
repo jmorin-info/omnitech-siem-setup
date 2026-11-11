@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-soar-exclusions - liste d'exclusion DYNAMIQUE du SOAR (v1, 11/11/2026)
+# Toute IP publique qui s'est authentifiee avec succes dans les N derniers jours
+# (SOAR_EXCL_JOURS, 90) ne peut PAS etre bloquee automatiquement :
+#   - VPN FortiGate : tunnel-up (IPsec dial-up EMS/SAML, sites, partenaires) et ssl-new-con ;
+#   - Microsoft 365 : activite reussie (connexion, mail, fichiers) d'un compte du tenant.
+# Ecrit /var/lib/omni-soar/exclusions.json. Timer horaire (omni-soar-exclusions.timer).
+# La liste fixe (sites, partenaires, Microsoft EOP...) est dans /etc/omni-soar/exclusions-statiques.txt.
+# =============================================================================
+import ipaddress, json, os, re, sys, time, urllib.request
+
+OS_URL = "http://127.0.0.1:9200"
+OUT = "/var/lib/omni-soar/exclusions.json"
+SOARENV = "/etc/omni-soar/soar.env"
+
+def env():
+    e = {}
+    try:
+        for line in open(SOARENV):
+            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            if m: e[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError: pass
+    return e
+
+def q(index, body):
+    r = urllib.request.Request(f"{OS_URL}/{index}/_search", data=json.dumps(body).encode(),
+                               headers={"Content-Type": "application/json"})
+    return json.load(urllib.request.urlopen(r, timeout=120))
+
+def public(ip):
+    try: return ipaddress.ip_address(ip).version == 4 and ipaddress.ip_address(ip).is_global
+    except ValueError: return False
+
+def agg(index, filtres, champ, champ_user=None, taille=20000):
+    body = {"size": 0, "query": {"bool": {"filter": filtres}},
+            "aggs": {"ip": {"terms": {"field": champ, "size": taille}}}}
+    if champ_user:
+        body["aggs"]["ip"]["aggs"] = {"u": {"terms": {"field": champ_user, "size": 1}}}
+    r = q(index, body)
+    res = {}
+    for b in r.get("aggregations", {}).get("ip", {}).get("buckets", []):
+        u = ""
+        if champ_user and b.get("u", {}).get("buckets"): u = b["u"]["buckets"][0]["key"]
+        res[b["key"]] = (b["doc_count"], u)
+    return res
+
+def main():
+    e = env(); jours = int(e.get("SOAR_EXCL_JOURS", "90"))
+    depuis = {"range": {"timestamp": {"gte": f"now-{jours}d"}}}
+    ips, stats = {}, {}
+    # 1. VPN : tunnel monte (IPsec ou SSL) = authentification reussie
+    vpn = agg("omni-fortigate_*", [depuis, {"terms": {"action": ["tunnel-up", "ssl-new-con", "phase2-up"]}}], "remip", "xauthuser")
+    for ip, (n, u) in vpn.items():
+        if public(ip): ips[ip] = f"VPN reussi ({n}x{', ' + u if u else ''})"
+    stats["vpn"] = len([i for i in vpn if public(i)])
+    # 2. Microsoft 365 : activite reussie d'un compte du tenant
+    m365 = agg("omni-m365_*", [depuis, {"terms": {"result": ["Succeeded", "Success", "success", "True", "Successful", "PartiallySucceeded"]}}], "src_ip", "user")
+    k = 0
+    for ip, (n, u) in m365.items():
+        if public(ip) and ip not in ips:
+            ips[ip] = f"M365 reussi ({n}x{', ' + u if u else ''})"; k += 1
+    stats["m365"] = len([i for i in m365 if public(i)])
+    out = {"genere": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "jours": jours, "stats": stats, "ips": ips}
+    tmp = OUT + ".tmp"; json.dump(out, open(tmp, "w"), ensure_ascii=False); os.replace(tmp, OUT)
+    print(f"omni-soar-exclusions : {len(ips)} IP exclues (VPN {stats['vpn']}, M365 {stats['m365']}) sur {jours} j")
+
+if __name__ == "__main__":
+    try: main()
+    except Exception as ex:
+        print(f"omni-soar-exclusions ECHEC : {ex}", file=sys.stderr); sys.exit(1)

@@ -1,0 +1,44 @@
+rule "omni-fp-26-schtask-oms"
+// Faux positifs "Tache planifiee a charge offensive (4698)" - signatures mesurees le 11/11/2026 sur 30 j (318 evenements).
+// Chaque branche exige un NOM de tache precis + un CONTENU ou un auteur precis ; une tache au meme nom qui pointe
+// ailleurs, ou creee par un autre compte, continue d'alerter.
+when
+  to_string($message.alert_tag) == "schtask_payload"
+  AND (
+    // 1. Taches GPP utilisateur deployees par nos GPO (Author OMNITECH, script dans NETLOGON/SYSVOL, ecriture admins seuls)
+    ( ( lowercase(to_string($message.winlogbeat_winlog_event_data_TaskName)) == "\\oms-onedrive-toujoursdisponible"
+        OR lowercase(to_string($message.winlogbeat_winlog_event_data_TaskName)) == "\\oms-reconnexion-imprimantes" )
+      AND contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "<Author>OMNITECH</Author>", false)
+      AND ( contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "-File \"\\\\omnitech.security\\NETLOGON\\", true)
+         OR contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "-File \"\\\\omnitech.security\\SYSVOL\\omnitech.security\\Policies\\", true) ) )
+    // 2. Taches d'administration temporaires creees par adm-jmorin (prefixe OMS)
+    OR ( lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) == "adm-jmorin"
+      AND regex("(?i)^\\\\(OMNITECH\\\\)?OMS[ -]", to_string($message.winlogbeat_winlog_event_data_TaskName)).matches == true )
+    // 3. PDF24 : binaire dans Program Files (ecriture admins seuls)
+    OR ( starts_with(to_string($message.winlogbeat_winlog_event_data_TaskName), "\\PDF24 ", true)
+      AND contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "<Command>C:\\Program Files\\PDF24\\pdf24-wpp.exe</Command>", true) )
+    // 4. LvfCleanup (pilote/utilitaire constructeur) : un seul poste, cree par SYSTEM, contenu verifie
+    OR ( to_string($message.winlogbeat_winlog_event_data_TaskName) == "\\LvfCleanup"
+      AND starts_with(to_string($message.host), "BX-DEV-JTH-LT", true)
+      AND to_string($message.winlogbeat_winlog_event_data_SubjectUserSid) == "S-1-5-18"
+      AND contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "Get-Service 'LvfInstallService'", true) )
+  )
+  // GARDE-FOU commun : aucun indicateur de telechargement / execution distante / vol d'identifiants en clair
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "downloadstring", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "downloadfile", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "invoke-webrequest", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "webclient", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "bitsadmin", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "certutil", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "mimikatz", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "sekurlsa", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "comsvcs", true)
+  // (pas de filtre "http://" : le XML de TOUTE tache contient xmlns="http://schemas.microsoft.com/...")
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "<Command>http", true)
+  AND NOT contains(to_string($message.winlogbeat_winlog_event_data_TaskContent), "<Arguments>http", true)
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "schtask_oms");
+  set_field("fp_allowlist_reason", "schtask_payload: tache OMS (GPP NETLOGON/SYSVOL, admin adm-jmorin) ou editeur connu (PDF24, LvfCleanup) - v2 11/11/2026");
+  remove_single_field("alert_tag");
+end

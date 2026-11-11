@@ -1,7 +1,16 @@
 # Journal des modifications — SIEM OMNITECH
 
 Toutes les évolutions notables du dispositif. Format : date — changement.
-*Dernière revue : 2026-06-22.*
+*Dernière revue : 2026-11-11.*
+
+## 2026-11-11 (socle, détection v3, tri des alertes, SOAR, console)
+- Socle mis à jour (Graylog 7.1.12, OpenSearch 2.19.7, MongoDB 8.0.38, Logstash 8.19.25) et mises à jour automatiques hebdomadaires dans des séries épinglées (`oms-maj-siem`).
+- Snapshots OpenSearch sélectifs et incrémentaux chaque nuit, avec test de restauration hebdomadaire (`oms-snap-siem`).
+- Couche de corrélation v3 : 14 règles, 11 définitions, table des actifs critiques.
+- Tri des alertes : signatures de faux positifs, regroupement des alertes ÉLEVÉ, récapitulatif quotidien.
+- SOAR remis en route sur les deux sites, avec exclusion automatique des IP légitimes et expiration à 24 h.
+- Console SOC : bande « À traiter », page SOAR avec déblocage, page Exploitation. Quatre nouveaux dashboards.
+- Correctifs : plugin GELF de Logstash, magasin de confiance hors paquet, robot DHCP (encodage), contrôle de dérive (lecture nftables).
 
 ## 2026-06-22 (couche ML, console enrichie, qualité)
 

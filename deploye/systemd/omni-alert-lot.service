@@ -1,0 +1,6 @@
+[Unit]
+Description=OMNI SIEM - envoi groupe horaire des alertes ELEVE (v2 11/11/2026)
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-alert-lot

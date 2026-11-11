@@ -1,0 +1,20 @@
+rule "omni-fp-26-outlook-liens"
+// "Execution d'un binaire depose via archiveur ou Outlook (T1204.002)" (requete, pas d'alert_tag) : 40 evenements sur
+// 30 j = clic sur un lien dans Outlook -> Chrome installe dans le profil (AppData\Local\Google\Chrome\Application) avec
+// --single-argument http(s)://, ou ouverture d'une piece jointe chiffree avec Zed! Pro (Prim'X). La definition est
+// completee par "AND NOT fp_allowlist:true". Un vrai binaire depose (Downloads, Temp, 7z...) continue d'alerter.
+when
+  to_string($message.event_source) == "sysmon"
+  AND to_string($message.winlogbeat_winlog_event_id) == "1"
+  AND ends_with(to_string($message.winlogbeat_winlog_event_data_ParentImage), "\\OUTLOOK.EXE", true)
+  AND (
+    ( regex("(?i)^C:\\\\Users\\\\[^\\\\]+\\\\AppData\\\\Local\\\\Google\\\\Chrome\\\\Application\\\\chrome\\.exe$", to_string($message.winlogbeat_winlog_event_data_Image)).matches == true
+      AND regex("(?i)\\s--single-argument\\s+https?://\\S+$", to_string($message.winlogbeat_winlog_event_data_CommandLine)).matches == true )
+    OR ( regex("(?i)^C:\\\\Users\\\\[^\\\\]+\\\\AppData\\\\Local\\\\Prim'X\\\\Zed! Pro\\\\zed\\.exe$", to_string($message.winlogbeat_winlog_event_data_Image)).matches == true
+      AND contains(to_string($message.winlogbeat_winlog_event_data_CommandLine), "\\INetCache\\Content.Outlook\\", true) )
+  )
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "outlook_lien_chrome_zed");
+  set_field("fp_allowlist_reason", "T1204.002: lien Outlook ouvert dans Chrome (profil) ou piece jointe Zed! - v2 11/11/2026");
+end

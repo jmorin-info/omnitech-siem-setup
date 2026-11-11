@@ -1,0 +1,16 @@
+rule "omni-fp-26-lsass-defender"
+// "Acces memoire LSASS" : Microsoft Defender (MsMpEng.exe) et l'outil de suppression MRT.exe analysent LSASS.
+// CHEMIN COMPLET exige (anti-usurpation : un MsMpEng.exe ailleurs DECLENCHE) et droits limites a la lecture (0x1010/0x1410).
+when
+  to_string($message.alert_tag) == "lsass_access"
+  AND ( regex("(?i)^C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Platform\\\\[0-9.\\-]+\\\\MsMpEng\\.exe$", to_string($message.winlogbeat_winlog_event_data_SourceImage)).matches == true
+     OR lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == "c:\\program files\\windows defender\\msmpeng.exe"
+     OR lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == "c:\\windows\\system32\\mrt.exe" )
+  AND ( to_string($message.winlogbeat_winlog_event_data_GrantedAccess) == "0x1010"
+     OR to_string($message.winlogbeat_winlog_event_data_GrantedAccess) == "0x1410" )
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "lsass_defender");
+  set_field("fp_allowlist_reason", "lsass_access: Microsoft Defender/MRT (chemin complet, lecture seule) - v2 11/11/2026");
+  remove_single_field("alert_tag");
+end

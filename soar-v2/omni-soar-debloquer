@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-soar-debloquer - debloque une IP du SOAR (effet sur les FortiGate en 2 min max)
+#   omni-soar-debloquer 1.2.3.4                     # retire de la liste de blocage
+#   omni-soar-debloquer 1.2.3.4 --exclure "domicile M. X"   # + exclusion definitive (liste fixe)
+#   omni-soar-debloquer --liste                     # IP bloquees actuellement (detection, expiration)
+# =============================================================================
+import ipaddress, json, os, sys, time, urllib.request
+STATE = "/var/lib/omni-soar/blocklist.json"; META = "/var/lib/omni-soar/blocklist-meta.json"
+FEED = "/var/www/siem-kit/soar/blocklist.txt"; FIX = "/etc/omni-soar/exclusions-statiques.txt"
+DECISIONS = "/var/log/omni-soar/decisions.log"
+
+def load(p):
+    try: return json.load(open(p))
+    except Exception: return {}
+def save(d, p):
+    t = p + ".tmp"; json.dump(d, open(t, "w")); os.replace(t, p)
+def render(d):
+    now = time.time(); t = FEED + ".tmp"
+    open(t, "w").write("\n".join(["# OMNITECH SIEM SOAR blocklist - auto-genere - ne pas editer"] + [i for i, x in sorted(d.items()) if x > now]) + "\n")
+    os.replace(t, FEED)
+def gelf(action, ip, msg):
+    try:
+        b = json.dumps({"version": "1.1", "host": "bx-it-graylog-vm", "short_message": f"SOAR {action}: {ip} ({msg})",
+                        "_event_source": "siem_soar", "_event_action": action, "_soar_ip": ip, "_soar_par": os.environ.get("SUDO_USER", "root")}).encode()
+        urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:12201/gelf", data=b, headers={"Content-Type": "application/json"}), timeout=8)
+    except Exception: pass
+
+a = sys.argv[1:]
+if not a or a[0] in ("-h", "--help"):
+    print(__doc__ if __doc__ else open(sys.argv[0]).read().split("# ===")[1]); sys.exit(0)
+d = load(STATE); meta = load(META); now = time.time()
+if a[0] == "--liste":
+    act = {i: x for i, x in d.items() if x > now}
+    print(f"{len(act)} IP bloquee(s)")
+    for i, x in sorted(act.items(), key=lambda kv: kv[1]):
+        m = meta.get(i, {})
+        print(f"  {i:16} jusqu'a {time.strftime('%d/%m %H:%M', time.localtime(x))}  {m.get('pays',''):3} {m.get('hits','')!s:>4} hits  {m.get('detection','')}")
+    sys.exit(0)
+ip = a[0]
+try: ipaddress.ip_address(ip)
+except ValueError: sys.exit(f"IP invalide : {ip}")
+etait = ip in d
+d.pop(ip, None); meta.pop(ip, None); save(d, STATE); save(meta, META); render(d)
+gelf("ip_debloquee", ip, "deblocage manuel")
+os.makedirs(os.path.dirname(DECISIONS), exist_ok=True)
+with open(DECISIONS, "a") as f: f.write(json.dumps({"t": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "action": "ip_debloquee", "ip": ip, "par": os.environ.get("SUDO_USER", "root")}) + "\n")
+print(f"{ip} : {'debloquee' if etait else 'n etait pas bloquee'} (effet sur les FortiGate en 2 min max)")
+if len(a) >= 3 and a[1] == "--exclure":
+    motif = " ".join(a[2:]).replace("#", "")
+    with open(FIX, "a") as f: f.write(f"{ip}  # {motif} (ajout {time.strftime('%d/%m/%Y')} par {os.environ.get('SUDO_USER', 'root')})\n")
+    gelf("ip_exclue_ajout", ip, motif)
+    print(f"{ip} ajoutee a la liste d'exclusion fixe : {motif}")

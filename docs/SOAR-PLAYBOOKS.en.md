@@ -40,3 +40,13 @@ Each playbook = a new endpoint of the `omni-soar` service (`/isolate`, `/disable
 **Dry-run** mode first (`SOAR_DRYRUN=1`: the service logs the action without executing it), on a TEST host/account, then switch over. Explicitly test that a whitelisted / RFC1918 target is **refused**. Keep a log of triggers (useful for ISO A.5.25/5.26).
 
 > As soon as the NinjaOne API is available: implementation of the `/isolate`, `/disable`, `/ticket` endpoints in `omni-soar` + notifications + safeguards, in dry-run then prod.
+
+## November 2026 restart
+
+Blocking now goes through an external threat feed polled every 2 minutes by the firewalls of both sites, with a deny at the WAN edge. Guardrails:
+- automatic exclusion, recomputed hourly, of any IP that authenticated successfully in the last 90 days;
+- site ranges, IPsec partners and the mail provider are never blocked;
+- never a block on a single failure, and a higher threshold for usual countries;
+- automatic expiry after 24 hours, with a daily summary.
+
+Before activation, a 30-day replay showed the old mode would have blocked employees' home connections; the automatic exclusions fix that. Unblock from the SOC console, or with `omni-soar-debloquer <ip>` on the server. Sources: `../soar-v2/`.

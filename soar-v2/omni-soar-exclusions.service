@@ -1,0 +1,6 @@
+[Unit]
+Description=SOAR OMNITECH - liste d'exclusion dynamique (authentifications reussies 90 j)
+After=opensearch.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/omni-soar-exclusions

@@ -24,7 +24,7 @@ zone, and renders one clean message per real alert.
 3. **Correlate** across sources on canonical keys (identity / host / IP / badge). A SEAL
    console login and a Windows brute force on the same account join up; ≥ N distinct types on
    one entity escalates to a **kill-chain incident**, re-injected for the console.
-4. **Grey zone → LLM judge.** For ambiguous alerts, a Claude (Haiku) judge is asked — over a
+4. **Grey zone → LLM judge.** For ambiguous alerts, a small hosted LLM judge is asked — over a
    **redacted** context (IPs/emails masked before egress) — whether the alert warrants an
    immediate e-mail. Critical alerts are never suppressed; noise is dropped unless it
    escalates by score.
@@ -81,3 +81,13 @@ re-injected as an event, shown on the console). A **manual block** path lets an 
 an IP straight from an alert e-mail via an HMAC-signed, time-boxed link.
 
 See also [REPONSE-AUTOMATISEE.md](REPONSE-AUTOMATISEE.md) and [SOAR-PLAYBOOKS.md](SOAR-PLAYBOOKS.md).
+
+## Noise control (November 2026)
+
+- Structural false positives are removed by precise signatures in the allowlist pipeline
+  (account + host + process). Events stay indexed and can be found with `_exists_:fp_signature`.
+- HIGH alerts are grouped into at most one mail per hour, each carrying the entity's 7-day history.
+- A daily digest (weekdays, 08:00) lists what was filtered as known legitimate activity.
+- The LLM judge is paused for one hour after a failure.
+- Triage decisions are written to the internal index, not mixed with Microsoft 365 data.
+- Rollback: the `retour.sh` script restores the previous triage code and removes the signatures.

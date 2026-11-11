@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-alert-lot (v2 11/11/2026) : envoi GROUPE des alertes ELEVE (zone grise / bruit escalade).
+# omni-alert-triage met ces alertes en file (/var/lib/omni-alert-triage/lot.json) au lieu d'un mail unitaire ;
+# ce script (timer horaire omni-alert-lot.timer) envoie UN mail par heure s'il y a quelque chose, le plus urgent
+# en premier. CRITIQUE et kill-chain ne passent jamais par ici (mail immediat). Test : LOT_DRYRUN=1.
+# Retour : GRAY_BATCH=0 dans /etc/omni-alert-triage.env -> retour au mail unitaire immediat.
+# =============================================================================
+import fcntl, html, json, os, re, smtplib, sys, time
+from email.message import EmailMessage
+from email.utils import formatdate
+ENVF = "/etc/omni-alert-triage.env"; LOT = "/var/lib/omni-alert-triage/lot.json"
+def load_env():
+    e = {}
+    try:
+        for l in open(ENVF, encoding="utf-8"):
+            l = l.strip()
+            if l and not l.startswith("#") and "=" in l:
+                k, v = l.split("=", 1); e[k.strip()] = v.strip().strip('"').strip("'")
+    except Exception: pass
+    return e
+E = load_env()
+esc = lambda s: html.escape(str(s if s is not None else ""))
+INK, BODY, MUT, LAB, LINE, BOX, BG, AMB = "#101828", "#344054", "#667085", "#475467", "#eaecf0", "#f9fafb", "#f2f4f7", "#d97706"
+def take():
+    with open(LOT + ".lock", "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try: q = json.load(open(LOT))
+        except Exception: q = []
+        if q and not os.environ.get("LOT_DRYRUN"):
+            tmp = LOT + ".tmp"; json.dump([], open(tmp, "w")); os.replace(tmp, LOT)
+        return q
+def put_back(items):
+    with open(LOT + ".lock", "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try: q = json.load(open(LOT))
+        except Exception: q = []
+        tmp = LOT + ".tmp"; json.dump(items + q, open(tmp, "w")); os.replace(tmp, LOT)
+def fact(lab, val):
+    return (f'<tr><td style="padding:2px 12px 2px 0;font-size:12px;color:{MUT};white-space:nowrap;vertical-align:top">{esc(lab)}</td>'
+            f'<td style="padding:2px 0;font-size:12.5px;color:{INK};word-break:break-word">{esc(val)}</td></tr>') if val not in ("", None, "-") else ""
+def card(i, a):
+    ent = (a.get("entite") or "").split("=", 1)[-1]
+    quand = time.strftime("%d/%m %H:%M", time.localtime(a.get("t", time.time())))
+    occ = (f'{a.get("count")} sur la fenêtre' if a.get("count_reel") else (str(a.get("count")) if a.get("count") else ""))
+    facts = "".join([fact("Concerne", ent), fact("Compte", a.get("user") if a.get("user") != ent else ""),
+                     fact("Hôte", a.get("host") if a.get("host") != ent else ""),
+                     fact("IP", (a.get("src_ip") or "") + (f' ({a["country"]})' if a.get("country") else "") if a.get("src_ip") != ent else ""),
+                     fact("Occurrences", occ), fact("MITRE ATT&CK", (a.get("mitre") or "") + (f' · {a["tactique"]}' if a.get("tactique") else "")),
+                     fact("Pourquoi", a.get("why")), fact("À vérifier", a.get("a_verifier"))])
+    h7 = a.get("hist7") or []
+    hist = (f'<div style="font-size:11.5px;color:{MUT};margin-top:6px">Historique 7 j ({esc(a.get("hist7_total", 0))}) : '
+            + esc("; ".join(f"{n}× {t}" for t, n in h7[:4])) + '</div>') if h7 else ""
+    corr = (f'<div style="font-size:11.5px;color:#b54708;margin-top:4px">Autres alertes liées : '
+            + esc("; ".join(t for _, t in (a.get("corr") or [])[:3])) + '</div>') if a.get("corr") else ""
+    liens = " &nbsp;·&nbsp; ".join(x for x in [
+        f'<a href="{esc(a["replay"])}" style="color:#175cd3">Logs Graylog</a>' if a.get("replay") else "",
+        f'<a href="{esc(a["soc"])}" style="color:#175cd3">Dossier 360</a>' if a.get("soc") else "",
+        f'<a href="{esc(a["fp"])}" style="color:#667085">Marquer faux positif</a>' if a.get("fp") else ""] if x)
+    return (f'<tr><td style="padding:14px 32px 0"><div style="border:1px solid {LINE};border-left:3px solid {AMB};border-radius:8px;padding:12px 14px">'
+            f'<div style="font-size:11px;color:{MUT}">{i}. {quand} · score {esc(a.get("score"))}/100</div>'
+            f'<div style="font-size:14.5px;font-weight:600;color:{INK};margin:3px 0 6px">{esc(a.get("titre"))}</div>'
+            f'<table role="presentation" cellpadding="0" cellspacing="0">{facts}</table>{hist}{corr}'
+            f'<div style="font-size:12px;margin-top:8px">{liens}</div></div></td></tr>')
+def main():
+    items = take()
+    if not items:
+        return 0
+    items.sort(key=lambda a: (-(a.get("score") or 0), a.get("t", 0)))
+    n = len(items); titres = {}
+    for a in items: titres[a.get("titre", "")] = titres.get(a.get("titre", ""), 0) + 1
+    top = ", ".join(t for t, _ in sorted(titres.items(), key=lambda x: -x[1])[:2])
+    pfx = E.get("SMTP_SUBJECT_PREFIX", "[SIEM OMNITECH]")
+    subj = f"{pfx} [ÉLEVÉ] {n} alerte(s) à qualifier — {top}" + (" …" if len(titres) > 2 else "")
+    synth = "".join(f'<tr><td style="padding:3px 0;font-size:12.5px;color:{BODY}"><b style="color:{INK}">{c}×</b>&nbsp; {esc(t)}</td></tr>'
+                    for t, c in sorted(titres.items(), key=lambda x: -x[1]))
+    cards = "".join(card(i + 1, a) for i, a in enumerate(items[:40]))
+    reste = f'<tr><td style="padding:10px 32px 0;font-size:12px;color:{MUT}">… et {n - 40} autre(s), visibles en console.</td></tr>' if n > 40 else ""
+    soc = E.get("OMNI_SOC_URL", "https://bx-it-graylog-vm.omnitech.security/soc/")
+    page = (f'<!doctype html><html><body style="margin:0;background:{BG};font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" style="background:{BG};padding:24px 10px"><tr><td align="center">'
+            f'<table width="640" cellpadding="0" cellspacing="0" style="max-width:640px;background:#fff;border:1px solid #e8eaed;border-top:3px solid {AMB};border-radius:12px;overflow:hidden">'
+            f'<tr><td style="padding:24px 32px 6px"><div style="font-size:11px;letter-spacing:1.5px;color:{LAB};text-transform:uppercase">SIEM OMNITECH · SOC</div>'
+            f'<div style="font-size:12px;font-weight:600;color:{AMB};text-transform:uppercase;margin-top:10px">Élevé — à qualifier</div>'
+            f'<div style="font-size:20px;font-weight:600;color:{INK};margin-top:4px">{n} alerte(s) de la dernière heure</div>'
+            f'<div style="font-size:12.5px;color:{MUT};margin-top:6px">Regroupées pour limiter les interruptions. Les alertes CRITIQUES '
+            f'et les incidents corrélés partent toujours immédiatement, en mail séparé.</div></td></tr>'
+            f'<tr><td style="padding:10px 32px 0"><table cellpadding="0" cellspacing="0" width="100%">{synth}</table></td></tr>'
+            f'{cards}{reste}'
+            f'<tr><td style="padding:20px 32px 22px;font-size:12px;color:{MUT}">Console SOC : <a href="{esc(soc)}" style="color:#175cd3">{esc(soc)}</a></td></tr>'
+            f'</table></td></tr></table></body></html>')
+    txt = [f"{n} alerte(s) ELEVE a qualifier (derniere heure)", ""] + [
+        f"- {time.strftime('%d/%m %H:%M', time.localtime(a.get('t', 0)))} | {a.get('titre')} | {(a.get('entite') or '').split('=', 1)[-1]} | score {a.get('score')}"
+        + (f"\n    Logs : {a['replay']}" if a.get("replay") else "") for a in items] + ["", f"Console SOC : {soc}"]
+    if os.environ.get("LOT_DRYRUN"):
+        print(subj); print("\n".join(txt)); print(f"[dry-run] HTML {len(page)} octets"); return 0
+    to = [x.strip() for x in E.get("LOT_RECIPIENTS", E.get("MAIL_RECIPIENTS", "")).split(",") if x.strip()]
+    m = EmailMessage(); m["Subject"] = subj; m["From"] = E.get("SMTP_FROM", "no-reply@omnitech-security.fr")
+    m["To"] = ", ".join(to); m["Date"] = formatdate(localtime=True)
+    m.set_content("\n".join(txt)); m.add_alternative(page, subtype="html")
+    try:
+        with smtplib.SMTP(E.get("SMTP_HOST", "smtp-internal.omnitech-security.fr"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
+            s.send_message(m)
+    except Exception as ex:
+        put_back(items); print(f"echec envoi ({type(ex).__name__}) : {n} alerte(s) remises en file", file=sys.stderr); return 1
+    print(f"lot envoye : {n} alerte(s) -> {len(to)} destinataire(s)")
+    return 0
+if __name__ == "__main__":
+    sys.exit(main())

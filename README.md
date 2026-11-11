@@ -95,8 +95,11 @@ flowchart LR
   end
   subgraph SIEM[SIEM server]
     IN[Graylog inputs] --> PIPE[Pipelines<br/>normalise · enrich · tag]
+    PIPE --> V3[Correlation layer v3<br/>critical-asset lookup]
     PIPE --> OS[(OpenSearch<br/>encrypted /data)]
     PIPE --> DEF[Event definitions<br/>MITRE-mapped]
+    V3 --> DEF
+    OS -.->|nightly selective snapshots| SNAP[(Snapshot repository<br/>separate disk)]
     ROB[Analytics robots<br/>UEBA · NDR · health] -->|GELF| IN
     DEF --> TRI[omni-alert-triage<br/>score · correlate · dedup]
     DEF --> SOAR[omni-soar<br/>IP blocklist]
@@ -109,7 +112,9 @@ flowchart LR
   SEAL --> IN
   TRI --> MAIL[E-mail · Teams]
   TRI --> CON[SOC console · mobile PWA]
-  SOAR -->|threat feed| FW[FortiGate WAN block]
+  TRI --> DIG[Daily digest<br/>weekdays 08:00]
+  SOAR -->|external threat feed<br/>polled every 2 min| FW[FortiGate WAN deny<br/>both sites]
+  CON -->|unblock request<br/>queued, audited| SOAR
 ```
 
 The detailed view:
@@ -237,6 +242,28 @@ noise/false-positive allow-lists learned over time.
 
 ---
 
+### Correlation layer (v3)
+
+A second detection layer sits on top of the historical rules and only adds things; nothing
+existing was rewritten. It lives in its own pipeline stage (stages 40-41) and uses a small
+lookup table of tier-0/tier-1 assets (domain controllers, PKI, backup, SIEM, physical-security
+servers). What it looks for:
+
+- a user account reading a gMSA password (critical);
+- Kerberos RC4/DES tickets coming back after the domain was moved to AES only;
+- firewall administration from a public address, use of the local break-glass `admin`
+  account, or bursts of failed admin logins;
+- an EDR detection left unremediated, worse when it lands on a critical asset;
+- backup tampering: job or restore-point deletion, restores run by an unexpected account;
+- **cross-source correlation**: an EDR detection followed within the hour by an admin logon
+  on the same machine.
+
+Every rule was replayed over 30 days before going live (0 to about 10 hits per rule, known
+false positives excluded), and a pipeline simulator suite covers the expected cases. The
+ingestion cost stayed around 3-4 ms per message. One rule (admin RDP from the user LAN to a
+critical asset) ships disabled until the admin VLAN is generalised. Sources and the rollback
+script are in [`tools/omni-v3/`](tools/omni-v3/).
+
 ## 6. Alert triage &amp; notifications
 
 Raw detections are firehosed to Teams and the console, but **only qualified, actionable
@@ -268,6 +295,24 @@ alerts additionally carry site / zone / door / badge.
 
 ---
 
+### Keeping the mailbox readable
+
+Mail volume used to be driven by the grey zone: when the LLM judge was unavailable, every
+ambiguous alert was mailed "just in case". The triage service now:
+
+- pauses the judge for an hour after a failure instead of retrying on every alert;
+- drops structural false positives through precise signatures in the allowlist pipeline
+  (account + host + process, never a broad exclusion). Typical cases: scheduled tasks created
+  by our own automation, backup-lab activity, EDR touching LSASS, developer tooling. The
+  events stay indexed and searchable with `_exists_:fp_signature`;
+- groups HIGH alerts into at most one mail per hour, each with the entity's 7-day history;
+- sends a daily digest (weekdays, 08:00) with a "known legitimate activity" section, so what
+  was filtered stays visible;
+- keeps every CRITICAL alert immediate.
+
+Replayed on 30 days of real decisions, this goes from about 76 mails a day to about 9 plus
+the digest, with all critical alerts still delivered. Sources: [`tools/alertes-v2/`](tools/alertes-v2/).
+
 ## 7. Automated response (SOAR)
 
 `omni-soar` exposes a webhook that the platform calls when an attacking **public** IP is
@@ -289,6 +334,23 @@ A **manual block** path lets an analyst block an IP straight from an alert e-mai
 HMAC-signed, time-boxed link.
 
 ---
+
+### How blocking works today
+
+The firewalls pull the blocklist published by the SIEM through an *external threat feed*
+every two minutes and deny those addresses at the WAN edge, on both sites. The guardrails
+matter more than the blocking itself:
+
+- any public IP that authenticated successfully in the last 90 days (VPN, Microsoft 365) is
+  excluded automatically, recomputed every hour;
+- site ranges, IPsec partners and the mail provider are never blocked;
+- a single failure never triggers a block, and IPs from usual countries need a higher score;
+- blocks expire after 24 hours on their own;
+- a daily summary lists blocked IPs, spared users and active blocks.
+
+Unblocking takes two minutes, either from the SOC console (request queued and processed by a
+root service that logs every action) or on the server with `omni-soar-debloquer <ip>`
+(`--exclure "reason"` to never block it again). Sources: [`soar-v2/`](soar-v2/).
 
 ## 8. Visualisation — Graylog dashboards &amp; SOC console
 
@@ -339,6 +401,23 @@ playbooks. A companion **mobile PWA** brings the essentials and push notificatio
 > Console details: [`docs/CONSOLE-SOC.md`](docs/CONSOLE-SOC.md).
 
 ---
+
+### November 2026 additions
+
+Four dashboards were added, each widget filtered on its own stream:
+
+- **SOC overview** for management: alerts by severity, incidents, SOAR blocks, privileged
+  accounts, silent sources, EDR coverage, backups;
+- **Identities and AD**: admin logons, failures, lockouts, group changes, Kerberos/NTLM;
+- **Network, FortiGate and VPN**: IPsec VPN, denies, top countries, SOAR, segmentation;
+- **SIEM health**: throughput per source, lag, journal, indices, errors.
+
+Broken widgets pointing at renamed fields were repaired. The SOC console gained an
+**"Action needed" band** (open critical incidents, never-qualified incidents, silent hosts,
+failed robots, blocked IPs), a **SOAR page** with the unblock workflow, an **operations page**
+(updates, snapshots and restore test, backup, disks, failed units, certificate, versions), a
+direct "open in Graylog" link on every incident and an optional light theme. Access still goes
+through Graylog's AD authentication; state-changing actions carry an origin check.
 
 ## 9. Physical security correlation (SEAL)
 
@@ -457,6 +536,7 @@ for operations.
 | **Logstash restarts in a loop** after a package upgrade | The upgrade removes the hand-installed `logstash-output-gelf` plugin. Reinstall it with `JRUBY_OPTS="-J-Xmx2g" logstash-plugin install logstash-output-gelf`; without the memory flag the installer runs out of heap. `oms-maj-siem` does it for you |
 | Logstash **TLS errors to SQL Server** | Logstash ships its own JVM, which does not know the internal CA: use a truststore outside the package (`/etc/logstash/cacerts-omni.jks`, referenced in `jvm.options`). On the SQL side, check the instance is bound to the *current* machine certificate; after auto-renewal it keeps the old thumbprint |
 | **OpenSearch red** right after a reboot | Expected for a few minutes while 1,200+ shards are reallocated. Graylog migrations running in that window may log rotation errors; they are harmless as long as `index_failures` stays empty. Wait for green before digging |
+| About 240 *connection reset by peer* on the Beats input every two hours, all hosts at the same second | Not a collection problem. The RMM health script runs `winlogbeat test output` on every machine every two hours and closes its test connection with a RST. A `log4j2.xml` filter hides those lines (applied at the next Graylog restart); real collection connections are untouched |
 | Snapshots silently stopped | The `graylog_fs` repository registration lives in the cluster state and is lost if `path.data` is migrated or wiped. Re-register it |
 
 More in [`docs/GUIDE-DEPANNAGE.md`](docs/GUIDE-DEPANNAGE.md) and the French README.

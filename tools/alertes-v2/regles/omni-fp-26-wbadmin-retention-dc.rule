@@ -1,0 +1,17 @@
+rule "omni-fp-26-wbadmin-retention-dc"
+// "Indicateur de ransomware" (CRITIQUE) : 24 evenements / 30 j, tous = retention Windows Server Backup sur les DC
+// (wbadmin delete [systemstate]backup -keepVersions:N, N>=3 : on GARDE N versions). Un rancongiciel supprime TOUT
+// (keepVersions:0/1/2, -deleteOldest, delete catalog, vssadmin delete shadows) : ces formes, et toute autre machine ou
+// tout autre compte, continuent d'alerter en CRITIQUE. La detection reste active.
+when
+  to_string($message.alert_tag) == "ransomware_indicator"
+  AND ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\wbadmin.exe", true)
+  AND regex("(?i)^\"?c:\\\\windows\\\\system32\\\\wbadmin\\.exe\"?\\s+delete\\s+(systemstatebackup|backup)\\s+-keepVersions:([3-9]|[1-9][0-9]+)(\\s+-backupTarget:[a-z]:)?\\s+-quiet\\s*$", to_string($message.winlogbeat_winlog_event_data_CommandLine)).matches == true
+  AND regex("(?i)^(BX-AD-01-IT-VM|BX-AD02-IT-VM|IV-IT-AD-VM)(\\.|$)", to_string($message.host)).matches == true
+  AND regex("(?i)^(AUTORITE NT\\\\Syst.me|NT AUTHORITY\\\\SYSTEM|SECURITY\\\\adm-jmorin)$", to_string($message.winlogbeat_winlog_event_data_User)).matches == true
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "wbadmin_retention_dc");
+  set_field("fp_allowlist_reason", "ransomware_indicator: retention WSB sur DC (keepVersions>=3, SYSTEM/adm-jmorin) - v2 11/11/2026");
+  remove_single_field("alert_tag");
+end

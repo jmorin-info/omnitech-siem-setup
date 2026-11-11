@@ -1,0 +1,16 @@
+rule "omni-fp-26-webshell-proactive"
+// "Web shell" (CRITIQUE) sur IV-TECH-FFE-LT2 : la centrale Pro-Active (Apache WAMP) affiche un message via
+// bgrun.exe + pamsgbox.exe. Signature exacte : parent httpd.exe WAMP + commande qui commence par ces deux binaires +
+// aucun separateur de commande. ATTENTION : les 2 207 evenements de VM-DEV-CENTRAL6 (w3wp SealWebMvc -> cmd /c ping
+// avec charges ;env; /etc/passwd ...) sont une VRAIE injection de commande : NON couverts, ils continuent d'alerter.
+when
+  to_string($message.alert_tag) == "web_shell"
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_ParentImage)) == "c:\\wamp\\bin\\apache\\apache2.2.11\\bin\\httpd.exe"
+  AND starts_with(to_string($message.winlogbeat_winlog_event_data_CommandLine), "cmd.exe /c \"c:\\pro-active\\tools\\win32shell\\bgrun.exe c:\\pro-active\\tools\\win32shell\\pamsgbox.exe ", true)
+  AND regex("[&|<>`]", to_string($message.winlogbeat_winlog_event_data_CommandLine)).matches == false
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "webshell_proactive_pamsgbox");
+  set_field("fp_allowlist_reason", "web_shell: message de la centrale Pro-Active (bgrun/pamsgbox) - v2 11/11/2026");
+  remove_single_field("alert_tag");
+end

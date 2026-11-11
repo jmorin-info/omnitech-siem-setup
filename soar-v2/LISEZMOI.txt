@@ -1,0 +1,3 @@
+SOAR OMNITECH v2 (11/11/2026) - remplace la partie SOAR de 36-soar.sh (v1).
+Installation : installer-soar-v2.sh (C:\DC\SIEM\SOAR\src sur le DC). Cote FortiGate : C:\DC\SIEM\SOAR\FG-SOAR-20261111.ps1.
+Rapport : C:\DC\SIEM\SOAR\Remise-en-route-SOAR-20261111.md

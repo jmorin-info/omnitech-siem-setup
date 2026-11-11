@@ -1,0 +1,22 @@
+rule "omni-fp-26-webshell-dev-central6"
+// "Web shell (process web -> shell)" (CRITIQUE) sur VM-DEV-CENTRAL6 : l'application SEAL de DEVELOPPEMENT (pool IIS
+// SealWebMvc) execute "cmd.exe /c ping -n 1 <saisie>" ; un scanner/test y injecte des charges (;env; |env id
+// /etc/passwd ...) = injection de commande CONNUE de l'environnement de dev. DECISION jmorin 11/11/2026 : environnement
+// de dev, "ce n'est pas grave" -> plus de mail CRITIQUE ; comptage dans le recapitulatif quotidien (section
+// "Activite legitime connue ecartee", signature webshell_dev_central6_sealwebmvc). Evenements toujours stockes.
+// Signature EXACTE : hote VM-DEV-CENTRAL6 + parent w3wp.exe + compte IIS APPPOOL\SealWebMvc + cmd.exe + "/c ping -n 1 ".
+// Toute autre machine (EN PARTICULIER la prod SEAL BX-SEAL-OMEGA et BX-QA-SEAL-VM), tout autre pool/compte ou toute
+// autre commande continue d'alerter en CRITIQUE. Retour : supprimer cette regle (retour.sh de la v2) .
+when
+  to_string($message.alert_tag) == "web_shell"
+  AND regex("(?i)^VM-DEV-CENTRAL6(\\.omnitech\\.security)?$", to_string($message.host)).matches == true
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_ParentImage)) == "c:\\windows\\system32\\inetsrv\\w3wp.exe"
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_User)) == "iis apppool\\sealwebmvc"
+  AND ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\cmd.exe", true)
+  AND regex("(?i)^\"?cmd(\\.exe)?\"?\\s+/c\\s+ping\\s+-n\\s+1\\s", to_string($message.winlogbeat_winlog_event_data_CommandLine)).matches == true
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "webshell_dev_central6_sealwebmvc");
+  set_field("fp_allowlist_reason", "web_shell: environnement de DEV VM-DEV-CENTRAL6, SealWebMvc cmd /c ping (injection connue, decision jmorin 11/11/2026) - hors prod");
+  remove_single_field("alert_tag");
+end

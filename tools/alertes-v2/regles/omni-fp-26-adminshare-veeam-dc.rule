@@ -1,0 +1,18 @@
+rule "omni-fp-26-adminshare-veeam-dc"
+// "Balayage de partages admin" : 7 676 evenements / 30 j, dont 4 764 = gMSA Veeam (utilisables seulement par les
+// serveurs autorises) depuis le serveur et les proxys Veeam (10.33.240.1/21/22/23), et 968 = adm-jmorin depuis le DC
+// BX-AD-01 (10.33.50.250, poste d'administration et automatisations). adm-jmorin depuis toute autre IP continue d'alerter.
+when
+  to_string($message.alert_tag) == "admin_share"
+  AND (
+    ( regex("(?i)^gMSA-Veeam(T0|Aware)\\$$", to_string($message.user)).matches == true
+      AND regex("^10\\.33\\.240\\.(1|21|22|23)$", to_string($message.winlogbeat_winlog_event_data_IpAddress)).matches == true )
+    OR ( lowercase(to_string($message.user)) == "adm-jmorin"
+      AND to_string($message.winlogbeat_winlog_event_data_IpAddress) == "10.33.50.250" )
+  )
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "adminshare_veeam_dc");
+  set_field("fp_allowlist_reason", "admin_share: gMSA Veeam depuis serveur/proxys Veeam, ou adm-jmorin depuis BX-AD-01 - v2 11/11/2026");
+  remove_single_field("alert_tag");
+end

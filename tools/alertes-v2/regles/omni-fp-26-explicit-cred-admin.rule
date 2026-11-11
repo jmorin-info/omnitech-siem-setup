@@ -1,0 +1,23 @@
+rule "omni-fp-26-explicit-cred-admin"
+// "Usage de credentials explicites (4648)" : 3 115 evenements / 30 j, dont 2 662 = jmorin qui utilise SON compte
+// d'administration adm-jmorin depuis SON poste BX-IT-JMO-LT vers les DC (sessions PowerShell d'admin), et 330 =
+// bailloud vers le domaine de test seal.dev depuis son appli en developpement. Meme compte depuis un autre poste,
+// vers un autre serveur, ou un autre compte cible : continue d'alerter (ADExplorer de bailloud inclus).
+when
+  to_string($message.alert_tag) == "explicit_cred_use"
+  AND (
+    ( lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) == "jmorin"
+      AND lowercase(to_string($message.winlogbeat_winlog_event_data_TargetUserName)) == "adm-jmorin"
+      AND starts_with(to_string($message.host), "BX-IT-JMO-LT", true)
+      AND regex("(?i)^(BX-AD-01-IT-VM|BX-AD02-IT-VM|IV-IT-AD-VM)\\.omnitech\\.security$", to_string($message.winlogbeat_winlog_event_data_TargetServerName)).matches == true )
+    OR ( lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) == "bailloud"
+      AND lowercase(to_string($message.winlogbeat_winlog_event_data_TargetUserName)) == "administrateur@seal.dev"
+      AND regex("(?i)\\.seal\\.dev$", to_string($message.winlogbeat_winlog_event_data_TargetServerName)).matches == true
+      AND starts_with(to_string($message.winlogbeat_winlog_event_data_ProcessName), "D:\\projects\\SealToSmartlog\\", true) )
+  )
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "explicit_cred_admin_connu");
+  set_field("fp_allowlist_reason", "explicit_cred_use: jmorin -> adm-jmorin depuis BX-IT-JMO-LT vers DC, ou bailloud -> labo seal.dev - v2 11/11/2026");
+  remove_single_field("alert_tag");
+end

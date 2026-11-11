@@ -1,0 +1,13 @@
+rule "omni-extra-10-svcstop"
+// v2 11/11/2026 : l'ancienne version demandait seulement "stop" N'IMPORTE OU + un nom de service en sous-chaine.
+// Resultat : 166 evenements/30 j de faux positifs ("-ErrorAction Stop" + "Get-WinEvent ... eventlog", "sense" dans
+// "license", "veeam" dans un chemin...). On exige maintenant un VERBE d'arret/desactivation reel ET un nom de service
+// en mot entier. Couverture ELARGIE a notre pile (ESET ekrn/eraagent/efs, Sysmon, Winlogbeat, NinjaOne).
+// Retour : version precedente dans la sauvegarde rules.json.
+when
+  to_string($message.event_source) == "sysmon" AND to_long($message.event_id, 0) == 1
+  AND regex("(?i)(\\bsc(\\.exe)?\\s+(\\\\\\\\\\S+\\s+)?(stop|config|delete)\\b|\\bnet1?(\\.exe)?\\s+stop\\b|\\bstop-service\\b|\\bset-service\\b.*-(startuptype|status)\\s+['\"]?(disabled|stopped)|\\btaskkill(\\.exe)?\\b.*\\b(msmpeng|ekrn|sysmon|winlogbeat|veeam))", to_string($message.command_line)).matches == true
+  AND regex("(?i)\\b(windefend|wuauserv|eventlog|mpssvc|sense|wscsvc|sophos\\w*|veeam\\w*|ekrn|eraagent|efs|sysmon\\w*|winlogbeat|ninjarmmagent|msmpeng)\\b", to_string($message.command_line)).matches == true
+then
+  set_field("alert_tag", "service_stop_securite");
+end

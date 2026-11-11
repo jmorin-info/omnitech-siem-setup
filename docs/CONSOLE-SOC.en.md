@@ -61,3 +61,11 @@ omni-mobile-api: Graylog auth (LDAPS) → HMAC cookie; OpenSearch read; SSE; web
 - Deployment / update: `65-mobile-pwa.sh` (PWA + backend), `71-soc-console.sh` (console).
 - Front-end libraries vendored locally (`chart.min.js`, `cytoscape.min.js`) — no CDN at runtime.
 - **Tests** (offline, without OpenSearch): `./run-tests.sh` — redaction (`_rd`/`_scrub`) + oms-ml (anomaly, FP gating); 23 tests.
+
+## November 2026 changes
+
+- An "Action needed" band at the top of the overview, every item clickable.
+- A "SOAR — blocks" page: blocked IPs, country, reason, expiry, Graylog link and an "Unblock" button with confirmation (plus "never block again", reason required). Requests are queued and processed by a root service that logs every action.
+- An "SIEM operations" page: automatic updates, snapshots and restore test, backup, disks, failed units, certificate, versions.
+- A Graylog link on every incident, an optional light theme, preloaded Deployment and Report pages.
+- Access is still restricted to AD accounts verified by Graylog; state-changing actions check their origin.

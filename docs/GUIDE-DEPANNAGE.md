@@ -111,3 +111,13 @@ tail -f /var/log/graylog-server/server.log
 > En cas d'incident non listé : consigner symptôme + résolution dans `CONTEXT.md`
 > (section « PIÈGE À RETENIR ») pour enrichir ce guide.
 > Voir aussi : `INTEGRATION-SOURCES.md`, `POLITIQUE-RETENTION.md`, `PROCEDURE-INCIDENT.md`.
+
+## Ajouts de novembre 2026
+
+| Symptôme | Cause et solution |
+|---|---|
+| Connexion à la console en 503 « Authentication service unavailable » pour tout le monde | Le backend AD de Graylog (LDAPS avec vérification) ne connaît pas la racine qui signe les certificats des DC, souvent après un renouvellement de CA. Importer la nouvelle racine dans le magasin Java déclaré dans `GRAYLOG_SERVER_JAVA_OPTS`, puis redémarrer `graylog-server`. |
+| Logstash redémarre en boucle après une mise à jour | Le paquet efface le plugin `logstash-output-gelf`. Le réinstaller avec `JRUBY_OPTS="-J-Xmx2g" logstash-plugin install logstash-output-gelf`. `oms-maj-siem` le fait automatiquement. |
+| Erreurs TLS de Logstash vers SQL Server | Utiliser un magasin de confiance hors paquet (`/etc/logstash/cacerts-omni.jks`). Côté SQL, vérifier que l'instance est liée au certificat machine **actuel** : après un renouvellement automatique, elle garde l'ancienne empreinte. |
+| Environ 240 « connection reset » sur l'entrée Beats toutes les 2 h | Script de santé du RMM qui lance `winlogbeat test output` sur le parc. Sans effet sur la collecte ; filtré dans `log4j2.xml`. |
+| OpenSearch rouge juste après un redémarrage | Normal pendant quelques minutes (plus de 1 200 shards). Les erreurs de migration Graylog de cette fenêtre sont sans effet si `index_failures` reste vide. |

@@ -1,0 +1,16 @@
+rule "omni-fp-26-ntds-surebackup-mh"
+// "Extraction NTDS.dit" (CRITIQUE) : esentutl /mh (lecture de l'EN-TETE seulement, aucune copie) sur les copies de
+// verification SureBackup, par adm-jmorin, sur BX-VEEAM-IT-SV. Toute autre option (/y /vss /p...), tout autre chemin,
+// machine ou compte, et ntdsutil, continuent d'alerter.
+when
+  to_string($message.alert_tag) == "ntds_dump"
+  AND ends_with(to_string($message.winlogbeat_winlog_event_data_Image), "\\esentutl.exe", true)
+  AND regex("(?i)^\"?c:\\\\windows\\\\system32\\\\esentutl\\.exe\"?\\s+/mh\\s+C:\\\\ProgramData\\\\OMS\\\\SureBackup-[0-9]{8}\\\\hives\\\\[A-Za-z0-9_-]+\\\\ntds\\.dit\\s*$", to_string($message.winlogbeat_winlog_event_data_CommandLine)).matches == true
+  AND starts_with(to_string($message.host), "BX-VEEAM-IT-SV", true)
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_User)) == "security\\adm-jmorin"
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "ntds_surebackup_mh");
+  set_field("fp_allowlist_reason", "ntds_dump: esentutl /mh (en-tete) sur copie SureBackup, adm-jmorin, BX-VEEAM-IT-SV - v2 11/11/2026");
+  remove_single_field("alert_tag");
+end

@@ -1,0 +1,5 @@
+[Unit]
+Description=SOAR OMNITECH - recapitulatif quotidien par mail
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/omni-soar-rapport
