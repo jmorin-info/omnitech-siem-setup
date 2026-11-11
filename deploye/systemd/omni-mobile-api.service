@@ -1,0 +1,10 @@
+[Unit]
+Description=OMNI - Backend PWA mobile SIEM
+After=network-online.target graylog-server.service opensearch.service
+[Service]
+EnvironmentFile=/etc/default/omni-mobile
+ExecStart=/root/omnitech-siem-setup/mobile/.venv/bin/python /root/omnitech-siem-setup/mobile/omni-mobile-api.py
+Restart=on-failure
+User=root
+[Install]
+WantedBy=multi-user.target

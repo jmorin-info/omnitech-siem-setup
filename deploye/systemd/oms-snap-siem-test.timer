@@ -1,0 +1,8 @@
+[Unit]
+Description=OMNITECH - test de restauration hebdomadaire (mercredi 11:00)
+
+[Timer]
+OnCalendar=Wed *-*-* 11:00:00
+
+[Install]
+WantedBy=timers.target

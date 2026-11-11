@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - exfiltration par volume
+After=network-online.target graylog-server.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-ndr-exfil
+Nice=15

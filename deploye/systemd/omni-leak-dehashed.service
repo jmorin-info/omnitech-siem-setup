@@ -1,0 +1,6 @@
+[Unit]
+Description=OMNI - Leak intel dehashed
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-leak-dehashed

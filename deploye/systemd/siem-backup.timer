@@ -1,0 +1,8 @@
+[Unit]
+Description=Declencheur quotidien sauvegarde SIEM
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=10m
+Persistent=true
+[Install]
+WantedBy=timers.target

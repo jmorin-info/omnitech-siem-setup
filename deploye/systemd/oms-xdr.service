@@ -1,0 +1,12 @@
+[Unit]
+Description=OMS-XDR - cycle de correlation/reponse (dry-run)
+After=network-online.target graylog-server.service opensearch.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/omnitech-siem-setup/oms-xdr
+# Token Graylog NON requis (lecture OpenSearch local) ; env optionnel (Teams/AD/Ninja)
+EnvironmentFile=-/etc/oms-xdr/oms-xdr.env
+ExecStart=/root/omnitech-siem-setup/oms-xdr/.venv/bin/python -m oms_xdr.engine --once --config /root/omnitech-siem-setup/oms-xdr/config.yaml

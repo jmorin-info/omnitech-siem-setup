@@ -1,0 +1,6 @@
+[Unit]
+Description=Garde-fou disque /data du SIEM (alerte 80%, purge urgence 88%)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /root/omnitech-siem-setup/32-disk-guard.sh

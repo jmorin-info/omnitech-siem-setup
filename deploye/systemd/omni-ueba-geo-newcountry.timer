@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - nouveau pays par compte (timer)
+[Timer]
+OnCalendar=*-*-* *:23,53:00
+Persistent=true
+[Install]
+WantedBy=timers.target

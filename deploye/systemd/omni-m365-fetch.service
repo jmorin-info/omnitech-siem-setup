@@ -1,0 +1,6 @@
+[Unit]
+Description=Collecte Microsoft 365 -> Graylog (GELF)
+After=graylog-server.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-m365-fetch

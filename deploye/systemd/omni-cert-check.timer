@@ -1,0 +1,9 @@
+[Unit]
+Description=Verification hebdomadaire des certificats SIEM
+
+[Timer]
+OnCalendar=Mon *-*-* 07:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

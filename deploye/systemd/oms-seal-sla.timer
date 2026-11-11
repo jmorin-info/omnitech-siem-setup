@@ -1,0 +1,11 @@
+[Unit]
+Description=OMS SEAL - evalue le SLA des alarmes severes toutes les minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Unit=oms-seal-sla.service
+
+[Install]
+WantedBy=timers.target

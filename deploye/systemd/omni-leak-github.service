@@ -1,0 +1,6 @@
+[Unit]
+Description=OMNI - Surveillance fuites GitHub
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-leak-github

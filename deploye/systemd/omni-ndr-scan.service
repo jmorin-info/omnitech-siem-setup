@@ -1,0 +1,8 @@
+[Unit]
+Description=OMNI SIEM - detection de scan reseau interne
+After=network-online.target graylog-server.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-ndr-scan
+Nice=15

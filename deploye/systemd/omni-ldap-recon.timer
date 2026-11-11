@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - reconnaissance LDAP (timer)
+[Timer]
+OnBootSec=240
+OnUnitActiveSec=900
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - auto-supervision (30 min)
+[Timer]
+OnBootSec=300
+OnUnitActiveSec=1800
+[Install]
+WantedBy=timers.target

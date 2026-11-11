@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - beaconing / C2 (toutes les 6h) (timer)
+
+[Timer]
+OnCalendar=*-*-* 02,08,14,20:22:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

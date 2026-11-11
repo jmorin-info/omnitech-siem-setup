@@ -1,0 +1,6 @@
+[Unit]
+Description=Collecte O365 Management Activity (Exchange/SharePoint) -> Graylog
+After=graylog-server.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-m365-activity

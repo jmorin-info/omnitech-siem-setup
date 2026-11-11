@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI - Audit M365 transferts (hebdomadaire)
+[Timer]
+OnCalendar=Mon 06:30
+Persistent=true
+[Install]
+WantedBy=timers.target

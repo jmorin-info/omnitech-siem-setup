@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - mouvement lateral reussi
+After=graylog-server.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-ndr-lateral
+Nice=15

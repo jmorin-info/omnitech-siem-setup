@@ -1,0 +1,15 @@
+[Unit]
+Description=OMNITECH - Triage de pertinence des alertes (mail critique uniquement)
+After=network.target graylog-server.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/omni-alert-triage
+Restart=on-failure
+RestartSec=5
+EnvironmentFile=/etc/omni-alert-triage.env
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=OMS-ML - scoring d'anomalie (toutes les heures)
+
+[Timer]
+OnBootSec=8min
+OnUnitActiveSec=1h
+AccuracySec=2min
+Unit=oms-ml-anomaly.service
+
+[Install]
+WantedBy=timers.target

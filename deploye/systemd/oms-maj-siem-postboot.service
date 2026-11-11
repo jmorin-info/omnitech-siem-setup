@@ -1,0 +1,13 @@
+[Unit]
+Description=OMNITECH - controle du SIEM apres un redemarrage de mise a jour
+After=graylog-server.service opensearch.service mongod.service logstash.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 120
+ExecStart=/usr/local/sbin/oms-maj-siem --apres-boot
+TimeoutStartSec=1h
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - anomalie de volume (z-score)
+After=network-online.target graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-ueba-volume
+Nice=15

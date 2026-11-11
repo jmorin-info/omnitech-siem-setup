@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI - Controle de derive depot/production
+After=network-online.target graylog-server.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-drift-check
+Nice=15

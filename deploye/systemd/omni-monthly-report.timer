@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - rapport mensuel (1er du mois 06:00)
+[Timer]
+OnCalendar=*-*-01 06:00:00
+Persistent=true
+[Install]
+WantedBy=timers.target

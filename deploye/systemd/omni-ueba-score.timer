@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - score d'entite UEBA (timer)
+
+[Timer]
+OnCalendar=*-*-* *:27,57:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

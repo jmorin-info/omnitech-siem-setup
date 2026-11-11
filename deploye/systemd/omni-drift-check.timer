@@ -1,0 +1,8 @@
+[Unit]
+Description=Controle de derive SIEM (hebdomadaire)
+[Timer]
+OnCalendar=Mon *-*-* 07:00:00
+Persistent=true
+RandomizedDelaySec=10m
+[Install]
+WantedBy=timers.target

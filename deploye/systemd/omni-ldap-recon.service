@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - reconnaissance LDAP
+After=graylog-server.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-ldap-recon
+Nice=15

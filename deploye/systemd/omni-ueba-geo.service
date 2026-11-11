@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - impossible travel (geo-velocite)
+After=network-online.target graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-ueba-geo
+Nice=15

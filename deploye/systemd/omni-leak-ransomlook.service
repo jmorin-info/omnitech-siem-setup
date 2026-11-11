@@ -1,0 +1,6 @@
+[Unit]
+Description=OMNI - Leak intel ransomlook
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-leak-ransomlook

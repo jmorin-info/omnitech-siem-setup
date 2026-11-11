@@ -1,0 +1,6 @@
+[Unit]
+Description=OMNI - Audit M365 des transferts mail externes existants
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-m365-fwd-audit

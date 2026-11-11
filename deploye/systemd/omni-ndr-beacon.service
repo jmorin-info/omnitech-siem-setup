@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - beaconing / C2 (toutes les 6h)
+After=network-online.target graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-ndr-beacon
+Nice=15

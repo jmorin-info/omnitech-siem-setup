@@ -1,0 +1,10 @@
+[Unit]
+Description=OMNITECH - mise a jour hebdomadaire du SIEM (dimanche 04:30)
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00
+RandomizedDelaySec=10m
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - scan reseau (15 min)
+[Timer]
+OnBootSec=180
+OnUnitActiveSec=900
+[Install]
+WantedBy=timers.target

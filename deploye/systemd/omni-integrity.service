@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI - Integrite logs : maillon quotidien hache+signe + copie hors-SIEM
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-integrity
+# copie hors-SIEM du registre (best-effort) vers le partage SMB des sauvegardes
+ExecStartPost=/bin/bash -c 'M=$(mktemp -d); mount -t cifs "//10.33.50.5/Public" "$M" -o "credentials=/root/.smb-siem.cred,vers=3.0" 2>/dev/null && { mkdir -p "$M/SIEM/integrity"; cp -f /var/lib/omni-integrity/chain.jsonl "$M/SIEM/integrity/"; umount "$M"; }; rmdir "$M" 2>/dev/null || true'
+Nice=10

@@ -1,0 +1,9 @@
+[Unit]
+Description=Rapport hebdomadaire de supervision SIEM OMNITECH
+After=network-online.target graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-weekly-report
+Nice=10

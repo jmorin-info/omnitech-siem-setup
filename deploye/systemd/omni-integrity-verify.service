@@ -1,0 +1,5 @@
+[Unit]
+Description=OMNI - Integrite logs : verification hebdomadaire de la chaine
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-integrity --verify

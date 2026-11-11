@@ -1,0 +1,10 @@
+[Unit]
+Description=OMNI SIEM - Recapitulatif des alertes (lundi et jeudi 08h00)
+
+[Timer]
+OnCalendar=Mon,Thu *-*-* 08:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

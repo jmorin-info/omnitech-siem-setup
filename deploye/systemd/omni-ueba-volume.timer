@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - anomalie de volume (z-score) (timer)
+
+[Timer]
+OnCalendar=*-*-* *:12:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI - Leak ransomlook (quotidien)
+[Timer]
+OnCalendar=*-*-* 07:21:00
+Persistent=true
+[Install]
+WantedBy=timers.target

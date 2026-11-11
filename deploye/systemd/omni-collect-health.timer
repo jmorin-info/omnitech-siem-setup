@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - supervision de collecte horaire
+
+[Timer]
+OnCalendar=*-*-* *:07:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

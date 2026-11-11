@@ -1,0 +1,8 @@
+[Unit]
+Description=Renouvellement automatique du certificat console (CSR -> AD CS via SMB)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-cert-renew

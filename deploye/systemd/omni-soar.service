@@ -1,0 +1,14 @@
+[Unit]
+Description=SOAR-light OMNITECH - blocklist d'IP attaquantes (webhook Graylog)
+After=network-online.target graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/sbin/omni-soar
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

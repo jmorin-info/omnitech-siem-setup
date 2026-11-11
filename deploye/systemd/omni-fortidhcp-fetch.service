@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI - FortiGate DHCP -> attribution IP/MAC/hostname (GELF + lookup CSV)
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-fortidhcp-fetch
+Nice=10

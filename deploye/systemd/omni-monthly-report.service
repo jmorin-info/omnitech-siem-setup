@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - rapport executif mensuel (PDF)
+After=network-online.target graylog-server.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-monthly-report
+Nice=15

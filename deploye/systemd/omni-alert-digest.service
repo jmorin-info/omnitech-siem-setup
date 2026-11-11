@@ -1,0 +1,15 @@
+[Unit]
+Description=OMNI SIEM - Recapitulatif des alertes retenues (non faux positifs)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-alert-digest
+Nice=10
+# Durcissement : le recap lit OpenSearch en local et envoie un mail, rien d'autre.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/omni-alert-triage.env

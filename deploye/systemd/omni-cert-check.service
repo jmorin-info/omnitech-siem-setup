@@ -1,0 +1,7 @@
+[Unit]
+Description=Verification expiration des certificats SIEM
+After=network-online.target graylog-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-cert-check

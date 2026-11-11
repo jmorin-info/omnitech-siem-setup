@@ -1,0 +1,6 @@
+[Unit]
+Description=OMNI - Watchdog fraicheur des sources
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-source-watchdog

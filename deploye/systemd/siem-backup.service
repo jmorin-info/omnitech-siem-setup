@@ -1,0 +1,8 @@
+[Unit]
+Description=Sauvegarde applicative SIEM (Mongo + OpenSearch + configs)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/siem-backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

@@ -1,0 +1,11 @@
+[Unit]
+Description=OMS-XDR - declenche la correlation toutes les 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=oms-xdr.service
+
+[Install]
+WantedBy=timers.target

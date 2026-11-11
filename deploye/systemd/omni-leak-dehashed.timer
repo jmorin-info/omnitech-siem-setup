@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI - Leak dehashed (quotidien)
+[Timer]
+OnCalendar=*-*-* 07:47:00
+Persistent=true
+[Install]
+WantedBy=timers.target

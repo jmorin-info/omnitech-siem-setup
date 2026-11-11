@@ -1,0 +1,8 @@
+[Unit]
+Description=OMNI SIEM - generation des flux geolocalises (carte cyber)
+After=network-online.target graylog-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-geo-flux
+Nice=15

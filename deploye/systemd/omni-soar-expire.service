@@ -1,0 +1,6 @@
+[Unit]
+Description=Expiration des IP de la blocklist SOAR
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/omni-soar-expire

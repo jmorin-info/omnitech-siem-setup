@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - correlation attack-chain (incidents)
+After=network-online.target graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-incident-correlate
+Nice=15

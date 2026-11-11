@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - auto-supervision des robots d'analyse
+After=graylog-server.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-self-health
+Nice=15

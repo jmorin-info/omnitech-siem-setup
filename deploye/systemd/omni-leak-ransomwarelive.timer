@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI - Leak ransomware.live (quotidien)
+[Timer]
+OnCalendar=*-*-* 07:35:00
+Persistent=true
+[Install]
+WantedBy=timers.target

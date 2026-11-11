@@ -1,0 +1,8 @@
+[Unit]
+Description=OMNITECH - test de restauration d'un snapshot OpenSearch (index temporaire supprime ensuite)
+After=opensearch.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/oms-snap-siem --test-restauration
+TimeoutStartSec=1h

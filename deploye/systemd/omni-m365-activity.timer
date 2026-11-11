@@ -1,0 +1,8 @@
+[Unit]
+Description=Declencheur collecte activite M365 (10 min)
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+RandomizedDelaySec=60
+[Install]
+WantedBy=timers.target

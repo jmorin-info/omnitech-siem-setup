@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNITECH - mise a jour hebdomadaire controlee du SIEM (Debian + Graylog/OpenSearch/MongoDB/Logstash)
+After=network-online.target graylog-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/oms-maj-siem
+TimeoutStartSec=3h

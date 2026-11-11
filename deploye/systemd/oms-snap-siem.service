@@ -1,0 +1,11 @@
+[Unit]
+Description=OMNITECH - snapshot OpenSearch selectif et incremental (index critiques du SIEM)
+After=opensearch.service
+Requires=opensearch.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/oms-snap-siem
+TimeoutStartSec=11h
+Nice=10
+IOSchedulingClass=idle

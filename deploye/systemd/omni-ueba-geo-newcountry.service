@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - nouveau pays par compte
+After=network-online.target graylog-server.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-ueba-geo-newcountry
+Nice=15

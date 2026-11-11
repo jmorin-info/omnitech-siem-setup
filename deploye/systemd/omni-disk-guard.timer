@@ -1,0 +1,9 @@
+[Unit]
+Description=Garde-fou disque SIEM toutes les 6 h
+
+[Timer]
+OnCalendar=*-*-* 00/6:45:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - scan de vulnerabilites quotidien
+
+[Timer]
+OnCalendar=*-*-* 07:15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

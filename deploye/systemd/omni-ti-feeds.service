@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI - Refresh feeds threat intel (abuse.ch)
+After=network-online.target
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/omni-ti-feeds
+ExecStart=/usr/local/sbin/omni-ti-feeds

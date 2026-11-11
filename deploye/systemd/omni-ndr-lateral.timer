@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI SIEM - mouvement lateral reussi (timer)
+[Timer]
+OnBootSec=300
+OnUnitActiveSec=1800
+[Install]
+WantedBy=timers.target

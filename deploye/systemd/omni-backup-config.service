@@ -1,0 +1,10 @@
+[Unit]
+Description=Sauvegarde config SIEM OMNITECH (sans logs) vers partage SMB
+After=network-online.target mongod.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /root/omnitech-siem-setup/30-backup-config.sh
+Nice=10
+IOSchedulingClass=idle

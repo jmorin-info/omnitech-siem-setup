@@ -1,0 +1,11 @@
+[Unit]
+Description=OMNI SIEM - verification post-boot (/data TPM + services)
+After=graylog-server.service opensearch.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-postboot-check
+
+[Install]
+WantedBy=multi-user.target
