@@ -23,6 +23,7 @@ SMB_BACKUP_UNC="${SMB_BACKUP_UNC:-//10.33.50.5/Public}"
 SMB_BACKUP_DIR="${SMB_BACKUP_DIR:-SIEM}"
 SMB_CRED_FILE="${SMB_CRED_FILE:-/root/.smb-siem.cred}"
 BACKUP_RETENTION_J="${BACKUP_RETENTION_J:-14}"
+BACKUP_LOCAL_RETENTION_J="${BACKUP_LOCAL_RETENTION_J:-3}"   # OMNITECH 2026-11-11 : copie locale courte (/var), le partage garde 14 j
 WORK=/var/backups/siem
 MNT=/mnt/siem-backup
 GELF_URL="http://127.0.0.1:12201/gelf"
@@ -133,7 +134,7 @@ cp "${ARCH}.enc" "${MNT}/${SMB_BACKUP_DIR}/" || fail "copie vers le partage impo
 
 # --- 5. Retention (distante + locale) -------------------------------------------
 find "${MNT}/${SMB_BACKUP_DIR}" -name 'omni-siem-config_*.tar.gz.enc' -mtime "+${BACKUP_RETENTION_J}" -delete || true
-find "${WORK}" -name 'omni-siem-config_*' -mtime "+${BACKUP_RETENTION_J}" -delete || true
+find "${WORK}" -name 'omni-siem-config_*' -mtime "+${BACKUP_LOCAL_RETENTION_J}" -delete || true
 DIST=$(ls -1 "${MNT}/${SMB_BACKUP_DIR}"/omni-siem-config_*.tar.gz.enc 2>/dev/null | wc -l)
 umount "${MNT}" || true
 
