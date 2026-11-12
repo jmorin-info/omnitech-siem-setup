@@ -1,30 +1,38 @@
 #!/usr/bin/env python3
 # =============================================================================
-# omni-soar-rapport - recapitulatif quotidien du SOAR par mail (08:05)
-# Contenu : IP bloquees sur 24 h (detection, occurrences, pays, expiration), IP qui auraient
-# ete bloquees mais sont exclues (collaborateurs, partenaires...), blocages actifs, deblocage.
-# Destinataire : SOAR_MAIL_TO (/etc/omni-soar/soar.env). Relais : SMTP_HOST/SMTP_FROM de
-# /etc/omni-alert-triage.env. Aucun mail si rien ne s'est passe et qu'aucune IP n'est bloquee.
-#   omni-soar-rapport --test   : affiche le mail sans l'envoyer
+# omni-soar-rapport (v3 12/11/2026) - recapitulatif quotidien du SOAR par mail (08:05)
+# Mail HTML au gabarit des mails SIEM OMNITECH (meme charte que omni-alert-lot) + version texte.
+# Contenu : nouveaux blocages 24 h, IP exclues (non bloquees), simulation, deblocages, blocages actifs.
+# Destinataire : SOAR_MAIL_TO (/etc/omni-soar/soar.env). Relais : SMTP_* de /etc/omni-alert-triage.env.
+# Aucun mail si rien ne s'est passe et qu'aucune IP n'est bloquee.
+#   omni-soar-rapport --test           : affiche sujet + version texte, sans envoyer
+#   omni-soar-rapport --html FICHIER   : ecrit la version HTML dans FICHIER, sans envoyer
+#   omni-soar-rapport --apercu ADRESSE : envoie le mail a ADRESSE seulement, sujet prefixe [APERCU]
 # =============================================================================
-import json, re, smtplib, sys, time
-from email.mime.text import MIMEText
-from email.header import Header
+import html, json, re, smtplib, sys, time, urllib.parse
+from email.message import EmailMessage
+from email.utils import formatdate, formataddr, make_msgid
 
 def env(f):
     e = {}
     try:
-        for line in open(f):
+        for line in open(f, encoding="utf-8"):
             m = re.match(r"\s*([A-Z_]+)=(.*)", line)
             if m: e[m.group(1)] = m.group(2).strip().strip("'").strip('"')
     except OSError: pass
     return e
 
+def arg(nom):
+    if nom in sys.argv:
+        i = sys.argv.index(nom)
+        return sys.argv[i + 1] if i + 1 < len(sys.argv) else ""
+    return None
+
 s = env("/etc/omni-soar/soar.env"); t = env("/etc/omni-alert-triage.env")
 now = time.time(); depuis = now - 86400
 dec = []
 try:
-    for line in open("/var/log/omni-soar/decisions.log"):
+    for line in open("/var/log/omni-soar/decisions.log", encoding="utf-8"):
         try:
             x = json.loads(line)
             if time.mktime(time.strptime(x["t"][:19], "%Y-%m-%dT%H:%M:%S")) >= depuis: dec.append(x)
@@ -38,39 +46,255 @@ act = {i: x for i, x in bl.items() if x > now}
 bloq = [x for x in dec if x["action"] in ("ip_bloquee", "ip_bloquee_manuel")]
 excl = {}
 for x in dec:
-    if x["action"] == "ip_exclue": excl.setdefault(x["ip"], x)
+    if x["action"] == "ip_exclue":
+        excl.setdefault(x["ip"], dict(x, n=0))["n"] += 1
 simu = [x for x in dec if x["action"] == "simulation"]
 deb = [x for x in dec if x["action"] == "ip_debloquee"]
-if not (bloq or excl or simu or deb or act) and "--test" not in sys.argv:
+
+TEST, HTMLF, APERCU = "--test" in sys.argv, arg("--html"), arg("--apercu")
+if not (bloq or excl or simu or deb or act) and not (TEST or HTMLF or APERCU):
     sys.exit(0)
-L = [f"SOAR OMNITECH - recapitulatif du {time.strftime('%d/%m/%Y %H:%M')} (24 dernieres heures)", "",
-     f"Mode : {s.get('SOAR_MODE', 'actif')}   |   IP bloquees actuellement sur les FortiGate Bordeaux + Ivry : {len(act)}", ""]
-L.append(f"Nouveaux blocages (24 h) : {len(bloq)}")
-for x in bloq:
-    L.append(f"  - {x['ip']:16} {x.get('pays',''):3} {x.get('hits','')!s:>4} occurrences  {x.get('detection', x.get('par',''))}  (TTL {x.get('ttl_h',24)} h)")
+
+# ---------------------------------------------------------------- mise en forme
+esc = lambda v: html.escape(str(v if v is not None else ""))
+INK, BODY, MUT, LAB, LINE, BOX, BG = "#101828", "#344054", "#667085", "#475467", "#eaecf0", "#f9fafb", "#f2f4f7"
+ACC, RED, GRN, AMB = "#175cd3", "#b42318", "#067647", "#b54708"
+MONO = "Consolas,'SF Mono',Menlo,monospace"
+JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+PAYS = {"FR": "France", "BE": "Belgique", "CH": "Suisse", "DE": "Allemagne", "BG": "Bulgarie", "NL": "Pays-Bas", "GB": "Royaume-Uni",
+        "IE": "Irlande", "US": "États-Unis", "CA": "Canada", "CN": "Chine", "RU": "Russie", "IT": "Italie", "ES": "Espagne", "PT": "Portugal",
+        "PL": "Pologne", "RO": "Roumanie", "UA": "Ukraine", "SG": "Singapour", "HK": "Hong Kong", "IN": "Inde", "BR": "Brésil", "VN": "Viêt Nam",
+        "KR": "Corée du Sud", "JP": "Japon", "TW": "Taïwan", "SE": "Suède", "FI": "Finlande", "NO": "Norvège", "DK": "Danemark", "LT": "Lituanie",
+        "LV": "Lettonie", "EE": "Estonie", "SC": "Seychelles", "IR": "Iran", "TR": "Turquie", "ID": "Indonésie", "LU": "Luxembourg",
+        "AT": "Autriche", "CZ": "Tchéquie", "HU": "Hongrie", "MA": "Maroc", "TN": "Tunisie", "DZ": "Algérie", "ZA": "Afrique du Sud",
+        "AU": "Australie", "MX": "Mexique", "AR": "Argentine", "IL": "Israël", "AE": "Émirats arabes unis", "MD": "Moldavie", "RS": "Serbie"}
+
+def pays(c):
+    c = (c or "").upper()
+    return PAYS.get(c, c) if c else "—"
+
+def plur(n, sg, pl):
+    return f"{n} {sg if n <= 1 else pl}"
+
+def detec(d):
+    """'OMNI - WAF : IP attaquante (>=20 blocages / IP / 6h) -> SOAR' -> ('WAF : IP attaquante', '≥ 20 blocages par IP en 6 h')"""
+    d = re.sub(r"^\s*OMNI\s*-\s*", "", d or ""); d = re.sub(r"\s*->\s*SOAR\s*$", "", d)
+    m = re.search(r"\s*\(([^()]*)\)\s*$", d); seuil = ""
+    if m:
+        seuil, d = m.group(1), d[:m.start()]
+        seuil = re.sub(r">=\s*", "≥ ", seuil)
+        seuil = re.sub(r"\s*/\s*IP\s*/\s*(\d+)\s*h\b", r" par IP en \1 h", seuil)
+        if "404" in d: seuil = re.sub(r"^≥ (\d+) par IP", r"≥ \1 erreurs 404 par IP", seuil)
+    return (d.strip() or "—"), seuil.strip()
+
+def motif(m):
+    """'VPN reussi (198x, x@y)' -> 'VPN réussi (198 fois, x@y)'"""
+    m = re.sub(r"\breussi(e?)\b", r"réussi\1", m or "")
+    return re.sub(r"\((\d+)x\b", r"(\1 fois", m)
+
+def par_txt(p):
+    return re.sub(r"^soc:", "console SOC · ", p or "") or "—"
+
+def ts_iso(v):
+    try: return time.mktime(time.strptime(v[:19], "%Y-%m-%dT%H:%M:%S"))
+    except Exception: return None
+
+def hm(e):
+    return time.strftime("%d/%m %H:%M", time.localtime(e)) if e else "—"
+
+def dans(e):
+    r = e - now
+    if r < 3600: return f"dans {max(1, int(r / 60))} min"
+    if r < 48 * 3600: return f"dans {round(r / 3600)} h"
+    return f"dans {round(r / 86400)} j"
+
+SOC = t.get("OMNI_SOC_URL", "https://bx-it-graylog-vm.omnitech.security/soc/")
+GL = re.sub(r"/soc/?$", "", SOC)
+def gl(q, sec=604800):
+    return GL + "/search?" + urllib.parse.urlencode({"q": q, "rangetype": "relative", "relative": sec})
+
+def ip_cell(ip):
+    return (f'<a href="{esc(gl(chr(34) + ip + chr(34)))}" style="color:{ACC};text-decoration:none;font-family:{MONO};font-size:12.5px;'
+            f'white-space:nowrap" title="Historique 7 j dans Graylog">{esc(ip)}</a>')
+
+def det_cell(d):
+    titre, seuil = detec(d)
+    return (f'<div style="color:{INK};font-size:12.5px">{esc(titre)}</div>'
+            + (f'<div style="color:{MUT};font-size:11.5px;margin-top:1px">{esc(seuil)}</div>' if seuil else ""))
+
+def muted(v, nowrap=True):
+    return f'<span style="color:{MUT};font-size:12px{";white-space:nowrap" if nowrap else ""}">{esc(v)}</span>'
+
+def tableau(entetes, lignes):
+    th = "".join(f'<th align="{a}" style="padding:0 8px 6px;font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;'
+                 f'color:{MUT};border-bottom:1px solid {LINE};white-space:nowrap">{esc(h)}</th>' for h, a in entetes)
+    tr = "".join("<tr>" + "".join(f'<td align="{entetes[k][1]}" valign="top" style="padding:8px;border-bottom:1px solid {LINE};'
+                                   f'font-size:12.5px;color:{BODY}">{c}</td>' for k, c in enumerate(l)) + "</tr>" for l in lignes)
+    return (f'<tr><td style="padding:0 24px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'style="border-collapse:collapse"><tr>{th}</tr>{tr}</table></td></tr>')
+
+def section(titre, n, sous, couleur):
+    return (f'<tr><td style="padding:26px 32px 10px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+            f'<td style="width:3px;background:{couleur};border-radius:2px">&nbsp;</td>'
+            f'<td style="padding-left:10px"><div style="font-size:15px;font-weight:600;color:{INK}">{esc(titre)}'
+            f'<span style="font-weight:400;color:{MUT}"> · {n}</span></div>'
+            f'<div style="font-size:12px;color:{MUT};margin-top:2px">{esc(sous)}</div></td></tr></table></td></tr>')
+
+def vide(texte):
+    return f'<tr><td style="padding:0 32px 4px;font-size:12.5px;color:{MUT}">{esc(texte)}</td></tr>'
+
+def kpi(val, lab, col):
+    return (f'<td width="25%" valign="top" style="padding:0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'style="background:{BOX};border:1px solid {LINE};border-radius:10px"><tr><td align="center" style="padding:14px 6px 12px">'
+            f'<div style="font-size:26px;font-weight:700;line-height:1.1;color:{col if val else MUT}">{val}</div>'
+            f'<div style="font-size:11.5px;color:{LAB};margin-top:5px;line-height:1.3">{esc(lab)}</div></td></tr></table></td>')
+
+def bouton(lien, texte, plein):
+    st = (f"background:{ACC};color:#ffffff;border:1px solid {ACC}" if plein else f"background:#ffffff;color:{ACC};border:1px solid #b2ccff")
+    return (f'<td style="padding:0 8px 0 0"><a href="{esc(lien)}" style="display:inline-block;{st};border-radius:8px;padding:9px 16px;'
+            f'font-size:13px;font-weight:600;text-decoration:none">{esc(texte)}</a></td>')
+
+mode = s.get("SOAR_MODE", "actif")
+simulation = mode.lower().startswith("simu")
+lt = time.localtime(now)
+date_longue = f"{JOURS[lt.tm_wday].capitalize()} {lt.tm_mday} {MOIS[lt.tm_mon - 1]} {lt.tm_year}"
+puce = (f'<span style="display:inline-block;background:#fffaeb;color:{AMB};border:1px solid #fedf89;border-radius:999px;padding:3px 10px;'
+        f'font-size:11.5px;font-weight:600">Mode simulation · aucun blocage appliqué</span>') if simulation else (
+        f'<span style="display:inline-block;background:#ecfdf3;color:{GRN};border:1px solid #abefc6;border-radius:999px;padding:3px 10px;'
+        f'font-size:11.5px;font-weight:600">Blocage actif · FortiGate Bordeaux et Ivry</span>')
+
+# --- nouveaux blocages
+lignes_b = []
+for x in sorted(bloq, key=lambda x: x.get("t", "")):
+    debut = ts_iso(x.get("t", "")); fin = bl.get(x["ip"]) or ((debut or now) + 3600 * float(x.get("ttl_h", 24) or 24))
+    par = "" if x["action"] == "ip_bloquee" else f'<div style="font-size:11.5px;color:{MUT}">manuel · {esc(x.get("par", ""))}</div>'
+    lignes_b.append([ip_cell(x["ip"]), muted(pays(x.get("pays"))), det_cell(x.get("detection", x.get("par", ""))) + par,
+                     f'<b style="color:{INK}">{esc(x.get("hits", "—"))}</b>',
+                     f'<span style="white-space:nowrap">{hm(debut)}</span><div style="font-size:11.5px;color:{MUT};white-space:nowrap">jusqu\'au {hm(fin)}</div>'])
+# --- simulation
+lignes_s = [[ip_cell(x["ip"]), muted(pays(x.get("pays"))), det_cell(x.get("detection", "")), f'<b style="color:{INK}">{esc(x.get("hits", "—"))}</b>',
+             muted(hm(ts_iso(x.get("t", "")))) ] for x in simu]
+# --- exclusions
+lignes_e = [[ip_cell(ip), det_cell(x.get("detection", "")),
+             f'<span style="color:{GRN}">{esc(motif(x.get("motif", "")))}</span>'
+             + (f'<div style="font-size:11.5px;color:{MUT}">{plur(x["n"], "détection ignorée", "détections ignorées")}</div>' if x["n"] > 1 else "")]
+            for ip, x in list(excl.items())[:40]]
+# --- deblocages
+lignes_d = [[ip_cell(x["ip"]), esc(par_txt(x.get("par", ""))),muted(hm(ts_iso(x.get("t", ""))))] for x in deb[:60]]
+# --- actifs
+lignes_a = []
+for ip, fin in sorted(act.items(), key=lambda kv: kv[1]):
+    m = meta.get(ip, {})
+    lignes_a.append([ip_cell(ip), muted(pays(m.get("pays"))),
+                     det_cell(m["detection"]) if m.get("detection") else muted("détection antérieure à la v2", False),
+                     f'<span style="white-space:nowrap">{hm(fin)}</span><div style="font-size:11.5px;color:{MUT};white-space:nowrap">{dans(fin)}</div>'])
+
+corps = []
+corps.append(section("Nouveaux blocages", len(bloq), "IP bloquées automatiquement sur les deux pare-feu au cours des dernières 24 h", RED))
+corps.append(tableau([("Adresse IP", "left"), ("Pays", "left"), ("Détection", "left"), ("Occ.", "right"), ("Bloquée", "left")], lignes_b)
+             if lignes_b else vide("Aucun nouveau blocage sur la période."))
 if simu:
-    L.append(""); L.append(f"Aurait ete bloque (mode simulation) : {len(simu)}")
-    for x in simu: L.append(f"  - {x['ip']:16} {x.get('pays',''):3} {x.get('hits','')!s:>4}  {x.get('detection','')}")
-L.append(""); L.append(f"Detections NON bloquees car IP exclue (collaborateur, partenaire, site...) : {len(excl)}")
-for ip, x in list(excl.items())[:40]:
-    L.append(f"  - {ip:16} {x.get('detection','')}  -> exclue : {x.get('motif','')}")
+    corps.append(section("Auraient été bloquées", len(simu), "Mode simulation : détections qui auraient déclenché un blocage", AMB))
+    corps.append(tableau([("Adresse IP", "left"), ("Pays", "left"), ("Détection", "left"), ("Occ.", "right"), ("Heure", "left")], lignes_s))
+corps.append(section("Détections non bloquées", len(excl), "IP connues (collaborateur, partenaire, site) : protégées par la liste d'exclusion", GRN))
+corps.append(tableau([("Adresse IP", "left"), ("Détection", "left"), ("Raison de l'exclusion", "left")], lignes_e)
+             if lignes_e else vide("Aucune détection sur une IP exclue."))
+if len(excl) > 40: corps.append(vide(f"… et {len(excl) - 40} autre(s), visibles dans la console SOC."))
 if deb:
-    L.append(""); L.append(f"Deblocages manuels : {', '.join(x['ip'] + ' (' + x.get('par','') + ')' for x in deb)}")
-if act:
-    L.append(""); L.append("Blocages actifs (expiration) :")
-    for i, x in sorted(act.items(), key=lambda kv: kv[1]):
-        m = meta.get(i, {})
-        L.append(f"  - {i:16} jusqu'a {time.strftime('%d/%m %H:%M', time.localtime(x))}  {m.get('detection','')}")
-L += ["", "Debloquer une IP (effet en 2 min) : sur BX-IT-GRAYLOG-VM, sudo omni-soar-debloquer <ip>",
-      "Debloquer + ne plus jamais bloquer : sudo omni-soar-debloquer <ip> --exclure \"motif\"",
-      "Liste : sudo omni-soar-debloquer --liste   |   Graylog : event_source:siem_soar"]
-corps = "\n".join(L)
-dest = s.get("SOAR_MAIL_TO", "")
-if "--test" in sys.argv or not dest:
-    print(corps); sys.exit(0)
-msg = MIMEText(corps, "plain", "utf-8")
-msg["Subject"] = Header(f"{t.get('SMTP_SUBJECT_PREFIX', '[SIEM OMNITECH]')} [INFO] SOAR : {len(bloq)} blocage(s), {len(excl)} exclusion(s), {len(act)} actif(s)", "utf-8")
-msg["From"] = t.get("SMTP_FROM", "no-reply@omnitech-security.fr"); msg["To"] = dest
+    corps.append(section("Déblocages manuels", len(deb), "IP retirées de la liste de blocage à la main ou depuis la console", ACC))
+    corps.append(tableau([("Adresse IP", "left"), ("Par / motif", "left"), ("Heure", "left")], lignes_d))
+corps.append(section("Blocages en cours", len(act), "Liste lue toutes les 2 minutes par BX-FW02 et IV-FW01, triée par expiration", LAB))
+corps.append(tableau([("Adresse IP", "left"), ("Pays", "left"), ("Détection", "left"), ("Expiration", "left")], lignes_a)
+             if lignes_a else vide("Aucune IP bloquée actuellement."))
+
+code = lambda c: (f'<code style="font-family:{MONO};font-size:12px;background:#ffffff;border:1px solid {LINE};border-radius:4px;'
+                  f'padding:2px 6px;color:{INK};white-space:nowrap">{esc(c)}</code>')
+actions = (f'<tr><td style="padding:28px 24px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+           f'style="background:{BOX};border:1px solid {LINE};border-radius:10px"><tr><td style="padding:16px 18px">'
+           f'<div style="font-size:13px;font-weight:600;color:{INK};margin-bottom:8px">Une IP légitime a été bloquée ?</div>'
+           f'<table role="presentation" cellpadding="0" cellspacing="0" style="font-size:12.5px;color:{BODY}">'
+           f'<tr><td style="padding:3px 12px 3px 0;white-space:nowrap">Débloquer (effet sous 2 min)</td><td style="padding:3px 0">{code("sudo omni-soar-debloquer <ip>")}</td></tr>'
+           f'<tr><td style="padding:3px 12px 3px 0;white-space:nowrap">Débloquer et ne plus bloquer</td><td style="padding:3px 0">{code("sudo omni-soar-debloquer <ip> --exclure " + chr(34) + "motif" + chr(34))}</td></tr>'
+           f'<tr><td style="padding:3px 12px 3px 0;white-space:nowrap">Lister les blocages</td><td style="padding:3px 0">{code("sudo omni-soar-debloquer --liste")}</td></tr>'
+           f'</table><div style="font-size:11.5px;color:{MUT};margin-top:8px">À lancer sur BX-IT-GRAYLOG-VM, ou depuis la page SOAR de la console SOC.</div>'
+           f'</td></tr></table></td></tr>'
+           f'<tr><td style="padding:18px 24px 0"><table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+           f'{bouton(SOC, "Ouvrir la console SOC", True)}{bouton(gl("event_source:siem_soar", 86400), "Décisions SOAR dans Graylog", False)}'
+           f'</tr></table></td></tr>')
+
+page = (f'<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        f'<meta name="color-scheme" content="light"><title>SOAR OMNITECH</title></head>'
+        f'<body style="margin:0;padding:0;background:{BG};font-family:-apple-system,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;color:{BODY}">'
+        f'<div style="display:none;max-height:0;overflow:hidden;color:{BG}">{esc(plur(len(bloq), "nouveau blocage", "nouveaux blocages"))}, '
+        f'{esc(plur(len(act), "IP bloquée", "IP bloquées"))} en ce moment, {esc(plur(len(excl), "détection ignorée", "détections ignorées"))} (IP connues).</div>'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{BG}"><tr><td align="center" style="padding:24px 10px">'
+        f'<table role="presentation" width="680" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;background:#ffffff;'
+        f'border:1px solid #e4e7ec;border-top:3px solid {ACC};border-radius:12px">'
+        # en-tete
+        f'<tr><td style="padding:26px 32px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+        f'<td style="font-size:11px;font-weight:600;letter-spacing:1.6px;color:{LAB};text-transform:uppercase">SIEM OMNITECH · SOAR</td>'
+        f'<td align="right">{puce}</td></tr></table>'
+        f'<div style="font-size:22px;font-weight:700;color:{INK};margin-top:14px">Récapitulatif quotidien</div>'
+        f'<div style="font-size:13px;color:{MUT};margin-top:4px">{esc(date_longue)} · activité des 24 dernières heures (depuis {hm(depuis)})</div>'
+        f'</td></tr>'
+        # indicateurs
+        f'<tr><td style="padding:20px 28px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+        f'{kpi(len(bloq), "nouveaux blocages", RED)}{kpi(len(act), "IP bloquées en ce moment", INK)}'
+        f'{kpi(len(excl), "détections non bloquées (IP connues)", GRN)}{kpi(len(deb), "déblocages manuels", ACC)}'
+        f'</tr></table></td></tr>'
+        + "".join(corps) + actions +
+        # pied
+        f'<tr><td style="padding:26px 32px 24px"><div style="border-top:1px solid {LINE};padding-top:14px;font-size:11.5px;color:{MUT};line-height:1.5">'
+        f'Mail automatique du SIEM OMNITECH (BX-IT-GRAYLOG-VM), envoyé chaque jour à 08:05 s\'il y a de l\'activité ou des blocages en cours. '
+        f'Les blocages expirent d\'eux-mêmes. Les adresses IP ouvrent leur historique de 7 jours dans Graylog. Merci de ne pas répondre à ce message.'
+        f'</div></td></tr>'
+        f'</table></td></tr></table></body></html>')
+
+# ---------------------------------------------------------------- version texte
+def ligne_txt(*cols):
+    return "  " + "  ".join(cols)
+T = [f"SIEM OMNITECH - SOAR - Récapitulatif quotidien", f"{date_longue}, activité des 24 dernières heures", "",
+     f"Mode : {'SIMULATION (aucun blocage appliqué)' if simulation else 'actif, FortiGate Bordeaux et Ivry'}",
+     f"Nouveaux blocages : {len(bloq)}   |   IP bloquées en ce moment : {len(act)}   |   Détections non bloquées : {len(excl)}   |   Déblocages : {len(deb)}", ""]
+T.append(f"NOUVEAUX BLOCAGES ({len(bloq)})")
+for x in bloq:
+    ti, se = detec(x.get("detection", x.get("par", "")))
+    T.append(ligne_txt(f"{x['ip']:16}", f"{pays(x.get('pays')):12}", f"{str(x.get('hits', '')):>4} occ.", f"{ti}" + (f" ({se})" if se else "")))
+if not bloq: T.append("  aucun")
+if simu:
+    T += ["", f"AURAIENT ÉTÉ BLOQUÉES - SIMULATION ({len(simu)})"]
+    for x in simu: T.append(ligne_txt(f"{x['ip']:16}", f"{pays(x.get('pays')):12}", detec(x.get("detection", ""))[0]))
+T += ["", f"DÉTECTIONS NON BLOQUÉES, IP CONNUES ({len(excl)})"]
+for ip, x in list(excl.items())[:40]: T.append(ligne_txt(f"{ip:16}", detec(x.get("detection", ""))[0], f"-> {motif(x.get('motif', ''))}"))
+if not excl: T.append("  aucune")
+if deb:
+    T += ["", f"DÉBLOCAGES MANUELS ({len(deb)})"]
+    for x in deb: T.append(ligne_txt(f"{x['ip']:16}", par_txt(x.get("par", ""))))
+T += ["", f"BLOCAGES EN COURS ({len(act)})"]
+for ip, fin in sorted(act.items(), key=lambda kv: kv[1]):
+    T.append(ligne_txt(f"{ip:16}", f"jusqu'au {hm(fin)} ({dans(fin)})", detec(meta.get(ip, {}).get("detection", ""))[0]))
+if not act: T.append("  aucun")
+T += ["", "Débloquer une IP (effet sous 2 min), sur BX-IT-GRAYLOG-VM : sudo omni-soar-debloquer <ip>",
+      "Débloquer et ne plus bloquer : sudo omni-soar-debloquer <ip> --exclure \"motif\"",
+      "Lister : sudo omni-soar-debloquer --liste", f"Console SOC : {SOC}", "Graylog : event_source:siem_soar"]
+txt = "\n".join(T)
+
+pfx = t.get("SMTP_SUBJECT_PREFIX", "[SIEM OMNITECH]")
+sujet = (f"{pfx} [INFO] SOAR : {plur(len(bloq), 'nouveau blocage', 'nouveaux blocages')} · {plur(len(act), 'IP bloquée', 'IP bloquées')}"
+         f" · {plur(len(excl), 'exclusion', 'exclusions')}{' · SIMULATION' if simulation else ''} ({time.strftime('%d/%m', lt)})")
+
+if HTMLF is not None:
+    open(HTMLF or "/dev/stdout", "w", encoding="utf-8").write(page); print(f"HTML écrit : {HTMLF} ({len(page)} octets)", file=sys.stderr); sys.exit(0)
+dest = [x.strip() for x in (APERCU or s.get("SOAR_MAIL_TO", "")).split(",") if x.strip()]
+if TEST or not dest:
+    print(sujet); print(); print(txt); sys.exit(0)
+frm = t.get("SMTP_FROM", "no-reply@omnitech-security.fr")
+msg = EmailMessage()
+msg["Subject"] = ("[APERÇU] " if APERCU else "") + sujet
+msg["From"] = formataddr(("SIEM OMNITECH", frm)); msg["To"] = ", ".join(dest)
+msg["Date"] = formatdate(localtime=True); msg["Message-ID"] = make_msgid(domain=frm.split("@")[-1])
+msg.set_content(txt); msg.add_alternative(page, subtype="html")
 with smtplib.SMTP(t.get("SMTP_HOST", "smtp-internal.omnitech-security.fr"), int(t.get("SMTP_PORT", "25")), timeout=30) as c:
-    c.sendmail(msg["From"], [x.strip() for x in dest.split(",") if x.strip()], msg.as_string())
-print(f"rapport SOAR envoye ({len(bloq)} blocages, {len(excl)} exclusions, {len(act)} actifs)")
+    c.send_message(msg, from_addr=frm, to_addrs=dest)
+print(f"rapport SOAR envoyé à {', '.join(dest)} ({len(bloq)} blocages, {len(excl)} exclusions, {len(act)} actifs)")

@@ -1,7 +1,11 @@
 # Changelog — SIEM OMNITECH
 
 All notable changes to the platform. Format: date — change.
-*Last review: 2026-11-11.*
+*Last review: 2026-11-12.*
+## 2026-11-12 (SOAR, backups)
+- SOAR: the hit count of a blocked IP now uses the value computed by Graylog (`count()`) instead of a fixed value derived from the backlog. No blocking decision changes.
+- SOAR: daily summary e-mail in HTML (indicators, per-section tables, links to each IP's history in Graylog, unblock commands), with a plain-text fallback.
+- Configuration, certificate and integrity-chain backups moved to the IT share (`SIEM-Sauvegardes`, dedicated service account); the guest-access fallback is removed.
 
 ## 2026-11-11 (stack, v3 detection, alert triage, SOAR, console)
 - Stack updated (Graylog 7.1.12, OpenSearch 2.19.7, MongoDB 8.0.38, Logstash 8.19.25) and weekly automatic updates inside pinned series (`oms-maj-siem`).

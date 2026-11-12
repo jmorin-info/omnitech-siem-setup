@@ -5,5 +5,5 @@ After=network-online.target
 Type=oneshot
 ExecStart=/usr/local/sbin/omni-integrity
 # copie hors-SIEM du registre (best-effort) vers le partage SMB des sauvegardes
-ExecStartPost=/bin/bash -c 'M=$(mktemp -d); mount -t cifs "//10.33.50.5/Public" "$M" -o "credentials=/root/.smb-siem.cred,vers=3.0" 2>/dev/null && { mkdir -p "$M/SIEM/integrity"; cp -f /var/lib/omni-integrity/chain.jsonl "$M/SIEM/integrity/"; umount "$M"; }; rmdir "$M" 2>/dev/null || true'
+ExecStartPost=/bin/bash -c 'M=$(mktemp -d); mount -t cifs "//10.33.50.5/Informatique" "$M" -o "credentials=/root/.smb-siem-backup.cred,vers=3.0" 2>/dev/null && { mkdir -p "$M/SIEM-Sauvegardes/integrity"; cp -f /var/lib/omni-integrity/chain.jsonl "$M/SIEM-Sauvegardes/integrity/"; umount "$M"; }; rmdir "$M" 2>/dev/null || true'
 Nice=10

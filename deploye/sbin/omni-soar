@@ -108,24 +108,35 @@ def motif_exclusion(ip, ips, nets, wl):
         if a in n: return m
     return None
 
+AGG = re.compile(r"\b[a-z_]+\([^)]*\)\s*=\s*(\d+(?:\.\d+)?)")
+
 def extract(payload):
-    """IP candidates + pays (si present dans le backlog)."""
+    """IP candidates + nombre d'occurrences + pays.
+    12/11/2026 : l'occurrence vient de la valeur d'agregation Graylog (message de l'evenement,
+    ex. '... : 79.124.58.82 - count()=503.0') quand l'evenement est groupe sur UNE IP. Avant, chaque
+    message du backlog etait compte 2 fois (champs + message) + evenement + key_tuple, soit toujours
+    22 avec un backlog de 10. Sans agregation : nombre de messages du backlog contenant l'IP (1 par message)."""
     c, pays = Counter(), {}
-    def scan(d):
+    def scan(d, vus):
         if not isinstance(d, dict): return
         for key in ("remip", "src_ip", "srcip"):
             v = d.get(key)
             if v not in (None, "", "-"):
-                v = str(v); c[v] += 1
+                v = str(v)
+                if v not in vus: vus.add(v); c[v] += 1
                 cc = d.get(key + "_country_code") or d.get("src_country")
                 if cc: pays[v] = str(cc).upper()
     for m in (payload.get("backlog") or []):
         if isinstance(m, dict):
-            scan(m); scan(m.get("fields")); scan(m.get("message"))
+            vus = set(); scan(m, vus); scan(m.get("fields"), vus); scan(m.get("message"), vus)
     ev = payload.get("event") or {}
-    scan(ev.get("fields"))
-    for v in (ev.get("key_tuple") or []):
-        if isinstance(v, str) and is_public(v): c[v] += 1
+    scan(ev.get("fields"), set(c))                      # pays seulement si l'IP est deja comptee
+    cles = [v for v in (ev.get("key_tuple") or []) if isinstance(v, str) and is_public(v)]
+    agg = AGG.search(str(ev.get("message") or ""))
+    if agg and len(cles) == 1:
+        c[cles[0]] = int(float(agg.group(1)))
+    else:
+        for v in cles: c[v] = max(c[v], 1)
     return c, pays
 
 class Handler(BaseHTTPRequestHandler):

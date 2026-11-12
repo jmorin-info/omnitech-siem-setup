@@ -1,7 +1,11 @@
 # Journal des modifications — SIEM OMNITECH
 
 Toutes les évolutions notables du dispositif. Format : date — changement.
-*Dernière revue : 2026-11-11.*
+*Dernière revue : 2026-11-12.*
+## 2026-11-12 (SOAR, sauvegardes)
+- SOAR : le nombre d'occurrences d'une IP bloquée reprend la valeur calculée par Graylog (`count()`), au lieu d'une valeur fixe tirée du backlog. Aucune décision de blocage ne change.
+- SOAR : récapitulatif quotidien en HTML (indicateurs, tableaux par section, liens vers l'historique de chaque IP dans Graylog, commandes de déblocage), avec une version texte de secours.
+- Sauvegardes de configuration, certificats et chaîne d'intégrité déplacées vers le partage Informatique (`SIEM-Sauvegardes`, compte de service dédié) ; le repli en accès invité est supprimé.
 
 ## 2026-11-11 (socle, détection v3, tri des alertes, SOAR, console)
 - Socle mis à jour (Graylog 7.1.12, OpenSearch 2.19.7, MongoDB 8.0.38, Logstash 8.19.25) et mises à jour automatiques hebdomadaires dans des séries épinglées (`oms-maj-siem`).

@@ -19,9 +19,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 . ./00-vars.env
 
-SMB_BACKUP_UNC="${SMB_BACKUP_UNC:-//10.33.50.5/Public}"
-SMB_BACKUP_DIR="${SMB_BACKUP_DIR:-SIEM}"
-SMB_CRED_FILE="${SMB_CRED_FILE:-/root/.smb-siem.cred}"
+SMB_BACKUP_UNC="${SMB_BACKUP_UNC:-//10.33.50.5/Informatique}"
+SMB_BACKUP_DIR="${SMB_BACKUP_DIR:-SIEM-Sauvegardes}"
+SMB_CRED_FILE="${SMB_CRED_FILE:-/root/.smb-siem-backup.cred}"
 BACKUP_RETENTION_J="${BACKUP_RETENTION_J:-14}"
 BACKUP_LOCAL_RETENTION_J="${BACKUP_LOCAL_RETENTION_J:-3}"   # OMNITECH 2026-11-11 : copie locale courte (/var), le partage garde 14 j
 WORK=/var/backups/siem
@@ -120,14 +120,10 @@ echo "[+] restaurabilite verifiee : ${VENTRIES} entrees ; streams+pipelines+regl
 
 # --- 4. Export SMB ---------------------------------------------------------------
 if ! mountpoint -q "${MNT}"; then
-  if [[ -f "${SMB_CRED_FILE}" ]]; then
+  [[ -f "${SMB_CRED_FILE}" ]] || fail "fichier d'identifiants ${SMB_CRED_FILE} absent (repli invite supprime le 2026-11-11)"
     mount -t cifs "${SMB_BACKUP_UNC}" "${MNT}" \
       -o "credentials=${SMB_CRED_FILE},iocharset=utf8,vers=3.0" \
       || fail "montage SMB ${SMB_BACKUP_UNC} impossible (credentials)"
-  else
-    mount -t cifs "${SMB_BACKUP_UNC}" "${MNT}" -o "guest,iocharset=utf8,vers=3.0" \
-      || fail "montage SMB ${SMB_BACKUP_UNC} impossible (guest refuse ? creer ${SMB_CRED_FILE})"
-  fi
 fi
 mkdir -p "${MNT}/${SMB_BACKUP_DIR}"
 cp "${ARCH}.enc" "${MNT}/${SMB_BACKUP_DIR}/" || fail "copie vers le partage impossible"
