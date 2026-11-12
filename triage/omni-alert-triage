@@ -1062,6 +1062,12 @@ def _mail_html(titre, level, color, ctx, site, g, soc, why, fp_link="", block_li
                 f'<div style="background:{BOX};border-left:2px solid #f79009;border-radius:0 6px 6px 0;padding:9px 14px">{lignes}'
                 f'<div style="font-size:11px;color:{MUT};margin-top:8px">'
                 f'{_esc(ctx.get("velocite", "?"))} types d\'alertes distincts sur la même entité dans la fenêtre.</div></div></td></tr>')
+    hist = ""; h7 = ctx.get("hist7") or []   # v2-20261111
+    if h7:
+        lh = "".join(f'<div style="font-size:12px;color:{BODY};padding:3px 0;border-bottom:1px solid {LINE}"><b style="color:{INK}">{n}&times;</b>&nbsp; {_esc(tt)}</div>' for tt, n in h7)
+        hist = (f'<tr><td style="padding:18px 32px 0"><div style="font-size:11px;color:{LAB};font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px">'
+                f'Historique de cette entité sur 7 jours ({_esc(ctx.get("hist7_total", 0))} alertes triées)</div>'
+                f'<div style="background:{BOX};border-left:2px solid #98a2b3;border-radius:0 6px 6px 0;padding:9px 14px">{lh}</div></td></tr>')
     guide = ""
     if g:
         def blk(lab, txt):
@@ -1095,7 +1101,7 @@ def _mail_html(titre, level, color, ctx, site, g, soc, why, fp_link="", block_li
             f'<tr><td style="padding:0 32px"><div style="border-top:1px solid {LINE};font-size:0;line-height:0">&nbsp;</div></td></tr>'
             f'{meta}{summary}'
             f'<tr><td style="padding:16px 32px 2px"><table role="presentation" cellpadding="0" cellspacing="0" width="100%">{facts}</table></td></tr>'
-            f'{corr}{events}{guide}'
+            f'{corr}{hist}{events}{guide}'
             f'<tr><td style="padding:22px 32px 24px">{btns}</td></tr>'
             f'<tr><td style="background:{BOX};padding:14px 32px;border-top:1px solid {LINE}">'
             f'<div style="font-size:11px;color:{LAB};line-height:1.6">Notification qualifiée automatiquement — seuls les signaux pertinents sont transmis par courriel ; le détail complet reste en console. '
@@ -1177,7 +1183,10 @@ def send_mail(e, ctx, decision_reason):
     if ctx.get("mitre_tech"):
         _mt = ctx["mitre_tech"] + (f" - {ctx['mitre_name']}" if ctx.get("mitre_name") else "")
         body += f"  MITRE    : {_mt}" + (f"  ({ctx['mitre_tac']})" if ctx.get("mitre_tac") else "") + "\n"
-    body += f"  Recu car : {why}\n\n"
+    body += f"  Recu car : {why}\n"
+    if ctx.get("hist7"):   # v2-20261111
+        body += f"  Historique 7 j ({ctx.get('hist7_total', 0)} alertes) : " + "; ".join(f"{n}x {tt}" for tt, n in ctx["hist7"]) + "\n"
+    body += "\n"
     bl = ctx.get("backlog") or []
     if bl:
         body += "  Evenements declencheurs :\n"
@@ -1248,6 +1257,55 @@ def fp_match(rules, title, entity, tag=""):
             return r
     return None
 
+# --- v2-20261111 : historique de l'entite (7 j), routage "admin connu", lot ELEVE regroupe ---------------
+_DEC_IDX = "http://127.0.0.1:9200/omni-interne*,omni-m365*/_search"
+def hist7(entity):
+    """Historique de l'entite sur 7 jours (toutes decisions de tri) : [(titre, n)], total. Jamais bloquant."""
+    if not entity or entity in ("-", ""): return [], 0
+    try:
+        b = {"size": 0, "query": {"bool": {"filter": [{"term": {"event_source": "alert_triage"}},
+             {"term": {"triage_entity": entity}}, {"range": {"timestamp": {"gte": "now-7d"}}}]}},
+             "aggs": {"t": {"terms": {"field": "alert_title", "size": 6}}}}
+        req = urllib.request.Request(_DEC_IDX, data=json.dumps(b).encode(), headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=4) as r: res = json.load(r)
+        rows = [(re.sub(r"^OMNI\s*-\s*", "", x["key"]), x["doc_count"]) for x in res["aggregations"]["t"]["buckets"]]
+        return rows, int(res["hits"]["total"]["value"])
+    except Exception:
+        return [], 0
+def admin_connu(e, title, entity):
+    """Activite d'administration CONNUE (titre + entite exacts) -> recapitulatif quotidien au lieu d'un mail.
+    DIGEST_ENTITY_RULES = "regex_titre|regex_entite;..." . Jamais applique aux CRITIQUE ni aux kill-chains."""
+    for part in (e.get("DIGEST_ENTITY_RULES") or "").split(";"):
+        if "|" not in part: continue
+        rt, ren = part.split("|", 1)
+        try:
+            if re.search(rt.strip(), title or "", re.I) and re.search(ren.strip(), entity or "", re.I): return True
+        except re.error:
+            continue
+    return False
+LOT_FILE = "/var/lib/omni-alert-triage/lot.json"
+def lot_enqueue(e, ctx, reason):
+    """Alerte ELEVE (zone grise / bruit escalade) mise en file : envoyee groupee chaque heure par omni-alert-lot."""
+    import fcntl
+    g = guidance(guidance_key(ctx.get("tag", ""), ctx.get("titre", ""))) or {}
+    soc = e.get("OMNI_SOC_URL", "https://bx-it-graylog-vm.omnitech.security/soc/")
+    item = {"t": time.time(), "titre": re.sub(r"^OMNI\s*-\s*", "", ctx.get("titre", "")), "entite": ctx.get("entite", ""),
+            "score": ctx.get("score"), "tier": ctx.get("tier"), "why": rationale(ctx.get("tier"), reason, ctx.get("score")),
+            "user": ctx.get("user", ""), "host": ctx.get("host", ""), "src_ip": ctx.get("src_ip", ""), "country": ctx.get("country", ""),
+            "count": ctx.get("count", ""), "count_reel": ctx.get("count_reel", False), "ts": ctx.get("ts", ""),
+            "mitre": (ctx.get("mitre_tech", "") + (" - " + ctx["mitre_name"] if ctx.get("mitre_name") else "")).strip(" -"),
+            "tactique": ctx.get("mitre_tac", ""), "desc": ctx.get("desc", ""), "a_verifier": g.get("a_verifier", ""),
+            "remediation": g.get("remediation", ""), "replay": ctx.get("replay", ""),
+            "soc": soc + ("#e=" + urllib.parse.quote(ctx["entite"]) if ctx.get("entite") not in ("-", "", None) else ""),
+            "fp": quick_fp_link(e, ctx.get("entite", ""), ctx.get("tag", "")) if ctx.get("tier") != "CRITICAL" else "",
+            "hist7": ctx.get("hist7") or [], "hist7_total": ctx.get("hist7_total", 0), "corr": ctx.get("corr_rows") or [],
+            "extrait": (ctx.get("message") or "")[:300]}
+    os.makedirs(os.path.dirname(LOT_FILE), exist_ok=True)
+    with open(LOT_FILE + ".lock", "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try: q = json.load(open(LOT_FILE))
+        except Exception: q = []
+        q.append(item); tmp = LOT_FILE + ".tmp"; json.dump(q[-500:], open(tmp, "w")); os.replace(tmp, LOT_FILE)
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def _json(self, code, obj):
@@ -1431,6 +1489,7 @@ class Handler(BaseHTTPRequestHandler):
                "ti":(str(f.get("src_ip_threat_indicated","")).lower()=="true"
                      or str(f.get("dest_ip_threat_indicated","")).lower()=="true")}
 
+        ctx["hist7"], ctx["hist7_total"] = hist7(entity)   # v2-20261111
         mail_thr = int(e.get("MAIL_SCORE_THRESHOLD","80"))
         # Sans LLM, la zone grise est CONSERVATRICE : ne maile que sur forte
         # corroboration (actif critique + threat-intel + prio...). Le vrai tri fin
@@ -1459,6 +1518,8 @@ class Handler(BaseHTTPRequestHandler):
             decision, reason = "drop", f"fp_soc({dyn_rule.get('by','?')})"
         elif tier == "GRAY" and re.search(e.get("DIGEST_TITLES_REGEX") or DIGEST_TITLES_DEFAULT, title or "", re.I):
             decision, reason = "digest", f"recapitulatif(score={score})"
+        elif tier == "GRAY" and admin_connu(e, title, entity):   # v2-20261111
+            decision, reason = "digest", f"admin_connu(score={score})"
         elif tier == "NOISE":
             if score >= mail_thr: want_mail, reason = True, f"noise_escalade(score={score})"
             else: decision, reason = "drop", f"noise(score={score})"
@@ -1500,7 +1561,10 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 if _gris and _cap > 0: d[_bk] = _rafale + [now]
                 try:
-                    send_mail(e, ctx, reason); decision = "mail"; d[key] = now
+                    if _gris and str(e.get("GRAY_BATCH", "1")) == "1":   # v2-20261111 : ELEVE -> lot horaire
+                        lot_enqueue(e, ctx, reason); decision = "lot"; d[key] = now
+                    else:
+                        send_mail(e, ctx, reason); decision = "mail"; d[key] = now
                 except Exception as ex:
                     decision, reason = "mail_echec", f"{reason}|smtp:{type(ex).__name__}"
         # purge dedup expires : borne par win (sinon un TRIAGE_DEDUP_SECONDS > 24h etait
