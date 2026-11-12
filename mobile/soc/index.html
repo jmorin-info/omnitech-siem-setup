@@ -2,9 +2,20 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>OMNI SOC — Console</title>
-<link rel="icon" href="/m/icon-192.png">
+<!-- OMNITECH-SOC-20261112 : PWA -->
+<link rel="manifest" href="/soc/manifest.webmanifest">
+<link rel="icon" href="/soc/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/soc/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/soc/icons/apple-touch-180.png">
+<meta name="theme-color" id="mThemeColor" content="#070a11">
+<meta name="description" content="Console SOC du SIEM OMNITECH : incidents, blocages SOAR, exploitation.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="OMNI SOC">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script>try{var _t=localStorage.getItem("soc_theme");if(_t!=="light"&&_t!=="dark")_t=(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark";document.documentElement.setAttribute("data-theme",_t);var _m=document.getElementById("mThemeColor");if(_m)_m.content=_t==="light"?"#f4f6fa":"#070a11";}catch(e){}</script>
 <script src="/soc/chart.min.js"></script>
 <!-- cytoscape (graphe) + globe.gl (1,8 Mo, carte) : charges A LA DEMANDE (lazy) -> ne bloquent plus le rendu initial -->
 <script>
@@ -552,6 +563,173 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
   html[data-theme=light] .card,html[data-theme=light] .kpi,html[data-theme=light] .lcard,html[data-theme=light] .threat{background:var(--card)!important;box-shadow:0 1px 3px rgba(20,30,50,.08)}
   html[data-theme=light] .inc{background:var(--card2)!important}
   @media (max-width:760px){.todo{font-size:12px;padding:8px 10px}.opsgrid{grid-template-columns:1fr 1fr}}
+
+  /* OMNITECH-SOC-20261112 : PWA, navigation mobile, états, thème clair finalisé, accessibilité */
+  #app{height:100vh;height:100dvh;grid-template-columns:230px minmax(0,1fr)}
+  header{min-width:0}
+  header h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+  header .pill{white-space:nowrap}
+  header .pill.clu{cursor:pointer}
+  header{gap:10px}
+  header .iconbtn{white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  header .pill.upd{min-width:0;overflow:hidden}header .pill.upd .updtxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media(min-width:821px){header h2{flex:0 0 auto;max-width:34%}}
+  @media(max-width:1700px){#clock{display:none}}
+  @media(max-width:1600px){#densBtn .densLab{display:none}}
+  .dot.warn{background:var(--amb);box-shadow:0 0 6px var(--amb)}.dot.crit{background:var(--red);box-shadow:0 0 6px var(--red)}
+  .pdesc:empty{display:none}
+  #appBtn{position:relative}
+  #appBtn .appdot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:var(--cy)}
+  .navbadge{margin-left:auto;min-width:20px;height:19px;padding:0 6px;border-radius:10px;background:var(--red);color:#fff;font-size:11px;font-weight:700;line-height:19px;text-align:center}
+  /* bandeaux hors ligne / nouvelle version */
+  #netbar,#updbar{position:fixed;left:50%;transform:translateX(-50%);z-index:70;display:none;align-items:center;gap:10px;width:max-content;max-width:calc(100vw - 24px);padding:8px 8px 8px 14px;border-radius:12px;font-size:13px;line-height:1.35;box-shadow:0 14px 34px -14px rgba(0,0,0,.6);border:1px solid var(--bd)}
+  #netbar{top:calc(8px + env(safe-area-inset-top));background:#3a2a0c;color:#ffe2a8;border-color:#8a6420}
+  #updbar{bottom:calc(18px + env(safe-area-inset-bottom));background:var(--card2);color:var(--fg);border-left:4px solid var(--cy)}
+  #netbar.on,#updbar.on{display:flex}
+  #netbar .svi{flex:0 0 auto;width:18px;height:18px}
+  #netbar button,#updbar button{flex:0 0 auto;min-height:36px;padding:0 12px;border-radius:9px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer}
+  #updbar #updGo{background:var(--cy);border-color:var(--cy);color:#04121a}
+  #updbar .ux{border:0;min-width:36px;padding:0;font-size:16px}
+  body.offline .stbtns,body.offline .socform,body.offline #sactive .iconbtn,body.offline .watchbtn,body.offline textarea#caseNote{pointer-events:none;opacity:.45}
+  /* squelettes et états */
+  .skel{display:block;border-radius:12px;min-height:16px;background:linear-gradient(100deg,var(--card2) 30%,var(--bd) 50%,var(--card2) 70%);background-size:220% 100%;background-position:120% 0;animation:shimmer 1.3s ease-in-out infinite}
+  .skrow{height:62px;margin-bottom:10px}.skkpi{height:96px}
+  p.muted[data-i18n$="_loading"]::after{content:"";display:block;height:140px;margin-top:14px;border-radius:12px;background:linear-gradient(100deg,var(--card2) 30%,var(--bd) 50%,var(--card2) 70%);background-size:220% 100%;background-position:120% 0;animation:shimmer 1.3s ease-in-out infinite}
+  .stateerr{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:26px 14px;color:var(--mut)}
+  .stateerr b{color:var(--fg);font-size:14px}
+  .shbtn{min-height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--bd2);background:var(--card2);color:var(--fg);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .shbtn:hover{border-color:var(--cy)}
+  .shbtn.pri{background:var(--cy);border-color:var(--cy);color:#04121a}
+  .shbtn[disabled]{opacity:.5;cursor:default}
+  /* filtres des incidents */
+  .incbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+  .incbar .search{flex:1 1 220px;margin:0;min-width:0}
+  .fchips{display:flex;flex-wrap:wrap;gap:6px}
+  .fchip{min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--bd2);background:transparent;color:var(--mut);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+  .fchip:hover{color:var(--fg);border-color:var(--cy)}
+  .fchip[aria-pressed=true]{background:var(--cy);border-color:var(--cy);color:#04121a}
+  .inccount{color:var(--mut);font-size:12px;margin-left:auto;white-space:nowrap}
+  .inc .top{min-width:0}.inc .ttl{min-width:0;overflow-wrap:anywhere}
+  /* menu (feuille) */
+  #sheet{position:fixed;inset:0;z-index:45;display:none}
+  #sheet.on{display:block}
+  #sheet .shbox{position:absolute;left:0;right:0;bottom:0;max-height:88vh;max-height:88dvh;overflow:auto;background:var(--card);border-top:1px solid var(--bd);border-radius:18px 18px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -20px 60px rgba(0,0,0,.5);animation:shup .2s ease}
+  #sheet .shbox:focus{outline:none}
+  @keyframes shup{from{transform:translateY(40px);opacity:0}}
+  .shhd{display:flex;align-items:center;gap:10px;margin-bottom:4px}.shhd h2{font-size:17px;margin:0;flex:1}
+  .shgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 6px}
+  .shgrid button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:70px;padding:8px 4px;border-radius:12px;border:1px solid var(--bd);background:var(--card2);color:var(--fg);font-family:inherit;font-size:11.5px;font-weight:600;line-height:1.2;cursor:pointer;text-align:center}
+  .shgrid button .svi{width:20px;height:20px;color:var(--cy)}
+  .shgrid button[aria-current=page]{border-color:var(--cy);box-shadow:inset 0 0 0 1px var(--cy)}
+  .shsec{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--mut);margin:16px 2px 4px}
+  .shrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-height:52px;padding:8px 2px;border-bottom:1px solid var(--bd)}
+  .shrow:last-child{border-bottom:0}
+  .shrow .lb{flex:1 1 160px;font-size:14px;min-width:0}.shrow .lb small{display:block;color:var(--mut);font-size:12px;margin-top:1px}
+  .seg{display:inline-flex;border:1px solid var(--bd2);border-radius:10px;overflow:hidden}
+  .seg button{min-height:40px;min-width:48px;padding:0 12px;background:transparent;border:0;border-left:1px solid var(--bd);color:var(--mut);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+  .seg button:first-child{border-left:0}
+  .seg button[aria-pressed=true]{background:var(--cy);color:#04121a}
+  .shfoot{margin-top:14px;color:var(--dim);font-size:11px;text-align:center}
+  @media(min-width:821px){#sheet .scrim2{background:rgba(0,0,0,.35)}#sheet .shbox{left:auto;right:18px;top:68px;bottom:auto;width:430px;border:1px solid var(--bd);border-radius:16px;max-height:calc(100vh - 90px);padding-bottom:18px}#sheet .grip,#sheet .shpages{display:none}}
+  /* barre de navigation du bas (mobile) */
+  #bnav{display:none}
+  @media(max-width:820px){
+    #app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+    header{padding:env(safe-area-inset-top) 12px 0;gap:8px;min-height:54px}
+    header .pill:not(.upd),#cadSel,#langBtn,#densBtn,#helpBtn,#themeBtn,#appBtn,header .iconbtn.lo{display:none!important}
+    header h2{font-size:16px;flex:1 1 auto}
+    header .pill.upd{padding:4px 8px;font-size:10.5px}
+    header .iconbtn{min-width:44px;min-height:40px}
+    main{padding:14px 12px calc(86px + env(safe-area-inset-bottom))!important}
+    #bnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:35;padding:4px 4px env(safe-area-inset-bottom);background:rgba(9,13,22,.95);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--bd)}
+    #bnav a,#bnav button{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;min-width:0;padding:0;margin:0;color:var(--mut);background:none;border:0;border-radius:12px;font-family:inherit;font-size:11px;font-weight:600;line-height:1.1;text-decoration:none;position:relative;transform:none!important;box-shadow:none!important;cursor:pointer}
+    #bnav a:hover,#bnav button:hover{background:none;color:var(--fg)}
+    #bnav .svi{width:22px;height:22px;vertical-align:0}
+    #bnav [aria-current=page]{color:var(--cy)}
+    #bnav [aria-current=page]::before{content:"";position:absolute;top:0;left:50%;width:28px;margin-left:-14px;height:3px;border-radius:0 0 3px 3px;background:var(--cy)}
+    #bnav .bbadge{position:absolute;top:5px;left:50%;margin-left:5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--red);color:#fff;font-size:10.5px;font-weight:700;line-height:18px;text-align:center}
+    #toasts{bottom:calc(76px + env(safe-area-inset-bottom))!important}
+    #updbar{bottom:calc(76px + env(safe-area-inset-bottom))}
+    .kpis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:10px!important}
+    .kpi{padding:12px 13px!important}.kpi .val{font-size:22px!important}.kpi .lab{font-size:10px!important;letter-spacing:.3px}
+    .threat{flex-wrap:wrap;gap:10px;padding:12px 14px!important}.tstats{gap:14px;width:100%;justify-content:space-around}.tlvl{font-size:19px}
+    .card{padding:14px!important}
+    .card h3{flex-wrap:wrap;font-size:13.5px}.card h3 .tag{margin-left:0;font-size:10px;white-space:normal}
+    .inc .top{flex-wrap:wrap;row-gap:5px}
+    .inc .ttl{flex:1 1 100%;order:2}
+    .inc .meta{overflow-wrap:anywhere}
+    .globe-wrap{grid-template-columns:minmax(0,1fr);height:auto}.globe-stage{height:62vh}
+    .emc{width:100%!important;max-width:100vw!important;padding:16px 16px calc(24px + env(safe-area-inset-bottom))!important}
+    input,select,textarea{font-size:16px!important}
+    .pdesc{font-size:12.5px;padding:10px 12px;margin-bottom:14px}
+    .opsgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .todo{gap:6px}
+    #palBtn .kk{display:none}
+    .incbar .search{flex-basis:100%}
+    .fchips{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .fchips::-webkit-scrollbar{display:none}
+    .fchip{flex:0 0 auto}
+    .socform input.motif{min-width:0;flex-basis:100%}
+    .lcard{width:min(340px,calc(100vw - 32px))}
+  }
+  /* cibles tactiles */
+  @media (pointer:coarse){
+    .iconbtn,.stb,.cadsel,.dfilter select,.gctrl-btn,.watchbtn,.entMore{min-height:44px}
+    .iconbtn{min-width:44px}
+    .tdi{display:inline-flex;align-items:center;min-height:40px;padding:6px 12px}
+    .fchip{min-height:40px}
+    .pi{padding:13px 12px}
+    nav a{min-height:44px}
+    .toast .tx{min-width:44px;min-height:44px}
+  }
+  /* mouvement réduit */
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+    .card:hover,.kpi:hover,.inc:hover,nav a:hover,.mcell:hover{transform:none!important}
+  }
+  /* thème clair : finitions */
+  html[data-theme=light]{color-scheme:light}
+  html[data-theme=dark]{color-scheme:dark}
+  html[data-theme=light] nav a{color:var(--mut)}
+  html[data-theme=light] nav a:hover{background:rgba(11,122,143,.07);color:var(--fg)}
+  html[data-theme=light] nav a.on{color:var(--fg);background:linear-gradient(90deg,rgba(11,122,143,.13),transparent 80%)}
+  html[data-theme=light] .pill,html[data-theme=light] .cadsel,html[data-theme=light] .search,html[data-theme=light] .dfilter select,html[data-theme=light] .gctrl-btn{background:#fff!important;color:var(--mut);border-color:var(--bd);backdrop-filter:none}
+  html[data-theme=light] .cadsel option{background:#fff;color:var(--fg)}
+  html[data-theme=light] .kpi .val,html[data-theme=light] .kpi.red .val,html[data-theme=light] .kpi.amb .val,html[data-theme=light] .kpi.cy .val,html[data-theme=light] .kpi.vio .val{background:none;-webkit-text-fill-color:currentColor;color:var(--accent,var(--fg))}
+  html[data-theme=light] .stb{background:#f1f5f9;color:var(--fg);border-color:var(--bd)}
+  html[data-theme=light] .stb.on{background:var(--cy);color:#fff;border-color:var(--cy)}
+  html[data-theme=light] .fchip[aria-pressed=true],html[data-theme=light] .seg button[aria-pressed=true],html[data-theme=light] .shbtn.pri,html[data-theme=light] #updbar #updGo{color:#fff}
+  html[data-theme=light] .pchip{background:#eaf2fb;border-color:#bcd3ec;color:#1d4f7a}
+  html[data-theme=light] .pchip.tac{background:#f1ecfd;border-color:#d4c6f5;color:#4b2fa0}
+  html[data-theme=light] .mhead{background:#eef2f7}
+  html[data-theme=light] .mcell{background:#fff}
+  html[data-theme=light] .mcell.h0{background:#f7f9fc;border-color:var(--bd)}
+  html[data-theme=light] .mcell.h1{border-color:#b9cde6}
+  html[data-theme=light] .mcell.h2{background:#e6effc;border-color:#9bbcf0}
+  html[data-theme=light] .mcell.h3{background:#fdf1de;border-color:#e9be72}
+  html[data-theme=light] .mcell.h4{background:#fde4e7;border-color:#ee9aa5;box-shadow:none}
+  html[data-theme=light] .mcell i{color:var(--fg)}
+  html[data-theme=light] .lrow{background:var(--card2)}
+  html[data-theme=light] .lrow:hover,html[data-theme=light] .entrow:hover,html[data-theme=light] .frow:hover,html[data-theme=light] .gxrow:hover{background:#eef4fa}
+  html[data-theme=light] .pi.sel,html[data-theme=light] .pi:hover{background:#e6f3f6}
+  html[data-theme=light] .gcard,html[data-theme=light] .blk.inv,html[data-theme=light] .ik,html[data-theme=light] .escore,html[data-theme=light] .pbcard,html[data-theme=light] .idu,html[data-theme=light] .riskbanner{background:var(--card2)!important;border-color:var(--bd)}
+  html[data-theme=light] .grow{border-top-color:var(--bd)}html[data-theme=light] .grow.gr{background:#fdf0f1}html[data-theme=light] .grow.gf{background:#eefaf3}
+  html[data-theme=light] .gval,html[data-theme=light] .tlx,html[data-theme=light] .entn,html[data-theme=light] .rbv,html[data-theme=light] .rgl,html[data-theme=light] .ipa{color:var(--fg)}
+  html[data-theme=light] .entMore,html[data-theme=light] .watchbtn,html[data-theme=light] .srcb,html[data-theme=light] .idchip{background:#eaf2fb;border-color:#bcd3ec;color:#1d4f7a}
+  html[data-theme=light] .rbt,html[data-theme=light] .gbar{background:#e2e8f0}
+  html[data-theme=light] .mbanner{background:#fff6e5;border-color:#efd39a}html[data-theme=light] .mbanner b{color:#7a4b00}html[data-theme=light] .mbanner .msub{color:#6b5a33}
+  html[data-theme=light] .toast{background:rgba(255,255,255,.97)}
+  html[data-theme=light] #cy{background:#f7f9fc}
+  html[data-theme=light] #simBody{background:var(--card)!important}
+  html[data-theme=light] #help kbd{background:#f1f5f9}
+  html[data-theme=light] #help .helpft{background:var(--card2)}
+  html[data-theme=light] .emc textarea,html[data-theme=light] .emc input{background:#fff}
+  html[data-theme=light] ::-webkit-scrollbar-thumb{background:#c5cedb;background-clip:padding-box}
+  html[data-theme=light] .rk-c{background:#fde4e7;color:#a3162a}html[data-theme=light] .rk-h{background:#fdf1de;color:#8a5200}html[data-theme=light] .rk-m{background:#f1ecfd;color:#4b2fa0}html[data-theme=light] .rk-l{background:#e6f1f8;color:#1d5f80}
+  html[data-theme=light] .pbsev.critique{background:#fde4e7;color:#a3162a}html[data-theme=light] .pbsev.eleve{background:#fdf1de;color:#8a5200}html[data-theme=light] .pbsev.moyen{background:#e3f4f7;color:#0b6a7c}html[data-theme=light] .pbsev.faible{background:#eef2f7;color:#55627a}
+  html[data-theme=light] #netbar{background:#fff4dc;color:#6b4500;border-color:#e8c27a}
+  html[data-theme=light] #bnav{background:rgba(255,255,255,.96)}
+  html[data-theme=light] .kpitrend.kt-bad{color:#a3162a;background:#fde4e7}html[data-theme=light] .kpitrend.kt-good{color:#13805b;background:#e3f6ee}
 </style>
 </head>
 <body>
@@ -582,18 +760,25 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
 <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v5c0 5-3.5 8.2-8 10-4.5-1.8-8-5-8-10V6z"/></symbol>
 <symbol id="i-key" viewBox="0 0 24 24"><circle cx="9" cy="9" r="4.5"/><path d="M12.2 12.2L20 20M17 17l2-2"/></symbol>
 <symbol id="i-code" viewBox="0 0 24 24"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></symbol>
+<symbol id="i-wifioff" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M8.5 16.5a5 5 0 0 1 7 0"/><path d="M5 12.6a10 10 0 0 1 4.2-2.4M13 10a10 10 0 0 1 6 2.6"/><path d="M2 8.8a15 15 0 0 1 4.3-2.7M10.6 5.1A15 15 0 0 1 22 8.8"/><line x1="12" y1="20" x2="12" y2="20"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7 10.5l5 5 5-5"/><path d="M5 20h14"/></symbol>
 </defs></svg>
 <div id="login">
   <form class="lcard" onsubmit="login(event)">
     <h1>⬢ OMNI <span style="color:var(--cy)">SOC</span></h1>
     <p>Centre des opérations de sécurité — accès RSSI (VPN)</p>
-    <input id="u" placeholder="Compte AD" data-i18n-ph="login_account" autocomplete="username" autocapitalize="none">
-    <input id="p" type="password" placeholder="Mot de passe" data-i18n-ph="login_password" autocomplete="current-password">
+    <input id="u" aria-label="Compte AD" required placeholder="Compte AD" data-i18n-ph="login_account" autocomplete="username" autocapitalize="none">
+    <input id="p" type="password" aria-label="Mot de passe" required placeholder="Mot de passe" data-i18n-ph="login_password" autocomplete="current-password">
     <button class="btn" data-i18n="login_signin">Se connecter</button>
     <div class="err" id="lerr"></div>
   </form>
 </div>
 
+<div id="netbar" role="status" aria-live="polite"><svg class="svi" aria-hidden="true"><use href="#i-wifioff"></use></svg><span class="nbt"></span><button type="button" onclick="socRetry()">Réessayer</button></div>
+<div id="updbar" role="status" aria-live="polite"><span class="ubt">Nouvelle version de la console disponible.</span><button type="button" id="updGo">Recharger</button><button type="button" class="ux" aria-label="Plus tard" onclick="this.parentNode.classList.remove('on')">✕</button></div>
+<div id="sheet" aria-hidden="true"><div class="scrim2" onclick="socCloseSheet()"></div><div class="shbox" role="dialog" aria-modal="true" aria-labelledby="shTitle" tabindex="-1"><div class="grip" style="margin:2px auto 10px"></div><div class="shhd"><h2 id="shTitle">Menu</h2><button class="iconbtn" type="button" onclick="socCloseSheet()" aria-label="Fermer le menu">✕</button></div><div id="shBody"></div></div></div>
 <div id="app">
   <aside>
     <div class="brand"><div class="logo">⬢</div><div><b>OMNI SOC</b><span>OMNITECH SECURITY</span></div></div>
@@ -616,7 +801,7 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
       <a data-p="report"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span><span data-i18n="nav_report">Rapport</span></a>
       <a data-p="playbooks"><span class="ic"><svg class="svi"><use href="#i-help"></use></svg></span><span data-i18n="nav_playbooks">Playbooks</span></a>
     </nav>
-    <div class="side-foot">v1 · données temps réel<br>OpenSearch + oms-xdr</div>
+    <div class="side-foot">v3 · 12/11/2026 · installable<br>OpenSearch + oms-xdr</div>
   </aside>
 
   <header>
@@ -635,7 +820,8 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
     <button class="iconbtn" id="refBtn" onclick="refreshNow()" data-i18n-t="t_refresh" data-i18n-al="al_refresh" title="Rafraîchir maintenant" aria-busy="false" aria-label="Rafraîchir les données"><svg class="svi"><use href="#i-refresh"></use></svg></button>
     <button class="iconbtn" id="densBtn" onclick="toggleDensity()" aria-pressed="false" data-i18n-al="al_density" title="Densité confortable — cliquer pour compact" aria-label="Basculer la densité d'affichage"><svg class="svi"><use href="#i-rows"></use></svg> <span class="densLab" data-i18n="dens_comfort">Confort</span></button>
     <button class="iconbtn" id="helpBtn" onclick="openHelp()" aria-haspopup="dialog" aria-expanded="false" data-i18n-t="t_help" data-i18n-al="al_help" title="Aide et raccourcis (touche ?)" aria-label="Ouvrir l'aide et les raccourcis clavier"><svg class="svi"><use href="#i-help"></use></svg></button>
-    <button class="iconbtn" onclick="logout()" data-i18n-t="t_logout" data-i18n-al="al_logout" title="Se déconnecter" aria-label="Se déconnecter"><svg class="svi"><use href="#i-logout"></use></svg></button>
+    <button class="iconbtn" id="appBtn" type="button" onclick="socSheet()" aria-haspopup="dialog" aria-expanded="false" title="Application, notifications et réglages" aria-label="Application, notifications et réglages"><svg class="svi" aria-hidden="true"><use href="#i-bell"></use></svg><i class="appdot" hidden></i></button>
+    <button class="iconbtn lo" onclick="logout()" data-i18n-t="t_logout" data-i18n-al="al_logout" title="Se déconnecter" aria-label="Se déconnecter"><svg class="svi"><use href="#i-logout"></use></svg></button>
   </header>
 
   <main>
@@ -669,7 +855,7 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
       <div class="card" style="margin-top:18px"><h3><svg class="svi"><use href="#i-globe"></use></svg> <span data-i18n="card_geo">Origines géographiques des sources externes</span><span class="tag" data-i18n="tag_geo">7 j · FortiGate GeoIP</span></h3><div id="geoFeed" class="geo"></div></div>
     </section>
 
-    <section class="page" id="p-incidents"><div class="card"><h3><svg class="svi"><use href="#i-alert"></use></svg> <span data-i18n="card_incidents">Incidents corrélés (oms-xdr)</span></h3><div class="feed" id="incFeed"></div></div></section>
+    <section class="page" id="p-incidents"><div class="card"><h3><svg class="svi"><use href="#i-alert"></use></svg> <span data-i18n="card_incidents">Incidents corrélés (oms-xdr)</span></h3><div class="incbar" role="toolbar" aria-label="Filtrer les incidents"><input id="incQ" class="search" type="search" placeholder="Filtrer : titre, entité, technique, assigné…" autocomplete="off" aria-label="Filtrer les incidents"><span class="fchips"><button type="button" class="fchip" data-f="open" aria-pressed="true">Ouverts</button><button type="button" class="fchip" data-f="hot" aria-pressed="false">Critiques + élevés</button><button type="button" class="fchip" data-f="new" aria-pressed="false">Non qualifiés</button><button type="button" class="fchip" data-f="all" aria-pressed="false">Tous</button></span><span class="inccount" id="incCount" aria-live="polite"></span></div><div class="feed" id="incFeed"></div></div></section>
     <section class="page" id="p-detections"><div class="card"><h3><svg class="svi"><use href="#i-target"></use></svg> <span data-i18n="card_det24">Détections (24 h)</span>
         <span class="tag" id="detCount"></span></h3>
       <div class="dfilter">
@@ -788,6 +974,13 @@ function loadScript(src){loadScript._c=loadScript._c||{};if(loadScript._c[src])r
         </div></div>
     </section>
   </main>
+  <nav id="bnav" aria-label="Navigation principale (mobile)">
+    <a href="#p=overview" data-bp="overview"><svg class="svi" aria-hidden="true"><use href="#i-grid"></use></svg><span data-fr="Accueil" data-en="Home">Accueil</span></a>
+    <a href="#p=incidents" data-bp="incidents"><svg class="svi" aria-hidden="true"><use href="#i-alert"></use></svg><span data-fr="Incidents" data-en="Incidents">Incidents</span><b class="bbadge" id="bbInc" hidden></b></a>
+    <a href="#p=soar" data-bp="soar"><svg class="svi" aria-hidden="true"><use href="#i-unlock"></use></svg><span data-fr="SOAR" data-en="SOAR">SOAR</span></a>
+    <a href="#p=ops" data-bp="ops"><svg class="svi" aria-hidden="true"><use href="#i-pulse"></use></svg><span data-fr="Exploitation" data-en="Operations">Exploitation</span></a>
+    <button type="button" id="bMore" onclick="socSheet()" aria-haspopup="dialog" aria-expanded="false"><svg class="svi" aria-hidden="true"><use href="#i-more"></use></svg><span data-fr="Plus" data-en="More">Plus</span></button>
+  </nav>
   <div id="emodal"><div class="scrim2" onclick="closeEnt()"></div><div class="emc" id="emc"></div></div>
   <div id="simModal" style="display:none;position:fixed;inset:0;z-index:60">
     <div onclick="closeSim()" style="position:absolute;inset:0;background:rgba(4,8,16,.7);backdrop-filter:blur(3px)"></div>
@@ -2304,10 +2497,316 @@ window.loadTodo=function(){Promise.all([j("/siem-ops").catch(()=>null),j("/soar"
   const el=$("#todo");if(!el)return;
   el.innerHTML=`<div class="todo"><b>À traiter</b>`+(L.length?L.map(([v,t,p])=>`<span class="tdi tdi-${v}" role="button" tabindex="0" onclick="goNav('${p}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goNav('${p}')}">${esc(t)}</span>`).join(""):`<span class="tdi tdi-ok">Rien d'urgent ✅</span>`)+`</div>`;});};
 window.socTheme=function(v){if(v){try{localStorage.setItem("soc_theme",v)}catch(e){}}
-  let th=v;if(!th){try{th=localStorage.getItem("soc_theme")}catch(e){}}th=th||"dark";
+  let th=v;if(!th){try{th=localStorage.getItem("soc_theme")}catch(e){}}th=th||((window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark");
   document.documentElement.setAttribute("data-theme",th);const b=document.getElementById("themeBtn");if(b)b.textContent=th==="light"?"☾ Sombre":"☀ Clair";};
 socTheme();
 })();
+</script>
+<script>
+/* OMNITECH-SOC-20261112 : console v3 — PWA (service worker, notifications, hors ligne, installation),
+   navigation mobile (barre du bas + menu), routage par ancre (#p=page&e=entité&case=id),
+   filtres des incidents, pastilles, états de chargement et d'erreur, état réel du SIEM dans l'en-tête. */
+(function(){
+"use strict";
+var V3="v3 · 12/11/2026";
+try{SOC_BUILD="v3 · build 2026-11-12";}catch(e){}
+var q1=function(s){return document.querySelector(s);};
+var EN=function(){try{return LANG==="en";}catch(e){return false;}};
+var T=function(fr,en){return EN()?en:fr;};
+var LS={get:function(k){try{return localStorage.getItem(k);}catch(e){return null;}},
+        set:function(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){}}};
+function appOn(){var a=q1("#app");return !!a&&a.style.display==="grid";}
+function curPage(){var a=document.querySelector("#nav a.on");return a?a.getAttribute("data-p"):"overview";}
+
+/* ---------- descriptions des pages SOAR et Exploitation ---------- */
+try{
+  PDESC.fr.soar="<b>SOAR — blocages pare-feu</b> — IP publiques bloquées automatiquement par les FortiGate (Bordeaux et Ivry) après une détection WAF. Levée automatique à 24 h ; <b>Débloquer</b> dépose une demande journalisée, traitée en moins d'une minute.";
+  PDESC.fr.ops="<b>Exploitation du SIEM</b> — mises à jour automatiques, redémarrage en attente, snapshots et test de restauration, sauvegarde, disques, services en échec, certificat. Vert : rien à faire.";
+  PDESC.en.soar="<b>SOAR — firewall blocks</b> — public IPs blocked automatically by the FortiGates (Bordeaux and Ivry) after a WAF detection. Lifted after 24 h; <b>Unblock</b> files a logged request, processed within a minute.";
+  PDESC.en.ops="<b>SIEM operations</b> — automatic updates, pending reboot, snapshots and restore test, backup, disks, failed services, certificate. Green: nothing to do.";
+}catch(e){}
+
+/* ---------- réseau : hors ligne et données en cache ---------- */
+var NET={off:false,cacheAt:0};
+function fmtWhen(t){try{return new Date(t).toLocaleString(EN()?"en-GB":"fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});}catch(e){return "";}}
+function netRender(){var b=q1("#netbar");if(!b)return;
+  if(!NET.off){b.classList.remove("on");document.body.classList.remove("offline");return;}
+  var msg;
+  if(NET.cacheAt){var m=Math.max(0,Math.round((Date.now()-NET.cacheAt)/60000));
+    var age=m<1?T("à l'instant","just now"):m<120?T("il y a "+m+" min",m+" min ago"):T("il y a "+Math.round(m/60)+" h",Math.round(m/60)+" h ago");
+    msg=T("Hors ligne — données du ","Offline — data from ")+fmtWhen(NET.cacheAt)+" ("+age+"). "+T("Actions désactivées.","Actions disabled.");}
+  else msg=T("SIEM injoignable — vérifiez le réseau ou le VPN.","SIEM unreachable — check your network or VPN.");
+  b.querySelector(".nbt").textContent=msg;var bt=b.querySelector("button");if(bt)bt.textContent=T("Réessayer","Retry");
+  b.classList.add("on");document.body.classList.add("offline");}
+function setOnline(){if(NET.off){NET.off=false;NET.cacheAt=0;netRender();}}
+function setOffline(at){NET.off=true;if(at)NET.cacheAt=NET.cacheAt?Math.min(NET.cacheAt,at):at;netRender();}
+setInterval(function(){if(NET.off)netRender();},60000);
+window.addEventListener("offline",function(){setOffline(0);});
+window.addEventListener("online",function(){socRetry();});
+window.socRetry=function(){if(appOn()){try{refreshNow();}catch(e){}}else{j("/me").then(function(d){if(d&&d.user)start();}).catch(function(){});}};
+function purgeData(){
+  try{if(window.caches)caches.delete("soc-data-v1");}catch(e){}
+  try{var c=navigator.serviceWorker&&navigator.serviceWorker.controller;if(c)c.postMessage({type:"purge-data"});}catch(e){}}
+var _fetch=window.fetch;
+window.fetch=function(input){
+  var url=typeof input==="string"?input:((input&&input.url)||"");
+  var p=_fetch.apply(window,arguments);
+  if(url.indexOf("/m/api/")<0)return p;
+  return p.then(function(r){
+    var c=r.headers.get("X-SOC-Cache");
+    if(c)setOffline(+c);else setOnline();
+    if(r.status===401&&url.indexOf("/m/api/login")<0)purgeData();
+    if(r.ok&&/\/m\/api\/siem-ops(\?|$)/.test(url))r.clone().json().then(updCluster).catch(function(){});
+    return r;
+  },function(e){setOffline(0);throw e;});
+};
+if(typeof logout==="function"){var _lo=logout;window.logout=function(){purgeData();try{if(navigator.clearAppBadge)navigator.clearAppBadge();}catch(e){}return _lo.apply(this,arguments);};}
+
+/* ---------- état réel du SIEM dans la pastille de l'en-tête ---------- */
+function updCluster(o){var d=document.querySelector("header .pill .dot");if(!d||!o)return;var pill=d.parentNode,lab=pill.querySelector("[data-i18n]");
+  var st=o.status==="crit"?"crit":o.status==="warn"?"warn":"ok";
+  d.className="dot"+(st==="ok"?"":" "+st);
+  var n=(o.items||[]).filter(function(x){return x.status!=="ok";}).length;
+  if(lab)lab.textContent=st==="ok"?T("SIEM opérationnel","SIEM operational"):st==="warn"?T("SIEM : à surveiller","SIEM: watch"):T("SIEM : critique","SIEM: critical");
+  pill.title=T(n+" point(s) d'exploitation à regarder — ouvrir « Exploitation SIEM »",n+" operations item(s) to check — open “SIEM operations”");}
+(function(){var d=document.querySelector("header .pill .dot");if(!d)return;var pill=d.parentNode;pill.classList.add("clu");pill.setAttribute("role","button");pill.setAttribute("tabindex","0");
+  pill.addEventListener("click",function(){goNav("ops");});})();
+
+/* ---------- routage par ancre : #p=page, #p=incidents&e=entité, #p=incidents&case=id ---------- */
+var ROUTING=false,LASTH=location.hash,PENDING_CASE=null,STARTED=false;
+function hashParams(){var o={};(location.hash||"").replace(/^#/,"").split("&").forEach(function(kv){var i=kv.indexOf("=");if(i>0){try{o[decodeURIComponent(kv.slice(0,i))]=decodeURIComponent(kv.slice(i+1));}catch(e){}}});return o;}
+function navTo(p){if(CMDPAGES.indexOf(p)<0)p="overview";if(p===curPage())return;ROUTING=true;try{goNav(p);}finally{ROUTING=false;}}
+function openCaseId(id){var i=-1;try{(CASES||[]).forEach(function(x,k){if(String(x.id)===String(id))i=k;});}catch(e){}
+  if(i>=0){PENDING_CASE=null;openCase(i);}else PENDING_CASE=id;}
+function route(full){if(!appOn())return;var o=hashParams();navTo(o.p||(o.e||o["case"]?curPage():"overview"));
+  if(full&&o.e){try{openEntity(o.e,String(o.e).split("\\").pop());}catch(e){}}
+  if(o["case"])openCaseId(o["case"]);
+  if(o.e||o["case"]){var h="#p="+curPage();try{history.replaceState(null,"",h);}catch(e){}LASTH=h;}}
+function onHash(){if(location.hash===LASTH)return;LASTH=location.hash;route(true);}
+window.addEventListener("hashchange",onHash);window.addEventListener("popstate",onHash);
+function openUrl(url){var i=String(url||"").indexOf("#"),h=i>=0?String(url).slice(i):"#p=incidents";if(location.hash===h){LASTH="";onHash();}else location.hash=h;}
+var PAGE_WRAP={twin:"#twinWrap",ems:"#emsWrap",network:"#netWrap",deploy:"#depWrap"};
+function afterNav(p){syncNav(p);socCloseSheet();var m=q1("main");if(m)m.scrollTop=0;
+  try{document.title=((titles[LANG]||titles.fr)[p]||"Console")+" · OMNI SOC";}catch(e){}
+  var sel=PAGE_WRAP[p];
+  if(sel)setTimeout(function(){var w=q1(sel);if(w&&curPage()===p&&w.querySelector('p.muted[data-i18n$="_loading"]'))w.innerHTML='<div class="card">'+errBox(T("Page indisponible","Page unavailable"),"goNav('"+p+"')")+'</div>';},25000);
+  if(p==="report")setTimeout(function(){var r=q1("#reportBody");if(r&&curPage()==="report"&&!r.innerHTML.trim())r.innerHTML=errBox(T("Rapport indisponible","Report unavailable"),"goNav('report')");},25000);}
+document.addEventListener("click",function(e){var a=e.target&&e.target.closest?e.target.closest("#nav a[data-p]"):null;if(!a)return;
+  var p=a.getAttribute("data-p");afterNav(p);
+  if(!ROUTING){var want="#p="+p;if(location.hash!==want){try{history.pushState(null,"",want);}catch(_){location.hash=want;}LASTH=want;}}},false);
+
+/* ---------- navigation mobile (barre du bas) et pastilles ---------- */
+function syncNav(p){var inBar=false;
+  document.querySelectorAll("#bnav [data-bp]").forEach(function(a){var on=a.getAttribute("data-bp")===p;if(on){a.setAttribute("aria-current","page");inBar=true;}else a.removeAttribute("aria-current");});
+  var mo=q1("#bMore");if(mo){if(inBar)mo.removeAttribute("aria-current");else mo.setAttribute("aria-current","page");}}
+function bnavI18n(){document.querySelectorAll("#bnav [data-fr]").forEach(function(s){s.textContent=EN()?s.getAttribute("data-en"):s.getAttribute("data-fr");});
+  var c=document.querySelectorAll("#p-incidents .fchip");var L={open:["Ouverts","Open"],hot:["Critiques + élevés","Critical + high"],"new":["Non qualifiés","Untriaged"],all:["Tous","All"]};
+  c.forEach(function(b){var l=L[b.getAttribute("data-f")];if(l)b.textContent=EN()?l[1]:l[0];});
+  var qi=q1("#incQ");if(qi)qi.placeholder=T("Filtrer : titre, entité, technique, assigné…","Filter: title, entity, technique, assignee…");}
+if(typeof setLang==="function"){var _sl=setLang;window.setLang=function(){var r=_sl.apply(this,arguments);bnavI18n();netRender();incFilter();if(q1("#sheet.on"))renderSheet();return r;};}
+function badges(hot){var b=q1("#bbInc");if(b){if(hot>0){b.textContent=hot>99?"99+":String(hot);b.hidden=false;b.setAttribute("aria-label",hot+T(" incidents critiques ou élevés ouverts"," open critical or high incidents"));}else b.hidden=true;}
+  var a=document.querySelector('#nav a[data-p="incidents"]');if(a){var s=a.querySelector(".navbadge");if(hot>0){if(!s){s=document.createElement("span");s.className="navbadge";a.appendChild(s);}s.textContent=hot>99?"99+":String(hot);}else if(s)s.remove();}
+  try{if(navigator.setAppBadge){if(hot>0)navigator.setAppBadge(hot);else navigator.clearAppBadge();}}catch(e){}}
+
+/* ---------- incidents : titre lisible (oms-xdr ne renseigne pas « title », seulement « rule ») ---------- */
+var RULES={CR_RISKY_USER_ENDPOINT_THREAT:"Utilisateur à risque + menace sur le poste",CR_LSASS_THEFT:"Vol de la mémoire LSASS (identifiants)",
+  CR_EXPOSED_SERVICE:"Service exposé attaqué",CR_PRIV_ESCALATION:"Élévation de privilèges",CR_CRED_ABUSE:"Abus d'identifiants (force brute puis succès)",
+  CR_RANSOMWARE:"Comportement de rançongiciel",CR_CREDDUMP_PERSIST:"Vol d'identifiants + persistance",CR_CREDDUMP_LATERAL:"Vol d'identifiants + mouvement latéral",
+  CR_AD_CERT_PERSIST:"Persistance par certificat AD",CR_AD_CREDENTIAL_THEFT:"Vol d'identifiants AD",CR_CREDUSE_ADMINSHARE:"Identifiants utilisés sur des partages d'administration",
+  CR_DECEPTION_TRIGGERED:"Leurre déclenché",CR_DEFENSE_NEUTRALIZED:"Défenses neutralisées",CR_ENDPOINT_COMPROMISE:"Poste compromis",CR_ENDPOINT_MALWARE:"Logiciel malveillant sur un poste",
+  CR_IMPOSSIBLE_TRAVEL_PIVOT:"Voyage impossible puis rebond",CR_LATERAL_FROM_SCAN:"Mouvement latéral après balayage",CR_LATERAL_MOVEMENT:"Mouvement latéral",
+  CR_OFFENSIVE_PS_PERSIST:"PowerShell offensif + persistance",CR_PASSWORD_SPRAY_INTERNAL:"Pulvérisation de mots de passe (interne)",CR_RECON_TO_ACCESS:"Reconnaissance puis accès",
+  CR_RISKY_USER_PRIV_ACTION:"Utilisateur à risque : action privilégiée",CR_SEAL_ACCOUNT_CHANGE:"Modification d'un compte SEAL",
+  CR_ANOMALY_CONFIRMED_HOST:"Anomalie confirmée (hôte)",CR_ANOMALY_CONFIRMED_USER:"Anomalie confirmée (utilisateur)"};
+function caseTitle(x){var r=String(x.rule||"");
+  if(!EN()&&RULES[r])return RULES[r];
+  var n=String(x.narrative||"").split("\n")[0].replace(/^Attaque probable\s*:\s*/i,"").replace(/\.$/,"");
+  if(!EN()&&n&&n.length<=90)return n;
+  return r?r.replace(/^CR_/,"").replace(/_/g," ").toLowerCase().replace(/^./,function(c){return c.toUpperCase();}):T("Incident corrélé","Correlated incident");}
+
+/* ---------- en-tête compact (mobile) ---------- */
+var MQ=window.matchMedia?matchMedia("(max-width:820px)"):null;
+if(typeof tickUpd==="function"){var _tu=tickUpd;window.tickUpd=function(){var r=_tu.apply(this,arguments);
+  try{if(MQ&&MQ.matches&&!RELOADING){var el=q1("#updPill .updtxt");if(el)el.textContent=fmtAgoShort(UPD_AT);}}catch(e){}return r;};}
+(function(){var b=document.querySelector('header button[onclick="openPal()"]');if(b){b.id="palBtn";b.innerHTML=ic("search")+'<span class="kk">⌘K</span>';}})();
+
+/* ---------- incidents : filtres ---------- */
+var INCF=LS.get("soc_incf")||"open";
+function isOpen(x){return x.status!=="closed"&&x.status!=="resolved";}
+function incMatch(x,f,q){var sev=sevClass(x.severity);
+  if(f==="open"&&!isOpen(x))return false;
+  if(f==="hot"&&!(isOpen(x)&&(sev==="critical"||sev==="high")))return false;
+  if(f==="new"&&x.status!=="new")return false;
+  if(q){var s=[x.title,x.entities,x.mitre,x["assignée"],x.severity].join(" ").toLowerCase();if(s.indexOf(q)<0)return false;}
+  return true;}
+function incFilter(){var feed=q1("#incFeed");if(!feed)return;var list=[];try{list=CASES||[];}catch(e){}
+  var q=((q1("#incQ")||{}).value||"").trim().toLowerCase();var shown=0;
+  var rows=feed.querySelectorAll(":scope > .inc");
+  for(var i=0;i<rows.length;i++){var x=list[i];var ok=!x||incMatch(x,INCF,q);rows[i].style.display=ok?"":"none";if(ok)shown++;}
+  var none=feed.querySelector(".incnone");
+  if(rows.length&&!shown){if(!none){none=document.createElement("div");none.className="empty incnone";feed.appendChild(none);}
+    none.innerHTML=esc(T("Aucun incident pour ce filtre.","No incident for this filter."))+' <button type="button" class="shbtn" style="margin-left:8px" onclick="socIncFilter(\'all\',true)">'+esc(T("Tout afficher","Show all"))+'</button>';}
+  else if(none)none.remove();
+  document.querySelectorAll("#p-incidents .fchip").forEach(function(b){b.setAttribute("aria-pressed",b.getAttribute("data-f")===INCF?"true":"false");});
+  var c=q1("#incCount");if(c)c.textContent=rows.length?(shown+" / "+rows.length):"";}
+window.socIncFilter=function(f,clear){INCF=f;LS.set("soc_incf",f);if(clear){var qi=q1("#incQ");if(qi)qi.value="";}incFilter();};
+document.querySelectorAll("#p-incidents .fchip").forEach(function(b){b.addEventListener("click",function(){socIncFilter(b.getAttribute("data-f"));});});
+(function(){var qi=q1("#incQ");if(qi)qi.addEventListener("input",incFilter);})();
+if(typeof renderCases==="function"){var _rc=renderCases;window.renderCases=function(list){
+  try{(list||[]).forEach(function(x){if(x&&(!x.title||x.title==="None"))x.title=caseTitle(x);});}catch(e){}
+  var r=_rc.apply(this,arguments);
+  try{incFilter();var hot=(list||[]).filter(function(x){var s=sevClass(x.severity);return isOpen(x)&&(s==="critical"||s==="high");}).length;badges(hot);}catch(e){}
+  if(PENDING_CASE)openCaseId(PENDING_CASE);return r;};}
+
+/* ---------- états de chargement / d'erreur (SOAR, Exploitation) ---------- */
+function skel(n,cls){var s="";for(var i=0;i<n;i++)s+='<span class="skel '+cls+'" aria-hidden="true"></span>';return s;}
+function errBox(msg,retry){return '<div class="stateerr" role="alert"><b>'+esc(msg)+'</b><span>'+esc(NET.off?T("Hors ligne : les données n'ont pas pu être chargées.","Offline: data could not be loaded."):T("Les données n'ont pas pu être chargées.","Data could not be loaded."))+'</span><button type="button" class="shbtn" onclick="'+retry+'">'+esc(T("Réessayer","Retry"))+'</button></div>';}
+window.socErrBox=errBox;
+var SOAR_OK=false,OPS_OK=false;
+window.loadSoar=function(){var a=q1("#sactive"),k=q1("#skpis");if(a&&!SOAR_OK){if(k)k.innerHTML=skel(4,"skkpi");a.innerHTML=skel(3,"skrow");}
+  j("/soar").then(function(d){SOAR_OK=true;renderSoar(d);}).catch(function(e){if(e==="auth"){location.reload();return;}
+    if(!SOAR_OK){if(k)k.innerHTML="";if(a)a.innerHTML=errBox(T("SOAR indisponible","SOAR unavailable"),"loadSoar()");}else toastNet();});};
+window.loadOps=function(){var it=q1("#oitems"),st=q1("#ostatus");if(it&&!OPS_OK){if(st)st.innerHTML=skel(1,"skrow");it.innerHTML=skel(6,"skkpi");}
+  j("/siem-ops").then(function(d){OPS_OK=true;renderOps(d);}).catch(function(e){if(e==="auth"){location.reload();return;}
+    if(!OPS_OK){if(st)st.innerHTML="";if(it)it.innerHTML='<div class="card" style="grid-column:1/-1">'+errBox(T("Exploitation indisponible","Operations unavailable"),"loadOps()")+'</div>';}else toastNet();});};
+
+/* ---------- thème : système / clair / sombre ---------- */
+function themeMode(){var v=LS.get("soc_theme");return v==="light"||v==="dark"?v:"system";}
+function metaTheme(){var m=q1("#mThemeColor");if(m)m.setAttribute("content",document.documentElement.getAttribute("data-theme")==="light"?"#f4f6fa":"#070a11");}
+if(typeof window.socTheme==="function"){var _st=window.socTheme;window.socTheme=function(v){var r=_st.apply(this,arguments);metaTheme();return r;};}
+function setThemeMode(m){if(m==="system"){LS.set("soc_theme",null);socTheme();}else socTheme(m);metaTheme();}
+try{matchMedia("(prefers-color-scheme: light)").addEventListener("change",function(){if(themeMode()==="system"){socTheme();metaTheme();}});}catch(e){}
+metaTheme();
+
+/* ---------- service worker : installation, mises à jour, messages ---------- */
+var SWREG=null,UPD_ASKED=false,SWV="",LASTSWCHK=Date.now();
+function sendCfg(){try{var c=navigator.serviceWorker.controller||(SWREG&&SWREG.active);if(c)c.postMessage({type:"cfg",cfg:{offline:LS.get("soc_offline")!=="0"}});}catch(e){}}
+function showUpd(w){var b=q1("#updbar");if(!b)return;b.querySelector(".ubt").textContent=T("Nouvelle version de la console disponible.","A new version of the console is available.");
+  var g=q1("#updGo");g.textContent=T("Recharger","Reload");
+  g.onclick=function(){UPD_ASKED=true;try{w.postMessage({type:"skip-waiting"});}catch(e){}setTimeout(function(){location.reload();},3000);};
+  b.classList.add("on");}
+function swInit(){if(!("serviceWorker" in navigator))return;
+  navigator.serviceWorker.register("/soc/sw.js",{scope:"/soc/",updateViaCache:"none"}).then(function(reg){SWREG=reg;
+    if(reg.waiting&&navigator.serviceWorker.controller)showUpd(reg.waiting);
+    reg.addEventListener("updatefound",function(){var w=reg.installing;if(!w)return;w.addEventListener("statechange",function(){if(w.state==="installed"&&navigator.serviceWorker.controller)showUpd(w);});});
+    sendCfg();
+    try{var c=navigator.serviceWorker.controller;if(c)c.postMessage({type:"version"});}catch(e){}
+  }).catch(function(e){try{console.warn("service worker",e);}catch(_){}});
+  navigator.serviceWorker.addEventListener("controllerchange",function(){sendCfg();if(UPD_ASKED){UPD_ASKED=false;location.reload();}});
+  navigator.serviceWorker.addEventListener("message",function(e){var d=e.data||{};if(d.type==="open"&&d.url)openUrl(d.url);if(d.type==="version")SWV=d.version||"";});}
+document.addEventListener("visibilitychange",function(){if(document.hidden)return;
+  try{if(appOn()&&!RELOADING&&Date.now()-UPD_AT>45000)refreshNow();}catch(e){}
+  if(SWREG&&Date.now()-LASTSWCHK>1800000){LASTSWCHK=Date.now();SWREG.update().catch(function(){});}});
+
+/* ---------- installation de l'application ---------- */
+var DEFER=null;
+function isStandalone(){try{return matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;}catch(e){return false;}}
+function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);}
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();DEFER=e;var d=q1("#appBtn .appdot");if(d)d.hidden=false;if(q1("#sheet.on"))renderSheet();});
+window.addEventListener("appinstalled",function(){DEFER=null;var d=q1("#appBtn .appdot");if(d)d.hidden=true;toastOk(T("Application installée : retrouvez « OMNI SOC » sur l'écran d'accueil.","App installed: find “OMNI SOC” on your home screen."));});
+window.socInstall=function(){if(!DEFER)return;DEFER.prompt();DEFER.userChoice.then(function(){DEFER=null;var d=q1("#appBtn .appdot");if(d)d.hidden=true;renderSheet();});};
+
+/* ---------- notifications push ---------- */
+function pushSupported(){return "serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;}
+function b64u(s){s=String(s||"");var raw=atob((s+"=".repeat((4-s.length%4)%4)).replace(/-/g,"+").replace(/_/g,"/"));var a=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)a[i]=raw.charCodeAt(i);return a;}
+function sameKey(sub,key){try{var k=sub.options&&sub.options.applicationServerKey;if(!k)return true;var a=new Uint8Array(k);if(a.length!==key.length)return false;for(var i=0;i<a.length;i++)if(a[i]!==key[i])return false;return true;}catch(e){return true;}}
+function postJ(u,body){return fetch(API+u,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+  .then(function(r){if(r.status===401)throw "auth";return r.json().catch(function(){return {ok:false,error:"HTTP "+r.status};});});}
+var PUSH={s:"?",sub:null};
+async function pushRefresh(){
+  if(!pushSupported()){PUSH={s:isIOS()&&!isStandalone()?"ios":"unsupported",sub:null};return PUSH;}
+  if(Notification.permission==="denied"){PUSH={s:"denied",sub:null};return PUSH;}
+  var reg=SWREG||await navigator.serviceWorker.getRegistration("/soc/");
+  if(!reg){PUSH={s:"nosw",sub:null};return PUSH;}
+  var sub=await reg.pushManager.getSubscription();PUSH={s:sub&&Notification.permission==="granted"?"on":"off",sub:sub};return PUSH;}
+async function pushSubscribe(reg){var k=await j("/vapid");var key=b64u(k.publicKey);var sub=await reg.pushManager.getSubscription();
+  if(sub&&!sameKey(sub,key)){await sub.unsubscribe();sub=null;}
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+  var r=await postJ("/subscribe",{subscription:sub});if(!r||!r.ok)throw "subscribe";return sub;}
+window.socPushOn=async function(){try{
+    if(!pushSupported()){toastWarn(isIOS()?T("Sur iPhone : installez d'abord l'application (Partager → Sur l'écran d'accueil), puis activez les notifications depuis l'application.","On iPhone: install the app first (Share → Add to Home Screen), then enable notifications from the app."):T("Ce navigateur ne gère pas les notifications push.","This browser does not support push notifications."));return;}
+    var perm=await Notification.requestPermission();
+    if(perm!=="granted"){toastWarn(T("Notifications refusées : autorisez-les dans les réglages du navigateur pour ce site.","Notifications denied: allow them in the browser settings for this site."));renderSheet();return;}
+    await pushSubscribe(await navigator.serviceWorker.ready);
+    toastOk(T("Notifications activées sur cet appareil.","Notifications enabled on this device."));
+  }catch(e){if(e==="auth"){location.reload();return;}toastErr(T("Activation impossible : ","Could not enable: ")+(e&&e.message?e.message:String(e)));}
+  renderSheet();};
+window.socPushOff=async function(){try{var st=await pushRefresh();if(st.sub){var ep=st.sub.endpoint;await st.sub.unsubscribe();await postJ("/unsubscribe",{endpoint:ep}).catch(function(){});}
+    toastInfo(T("Notifications désactivées sur cet appareil.","Notifications disabled on this device."));}catch(e){toastErr(String(e));}renderSheet();};
+window.socPushTest=async function(){try{var st=await pushRefresh();if(!st.sub){toastWarn(T("Activez d'abord les notifications.","Enable notifications first."));return;}
+    var r=await postJ("/push-test",{endpoint:st.sub.endpoint});
+    if(r&&r.ok)toastOk(T("Test envoyé : la notification doit arriver dans quelques secondes.","Test sent: the notification should arrive within seconds."));
+    else toastWarn((r&&r.error)||T("Échec de l'envoi.","Sending failed."));}catch(e){if(e==="auth"){location.reload();return;}toastErr(T("Échec du test.","Test failed."));}};
+async function pushResync(){try{if(!pushSupported()||Notification.permission!=="granted")return;var reg=await navigator.serviceWorker.ready;var sub=await reg.pushManager.getSubscription();if(sub)await pushSubscribe(reg);}catch(e){}}
+
+/* ---------- menu (feuille) : pages, réglages, application ---------- */
+var SHEET_OPENER=null;
+function seg(name,opts,cur){return '<span class="seg" role="group" aria-label="'+esc(name)+'">'+opts.map(function(o){return '<button type="button" aria-pressed="'+(o[0]===cur?"true":"false")+'" onclick="'+o[2]+'">'+esc(o[1])+'</button>';}).join("")+'</span>';}
+async function renderSheet(){var body=q1("#shBody");if(!body)return;
+  var p=curPage(),html="";
+  var tt=q1("#shTitle");if(tt)tt.textContent=T("Menu","Menu");
+  // pages (mobile)
+  html+='<div class="shpages"><div class="shsec">'+esc(T("Pages","Pages"))+'</div><div class="shgrid">';
+  document.querySelectorAll("#nav a[data-p]").forEach(function(a){var pg=a.getAttribute("data-p");var ic=a.querySelector(".ic");var lab=a.querySelector("span:not(.ic):not(.navbadge)");
+    html+='<button type="button" onclick="goNav(\''+pg+'\')"'+(pg===p?' aria-current="page"':'')+'>'+(ic?ic.innerHTML:"")+'<span>'+esc(lab?lab.textContent:pg)+'</span></button>';});
+  html+='</div></div>';
+  // notifications
+  await pushRefresh().catch(function(){});
+  var ps=PUSH.s,pl={on:T("Activées sur cet appareil","Enabled on this device"),off:T("Désactivées","Disabled"),denied:T("Bloquées dans le navigateur","Blocked by the browser"),
+    unsupported:T("Non prises en charge par ce navigateur","Not supported by this browser"),ios:T("iPhone : installez d'abord l'application","iPhone: install the app first"),nosw:T("Service hors ligne non actif","Offline service not active"),"?":"…"}[ps]||ps;
+  html+='<div class="shsec">'+esc(T("Alertes sur cet appareil","Alerts on this device"))+'</div>';
+  html+='<div class="shrow"><span class="lb">'+esc(T("Notifications push","Push notifications"))+'<small>'+esc(pl)+'</small></span>';
+  if(ps==="on")html+='<button type="button" class="shbtn" onclick="socPushTest()">'+esc(T("Envoyer un test","Send a test"))+'</button><button type="button" class="shbtn" onclick="socPushOff()">'+esc(T("Désactiver","Disable"))+'</button>';
+  else if(ps==="off"||ps==="nosw"||ps==="?")html+='<button type="button" class="shbtn pri" onclick="socPushOn()">'+esc(T("Activer","Enable"))+'</button>';
+  html+='</div>';
+  // application
+  var inst=isStandalone()?T("Installée — vous l'utilisez","Installed — in use"):DEFER?T("Installable sur cet appareil","Can be installed on this device"):isIOS()?T("Safari : Partager → Sur l'écran d'accueil","Safari: Share → Add to Home Screen"):T("Menu du navigateur → Installer l'application","Browser menu → Install app");
+  html+='<div class="shrow"><span class="lb">'+esc(T("Application","App"))+'<small>'+esc(inst)+'</small></span>'+(DEFER?'<button type="button" class="shbtn pri" onclick="socInstall()"><svg class="svi" aria-hidden="true"><use href="#i-download"></use></svg> '+esc(T("Installer","Install"))+'</button>':'')+'</div>';
+  html+='<div class="shrow"><span class="lb">'+esc(T("Copie hors ligne","Offline copy"))+'<small>'+esc(T("Dernières données lisibles sans réseau (24 h max., effacées à la déconnexion)","Latest data readable offline (24 h max, erased at sign-out)"))+'</small></span>'
+    +seg(T("Copie hors ligne","Offline copy"),[["1",T("Oui","On"),"socOffline('1')"],["0",T("Non","Off"),"socOffline('0')"]],LS.get("soc_offline")==="0"?"0":"1")+'</div>';
+  // affichage
+  html+='<div class="shsec">'+esc(T("Affichage","Display"))+'</div>';
+  html+='<div class="shrow"><span class="lb">'+esc(T("Thème","Theme"))+'</span>'+seg(T("Thème","Theme"),[["system",T("Système","System"),"socThemeMode('system')"],["light",T("Clair","Light"),"socThemeMode('light')"],["dark",T("Sombre","Dark"),"socThemeMode('dark')"]],themeMode())+'</div>';
+  html+='<div class="shrow"><span class="lb">'+esc(T("Langue","Language"))+'</span>'+seg(T("Langue","Language"),[["fr","FR","setLang('fr')"],["en","EN","setLang('en')"]],EN()?"en":"fr")+'</div>';
+  var dens="comfortable";try{dens=_densRead();}catch(e){}
+  html+='<div class="shrow"><span class="lb">'+esc(T("Densité","Density"))+'</span>'+seg(T("Densité","Density"),[["comfortable",T("Confort","Comfort"),"socDens('comfortable')"],["compact",T("Compacte","Compact"),"socDens('compact')"]],dens)+'</div>';
+  var cad="60000";try{cad=getCadence();}catch(e){}
+  html+='<div class="shrow"><span class="lb">'+esc(T("Rafraîchissement","Refresh"))+'</span>'+seg(T("Rafraîchissement","Refresh"),[["30000","30 s","socCad('30000')"],["60000","60 s","socCad('60000')"],["0",T("Pause","Pause"),"socCad('0')"]],cad)+'</div>';
+  // divers
+  html+='<div class="shsec">'+esc(T("Session","Session"))+'</div><div class="shrow"><button type="button" class="shbtn" onclick="socCloseSheet();openHelp()">'+esc(T("Aide et raccourcis","Help & shortcuts"))+'</button><button type="button" class="shbtn" onclick="logout()">'+esc(T("Se déconnecter","Sign out"))+'</button></div>';
+  html+='<div class="shfoot">OMNI SOC '+esc(V3)+(SWV?' · '+esc(SWV):'')+'</div>';
+  body.innerHTML=html;}
+window.socThemeMode=function(m){setThemeMode(m);renderSheet();};
+window.socDens=function(m){try{applyDensity(m);}catch(e){}renderSheet();};
+window.socCad=function(v){try{setCadence(v);}catch(e){}renderSheet();};
+window.socOffline=function(v){LS.set("soc_offline",v==="0"?"0":null);if(v==="0")purgeData();sendCfg();renderSheet();};
+window.socSheet=function(){var s=q1("#sheet");if(!s)return;SHEET_OPENER=document.activeElement;s.classList.add("on");s.setAttribute("aria-hidden","false");
+  ["#appBtn","#bMore"].forEach(function(id){var b=q1(id);if(b)b.setAttribute("aria-expanded","true");});
+  renderSheet().then(function(){var f=s.querySelector(".shbox button,.shbox [tabindex]");var box=s.querySelector(".shbox");try{(box||f).focus();}catch(e){}});};
+window.socCloseSheet=function(){var s=q1("#sheet");if(!s||!s.classList.contains("on"))return;s.classList.remove("on");s.setAttribute("aria-hidden","true");
+  ["#appBtn","#bMore"].forEach(function(id){var b=q1(id);if(b)b.setAttribute("aria-expanded","false");});
+  var o=SHEET_OPENER;SHEET_OPENER=null;if(o&&o.focus&&document.contains(o)){try{o.focus();}catch(e){}}};
+function socCloseSheet(){window.socCloseSheet();}
+document.addEventListener("keydown",function(e){var s=q1("#sheet.on");if(!s)return;
+  if(e.key==="Escape"){e.preventDefault();socCloseSheet();return;}
+  if(e.key!=="Tab")return;var f=s.querySelectorAll(".shbox button:not([disabled]),.shbox a[href]");if(!f.length)return;
+  var first=f[0],last=f[f.length-1],a=document.activeElement;
+  if(e.shiftKey&&(a===first||!s.contains(a))){e.preventDefault();last.focus();}else if(!e.shiftKey&&a===last){e.preventDefault();first.focus();}},true);
+
+/* ---------- démarrage ---------- */
+function afterStart(){if(STARTED)return;STARTED=true;var o=hashParams();
+  if(o.p)navTo(o.p);
+  if(o["case"])PENDING_CASE=o["case"];
+  syncNav(curPage());bnavI18n();metaTheme();
+  if(o.e||o["case"])setTimeout(function(){var h="#p="+curPage();try{history.replaceState(null,"",h);}catch(e){}LASTH=h;},8000);
+  else LASTH=location.hash;
+  setTimeout(pushResync,4000);}
+if(typeof start==="function"){var _sa=start;window.start=function(){var r=_sa.apply(this,arguments);try{afterStart();}catch(e){}return r;};}
+if(appOn())afterStart();
+syncNav(curPage());bnavI18n();
+swInit();
+})();
+
 </script>
 </body>
 </html>

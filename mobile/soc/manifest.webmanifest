@@ -1,0 +1,34 @@
+{
+  "id": "/soc/",
+  "name": "OMNI SOC — Console de sécurité",
+  "short_name": "OMNI SOC",
+  "description": "Console SOC du SIEM OMNITECH : incidents, blocages SOAR, exploitation du SIEM.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "/soc/?source=pwa",
+  "scope": "/soc/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#070a11",
+  "theme_color": "#070a11",
+  "categories": ["security", "utilities", "business"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/soc/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/soc/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/soc/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/soc/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/soc/icons/badge-96.png", "sizes": "96x96", "type": "image/png", "purpose": "monochrome" }
+  ],
+  "shortcuts": [
+    { "name": "Incidents", "short_name": "Incidents", "description": "File des incidents corrélés", "url": "/soc/?source=raccourci#p=incidents",
+      "icons": [{ "src": "/soc/icons/sc-incidents.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "SOAR — IP bloquées", "short_name": "SOAR", "description": "IP bloquées au pare-feu, déblocage", "url": "/soc/?source=raccourci#p=soar",
+      "icons": [{ "src": "/soc/icons/sc-soar.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "Exploitation du SIEM", "short_name": "Exploitation", "description": "Mises à jour, snapshots, disques, services", "url": "/soc/?source=raccourci#p=ops",
+      "icons": [{ "src": "/soc/icons/sc-ops.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "Vue d'ensemble — À traiter", "short_name": "À traiter", "description": "Niveau de menace et liste « À traiter »", "url": "/soc/?source=raccourci#p=overview",
+      "icons": [{ "src": "/soc/icons/sc-overview.png", "sizes": "96x96", "type": "image/png" }] }
+  ]
+}

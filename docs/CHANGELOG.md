@@ -3,6 +3,7 @@
 Toutes les évolutions notables du dispositif. Format : date — changement.
 *Dernière revue : 2026-11-12.*
 ## 2026-11-12 (SOAR, sauvegardes)
+- Console SOC v3 : application installable (PWA) avec raccourcis, mode hors ligne et notifications push vers la fiche de l'incident ; navigation mobile, filtres et recherche des incidents, titres d'incidents lisibles, états de chargement et d'erreur, thème clair finalisé.
 - SOAR : le nombre d'occurrences d'une IP bloquée reprend la valeur calculée par Graylog (`count()`), au lieu d'une valeur fixe tirée du backlog. Aucune décision de blocage ne change.
 - SOAR : récapitulatif quotidien en HTML (indicateurs, tableaux par section, liens vers l'historique de chaque IP dans Graylog, commandes de déblocage), avec une version texte de secours.
 - Sauvegardes de configuration, certificats et chaîne d'intégrité déplacées vers le partage Informatique (`SIEM-Sauvegardes`, compte de service dédié) ; le repli en accès invité est supprimé.

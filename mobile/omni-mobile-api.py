@@ -2176,6 +2176,29 @@ class H(BaseHTTPRequestHandler):
                 save_subs(subs)
                 return self._json({"ok": True})
             return self._json({"ok": False}, 400)
+        if p in ("/m/api/push-test", "/m/api/unsubscribe"):   # OMNITECH-SOC-20261112
+            u = self._user()
+            if not u:
+                return self._json({"error": "auth"}, 401)
+            if not origin_ok(self.headers):
+                return self._json({"ok": False, "error": "origine refusée"}, 403)
+            ep = str(b.get("endpoint") or "")
+            subs = load_subs()
+            known = bool(ep) and any(s.get("endpoint") == ep for s in subs)
+            if p == "/m/api/unsubscribe":
+                if known:
+                    save_subs([s for s in subs if s.get("endpoint") != ep])
+                return self._json({"ok": True, "removed": known})
+            if not known:
+                return self._json({"ok": False, "error": "appareil non abonné : réactivez les notifications"}, 404)
+            now = time.time()
+            if now - _PUSH_TEST.get(ep, 0) < 20:
+                return self._json({"ok": False, "error": "patientez 20 s entre deux tests"}, 429)
+            _PUSH_TEST[ep] = now
+            n = push_all("Test de notification OMNI SOC", f"Les alertes du SIEM arriveront sur cet appareil ({u}).",
+                         url="/soc/#p=overview", sev="", tag="omni-soc-test", only=ep)
+            return self._json({"ok": n > 0, "sent": n,
+                               "error": "" if n > 0 else "échec de l'envoi (abonnement expiré ou service push injoignable)"})
         if p == "/m/api/push":
             # webhook Graylog (localhost) : secret partagé (query ?secret=, body ou header)
             import urllib.parse as _up
@@ -2186,13 +2209,30 @@ class H(BaseHTTPRequestHandler):
             title = b.get("title") or b.get("event_definition_title") or "Alerte SIEM critique"
             ev = b.get("event") or {}
             body = b.get("body") or ev.get("message") or ev.get("key") or "Ouvrir l'app pour le détail"
-            sent = push_all(str(title)[:90], str(body)[:140])
+            # OMNITECH-SOC-20261112 : lien d'ouverture, gravité, étiquette (une notification par définition)
+            url = str(b.get("url") or "")
+            if not url.startswith("/soc/"):
+                kt = ev.get("key_tuple") or []
+                ent = str((kt[0] if kt else "") or ev.get("key") or "").split("|")[0].strip()
+                url = "/soc/#p=incidents"
+                if ent and len(ent) <= 120:
+                    url += "&e=" + _up.quote(ent, safe="")
+            try:
+                prio = int(ev.get("priority") or b.get("priority") or 0)
+            except (TypeError, ValueError):
+                prio = 0
+            sev = str(b.get("sev") or ("critical" if prio >= 4 else "high" if prio == 3 else "medium" if prio == 2 else ""))
+            tag = "omni-" + str(b.get("event_definition_id") or b.get("tag") or "soc")[:40]
+            sent = push_all(str(title)[:90], str(body)[:140], url=url, sev=sev, tag=tag)
             return self._json({"sent": sent})
         self._json({"error": "not found"}, 404)
 
 
-def push_all(title: str, body: str) -> int:
-    """Envoie un web-push minimal à tous les abonnés (payload non sensible)."""
+_PUSH_TEST: dict = {}   # OMNITECH-SOC-20261112 : anti-rafale des notifications de test
+
+
+def push_all(title: str, body: str, url: str = "", sev: str = "", tag: str = "", only: str = "") -> int:
+    """Envoie un web-push minimal à tous les abonnés (ou au seul `only`) ; payload non sensible."""
     try:
         from pywebpush import webpush, WebPushException  # type: ignore
     except ImportError:
@@ -2200,8 +2240,11 @@ def push_all(title: str, body: str) -> int:
     if not os.path.exists(VAPID_PRIV_FILE):
         return -1
     priv = open(VAPID_PRIV_FILE).read()
-    payload = json.dumps({"title": title, "body": body})[:300]
+    payload = json.dumps({"title": str(title)[:90], "body": str(body)[:140], "url": str(url)[:300],
+                          "sev": str(sev)[:12], "tag": str(tag)[:60]}, ensure_ascii=False).encode("utf-8")
     subs = load_subs()
+    if only:
+        subs = [s for s in subs if s.get("endpoint") == only]
     ok, dead = 0, []
     for s in subs:
         try:
@@ -2214,7 +2257,7 @@ def push_all(title: str, body: str) -> int:
         except Exception:
             pass
     if dead:
-        save_subs([s for s in subs if s.get("endpoint") not in dead])
+        save_subs([s for s in load_subs() if s.get("endpoint") not in dead])
     return ok
 
 

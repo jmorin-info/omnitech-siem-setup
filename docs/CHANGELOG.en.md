@@ -3,6 +3,7 @@
 All notable changes to the platform. Format: date — change.
 *Last review: 2026-11-12.*
 ## 2026-11-12 (SOAR, backups)
+- SOC console v3: installable app (PWA) with shortcuts, offline mode and push notifications that open the incident; mobile navigation, incident filters and search, readable incident titles, loading and error states, finished light theme.
 - SOAR: the hit count of a blocked IP now uses the value computed by Graylog (`count()`) instead of a fixed value derived from the backlog. No blocking decision changes.
 - SOAR: daily summary e-mail in HTML (indicators, per-section tables, links to each IP's history in Graylog, unblock commands), with a plain-text fallback.
 - Configuration, certificate and integrity-chain backups moved to the IT share (`SIEM-Sauvegardes`, dedicated service account); the guest-access fallback is removed.
