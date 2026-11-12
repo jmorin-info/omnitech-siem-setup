@@ -144,6 +144,69 @@ def merge(dst, src):
             else:
                 du[c] = dict(info)
 
+# ---- Base de reference agregee + cache journalier (12/11/2026) ----------------------------
+BASE_CACHE = "/var/lib/omni-ueba/geo-baseline-jours.json"
+BASE_VER   = "v1"
+DAY_MS     = 86400000
+def _agg_counts(base_query, country_f, idx, gte_ms, lt_ms):
+    """{user: {pays: nb}} sur [gte_ms, lt_ms) - memes filtres que country_map."""
+    body = {"size": 0, "query": {"bool": {"must": [base_query,
+                {"range": {"timestamp": {"gte": int(gte_ms), "lt": int(lt_ms), "format": "epoch_millis"}}}]}},
+            "aggs": {"u": {"terms": {"field": "user", "size": 65000},
+                     "aggs": {"c": {"terms": {"field": country_f, "size": 1000}}}}}}
+    a = es(f"/{idx}/_search", body)["aggregations"]["u"]
+    if a.get("sum_other_doc_count"):
+        print("baseline : agregation incomplete (sum_other_doc_count)", file=sys.stderr)
+    out = {}
+    for b in a["buckets"]:
+        user = b["key"]
+        if not user or WAN_USER.match(str(user)):
+            continue
+        for c in b["c"]["buckets"]:
+            if not c["key"] or c["key"] == "N/A":
+                continue
+            out.setdefault(user, {})[c["key"]] = c["doc_count"]
+    return out
+def _add(dst, src):
+    for u, cs in src.items():
+        du = dst.setdefault(u, {})
+        for c, n in cs.items():
+            du[c] = du.get(c, 0) + n
+def baseline_counts(base_query, country_f, label):
+    idx = "omni-m365_*" if label == "M365" else "omni-fortigate_*"
+    now = int(time.time() * 1000)
+    a_ms = now - BASELINE_D * DAY_MS            # = now-30d
+    b_ms = now - RECENT_H * 3600000             # = now-24h (borne exclue)
+    stable_end = min(b_ms, now - 2 * DAY_MS)    # jours caches : termines depuis >= 48 h (logs tardifs)
+    nocache = bool(os.environ.get("UEBA_GEO_NOCACHE"))
+    try:
+        cache = {} if nocache else json.load(open(BASE_CACHE))
+    except Exception:
+        cache = {}
+    tot = {}
+    d0 = -(-a_ms // DAY_MS) * DAY_MS            # premier debut de jour UTC >= a_ms
+    if nocache:
+        _add(tot, _agg_counts(base_query, country_f, idx, a_ms, b_ms))
+    else:
+        if d0 > a_ms:
+            _add(tot, _agg_counts(base_query, country_f, idx, a_ms, min(d0, b_ms)))
+        cur = d0
+        while cur + DAY_MS <= stable_end:
+            k = f"{BASE_VER}|{label}|{cur}"
+            if k not in cache:
+                cache[k] = _agg_counts(base_query, country_f, idx, cur, cur + DAY_MS)
+            _add(tot, cache[k]); cur += DAY_MS
+        if cur < b_ms:
+            _add(tot, _agg_counts(base_query, country_f, idx, cur, b_ms))
+        cache = {k: v for k, v in cache.items()
+                 if k.startswith(BASE_VER + "|") and int(k.rsplit("|", 1)[1]) >= a_ms - 2 * DAY_MS}
+        try:
+            os.makedirs(os.path.dirname(BASE_CACHE), exist_ok=True)
+            tmp = BASE_CACHE + ".tmp"; json.dump(cache, open(tmp, "w")); os.replace(tmp, BASE_CACHE)
+        except Exception as e:
+            print("cache baseline KO:", e, file=sys.stderr)
+    return {u: {c: {"count": n, "city": None, "ip": None, "source": label} for c, n in cs.items()}
+            for u, cs in tot.items()}
 def main():
     recent_gte   = f"now-{RECENT_H}h"
     baseline_gte = f"now-{BASELINE_D}d"
@@ -151,10 +214,13 @@ def main():
 
     # --- BASELINE : pays connus par compte (hors fenetre recente)
     baseline = {}
-    merge(baseline, country_map(M365_Q, baseline_gte, baseline_lt,
-                                "src_country", "src_city", "src_ip", "M365"))
-    merge(baseline, country_map(VPN_Q, baseline_gte, baseline_lt,
-                                "remip_country_code", "remip_city_name", "remip", "VPN"))
+    # 12/11/2026 : base AGREGEE (exacte, plus de troncature a 10 000 documents) avec cache
+    # par jour UTC ; seules les bordures (<= 3 jours) sont relues a chaque passage.
+    merge(baseline, baseline_counts(M365_Q, "src_country", "M365"))
+    merge(baseline, baseline_counts(VPN_Q, "remip_country_code", "VPN"))
+    if os.environ.get("UEBA_GEO_DUMP"):
+        json.dump({u: {c: i["count"] for c, i in cs.items()} for u, cs in baseline.items()},
+                  open(os.environ["UEBA_GEO_DUMP"], "w"), sort_keys=True)
 
     # --- RECENT : pays vus dans les dernieres RECENT_H heures.
     # On N'ALERTE QUE sur M365 (residentiel) : la sortie SSL-VPN geolocalise au

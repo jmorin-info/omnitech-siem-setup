@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+# =============================================================================
+# omni-siem-coherence - sentinelle de cohérence du SIEM (12/11/2026)
+#   Toutes les 5 min (timer), émet en GELF event_source=siem_health,
+#   health_type=coherence, alert_tag=<contrôle> -> stream Interne SIEM,
+#   définition « OMNI - Cohérence SIEM (sentinelle) ».
+#   Contrôles :
+#     1. fielddata_id       : cache fielddata `_id` >= FD_ID_MB (un client trie ou
+#                             agrège sur _id -> saturation du breaker, cf. 12/11).
+#                             Capture _tasks + top_queries dans /var/log/omni-siem-coherence/.
+#     2. fielddata_breaker  : breaker fielddata >= FD_RATIO de sa limite, ou
+#                             nouveaux déclenchements du breaker (tripped).
+#     3. definition_en_echec: >= DEF_FAILS échecs « Event processor <...> failed »
+#                             d'une même définition dans server.log depuis le passage précédent.
+#     3b. notification_en_echec : >= NOTIF_FAILS abandons définitifs d'une même
+#                             notification (ex. « OMNI - Triage (mail critique) » en timeout).
+#     4. soar_flux_fige     : blocklist.txt plus vieille que SOAR_MAX_AGE_S, ou
+#                             IP active de blocklist.json absente du fichier publié.
+#     5. soar_fg_ne_lit_plus: aucun GET de /kit/soar/blocklist.txt dans le journal
+#                             nginx depuis SOAR_FETCH_MAX_S (les FortiGate lisent toutes les 2 min).
+#     6. canal_silencieux   : (horaire) poste/serveur dont le journal Sécurité (winsec)
+#                             est muet depuis 6 h alors que Sysmon/autres journaux arrivent.
+#   Anti-bruit : une alerte par clé et par fenêtre (1 h, 24 h pour canal_silencieux).
+#   Options : --simuler (aucun GELF, état non enregistré), --force-horaire.
+# =============================================================================
+import json, os, re, ssl, sys, time, base64, urllib.request, datetime, glob
+
+CONF = {}
+for p in ("/etc/default/omni-siem-coherence",):
+    try:
+        for l in open(p):
+            l = l.strip()
+            if l and not l.startswith("#") and "=" in l:
+                k, v = l.split("=", 1); CONF[k.strip()] = v.strip().strip('"')
+    except FileNotFoundError:
+        pass
+def c(k, d): return type(d)(CONF.get(k, d))
+
+ES = "http://127.0.0.1:9200"
+GELF = c("GELF_URL", "http://127.0.0.1:12201/gelf")
+FD_ID_MB = c("FD_ID_MB", 256)
+FD_RATIO = c("FD_RATIO", 0.75)
+TRIP_DELTA = c("TRIP_DELTA", 10)
+DEF_FAILS = c("DEF_FAILS", 3)
+SOAR_MAX_AGE_S = c("SOAR_MAX_AGE_S", 4500)
+SOAR_FETCH_MAX_S = c("SOAR_FETCH_MAX_S", 900)
+NGINX_LOG = c("NGINX_LOG", "/var/log/nginx/access.log")
+SERVER_LOG = "/var/log/graylog-server/server.log"
+STATE_DIR = "/var/lib/omni-siem-coherence"
+CAP_DIR = "/var/log/omni-siem-coherence"
+SOAR_STATE = "/var/lib/omni-soar/blocklist.json"
+SOAR_FEED = "/var/www/siem-kit/soar/blocklist.txt"
+SIM = "--simuler" in sys.argv
+FORCE_H = "--force-horaire" in sys.argv
+NOW = time.time()
+
+def es(path, body=None, timeout=60):
+    r = urllib.request.Request(ES + path, data=json.dumps(body).encode() if body is not None else None,
+                               headers={"Content-Type": "application/json"})
+    return json.load(urllib.request.urlopen(r, timeout=timeout))
+
+def load_state():
+    try: return json.load(open(os.path.join(STATE_DIR, "state.json")))
+    except Exception: return {}
+def save_state(st):
+    if SIM: return
+    os.makedirs(STATE_DIR, exist_ok=True)
+    t = os.path.join(STATE_DIR, "state.json.tmp")
+    json.dump(st, open(t, "w")); os.replace(t, os.path.join(STATE_DIR, "state.json"))
+
+ST = load_state(); ST.setdefault("sent", {})
+SENT = []
+
+def alert(key, tag, msg, level=4, window=3600, **fields):
+    last = ST["sent"].get(key, 0)
+    if NOW - last < window:
+        print(f"  (déjà signalé) {key}"); return
+    f = {"version": "1.1", "host": "bx-it-graylog-vm", "short_message": msg, "level": level,
+         "_event_source": "siem_health", "_health_type": "coherence", "_alert_tag": tag,
+         "_coherence_key": key}
+    for k, v in fields.items(): f["_" + k] = v
+    print(("SIMULATION " if SIM else "") + f"ALERTE {tag}: {msg}")
+    if not SIM:
+        try:
+            urllib.request.urlopen(urllib.request.Request(GELF, data=json.dumps(f).encode(),
+                                   headers={"Content-Type": "application/json"}), timeout=8)
+            ST["sent"][key] = NOW; SENT.append(key)
+        except Exception as e:
+            print("  GELF KO:", e, file=sys.stderr)
+
+def capture(reason):
+    if SIM: return None
+    os.makedirs(CAP_DIR, exist_ok=True)
+    out = {"raison": reason, "date": datetime.datetime.now().isoformat()}
+    for k, p in (("fielddata", "/_cat/fielddata?format=json&bytes=b"),
+                 ("tasks", "/_tasks?detailed=true&actions=*search*"),
+                 ("top_memory", "/_insights/top_queries?type=memory"),
+                 ("top_latency", "/_insights/top_queries?type=latency")):
+        try: out[k] = es(p)
+        except Exception as e: out[k] = "KO " + str(e)[:200]
+    fn = os.path.join(CAP_DIR, "capture-" + time.strftime("%Y%m%d-%H%M") + ".json")
+    json.dump(out, open(fn, "w"), ensure_ascii=False)
+    for old in sorted(glob.glob(os.path.join(CAP_DIR, "capture-*.json")))[:-30]:
+        os.remove(old)
+    return fn
+
+# ---------------------------------------------------------------- 1-2 fielddata
+def check_fielddata():
+    try:
+        fd = es("/_cat/fielddata?format=json&bytes=b")
+        per = {}
+        for r in fd: per[r["field"]] = per.get(r["field"], 0) + int(r["size"])
+        idb = per.get("_id", 0)
+        br = es("/_nodes/stats/breaker")["nodes"]
+        est = lim = trip = 0
+        for n in br.values():
+            b = n["breakers"]["fielddata"]; est += b["estimated_size_in_bytes"]; lim += b["limit_size_in_bytes"]; trip += b["tripped"]
+    except Exception as e:
+        print("fielddata: lecture KO", e); return
+    top = sorted(per.items(), key=lambda x: -x[1])[:3]
+    print(f"fielddata: _id={idb/1048576:.0f} Mo, breaker {est/1048576:.0f}/{lim/1048576:.0f} Mo, tripped={trip}, top={[(k, round(v/1048576)) for k, v in top]}")
+    if idb >= FD_ID_MB * 1048576:
+        fn = capture("fielddata _id")
+        alert("fielddata_id", "fielddata_pression",
+              f"OpenSearch : cache fielddata _id = {idb/1048576:.0f} Mo (un client trie/agrège sur _id). Capture : {fn}",
+              fd_id_mo=round(idb/1048576), capture=fn or "")
+    ratio = est / lim if lim else 0
+    prev = ST.get("tripped")
+    delta = (trip - prev) if (prev is not None and trip >= prev) else 0
+    ST["tripped"] = trip
+    if ratio >= FD_RATIO or delta >= TRIP_DELTA:
+        fn = capture("breaker fielddata")
+        alert("fielddata_breaker", "fielddata_pression",
+              f"OpenSearch : breaker fielddata à {ratio*100:.0f} % de sa limite, {delta} déclenchement(s) depuis 5 min "
+              f"(top : {', '.join(f'{k}={v/1048576:.0f} Mo' for k, v in top)}). Les définitions groupées échouent dans ce cas.",
+              fd_ratio=round(ratio*100), fd_tripped_delta=delta, capture=fn or "")
+
+# ---------------------------------------------------------------- 3 définitions
+RX_FAIL = re.compile(r"Event processor <aggregation-v1/([0-9a-f]{24})> failed to execute: (.{0,220})")
+RX_NOTIF = re.compile(r"Failed permanently to execute notification, giving up - <([0-9a-f]{24})/([^/>]+)/")
+NOTIF_FAILS = c("NOTIF_FAILS", 2)
+def gl_title(did):
+    try:
+        env = {}
+        for l in open("/root/omnitech-siem-setup/00-vars.env"):
+            if l.startswith("GRAYLOG_ADMIN_PASS="): env["p"] = l.split("=", 1)[1].strip().strip('"').strip("'")
+        auth = "Basic " + base64.b64encode(("admin:" + env["p"]).encode()).decode()
+        r = urllib.request.Request("https://127.0.0.1:9000/api/events/definitions/" + did,
+                                   headers={"Authorization": auth, "Accept": "application/json", "X-Requested-By": "coherence"})
+        return json.load(urllib.request.urlopen(r, context=ssl._create_unverified_context(), timeout=15)).get("title", did)
+    except Exception:
+        return did
+def check_definitions():
+    try: s = os.stat(SERVER_LOG)
+    except Exception as e: print("server.log KO", e); return
+    pos = ST.get("log_pos", {})
+    if pos.get("ino") != s.st_ino or pos.get("off", 0) > s.st_size:
+        off = 0 if pos else s.st_size        # premier passage : pas de rejeu de l'historique
+    else:
+        off = pos["off"]
+    fails = {}
+    with open(SERVER_LOG, "rb") as f:
+        f.seek(off)
+        data = f.read(64 * 1048576)
+        newoff = f.tell()
+    txt = data.decode("utf-8", "replace")
+    for m in RX_FAIL.finditer(txt):
+        d = fails.setdefault(m.group(1), [0, m.group(2)]); d[0] += 1
+    notifs = {}
+    for m in RX_NOTIF.finditer(txt):
+        d = notifs.setdefault(m.group(1), [0, m.group(2)]); d[0] += 1
+    for nid, (n, name) in notifs.items():
+        print(f"notification {name} : {n} échec(s) définitif(s)")
+        if n >= NOTIF_FAILS:
+            alert("notif_" + nid, "notification_en_echec",
+                  f"Notification Graylog « {name} » abandonnée {n} fois en 5 min (échec définitif, pas de nouvel essai) : "
+                  "alertes potentiellement non transmises, voir server.log et le service appelé",
+                  notification_id=nid, notif_title=name, notif_fails=n)
+    ST["log_pos"] = {"ino": s.st_ino, "off": newoff}
+    print(f"définitions : {sum(v[0] for v in fails.values())} échec(s) lus, {len(fails)} définition(s)")
+    for did, (n, err) in fails.items():
+        if n >= DEF_FAILS:
+            t = gl_title(did)
+            alert("def_" + did, "definition_en_echec",
+                  f"Définition d'événement en échec répété ({n} fois en 5 min) : {t} — {err.strip()[:180]}",
+                  event_definition_id=did, def_title=t, def_fails=n)
+
+# ---------------------------------------------------------------- 4-5 SOAR
+def check_soar():
+    try: age = NOW - os.path.getmtime(SOAR_FEED)
+    except Exception: age = None
+    try: active = {ip for ip, exp in json.load(open(SOAR_STATE)).items() if exp > NOW + 120}
+    except Exception: active = set()
+    try: feed = {l.strip() for l in open(SOAR_FEED) if l.strip() and not l.startswith("#")}
+    except Exception: feed = set()
+    missing = sorted(active - feed)
+    print(f"SOAR : fichier âgé de {None if age is None else round(age/60)} min, {len(feed)} IP publiées, {len(missing)} active(s) non publiée(s)")
+    if age is None or age > SOAR_MAX_AGE_S or missing:
+        alert("soar_flux", "soar_flux_fige",
+              f"SOAR : blocklist publiée {'absente' if age is None else f'âgée de {age/60:.0f} min'}"
+              + (f", {len(missing)} IP active(s) non publiée(s) : {', '.join(missing[:5])}" if missing else "")
+              + " (omni-soar-expire réécrit le fichier à :30)", soar_feed_age_min=-1 if age is None else round(age/60))
+    # lecture par les FortiGate (journal nginx, fin de fichier)
+    try:
+        sz = os.path.getsize(NGINX_LOG)
+        with open(NGINX_LOG, "rb") as f:
+            f.seek(max(0, sz - 4 * 1048576)); tail = f.read().decode("utf-8", "replace")
+    except Exception as e:
+        print("nginx :", e); return
+    last = {}
+    for m in re.finditer(r'^(\S+) \S+ \S+ \[([^\]]+)\] "GET /kit/soar/blocklist\.txt[^"]*" (\d{3})', tail, re.M):
+        try: t = datetime.datetime.strptime(m.group(2), "%d/%b/%Y:%H:%M:%S %z").timestamp()
+        except Exception: continue
+        # les FortiGate relisent par GET conditionnel : 304 = lecture réussie, fichier inchangé
+        if m.group(3) in ("200", "304"): last[m.group(1)] = max(last.get(m.group(1), 0), t)
+    if not last:
+        print("SOAR : aucune lecture 200/304 de la blocklist dans les 4 derniers Mo du journal nginx")
+        if sz > 4 * 1048576 or os.path.getmtime(NGINX_LOG) > NOW - 600:
+            alert("soar_fetch", "soar_fg_ne_lit_plus",
+                  "SOAR : aucune lecture réussie de /kit/soar/blocklist.txt dans le journal nginx récent (les FortiGate la lisent toutes les 2 min)")
+        return
+    newest = max(last.values())
+    print("SOAR : dernières lectures", {ip: round((NOW - t)/60) for ip, t in last.items()}, "min")
+    if NOW - newest > SOAR_FETCH_MAX_S:
+        alert("soar_fetch", "soar_fg_ne_lit_plus",
+              f"SOAR : la blocklist n'a plus été lue depuis {(NOW-newest)/60:.0f} min (FortiGate : connecteur OMNI_SOAR_Blocklist)")
+
+# ---------------------------------------------------------------- 6 canal muet
+def check_channels():
+    hr = int(time.strftime("%H"))
+    if not FORCE_H and (ST.get("last_hourly_h") == time.strftime("%Y%m%d%H")): return
+    ST["last_hourly_h"] = time.strftime("%Y%m%d%H")
+    def agg(prefix, gte, lt=None):
+        rng = {"gte": gte};
+        if lt: rng["lt"] = lt
+        r = es(f"/{prefix}_*/_search", {"size": 0, "query": {"range": {"timestamp": rng}},
+               "aggs": {"s": {"terms": {"field": "source", "size": 5000}}}}, timeout=240)
+        return {b["key"]: b["doc_count"] for b in r["aggregations"]["s"]["buckets"]}
+    try:
+        base = agg("omni-winsec", "now-7d", "now-6h")
+        recent = agg("omni-winsec", "now-6h")
+        other = agg("omni-sysmon", "now-6h")
+        for k, v in agg("omni-winother", "now-6h").items(): other[k] = other.get(k, 0) + v
+    except Exception as e:
+        print("canaux : KO", e); return
+    muets = [(h, n, other[h]) for h, n in base.items() if n >= 500 and recent.get(h, 0) == 0 and other.get(h, 0) >= 50]
+    print(f"canaux : {len(muets)} hôte(s) au journal Sécurité muet alors que les autres journaux arrivent")
+    for h, n, o in sorted(muets, key=lambda x: -x[1])[:20]:
+        alert("canal_" + h, "canal_silencieux",
+              f"Collecte : {h} n'envoie plus son journal Sécurité depuis 6 h ou plus, mais {o} événements Sysmon/autres sont arrivés (winlogbeat ou canal Security à vérifier)",
+              window=86400, dark_host=h, winsec_base_7j=n, autres_6h=o)
+
+def main():
+    for fn in (check_fielddata, check_definitions, check_soar, check_channels):
+        try: fn()
+        except Exception as e: print(fn.__name__, "KO:", e, file=sys.stderr)
+    save_state(ST)
+    print(f"coherence : {len(SENT)} alerte(s) émise(s)" + (" (simulation)" if SIM else ""))
+
+if __name__ == "__main__":
+    main()

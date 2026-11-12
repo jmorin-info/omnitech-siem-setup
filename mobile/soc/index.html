@@ -2458,7 +2458,7 @@ window.loadSoar=function(){j("/soar").then(renderSoar).catch(e=>{if(e==="auth")l
 window.renderSoar=function(d){SOARD=d||{};const a=SOARD.active||[],ex=SOARD.exclusions||{},st=ex.dynamic_stats||{};
   $("#skpis").innerHTML=[
     [a.length?"amb":"grn","IP bloquées",a.length,"Bordeaux + Ivry"],
-    [(SOARD.feed_age_s!=null&&SOARD.feed_age_s<600)?"cy":"red","Liste publiée",fmtAge(SOARD.feed_age_s),"âge du flux lu par les FortiGate"],
+    [(SOARD.feed_age_s!=null&&SOARD.feed_age_s<3900)?"cy":"red","Liste publiée",fmtAge(SOARD.feed_age_s),"âge du fichier lu par les FortiGate (réécrit à :30 chaque heure et à chaque blocage)"],
     ["vio","Exclusions automatiques",((st.vpn||0)+(st.m365||0)).toLocaleString("fr"),"IP légitimes (VPN, M365) sur "+(ex.dynamic_days||90)+" j"],
     ["cy","Exclusions fixes",ex.static||0,"sites, partenaires, prestataires"]
   ].map(([c,l,v,s])=>`<div class="kpi ${c}"><div class="lab">${l}</div><div class="val mono">${esc(String(v))}</div><div class="sub">${s}</div></div>`).join("");

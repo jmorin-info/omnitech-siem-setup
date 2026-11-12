@@ -48,7 +48,20 @@ ALLOW = tuple(p for p in ENV.get("NDR_ALLOW_PREFIX", _DEF_ALLOW).split(",") if p
 # Qualifies au prealable. Robuste aux rotations d'IP du fournisseur (vs allowlist dest).
 WL_SRC = set(p for p in ENV.get("NDR_BEACON_WHITELIST_SRC", "").split(",") if p.strip())
 
-def es(body, path="/omni-*/_search"):
+_CIBLE = None
+def es(body, path=None):
+    # 12/11/2026 : index du jeu omni-fortigate actifs sur la fenetre (au lieu de omni-*, 1 235 shards)
+    global _CIBLE
+    if path is None:
+        if _CIBLE is None:
+            try:
+                sys.path.insert(0, "/usr/local/lib/omni-siem")
+                from omni_cible import cible
+                _CIBLE = "/" + cible(["omni-fortigate"], WINDOW_H * 3600) + "/_search?ignore_unavailable=true"
+            except Exception as e:
+                print("ciblage KO, repli omni-* :", e, file=sys.stderr)
+                _CIBLE = "/omni-*/_search"
+        path = _CIBLE
     req = urllib.request.Request(OS_URL + path, data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=90) as r:

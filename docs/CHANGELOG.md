@@ -3,6 +3,10 @@
 Toutes les évolutions notables du dispositif. Format : date — changement.
 *Dernière revue : 2026-11-12.*
 ## 2026-11-12 (SOAR, sauvegardes)
+- Cohérence du SIEM : nouvelle sentinelle `omni-siem-coherence` (toutes les 5 min) qui signale cache fielddata `_id` ou breaker saturés, définitions en échec répété, notifications abandonnées, blocklist SOAR figée ou non lue par les pare-feu, journal Sécurité muet alors que Sysmon arrive ; `indices.id_field_data.enabled=false` côté OpenSearch.
+- Tri des alertes : réception asynchrone des notifications Graylog (acquittement immédiat, classement inchangé et en série).
+- Performances : base de référence complète et mise en cache pour la détection « nouveau pays », lecture des seuls index FortiGate utiles pour la détection de beaconing (module commun `omni_cible`).
+- Routage des messages de surveillance interne vers `omni-interne` ; retrait du jeu d'index Cert Orchestrator (serveur décommissionné).
 - Console SOC v3 : application installable (PWA) avec raccourcis, mode hors ligne et notifications push vers la fiche de l'incident ; navigation mobile, filtres et recherche des incidents, titres d'incidents lisibles, états de chargement et d'erreur, thème clair finalisé.
 - SOAR : le nombre d'occurrences d'une IP bloquée reprend la valeur calculée par Graylog (`count()`), au lieu d'une valeur fixe tirée du backlog. Aucune décision de blocage ne change.
 - SOAR : récapitulatif quotidien en HTML (indicateurs, tableaux par section, liens vers l'historique de chaque IP dans Graylog, commandes de déblocage), avec une version texte de secours.

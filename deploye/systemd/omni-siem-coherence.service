@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI SIEM - sentinelle de coherence (fielddata, definitions en echec, flux SOAR, canaux muets)
+After=graylog-server.service opensearch.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/omni-siem-coherence
+Nice=10
+TimeoutStartSec=280

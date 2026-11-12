@@ -3,6 +3,10 @@
 All notable changes to the platform. Format: date — change.
 *Last review: 2026-11-12.*
 ## 2026-11-12 (SOAR, backups)
+- SIEM consistency: new `omni-siem-coherence` sentinel (every 5 min) reporting saturated `_id` fielddata or breaker, repeatedly failing event definitions, dropped notifications, stale or unread SOAR blocklist, silent Security log while Sysmon still arrives; `indices.id_field_data.enabled=false` on OpenSearch.
+- Alert triage: asynchronous reception of Graylog notifications (immediate acknowledgement, unchanged serial classification).
+- Performance: full, cached baseline for the "new country" detection; beaconing detection reads only the relevant FortiGate indices (shared `omni_cible` module).
+- Internal monitoring messages routed to `omni-interne`; Cert Orchestrator index set removed (server decommissioned).
 - SOC console v3: installable app (PWA) with shortcuts, offline mode and push notifications that open the incident; mobile navigation, incident filters and search, readable incident titles, loading and error states, finished light theme.
 - SOAR: the hit count of a blocked IP now uses the value computed by Graylog (`count()`) instead of a fixed value derived from the backlog. No blocking decision changes.
 - SOAR: daily summary e-mail in HTML (indicators, per-section tables, links to each IP's history in Graylog, unblock commands), with a plain-text fallback.

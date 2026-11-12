@@ -31,7 +31,8 @@ import hashlib, hmac, html as _html, ipaddress, json, os, re, smtplib, sys, time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
+import threading, queue, io, signal
 
 ENVFILE   = "/etc/omni-alert-triage.env"
 TIERSFILE = "/etc/omni-alert-triage-tiers.json"
@@ -1586,5 +1587,69 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200); self.end_headers()
         self.wfile.write(json.dumps({"decision":decision,"tier":tier,"score":score,"reason":reason}).encode())
 
+# --- v-async 12/11/2026 : file d'attente + fil de travail unique (voir en-tête du patch) ----------
+_STATE_LOCK = threading.RLock()
+_Q = queue.Queue(maxsize=2000)
+class _AsyncHandler(Handler):
+    def do_POST(self):
+        if os.environ.get("OMNI_TRIAGE_ASYNC", "1") == "1" and not self.path.startswith("/fp"):
+            e = env()
+            if not self._auth_ok(e):
+                self.send_response(403); self.end_headers(); return
+            try:
+                n = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(n) or b"{}"
+                json.loads(body)
+            except Exception:
+                self.send_response(400); self.end_headers(); return
+            try:
+                _Q.put_nowait((self.path, self.headers, body, self.client_address))
+            except queue.Full:
+                print("[async] file pleine -> traitement synchrone", file=sys.stderr, flush=True)
+                self.rfile = io.BytesIO(body)
+                with _STATE_LOCK:
+                    return Handler.do_POST(self)
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers()
+            self.wfile.write(json.dumps({"decision": "queued", "file": _Q.qsize()}).encode())
+            return
+        with _STATE_LOCK:
+            return Handler.do_POST(self)
+    def do_DELETE(self):
+        with _STATE_LOCK:
+            return Handler.do_DELETE(self)
+def _noop(*a, **k):
+    return None
+def _worker():
+    while True:
+        path, headers, body, addr = _Q.get()
+        t0 = time.time()
+        try:
+            h = Handler.__new__(Handler)
+            h.path, h.headers, h.client_address = path, headers, addr
+            h.rfile, h.wfile = io.BytesIO(body), io.BytesIO()
+            h.command, h.request_version, h.requestline = "POST", "HTTP/1.1", "POST " + path + " HTTP/1.1"
+            h.send_response = h.send_header = h.end_headers = _noop
+            with _STATE_LOCK:
+                Handler.do_POST(h)
+            out = h.wfile.getvalue()[:160].decode("utf-8", "replace")
+            print(f"[async] traite en {time.time()-t0:.1f}s, reste {_Q.qsize()} : {out}", flush=True)
+        except Exception as ex:
+            print(f"[async] ERREUR apres {time.time()-t0:.1f}s : {ex!r}", file=sys.stderr, flush=True)
+        finally:
+            _Q.task_done()
+def _start_worker():
+    t = threading.Thread(target=_worker, name="triage-worker", daemon=True); t.start(); return t
+def _build_server(listen):
+    srv = ThreadingHTTPServer(listen, _AsyncHandler); srv.daemon_threads = True; return srv
+def _serve(listen):
+    _start_worker()
+    srv = _build_server(listen)
+    signal.signal(signal.SIGTERM, lambda *a: threading.Thread(target=srv.shutdown, daemon=True).start())
+    print(f"[async] ecoute {listen} (ThreadingHTTPServer + file, OMNI_TRIAGE_ASYNC={os.environ.get('OMNI_TRIAGE_ASYNC','1')})", flush=True)
+    srv.serve_forever()
+    fin = time.time() + 60
+    while _Q.unfinished_tasks and time.time() < fin:
+        time.sleep(0.5)
+    print(f"[async] arret, {_Q.unfinished_tasks} element(s) non traite(s)", flush=True)
 if __name__ == "__main__":
-    HTTPServer(LISTEN, Handler).serve_forever()
+    _serve(LISTEN)
