@@ -2,6 +2,11 @@
 
 Toutes les évolutions notables du dispositif. Format : date — changement.
 *Dernière revue : 2026-11-12.*
+## 2026-11-12 (soir : console SOC, SOAR, synchronisation du dépôt)
+- Console SOC : politique de sécurité du contenu stricte (`script-src 'self'`, plus aucun script en ligne). Les scripts sont dans `app*.js` et les anciens gestionnaires `onclick`/`oninput`/`onchange`/`onkeydown`/`onsubmit` sont exécutés par délégation (`app-csp.js`, analyseur restreint, sans `eval`). Le service worker met ces fichiers en cache, versionnés.
+- Console SOC : `SOC_ADMINS` renseigné ; notifications push réservées aux administrateurs SOC (abonnement, test et envoi), compte enregistré avec chaque abonnement.
+- SOAR : nouvelle détection « balayage IKE » (négociations de phase 1 sans tunnel correspondant, ≥ 10 par IP en 6 h, BX, IV et Lançon). Elle alimente le SOAR en simulation uniquement (`SOAR_DETECTIONS_SIMULATION`) : aucun blocage avant validation.
+- Dépôt : `sync-deploye.sh` est retiré. `synchro-manifeste.sh` ne recopie que les fichiers listés dans `manifeste-deploye.txt` après comparaison SHA-256, `scan-depot.sh` bloque les commits contenant un secret ou une mention d'outillage (crochets pre-commit et commit-msg). Aucun commit automatique.
 ## 2026-11-12 (SOAR, sauvegardes)
 - Cohérence du SIEM : nouvelle sentinelle `omni-siem-coherence` (toutes les 5 min) qui signale cache fielddata `_id` ou breaker saturés, définitions en échec répété, notifications abandonnées, blocklist SOAR figée ou non lue par les pare-feu, journal Sécurité muet alors que Sysmon arrive ; `indices.id_field_data.enabled=false` côté OpenSearch.
 - Tri des alertes : réception asynchrone des notifications Graylog (acquittement immédiat, classement inchangé et en série).

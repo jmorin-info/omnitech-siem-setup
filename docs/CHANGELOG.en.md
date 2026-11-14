@@ -2,6 +2,11 @@
 
 All notable changes to the platform. Format: date — change.
 *Last review: 2026-11-12.*
+## 2026-11-12 (evening: SOC console, SOAR, repository sync)
+- SOC console: strict Content Security Policy (`script-src 'self'`, no inline script left). Scripts live in `app*.js`; former `onclick`/`oninput`/`onchange`/`onkeydown`/`onsubmit` handlers run through delegation (`app-csp.js`, restricted parser, no `eval`). The service worker caches these versioned files.
+- SOC console: `SOC_ADMINS` set; push notifications restricted to SOC administrators (subscribe, test and send), with the account stored on each subscription.
+- SOAR: new "IKE sweep" detection (phase 1 negotiations with no matching tunnel, >= 10 per IP in 6 h, BX, IV and Lançon). It feeds the SOAR in simulation only (`SOAR_DETECTIONS_SIMULATION`): no blocking until approved.
+- Repository: `sync-deploye.sh` is retired. `synchro-manifeste.sh` only copies the files listed in `manifeste-deploye.txt` after a SHA-256 comparison; `scan-depot.sh` blocks commits containing a secret or a tooling mention (pre-commit and commit-msg hooks). No automatic commit.
 ## 2026-11-12 (SOAR, backups)
 - SIEM consistency: new `omni-siem-coherence` sentinel (every 5 min) reporting saturated `_id` fielddata or breaker, repeatedly failing event definitions, dropped notifications, stale or unread SOAR blocklist, silent Security log while Sysmon still arrives; `indices.id_field_data.enabled=false` on OpenSearch.
 - Alert triage: asynchronous reception of Graylog notifications (immediate acknowledgement, unchanged serial classification).

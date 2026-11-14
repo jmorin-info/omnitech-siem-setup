@@ -14,7 +14,8 @@
 #   - seuil d'occurrences : SOAR_MIN_HITS (5), SOAR_MIN_HITS_PAYS_NORMAL (10) pour une IP d'un
 #     pays habituel (FR et voisins) : jamais de blocage sur un echec isole ;
 #   - duree limitee (SOAR_TTL_HOURS, 24 h) + plafond (SOAR_MAX) ; expiration : omni-soar-expire ;
-#   - chaque decision est journalisee (GELF event_source=siem_soar + /var/log/omni-soar/decisions.log).
+#   - chaque decision est journalisee (GELF event_source=siem_soar + /var/log/omni-soar/decisions.log) ;
+#   - detection en observation : SOAR_DETECTIONS_SIMULATION (soar.env) -> "simulation", aucun blocage.
 # Deblocage : omni-soar-debloquer <ip> [--exclure "motif"]
 # =============================================================================
 import ipaddress, json, os, re, time, urllib.request
@@ -159,6 +160,11 @@ class Handler(BaseHTTPRequestHandler):
         wl = {x.strip() for x in e.get("SOAR_WHITELIST", "").split(",") if x.strip()}
         ips_ex, nets_ex = exclusions()
         detection = str(payload.get("event_definition_title") or (payload.get("event") or {}).get("message") or "?")[:120]
+        # 12/11/2026 : detections en observation (SOAR_DETECTIONS_SIMULATION = extraits de titre, separes par
+        # des virgules) : journalisees en "simulation", jamais bloquees, meme si SOAR_MODE=actif.
+        simu = [x.strip().lower() for x in e.get("SOAR_DETECTIONS_SIMULATION", "").split(",") if x.strip()]
+        if actif and any(x in detection.lower() for x in simu):
+            actif = False
 
         # --- blocage MANUEL (action analyste) : refuse aussi les IP exclues sauf force ---
         if payload.get("manual") and payload.get("ip"):

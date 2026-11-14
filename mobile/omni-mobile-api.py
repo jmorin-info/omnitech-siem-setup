@@ -2167,15 +2167,22 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"ok": False, "error": "origine refusée"}, 403)
             return self._json(update_watch(b, self._user()))
         if p == "/m/api/subscribe":
-            if not self._user():
+            u = self._user()
+            if not u:
                 return self._json({"error": "auth"}, 401)
+            if not origin_ok(self.headers):
+                return self._json({"ok": False, "error": "origine refusée"}, 403)
+            # OMNITECH-SOC-20261112-V4 : notifications réservées aux administrateurs SOC
+            if not (SOC_ADMINS and u.lower() in SOC_ADMINS):
+                return self._json({"ok": False, "error": "notifications réservées aux administrateurs SOC"}, 403)
             sub = b.get("subscription")
-            if sub and sub.get("endpoint"):
+            if isinstance(sub, dict) and str(sub.get("endpoint", "")).startswith("https://") and isinstance(sub.get("keys"), dict):
                 subs = [s for s in load_subs() if s.get("endpoint") != sub["endpoint"]]
-                subs.append(sub)
+                subs.append({"endpoint": sub["endpoint"], "keys": {k: str(v) for k, v in sub["keys"].items() if k in ("p256dh", "auth")},
+                             "omni_user": u.lower(), "omni_ts": int(time.time())})
                 save_subs(subs)
                 return self._json({"ok": True})
-            return self._json({"ok": False}, 400)
+            return self._json({"ok": False, "error": "abonnement invalide"}, 400)
         if p in ("/m/api/push-test", "/m/api/unsubscribe"):   # OMNITECH-SOC-20261112
             u = self._user()
             if not u:
@@ -2191,6 +2198,8 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "removed": known})
             if not known:
                 return self._json({"ok": False, "error": "appareil non abonné : réactivez les notifications"}, 404)
+            if not (SOC_ADMINS and u.lower() in SOC_ADMINS):   # OMNITECH-SOC-20261112-V4
+                return self._json({"ok": False, "error": "notifications réservées aux administrateurs SOC"}, 403)
             now = time.time()
             if now - _PUSH_TEST.get(ep, 0) < 20:
                 return self._json({"ok": False, "error": "patientez 20 s entre deux tests"}, 429)
@@ -2245,10 +2254,12 @@ def push_all(title: str, body: str, url: str = "", sev: str = "", tag: str = "",
     subs = load_subs()
     if only:
         subs = [s for s in subs if s.get("endpoint") == only]
+    # OMNITECH-SOC-20261112-V4 : seulement les abonnements d'un administrateur SOC
+    subs = [s for s in subs if SOC_ADMINS and str(s.get("omni_user", "")).lower() in SOC_ADMINS]
     ok, dead = 0, []
     for s in subs:
         try:
-            webpush(subscription_info=s, data=payload, vapid_private_key=priv,
+            webpush(subscription_info={"endpoint": s.get("endpoint"), "keys": s.get("keys") or {}}, data=payload, vapid_private_key=priv,
                     vapid_claims={"sub": VAPID_SUBJECT}, timeout=10)
             ok += 1
         except WebPushException as e:
