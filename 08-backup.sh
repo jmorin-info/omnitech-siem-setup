@@ -40,7 +40,7 @@ cat > /usr/local/sbin/siem-backup.sh <<'EOF'
 # Les parametres (MONGO_ADMIN_PASS, BACKUP_DIR, RETENTION_DAYS) sont lus a
 # l'EXECUTION dans 00-vars.env (600 root) : pas de secret duplique ici.
 set -uo pipefail
-source /root/omnitech-siem-setup/00-vars.env
+source "${OMNI_CONFIG_FILE:?OMNI_CONFIG_FILE must point to the site configuration}"
 TS="$(date +%Y%m%d-%H%M)"
 LOG="/var/log/siem-backup.log"
 exec >>"${LOG}" 2>&1
@@ -58,8 +58,9 @@ ECHEC=0
 ko() { echo "ERREUR: $*"; gelf echec "$*"; ECHEC=1; }
 
 # 1) MongoDB (configuration Graylog)
+MONGO_BACKUP_PASS="$(MONGO_PASSWORD="$MONGO_ADMIN_PASS" python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["MONGO_PASSWORD"],safe=""))')"
 if mongodump --quiet --gzip \
-  --uri "mongodb://admin:${MONGO_ADMIN_PASS}@127.0.0.1:27017/?replicaSet=rs0&authSource=admin" \
+  --uri "mongodb://admin:${MONGO_BACKUP_PASS}@127.0.0.1:27017/?replicaSet=rs0&authSource=admin" \
   --archive="${BACKUP_DIR}/mongo/graylog-mongo-${TS}.archive.gz"; then
   echo "mongodump OK"
 else
@@ -120,13 +121,15 @@ else
 fi
 EOF
 chmod 700 /usr/local/sbin/siem-backup.sh   # contient des secrets
+INSTALL_CONFIG="$(pwd)/00-vars.env"
 
 echo "==> [3/3] Timer systemd (02:30 quotidien)"
-cat > /etc/systemd/system/siem-backup.service <<'EOF'
+cat > /etc/systemd/system/siem-backup.service <<EOF
 [Unit]
 Description=Sauvegarde applicative SIEM (Mongo + OpenSearch + configs)
 [Service]
 Type=oneshot
+Environment="OMNI_CONFIG_FILE=${INSTALL_CONFIG}"
 ExecStart=/usr/local/sbin/siem-backup.sh
 Nice=10
 IOSchedulingClass=best-effort

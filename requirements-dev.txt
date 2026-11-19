@@ -1,0 +1,3 @@
+# Offline test suites use simulated clients and synthetic data.
+-r oms-ml/requirements.txt
+pytest>=8,<10

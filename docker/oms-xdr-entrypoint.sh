@@ -9,10 +9,19 @@ if [ -n "${OMS_TEAMS_WEBHOOK_FILE:-}" ] && [ -r "${OMS_TEAMS_WEBHOOK_FILE}" ]; t
 fi
 
 python - <<'PY'
-import yaml
+import os, yaml
 c = yaml.safe_load(open("/app/config.yaml")) or {}
 g = c.setdefault("graylog", {})
 g["opensearch"] = "http://opensearch:9200"          # lecture OpenSearch interne
+g["url"] = "http://graylog:9000"
+# Reference stream IDs are tenant-specific. Explicit analytics enablement still
+# requires a generated site config; refusing is safer than silently querying all.
+if os.environ.get("OMS_CONFIG_FILE"):
+    c = yaml.safe_load(open(os.environ["OMS_CONFIG_FILE"])) or {}
+    g = c.setdefault("graylog", {})
+    g["opensearch"] = "http://opensearch:9200"
+elif any(g.get("streams", {}).values()):
+    raise SystemExit("Set OMS_CONFIG_FILE to a site-specific config with this installation's stream IDs; analytics profile is optional.")
 og = g.setdefault("output_gelf", {})
 og["host"] = "graylog"; og["port"] = 12201; og["proto"] = "http"   # reinjection GELF interne
 c.setdefault("ollama", {})["enabled"] = False       # pas de LLM (Ollama) dans le conteneur

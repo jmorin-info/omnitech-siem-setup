@@ -8,20 +8,23 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 source ./00-vars.env
+source ./lib-platform.sh
+omni_platform
 [[ $EUID -eq 0 ]] || { echo "ERREUR: a lancer en root."; exit 1; }
 
 echo "==> [1/8] Hostname & /etc/hosts"
 hostnamectl set-hostname "${SIEM_FQDN}"
 grep -q "${SIEM_IP}.*${SIEM_FQDN}" /etc/hosts || \
   echo "${SIEM_IP}  ${SIEM_FQDN} ${SIEM_HOSTNAME}" >> /etc/hosts
-timedatectl set-timezone Europe/Paris   # affichage local ; Graylog stocke en UTC
+timedatectl set-timezone "${SIEM_TIMEZONE:-Europe/Paris}" # Graylog stores UTC
 
 echo "==> [2/8] Paquets de base"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq curl wget gnupg ca-certificates apt-transport-https \
   lsb-release jq chrony nftables unattended-upgrades fail2ban rsync \
-  qemu-guest-agent vim htop iotop net-tools uuid-runtime openssl
+  qemu-guest-agent vim htop iotop net-tools uuid-runtime openssl python3 python3-venv \
+  parted xfsprogs
 systemctl enable --now qemu-guest-agent || true
 
 echo "==> [3/8] Reseau statique"
@@ -32,12 +35,32 @@ iface ${SIEM_IFACE} inet static
     gateway ${SIEM_GW}
     dns-nameservers ${DNS1} ${DNS2}
     dns-search ${SIEM_DOMAIN}"
+if [[ "$OMNI_OS" == "ubuntu" ]]; then
+  NETBLOCK="network:
+  version: 2
+  ethernets:
+    ${SIEM_IFACE}:
+      dhcp4: false
+      addresses: [${SIEM_IP}/${SIEM_PREFIX}]
+      routes:
+        - to: default
+          via: ${SIEM_GW}
+      nameservers:
+        addresses: [${DNS1}, ${DNS2}]
+        search: [${SIEM_DOMAIN}]"
+fi
 if [[ "${APPLY_NETWORK}" == "1" ]]; then
-  mkdir -p /etc/network/interfaces.d
-  echo "${NETBLOCK}" > /etc/network/interfaces.d/siem
-  echo "    -> /etc/network/interfaces.d/siem ecrit."
-  echo "    !! Verifier qu'aucune autre definition de ${SIEM_IFACE} n'existe"
-  echo "    !! (grep -r ${SIEM_IFACE} /etc/network/) puis: systemctl restart networking"
+  if [[ "$OMNI_OS" == "ubuntu" ]]; then
+    mkdir -p /etc/netplan
+    echo "$NETBLOCK" > /etc/netplan/60-omni-siem.yaml
+    chmod 600 /etc/netplan/60-omni-siem.yaml
+    netplan generate
+    echo "    Netplan prepared; review existing definitions, then use netplan try locally."
+  else
+    mkdir -p /etc/network/interfaces.d
+    echo "$NETBLOCK" > /etc/network/interfaces.d/siem
+    echo "    Network configuration prepared; review duplicates before restarting networking."
+  fi
 else
   echo "    APPLY_NETWORK=0 : conf NON appliquee. Bloc suggere :"
   echo "${NETBLOCK}" | sed 's/^/      /'
@@ -67,28 +90,38 @@ net.core.rmem_default = 8388608
 EOF
 sysctl --system >/dev/null
 
-echo "==> [6/8] Desactivation Transparent Huge Pages (requis MongoDB)"
-cat > /etc/systemd/system/disable-thp.service <<'EOF'
+echo "==> [6/8] Transparent Huge Pages policy (${THP_MODE:-preserve})"
+# MongoDB8 recommends THP enabled; OpenSearch shares the same host. This global
+# policy is explicit rather than silently applying the old MongoDB7 recommendation.
+case "${THP_MODE:-preserve}" in
+  preserve) echo "    Existing THP settings retained (see docs/INSTALLATION.md)." ;;
+  enable|disable)
+    THP_VALUE=always; THP_DEFRAG=defer+madvise
+    [[ "$THP_MODE" == disable ]] && { THP_VALUE=never; THP_DEFRAG=never; }
+    cat > /etc/systemd/system/omni-thp.service <<EOF
 [Unit]
-Description=Disable Transparent Huge Pages (MongoDB)
+Description=OMNI explicit THP policy
 DefaultDependencies=no
 After=sysinit.target local-fs.target
 Before=mongod.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled; echo never > /sys/kernel/mm/transparent_hugepage/defrag'
+ExecStart=/bin/sh -c 'echo ${THP_VALUE} > /sys/kernel/mm/transparent_hugepage/enabled; echo ${THP_DEFRAG} > /sys/kernel/mm/transparent_hugepage/defrag'
 
 [Install]
 WantedBy=basic.target
 EOF
-systemctl daemon-reload
-systemctl enable --now disable-thp.service
+    systemctl daemon-reload
+    systemctl enable --now omni-thp.service ;;
+  *) echo "Invalid THP_MODE (preserve, enable, disable)." >&2; exit 1 ;;
+esac
 
 echo "==> [7/8] Fail2ban (SSH) + mises a jour de securite automatiques"
 cat > /etc/fail2ban/jail.local <<EOF
 [sshd]
 enabled  = true
+backend  = systemd
 maxretry = 5
 findtime = 10m
 bantime  = 1h
@@ -105,6 +138,10 @@ echo "==> [8/8] Disque data dedie (montage sur ${DATA_MOUNT})"
 if [[ -n "${DATA_DISK}" ]]; then
   if [[ -b "${DATA_DISK}" ]]; then
     if ! blkid "${DATA_DISK}"* >/dev/null 2>&1; then
+      [[ "${ALLOW_FORMAT_DATA_DISK:-0}" == 1 ]] || { echo "Blank DATA_DISK requires ALLOW_FORMAT_DATA_DISK=1." >&2; exit 1; }
+      [[ "$(lsblk -dnro TYPE "$DATA_DISK")" == disk ]] || { echo "DATA_DISK must name a whole disk." >&2; exit 1; }
+      [[ "$(lsblk -nrpo NAME "$DATA_DISK" | wc -l)" -eq 1 ]] || { echo "Disk contains partitions; refusing to format." >&2; exit 1; }
+      [[ -z "$(lsblk -nrpo MOUNTPOINTS "$DATA_DISK" | tr -d '[:space:]')" ]] || { echo "Disk is mounted; refusing to format." >&2; exit 1; }
       echo "    Formatage XFS de ${DATA_DISK} (donnees detruites !)"
       parted -s "${DATA_DISK}" mklabel gpt mkpart primary xfs 0% 100%
       sleep 2

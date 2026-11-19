@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "unifi",
+  "name": "Ubiquiti UniFi Network",
+  "revision": 1,
+  "status": "preview",
+  "default_port": 1522,
+  "supported_format": "UniFi Network CEF SIEM export with Ubiquiti vendor and UniFi Network product; legacy device syslog is retained as unparsed",
+  "vendor_documentation": "https://help.ui.com/hc/en-us/articles/33349041044119-UniFi-System-Logs-SIEM-Integration",
+  "parser": {
+    "type": "cef",
+    "mapping": {"device_event_class_id": "event_id", "name": "event_action", "src": "src_ip", "dst": "dest_ip", "spt": "src_port", "dpt": "dest_port", "proto": "network_protocol", "UNIFIadmin": "user", "UNIFIhost": "host", "UNIFIcategory": "event_category"}
+  }
+}

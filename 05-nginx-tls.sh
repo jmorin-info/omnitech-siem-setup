@@ -52,6 +52,14 @@ fi
 
 echo "==> [3/4] Vhost Nginx"
 apt-get install -y -qq nginx
+NGINX_VERSION="$(nginx -v 2>&1 | sed -n 's|.*nginx/\([0-9.]*\).*|\1|p')"
+if dpkg --compare-versions "$NGINX_VERSION" ge 1.25.1; then
+  HTTP2_LISTEN="listen 443 ssl;"
+  HTTP2_DIRECTIVE="http2 on;"
+else
+  HTTP2_LISTEN="listen 443 ssl http2;"
+  HTTP2_DIRECTIVE=""
+fi
 cat > /etc/nginx/sites-available/graylog <<EOF
 # Reverse proxy TLS -> Graylog (genere par 05-nginx-tls.sh)
 server {
@@ -60,8 +68,8 @@ server {
     return 301 https://\$host\$request_uri;
 }
 server {
-    listen 443 ssl;
-    http2 on;
+    ${HTTP2_LISTEN}
+    ${HTTP2_DIRECTIVE}
     server_name ${SIEM_FQDN} ${SIEM_IP};
 
     ssl_certificate     ${SSLDIR}/graylog.crt;

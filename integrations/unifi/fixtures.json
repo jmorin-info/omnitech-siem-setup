@@ -1,0 +1,6 @@
+[
+  {"message": "<134>Jan 1 12:00:00 gateway CEF:0|Ubiquiti|UniFi Network|9.3.33|544|Admin Accessed UniFi Network|1|UNIFIcategory=System UNIFIhost=Example Gateway UNIFIadmin=sample-admin src=203.0.113.12 msg=Administrative login", "expected": {"event_id": "544", "event_action": "admin_accessed_unifi_network", "src_ip": "203.0.113.12", "user": "sample-admin", "host": "Example Gateway"}},
+  {"message": "CEF:0|Ubiquiti|UniFi Network|9.3.33|201|Threat Detected and Blocked|7|src=203.0.113.4 dst=192.0.2.4 spt=53123 dpt=443 proto=TCP UNIFIcategory=Security", "expected": {"event_id": "201", "src_port": 53123, "dest_port": 443, "network_protocol": "tcp"}},
+  {"message": "CEF:0|Other Vendor|Other Product|1|544|Other event|1|src=203.0.113.12", "expected": {"omni_parse_status": "unparsed"}},
+  {"message": "unifi-device legacy kernel diagnostic", "expected": {"omni_parse_status": "unparsed"}}
+]

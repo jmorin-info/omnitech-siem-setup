@@ -15,8 +15,8 @@ cd "$(dirname "$0")"
 source ./00-vars.env
 [[ $EUID -eq 0 ]] || { echo "ERREUR: a lancer en root."; exit 1; }
 
-API="https://${SIEM_FQDN}:9000/api"
-CURL=(curl -s --cacert /etc/graylog/certs/omnitech-rootca.crt -u "admin:${GRAYLOG_ADMIN_PASS}" -H "Content-Type: application/json" -H "X-Requested-By: 07-inputs.sh")
+source ./lib-platform.sh
+omni_api_setup
 
 input_exists() {  # $1 = titre
   "${CURL[@]}" "${API}/system/inputs" | jq -e --arg t "$1" '.inputs[] | select(.title == $t)' >/dev/null 2>&1
@@ -30,6 +30,7 @@ create_input() {  # $1 = titre, $2 = JSON
   else
     echo "    [!] Echec creation '$1' -> creer via l'UI. Reponse API :"
     echo "${RES}" | sed 's/^/        /'
+    return 1
   fi
 }
 

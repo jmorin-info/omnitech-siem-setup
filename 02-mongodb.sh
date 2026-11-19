@@ -12,6 +12,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 source ./00-vars.env
+source ./stack-versions.env
+source ./lib-platform.sh
+omni_platform
 [[ $EUID -eq 0 ]] || { echo "ERREUR: a lancer en root."; exit 1; }
 
 echo "==> [0/6] Controle AVX (CPU Proxmox = host ?)"
@@ -22,12 +25,15 @@ echo "==> [1/6] Depot MongoDB 8.0"
 # MongoDB ne contient pas (encore) le serveur. Les paquets bookworm fonctionnent
 # sur Debian 13 amd64 (libssl3t64 fournit libssl3).
 curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc \
-  | gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
-cat > /etc/apt/sources.list.d/mongodb-org-8.0.list <<'EOF'
-deb [arch=amd64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/debian bookworm/mongodb-org/8.0 main
+  | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+cat > /etc/apt/sources.list.d/mongodb-org-8.0.list <<EOF
+deb [arch=amd64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/${OMNI_MONGO_OS} ${OMNI_MONGO_SUITE}/mongodb-org/8.0 ${OMNI_MONGO_COMPONENT}
 EOF
 apt-get update -qq
-apt-get install -y -qq mongodb-org
+apt-get install -y -qq "mongodb-org=${MONGODB_PACKAGE_VERSION}" \
+  "mongodb-org-database=${MONGODB_PACKAGE_VERSION}" "mongodb-org-server=${MONGODB_PACKAGE_VERSION}" \
+  "mongodb-org-mongos=${MONGODB_PACKAGE_VERSION}" "mongodb-org-tools=${MONGODB_PACKAGE_VERSION}" \
+  "mongodb-org-database-tools-extra=${MONGODB_PACKAGE_VERSION}"
 apt-mark hold mongodb-org mongodb-org-server mongodb-org-mongos \
   mongodb-org-tools mongodb-org-database mongodb-org-database-tools-extra >/dev/null
 systemctl stop mongod || true
@@ -87,20 +93,21 @@ sleep 5
 
 echo "==> [5/6] Creation des utilisateurs (admin + graylog)"
 # L'exception localhost autorise la creation du premier utilisateur.
-mongosh --quiet <<EOF
+export MONGO_ADMIN_PASS MONGO_GRAYLOG_PASS
+mongosh --quiet <<'EOF'
 const adminDb = db.getSiblingDB("admin");
 try {
   adminDb.createUser({ user: "admin",
-    pwd: "${MONGO_ADMIN_PASS}",
+    pwd: process.env.MONGO_ADMIN_PASS,
     roles: [ { role: "root", db: "admin" } ] });
   print("Utilisateur admin cree.");
 } catch (e) { print("admin: " + e.message); }
 EOF
-mongosh --quiet -u admin -p "${MONGO_ADMIN_PASS}" --authenticationDatabase admin <<EOF
+mongosh --quiet -u admin -p "${MONGO_ADMIN_PASS}" --authenticationDatabase admin <<'EOF'
 const gl = db.getSiblingDB("graylog");
 try {
   gl.createUser({ user: "graylog",
-    pwd: "${MONGO_GRAYLOG_PASS}",
+    pwd: process.env.MONGO_GRAYLOG_PASS,
     roles: [ { role: "readWrite", db: "graylog" },
              { role: "dbAdmin",  db: "graylog" } ] });
   print("Utilisateur graylog cree.");
@@ -111,7 +118,7 @@ echo "==> [6/6] Verification de l'authentification"
 mongosh --quiet -u graylog -p "${MONGO_GRAYLOG_PASS}" \
   --authenticationDatabase graylog \
   "mongodb://127.0.0.1:27017/graylog?replicaSet=rs0" \
-  --eval 'db.runCommand({ping:1}).ok === 1 ? print("AUTH graylog: OK") : print("AUTH graylog: ECHEC")'
+  --eval 'if (db.runCommand({ping:1}).ok !== 1) { quit(1); } print("AUTH graylog: OK")'
 
 echo
 echo "=== 02-mongodb.sh termine. Lancer 03-opensearch.sh ==="

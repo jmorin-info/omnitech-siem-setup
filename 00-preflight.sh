@@ -14,6 +14,7 @@
 set -uo pipefail   # pas de -e : on veut TOUT analyser meme en cas d'echec
 cd "$(dirname "$0")"
 source ./00-vars.env 2>/dev/null || { echo "00-vars.env introuvable"; exit 1; }
+source ./lib-platform.sh
 
 GEN=0; [[ "${1:-}" == "--gen-vars" ]] && GEN=1
 P=0; W=0; F=0
@@ -27,10 +28,11 @@ echo "================= PREFLIGHT SIEM OMNITECH - $(date '+%F %T') =============
 echo "--- [1] Systeme"
 [[ $EUID -eq 0 ]] && pass "Execution en root" || fail "A lancer en root"
 . /etc/os-release 2>/dev/null
-if [[ "${ID:-}" == "debian" && "${VERSION_ID:-}" == "13" ]]; then
-  pass "Debian 13 (${VERSION_CODENAME:-?})"
+if omni_platform; then
+  pass "${PRETTY_NAME} (package installation platform recognized)"
+  [[ "${ID}:${VERSION_ID}" == debian:13 ]] && warn "Debian13 is the existing reference deployment; Graylog vendor matrix currently lists Debian12."
 else
-  warn "OS detecte: ${PRETTY_NAME:-inconnu} (kit prevu pour Debian 13)"
+  fail "OS unsupported: ${PRETTY_NAME:-unknown}"
 fi
 if grep -qw avx /proc/cpuinfo; then
   pass "AVX present ($(nproc) vCPU) - MongoDB OK"
@@ -128,7 +130,7 @@ echo "--- [7] Noyau"
 MMC=$(sysctl -n vm.max_map_count 2>/dev/null || echo 0)
 (( MMC >= 262144 )) && pass "vm.max_map_count=${MMC}" || warn "vm.max_map_count=${MMC} (corrige par 01-base.sh)"
 THP=$(cat /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || echo "?")
-grep -q '\[never\]' <<<"${THP}" && pass "THP desactivees" || warn "THP actives : ${THP} (corrige par 01-base.sh)"
+pass "THP current: ${THP}; requested policy: ${THP_MODE:-preserve} (MongoDB8 guidance differs from MongoDB7)"
 
 # ---------------------------------------------------------------- Synthese
 echo "==============================================================================="

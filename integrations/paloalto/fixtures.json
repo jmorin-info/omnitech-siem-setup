@@ -1,0 +1,5 @@
+[
+  {"message": "<134>Jan 1 12:00:00 firewall 1,2026/01/01 12:00:00,000000000001,TRAFFIC,end,1,2026/01/01 11:59:00,192.0.2.1,203.0.113.1,0.0.0.0,0.0.0.0,\"Example, rule\",sample-user,,ssl,vsys1,inside,outside,ethernet1/1,ethernet1/2,default,1,1234,1,52100,443,0,0,0x0,tcp,allow,1000,800,200", "expected": {"event_action": "allow", "src_ip": "192.0.2.1", "dest_ip": "203.0.113.1", "src_port": 52100, "dest_port": 443, "network_rule": "Example, rule", "user": "sample-user"}},
+  {"message": "1,2026/01/01 12:00:00,000000000001,TRAFFIC,drop,1,2026/01/01 11:59:00,192.0.2.1,203.0.113.1,0.0.0.0,0.0.0.0,Example-deny,,,dns,vsys1,inside,outside,ethernet1/1,ethernet1/2,default,1,1234,1,53100,53,0,0,0x0,udp,deny", "expected": {"event_action": "deny", "dest_port": 53}},
+  {"message": "1,2026/01/01 12:00:00,000000000001,SYSTEM,general", "expected": {"omni_parse_status": "unparsed"}}
+]

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "paloalto",
+  "name": "Palo Alto PAN-OS",
+  "revision": 1,
+  "status": "preview",
+  "default_port": 1523,
+  "supported_format": "PAN-OS default TRAFFIC CSV field order through action (31 columns minimum); custom CSV, THREAT, SYSTEM and CONFIG are retained as unparsed",
+  "vendor_documentation": "https://docs.paloaltonetworks.com/pan-os/11-1/pan-os-admin/monitoring/use-syslog-for-monitoring/syslog-field-descriptions/traffic-log-fields",
+  "parser": {
+    "type": "csv",
+    "fields": ["future_use_0", "receive_time", "serial", "log_type", "subtype", "future_use_5", "generated_time", "src_ip", "dest_ip", "nat_src_ip", "nat_dest_ip", "rule", "src_user", "dest_user", "application", "vsys", "src_zone", "dest_zone", "in_interface", "out_interface", "log_action", "future_use_21", "session_id", "repeat_count", "src_port", "dest_port", "nat_src_port", "nat_dest_port", "flags", "protocol", "action"],
+    "mapping": {"subtype": "event_id", "action": "event_action", "src_ip": "src_ip", "dest_ip": "dest_ip", "src_port": "src_port", "dest_port": "dest_port", "protocol": "network_protocol", "src_user": "user", "src_zone": "src_zone", "dest_zone": "dest_zone", "application": "network_application", "rule": "network_rule"}
+  }
+}

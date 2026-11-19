@@ -31,7 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 
 CONF = {}
-for path in ("/etc/default/omni-mobile",):
+for path in (os.environ.get("MOBILE_CONFIG", "/etc/default/omni-mobile"),):
     try:
         with open(path) as fh:
             for line in fh:
@@ -68,7 +68,8 @@ def _make_ssl_ctx():
                      "demarrer (TLS non verifie = MITM sur les identifiants AD).")
         return ssl.create_default_context(cafile=GL_CACERT)
     host = GL_URL.split("://", 1)[-1].split("/")[0].split(":")[0]
-    if host not in ("127.0.0.1", "localhost", "::1"):
+    docker_internal = host == "graylog" and CONF.get("MOBILE_ALLOW_HTTP_DOCKER") == "1"
+    if host not in ("127.0.0.1", "localhost", "::1") and not docker_internal:
         sys.exit(f"FATAL omni-mobile: GRAYLOG_API en HTTP clair vers {host} -> refus "
                  "(les identifiants AD transiteraient en clair). Utiliser https.")
     return None
@@ -297,7 +298,7 @@ def get_attack_matrix():
     rows = []
     try:
         import csv as _csv
-        with open("/root/omnitech-siem-setup/lookups/mitre-attack.csv") as f:
+        with open(CONF.get("MITRE_LOOKUP", "/root/omnitech-siem-setup/lookups/mitre-attack.csv")) as f:
             rd = _csv.reader(f); next(rd, None)
             for r in rd:
                 if len(r) >= 4 and r[1].startswith("T"):
@@ -333,7 +334,7 @@ def _tech_tactic_map():
     m = {}
     try:
         import csv as _csv
-        with open("/root/omnitech-siem-setup/lookups/mitre-attack.csv") as f:
+        with open(CONF.get("MITRE_LOOKUP", "/root/omnitech-siem-setup/lookups/mitre-attack.csv")) as f:
             rd = _csv.reader(f); next(rd, None)
             for r in rd:
                 if len(r) >= 4 and r[1].startswith("T"):

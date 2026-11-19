@@ -11,7 +11,7 @@
 #
 #   Ce script prepare UNIQUEMENT le socle Logstash (paquet, plugins, driver JDBC,
 #   arborescence, keystore). Les fichiers de configuration (seal.conf, requetes
-#   *.sql) sont le livrable de la Phase 2 de Claude Code : ce script ne les ecrit
+#   *.sql) sont livres dans seal/logstash/ et seal/sql/ : ce script ne les ecrit
 #   PAS, il prepare le terrain pour les recevoir.
 #
 # A LANCER
@@ -20,7 +20,7 @@
 #   Puis renseigner les secrets du keystore (interactif, voir fin de script).
 #
 # CE QUE CE SCRIPT NE FAIT PAS
-#   - Il ne deploie pas seal.conf ni les vues .sql (-> Claude Code Phase 2).
+#   - Il ne deploie pas seal.conf ni les vues .sql (etape de configuration separee).
 #   - Il ne demarre pas la collecte tant que la conf n'est pas en place.
 #   - Il ne touche pas a la machine SEAL.
 # =============================================================================
@@ -216,7 +216,7 @@ systemctl enable logstash >/dev/null 2>&1 && ok "Service active (enable), NON de
   || warn "Impossible d'activer le service (a verifier)"
 
 # =============================================================================
-# Recapitulatif + prochaines etapes (cote operateur, PUIS Claude Code)
+# Recapitulatif + prochaines etapes de configuration
 # =============================================================================
 cat <<'EOF'
 
@@ -239,7 +239,7 @@ cat <<'EOF'
        sudo -u logstash $KS add GRAYLOG_GELF_PORT
      (verifier la liste : sudo -u logstash $KS list)
 
-  2) DEPLOYER LA CONF (livrable Claude Code, Phase 2) :
+  2) DEPLOYER LA CONF (seal/logstash/ et seal/sql/) :
        - copier seal/logstash/seal.conf        -> /etc/logstash/conf.d/
        - copier seal/logstash/sql/*.sql        -> /etc/logstash/sql/
        - ajuster les droits : chown root:logstash, chmod 0640

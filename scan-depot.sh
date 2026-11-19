@@ -9,7 +9,7 @@
 set -u
 export LANG=C.UTF-8 GIT_PAGER=cat
 SECRETS='(password|passwd|pwd|secret|token|api[_-]?key|apikey|bearer|client_secret|webhook)["'"'"' ]*[:=]["'"'"' ]*[A-Za-z0-9/+_.~-]{16,}|-----BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|webhook\.office\.com/webhookb2/[A-Za-z0-9@/-]{20,}|logic\.azure\.com[^ "]*sig=[A-Za-z0-9%]{10,}|[?&]secret=[0-9a-f]{20,}|[a-z][a-z0-9+.-]*://[^/[:space:]:@"$]+:[^/[:space:]@"$]{4,}@'
-EXCL='example|changeme|change_me|xxxx|<[A-Z_]+>|\$\{|\$[A-Z_]{3,}|REPLACE|dummy|fake|placeholder|os\.environ|getenv|read -r|CONF\.get'
+EXCL='example|changeme|change_me|xxxx|<[A-Z_]+>|\$\{|\$[A-Z_]{3,}|REPLACE|dummy|fake|placeholder|os\.environ|process\.env\.|getenv|read -r|CONF\.get'
 OUTILS='claude|anthropic|co-authored-by|generated with|chatgpt|openai|copilot|codex'
 masque(){ sed -E 's/([:=]["'"'"' ]*)([A-Za-z0-9/+_.~-]{3})[A-Za-z0-9/+_.~-]{6,}/\1\2*****/' | cut -c1-180; }
 case "${1:-}" in

@@ -29,10 +29,14 @@ def _load_api():
 
 
 @pytest.fixture
-def api():
+def api(tmp_path, monkeypatch):
     """Module backend avec rédaction ACTIVE et tables vierges pour chaque test."""
     if not _API.exists():
         pytest.skip(f"backend mobile introuvable : {_API}")
+    config = tmp_path / "mobile.conf"
+    config.write_text("MOBILE_SECRET=dummy-session-secret\nMOBILE_PUSH_SECRET=dummy-push-secret\n"
+                      "GRAYLOG_API=http://127.0.0.1:9000/api\n", encoding="utf-8")
+    monkeypatch.setenv("MOBILE_CONFIG", str(config))
     mod = _load_api()
     mod.REDACT = True
     mod._RD_MAP.clear()

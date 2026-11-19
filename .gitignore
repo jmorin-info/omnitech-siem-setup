@@ -41,6 +41,7 @@ oms-xdr/.venv/
 # PWA mobile (venv)
 mobile/.venv/
 docker/.env
+docker/runtime-lookups/
 # Docker : certs prives + bases GeoIP (jamais versionnes)
 docker/certs/*.key
 docker/certs/*.pem

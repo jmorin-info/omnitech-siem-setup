@@ -26,12 +26,14 @@ cd "$(dirname "$0")"
 source ./00-vars.env
 [[ $EUID -eq 0 ]] || { echo "ERREUR: a lancer en root."; exit 1; }
 export GRAYLOG_ADMIN_PASS SIEM_FQDN
+source ./lib-platform.sh
+omni_api_setup
 
 python3 - <<'PY'
 import json, os, ssl, uuid, base64, urllib.request
 
-API = f"https://{os.environ['SIEM_FQDN']}:9000/api"
-CTX = ssl.create_default_context(cafile="/etc/graylog/certs/omnitech-rootca.crt")
+API = os.environ["GRAYLOG_API_URL"]
+CTX = ssl.create_default_context(cafile=os.environ["GRAYLOG_API_CA"]) if API.startswith("https:") else None
 AUTH = base64.b64encode(f"admin:{os.environ['GRAYLOG_ADMIN_PASS']}".encode()).decode()
 
 def api(method, path, body=None):

@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 03-opensearch.sh - OpenSearch 2.19.x (canal apt 2.x, JAMAIS la 3.x)
+# 03-opensearch.sh - pinned OpenSearch 2.19.x (new installation reference)
 #   - mono-noeud, bind 127.0.0.1 uniquement
 #   - plugin de securite DESACTIVE (acces local seul -> recommandation Graylog)
 #   - heap fixee, memory_lock, depot de snapshots pour les sauvegardes
 #
-# !! Graylog 7.1 supporte OpenSearch au maximum en 2.19.5. La 3.x CASSE
-# !! l'instance. On installe depuis le canal 2.x et on gele le paquet.
+# Graylog7.2 compatibility is documented upstream. This project deliberately
+# retains OpenSearch2.19; a major database migration is a separate operation.
 # ==============================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
 source ./00-vars.env
+source ./stack-versions.env
 [[ $EUID -eq 0 ]] || { echo "ERREUR: a lancer en root."; exit 1; }
 
 echo "==> [1/6] Depot OpenSearch (canal 2.x uniquement)"
 curl -fsSL https://artifacts.opensearch.org/publickeys/opensearch.pgp \
-  | gpg --dearmor -o /usr/share/keyrings/opensearch-keyring.gpg
+  | gpg --batch --yes --dearmor -o /usr/share/keyrings/opensearch-keyring.gpg
 cat > /etc/apt/sources.list.d/opensearch-2.x.list <<'EOF'
 deb [signed-by=/usr/share/keyrings/opensearch-keyring.gpg] https://artifacts.opensearch.org/releases/bundle/opensearch/2.x/apt stable main
 EOF
@@ -23,10 +24,10 @@ apt-get update -qq
 
 echo "==> [2/6] Installation (mot de passe bootstrap exige par le paquet >= 2.12)"
 OPENSEARCH_INITIAL_ADMIN_PASSWORD="${OPENSEARCH_BOOTSTRAP_PASS}" \
-  apt-get install -y -qq opensearch
+  apt-get install -y -qq "opensearch=${OPENSEARCH_PACKAGE_VERSION}"
 apt-mark hold opensearch >/dev/null
 echo "    Paquet 'opensearch' gele (apt-mark hold). MAJ uniquement en controle,"
-echo "    en restant <= a la version max supportee par Graylog (2.19.5 pour 7.1)."
+echo "    Reference package: ${OPENSEARCH_PACKAGE_VERSION}; major migrations are separate."
 systemctl stop opensearch || true
 # Le performance-analyzer consomme CPU/RAM pour rien sur un mono-noeud supervise par Centreon
 systemctl disable --now opensearch-performance-analyzer 2>/dev/null || true
@@ -83,6 +84,7 @@ for i in $(seq 1 30); do
 done
 curl -s 'http://127.0.0.1:9200/' | jq '{name:.name, version:.version.number}' || \
   { echo "ERREUR: OpenSearch ne repond pas. Voir /var/log/opensearch/graylog.log"; exit 1; }
+[[ "$STATUS" == green || "$STATUS" == yellow ]] || { echo "OpenSearch cluster did not reach yellow/green." >&2; exit 1; }
 echo "    Etat cluster: ${STATUS:-inconnu}"
 
 echo

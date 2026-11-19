@@ -30,8 +30,8 @@ ml-push: ## Déclenche le scoring ML + réinjection GELF (prod)
 fp-train: ## (Ré)entraîne le modèle de réduction de FP (si assez de labels)
 	@systemctl start oms-ml-fp.service && journalctl -u oms-ml-fp.service -n 5 --no-pager
 
-console-deploy: check-js ## Déploie la console desktop vers nginx
-	@install -m 644 mobile/soc/index.html $(SOC_WWW)/ && chown www-data:www-data $(SOC_WWW)/index.html && echo "console déployée → $(SOC_WWW)"
+console-deploy: ## Déploie tous les assets et les routes de la console SOC
+	@bash tools/install-console.sh --apply
 
 pwa-deploy: check-js ## Déploie la PWA mobile vers nginx
 	@install -m 644 mobile/www/index.html $(PWA_WWW)/ && chown www-data:www-data $(PWA_WWW)/index.html && echo "PWA déployée → $(PWA_WWW)"

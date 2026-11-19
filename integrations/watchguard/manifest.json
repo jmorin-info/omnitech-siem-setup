@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "watchguard",
+  "name": "WatchGuard Firebox",
+  "revision": 1,
+  "status": "preview",
+  "default_port": 1521,
+  "supported_format": "Fireware traffic messages: syslog firewall msg_id form or Traffic Monitor form; IPv4 TCP/UDP only",
+  "vendor_documentation": "https://www.watchguard.com/help/docs/help-center/en-US/Content/en-US/Fireware/logging/read_log-msg.html",
+  "parser": {
+    "type": "regex",
+    "patterns": [
+      {
+        "expression": "msg_id=\"([^\"]+)\"\\s+(Allow|Deny|Drop)\\s+(\\S+)\\s+(\\S+)\\s+(?:[0-9]+\\s+)?(tcp|udp)\\s+(?:[0-9]+\\s+[0-9]+\\s+)?([0-9.]+)\\s+([0-9.]+)\\s+([0-9]+)\\s+([0-9]+)",
+        "fields": ["event_id", "action", "src_zone", "dest_zone", "protocol", "src_ip", "dest_ip", "src_port", "dest_port"]
+      },
+      {
+        "expression": "\\b(Allow|Deny|Drop)\\s+([0-9.]+)\\s+([0-9.]+)\\s+[^\\s/]+/(tcp|udp)\\s+([0-9]+)\\s+([0-9]+).*?msg_id=\"([^\"]+)\"",
+        "fields": ["action", "src_ip", "dest_ip", "protocol", "src_port", "dest_port", "event_id"]
+      }
+    ],
+    "mapping": {"event_id": "event_id", "action": "event_action", "src_ip": "src_ip", "dest_ip": "dest_ip", "src_port": "src_port", "dest_port": "dest_port", "protocol": "network_protocol", "src_zone": "src_zone", "dest_zone": "dest_zone"}
+  }
+}

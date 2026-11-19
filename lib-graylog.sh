@@ -10,10 +10,9 @@
 #    avec l'ancien script ecrit pour le schema 6.x).
 # ==============================================================================
 
-# API en TLS de bout en bout (cert PKI, FQDN resolu en 127.0.0.1 via /etc/hosts)
-API="https://${SIEM_FQDN}:9000/api"
-API_CA="/etc/graylog/certs/omnitech-rootca.crt"
-CURL=(curl -s --cacert "${API_CA}" -u "admin:${GRAYLOG_ADMIN_PASS}" -H "Content-Type: application/json" -H "X-Requested-By: omni-provision")
+# Bootstrap uses loopback HTTP; an existing TLS API keeps certificate validation.
+source "$(dirname "${BASH_SOURCE[0]}")/lib-platform.sh"
+omni_api_setup || return 1
 
 jqr()       { jq -r "$1" 2>/dev/null; }
 api_get()   { "${CURL[@]}" "${API}$1"; }

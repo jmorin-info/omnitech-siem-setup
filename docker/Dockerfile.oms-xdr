@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY oms-xdr/ /app/
 COPY docker/oms-xdr-entrypoint.sh /usr/local/bin/oms-xdr-entrypoint.sh
 RUN chmod +x /usr/local/bin/oms-xdr-entrypoint.sh
+RUN mkdir -p /var/lib/oms-xdr && chown omsxdr:omsxdr /var/lib/oms-xdr
 
 USER omsxdr
 # Boucle de correlation (un cycle --once toutes les OMS_INTERVAL secondes).
