@@ -3,6 +3,13 @@
 Toutes les évolutions notables du dispositif. Format : date — changement.
 *Dernière revue : 2026-11-19.*
 
+## Qualification de l'installation Ubuntu 26.04
+
+- Correction du faux refus des noyaux Ubuntu corrigés, des droits hérités d'un umask privé et de l'attente du PRIMARY MongoDB.
+- Notifications natives sans triage optionnel, ordre des phases corrigé, enveloppes API Graylog 7 réessayées correctement et refus explicite des dashboards absents.
+- Pare-feu persistant sans effacement des tables tierces ; préflight IPv4 et connectivité adaptés.
+- Recette finale obligatoire des services et entités, contrôle des assets HTTPS, workflow VM Ubuntu 26.04 et tests des trois packs sur dix messages synthétiques réellement indexés.
+
 ## Installation Ubuntu et correctifs locaux
 
 - Parcours Ubuntu ligne par ligne ; Ubuntu 24.04 conseillé, Ubuntu 26.04 explicitement expérimental avec dépôt MongoDB noble et limites éditeur documentées.

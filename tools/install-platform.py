@@ -104,6 +104,22 @@ def validate_config(config):
     return errors
 
 
+def resource_blockers(config, total_kib):
+    errors, heap_gib = [], {}
+    for key in ("OS_HEAP", "GL_HEAP"):
+        match = re.fullmatch(r"([1-9][0-9]*)([gGmM])", config.get(key, ""))
+        if not match:
+            errors.append(key + " must be a JVM size such as 4g or 2048m")
+        else:
+            heap_gib[key] = int(match[1]) * (1 if match[2].lower() == "g" else 1 / 1024)
+    cache = config.get("MONGO_CACHE_GB", "")
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", cache) or float(cache) < 0.25:
+        errors.append("MONGO_CACHE_GB must be a number of at least 0.25")
+    elif len(heap_gib) == 2 and sum(heap_gib.values()) + float(cache) + 3 > total_kib / (1024 * 1024):
+        errors.append("configured JVM heaps plus MongoDB cache leave less than3GB for the OS and services; reduce OS_HEAP/GL_HEAP or allocate more RAM")
+    return errors
+
+
 def read_os(path=Path("/etc/os-release")):
     values = {}
     for line in path.read_text().splitlines():
@@ -273,6 +289,8 @@ def main(argv=None):
         total_kib = int(Path("/proc/meminfo").read_text().split("MemTotal:", 1)[1].split()[0])
         if total_kib < 15 * 1024 * 1024:
             blockers.append("core SOC profile requires at least16GB host RAM (adjust JVM heaps to host capacity)")
+        if cfg:
+            blockers.extend(resource_blockers(cfg, total_kib))
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, text=True)
     source_fingerprint, source_manifest = source_inventory(ROOT)
@@ -298,7 +316,7 @@ def main(argv=None):
             "blockers": blockers, "warnings": warnings, "source_fingerprint": source_fingerprint,
             "external_components": ["M365/SEAL/vendor collectors need their own credentials and source configuration", "ML/XDR/graph, SOAR and active scans are not enabled by this profile"],
             "database_policy": "fresh install only; no existing database upgrade or overwrite"}
-    print(json.dumps(plan, indent=2, ensure_ascii=False))
+    print(json.dumps(plan, indent=2, ensure_ascii=False), flush=True)
     if not args.apply:
         return 0
     if blockers:
@@ -317,7 +335,7 @@ def main(argv=None):
     child_env = dict(os.environ, OMNI_FRESH_INSTALL="1")
     child_env["OMNI_EXPERIMENTAL_UBUNTU_2604"] = "1" if args.experimental_ubuntu_2604 else "0"
     for name, script in phases:
-        if name in state["completed_phases"]:
+        if name in state["completed_phases"] and name != "verification":
             continue
         if source_inventory(ROOT)[0] != source_fingerprint:
             raise ValueError("installation sources changed during execution; stop and review before resuming")
@@ -331,7 +349,8 @@ def main(argv=None):
         result = subprocess.run([interpreter, str(ROOT / script)], cwd=ROOT, env=child_env, umask=0o022)
         if result.returncode:
             raise ValueError(f"phase {name} failed (exit{result.returncode}); repair it and resume with the same options")
-        state["completed_phases"].append(name)
+        if name not in state["completed_phases"]:
+            state["completed_phases"].append(name)
         write_private(state_path, state)
     state["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
     write_private(state_path, state)

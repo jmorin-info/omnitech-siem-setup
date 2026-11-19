@@ -57,3 +57,43 @@ def test_post_entity_only_retries_the_specific_envelope_validation(status, needs
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+@pytest.mark.parametrize("status,existing", [(404, []), (200, ["existing-pipeline"]), (401, []), (500, [])])
+def test_new_pipeline_connections_allow_only_404_and_preserve_existing(status, existing):
+    connected, writes = list(existing), []
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            code = 200 if writes else status
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"pipeline_ids": connected} if code == 200 else {"error": "dummy-private-rejected-value"}).encode())
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            writes.append(body)
+            connected[:] = body["pipeline_ids"]
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"{}")
+        def log_message(self, *args):
+            pass
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        script = 'set -euo pipefail; source "$1"; API="$2"; connect_pipeline stream-one new-pipeline; connect_pipeline stream-one new-pipeline'
+        result = subprocess.run(["bash", "-c", script, "test", str(ROOT / "lib-graylog.sh"),
+                                 f"http://127.0.0.1:{server.server_port}"],
+                                env={**os.environ, "GRAYLOG_API_URL": "http://127.0.0.1:9000/api", "GRAYLOG_ADMIN_PASS": "dummy-test-only-password"},
+                                capture_output=True, text=True, timeout=10)
+        assert "dummy-private-rejected-value" not in result.stdout + result.stderr
+        if status in (200, 404):
+            assert result.returncode == 0, result.stderr
+            assert writes == [{"stream_id": "stream-one", "pipeline_ids": sorted([*existing, "new-pipeline"])}]
+        else:
+            assert result.returncode != 0 and writes == []
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()

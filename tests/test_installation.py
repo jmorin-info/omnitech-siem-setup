@@ -28,6 +28,7 @@ def valid_config():
     config.update(SIEM_FQDN="siem.example.test", SIEM_HOSTNAME="siem", SIEM_DOMAIN="example.test",
                   SIEM_IFACE="ens18", SIEM_IP="192.0.2.10", SIEM_GW="192.0.2.1",
                   DNS1="192.0.2.53", DNS2="192.0.2.54", NET_ADMIN="192.0.2.0/24", NET_BEATS="198.51.100.0/24")
+    config.update(OS_HEAP="4g", GL_HEAP="2g", MONGO_CACHE_GB="1")
     return config
 
 
@@ -45,6 +46,19 @@ def test_optional_triage_precedes_detection_routing_and_verification_is_last():
     assert phases.index("pipelines") < phases.index("triage") < phases.index("detections")
     assert phases.count("triage") == 1
     assert phases[-1] == "verification" and phases.index("backups") < phases.index("verification")
+
+
+def test_memory_budget_rejects_32gb_defaults_on_a_16gb_vm():
+    config = valid_config()
+    config.update(OS_HEAP="12g", GL_HEAP="4g")
+    assert installer.resource_blockers(config, 16 * 1024 * 1024)
+    assert installer.resource_blockers(config, 32 * 1024 * 1024) == []
+    config.update(OS_HEAP="4096m", GL_HEAP="2g")
+    assert installer.resource_blockers(config, 16 * 1024 * 1024) == []
+    config["MONGO_CACHE_GB"] = "NaN"
+    assert installer.resource_blockers(config, 16 * 1024 * 1024)
+    config["OS_HEAP"] = "wrong"
+    assert len(installer.resource_blockers(config, 16 * 1024 * 1024)) == 2
 
 
 def test_existing_install_is_detected(tmp_path):
@@ -297,3 +311,15 @@ def test_private_operator_umask_keeps_secrets_private_and_service_paths_readable
     assert (root / "runtime/public").stat().st_mode & 0o777 == 0o644
     assert (root / "00-vars.env").stat().st_mode & 0o077 == 0
     assert state.stat().st_mode & 0o077 == 0
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Bash verification fixture")
+def test_resume_reruns_read_only_verification_without_reprovisioning(installation_sandbox, monkeypatch):
+    root, script, state = installation_sandbox
+    monkeypatch.setattr(installer, "PHASES", (("verification", "phase.sh"),))
+    script.write_text("echo checked >> checks.log\n")
+    flags = ["--apply", "--experimental-ubuntu-2604", "--allow-local-changes"]
+    assert installer.main(flags) == 0
+    assert installer.main([*flags, "--resume"]) == 0
+    assert (root / "checks.log").read_text().splitlines() == ["checked", "checked"]
+    assert json.loads(state.read_text())["completed_phases"] == ["verification"]

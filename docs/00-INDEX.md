@@ -5,6 +5,7 @@
 - [Interface d'administration dans le terminal SSH](INTERFACE-ADMINISTRATION.md)
 - [Installation neuve et périmètre des composants](INSTALLATION.md)
 - [Ubuntu : installation ligne par ligne et essai Ubuntu 26.04](UBUNTU-DEMARRAGE.md)
+- [Qualification Ubuntu 26.04 sur VM isolée et rapports](QUALIFICATION-UBUNTU2604.md)
 - [Mises à jour, conservation de la configuration et retour arrière](UPDATES.md)
 - [Modules WatchGuard, UniFi et Palo Alto](INTEGRATIONS-MODULAIRES.md)
 - [Console `/soc/` : déploiement et diagnostic 404/502](CONSOLE-DEPLOIEMENT.md)

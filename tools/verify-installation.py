@@ -193,7 +193,10 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, help="also save the sanitized JSON report")
     args = parser.parse_args(argv)
     report = {"schema_version": 1, "checked_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-              "kernel": platform.release(), "passed": False, "checks": []}
+              "kernel": platform.release(), "python": platform.python_version(), "passed": False, "checks": []}
+    signature = Path("/proc/version_signature")
+    if signature.is_file():
+        report["kernel_signature"] = signature.read_text().strip()
     try:
         spec = importlib.util.spec_from_file_location("omni_installer", ROOT / "tools/install-platform.py")
         module = importlib.util.module_from_spec(spec)

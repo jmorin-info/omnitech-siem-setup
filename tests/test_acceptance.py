@@ -1,9 +1,11 @@
 """Acceptance must reject partial installs and never expose credential-bearing errors."""
 import ast
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.util import module_from_spec, spec_from_file_location
 import json
 from pathlib import Path
 import subprocess
+import threading
 import uuid
 
 import pytest
@@ -93,6 +95,36 @@ def test_diagnostic_does_not_echo_exception_body_or_credential(installed):
     report = verify.evaluate(config, versions, **kwargs)
     assert any(not item["passed"] for item in report)
     assert "dummy-" not in json.dumps(report)
+
+
+def test_http_probe_negotiates_json_and_refuses_redirects():
+    calls = []
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            calls.append(self.path)
+            if self.path == "/redirect":
+                self.send_response(302)
+                self.send_header("Location", "/other")
+                self.end_headers()
+            else:
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"version":"7.2.2"}' if self.headers.get("Accept") == "application/json" else b"<html>UI</html>")
+        def log_message(self, *args):
+            pass
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        assert json.loads(verify.request(base + "/system", auth="dummy-password"))["version"] == "7.2.2"
+        with pytest.raises(ValueError):
+            verify.request(base + "/redirect", auth="dummy-password")
+        assert calls == ["/system", "/redirect"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
 
 
 @pytest.mark.parametrize("responses", [[{}], [{"id": "search-id"}, {}]])

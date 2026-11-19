@@ -10,6 +10,8 @@ Voir [INTERFACE-ADMINISTRATION.md](INTERFACE-ADMINISTRATION.md).
 Le profil `core-soc` installe la pile, la collecte de base, le modèle de données,
 les enrichissements, les détections de base, les dashboards natifs, la console
 `/soc/`, son backend et une sauvegarde applicative quotidienne.
+Une phase finale vérifie les services et les entités attendues avant d'enregistrer
+la réussite. Voir [la recette Ubuntu 26.04](QUALIFICATION-UBUNTU2604.md).
 
 Ce profil est une installation neuve. Il refuse une machine qui possède déjà les
 configurations MongoDB, OpenSearch ou Graylog. Pour une instance existante, suivre
@@ -44,6 +46,9 @@ pour la pile et les extensions), un stockage adapté à la rétention, une adres
 stable et un DNS cohérent. Les heaps de l’exemple visent 32 Go : les réduire si la
 machine dispose de 16 Go. Choisir un volume de sauvegarde dimensionné ; une archive
 de configuration ne remplace pas une sauvegarde des journaux.
+Le plan contrôle le budget mémoire : heaps JVM et cache MongoDB doivent laisser
+au moins 3 Gio aux autres services et au système. Les valeurs d'exemple pour
+32 Go sont donc refusées sur une VM de 16 Go tant qu'elles ne sont pas adaptées.
 
 ```bash
 git clone https://github.com/jmorin-info/omnitech-siem-setup.git
@@ -99,7 +104,12 @@ MongoDB 8 refuse les noyaux 6.19 à 7.0.13 inclus, selon ses
   l’application si le client SSH courant est hors de `NET_ADMIN`.
 - Le pare-feu utilise une table `inet omni_siem` et les réseaux du site. Les
   tables tierces sont conservées ; leurs politiques peuvent encore bloquer le
-  trafic. Le fichier `/etc/nftables.conf` précédent est sauvegardé. Les sources
+  trafic. Le fragment `/etc/nftables.d/omni-siem.nft` est inclus dans le fichier
+  `/etc/nftables.conf` conservé et sauvegardé ; l'application ne redémarre pas le
+  service nftables, dont l'arrêt pourrait vider les tables tierces. Contrôler
+  `sudo nft list table inet omni_siem` ; l'unité peut rester inactive jusqu'au
+  prochain démarrage alors que la table est chargée. Une ancienne déclaration
+  inline de cette table exige une migration examinée. Les sources
   envoient directement sur les ports configurés (pas de redirection 514 implicite).
 - nginx sert le navigateur en HTTPS 443. Un certificat auto-signé provisoire est
   généré ; le remplacer par un certificat approuvé. La communication nginx/Graylog
@@ -138,9 +148,13 @@ Les graphiques qui attendent ces sources restent vides tant que la source ou
 l’extension correspondante n’a pas été configurée. « Installé » ne signifie pas
 que les événements de chaque équipement arrivent déjà.
 
+Sans l'option triage, une installation neuve conserve le routage mail natif et
+Teams si configuré. Avec cette option, le triage précède le routage des détections.
+
 ## Contrôles de réception
 
 ```bash
+sudo python3 tools/verify-installation.py --output /var/lib/omni-siem/acceptance.json
 systemctl is-active mongod opensearch graylog-server nginx omni-mobile-api
 curl -fsS http://127.0.0.1:8090/m/api/vapid
 curl --cacert /etc/nginx/ssl/graylog.crt -I https://<fqdn>/soc/

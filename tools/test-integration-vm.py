@@ -6,14 +6,17 @@ import argparse
 import base64
 import datetime as dt
 import importlib.util
+import http.cookiejar
 import json
 import os
 from pathlib import Path
 import socket
+import ssl
 import sys
 import tempfile
 import time
 import urllib.request
+import urllib.error
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -80,6 +83,31 @@ def fixture_results(fixtures, messages, module_id, stream_id):
     return results
 
 
+def console_session(password):
+    """Exercise browser authentication only after the lab identity guard succeeds."""
+    context = ssl.create_default_context(cafile="/etc/nginx/ssl/graylog.crt")
+    cookies = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(NoRedirect(), urllib.request.ProxyHandler({}),
+        urllib.request.HTTPSHandler(context=context), urllib.request.HTTPCookieProcessor(cookies))
+    def call(path, data=None):
+        request = urllib.request.Request("https://siem.lab.test" + path,
+            data=json.dumps(data).encode() if data is not None else None,
+            headers={"Accept": "application/json", "Content-Type": "application/json", "Origin": "https://siem.lab.test"})
+        with opener.open(request, timeout=30) as response:
+            return json.load(response)
+    if call("/m/api/login", {"username": "admin", "password": password}).get("ok") is not True:
+        return False
+    try:
+        authenticated = call("/m/api/me").get("user") == "admin"
+    finally:
+        call("/m/api/logout", {})
+    try:
+        call("/m/api/me")
+    except urllib.error.HTTPError as exc:
+        return authenticated and exc.code == 401
+    return False
+
+
 def test_module(client, module, report):
     report["stage"] = "install"
     plan = install(client, module, parameters(module), apply=True)
@@ -113,7 +141,9 @@ def test_module(client, module, report):
         raise RuntimeError("the module input did not start")
     report["input_running"] = True
     fixtures = json.loads((CATALOG / module["id"] / "fixtures.json").read_text())
-    since = dt.datetime.now(dt.timezone.utc).isoformat()
+    # Graylog timestamps have millisecond precision; do not exclude a datagram
+    # received in the same millisecond as this Python microsecond timestamp.
+    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=2)).isoformat()
     report["stage"] = "udp_fixtures"
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
         for fixture in fixtures:
@@ -139,6 +169,7 @@ def main(argv=None):
     report = {"schema_version": 1, "passed": False, "scope": "isolated VM; synthetic fixtures only", "modules": []}
     try:
         config = isolated_configuration()
+        report["console_login_logout"] = console_session(config["GRAYLOG_ADMIN_PASS"])
         client = Graylog("http://127.0.0.1:9000/api", "isolated-vm-placeholder")
         client.authorization = "Basic " + base64.b64encode(("admin:" + config["GRAYLOG_ADMIN_PASS"]).encode()).decode()
         client.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
@@ -154,7 +185,7 @@ def main(argv=None):
                     result["operation"] = str(exc)
         report["fixtures_expected"] = sum(item.get("fixtures_expected", 0) for item in report["modules"])
         report["fixtures_received"] = sum(item.get("fixtures_received", 0) for item in report["modules"])
-        report["passed"] = len(report["modules"]) == 3 and report["fixtures_expected"] == 10 and all(
+        report["passed"] = report["console_login_logout"] and len(report["modules"]) == 3 and report["fixtures_expected"] == 10 and all(
             item["passed"] for item in report["modules"])
     except Exception as exc:
         report["error_type"] = type(exc).__name__

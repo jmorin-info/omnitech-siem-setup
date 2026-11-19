@@ -162,7 +162,7 @@ report_path = Path("/root/acceptance.json")
 report = json.loads(report_path.read_text())
 log = Path("/root/install-output.log")
 if log.exists():
-    report["failure_tail_redacted"] = [redact(line, private)[:1000] for line in log.read_text(errors="replace").splitlines()[-40:]]
+    report["failure_tail_redacted"] = [redact(line, private)[:1000] for line in log.read_text(errors="replace").splitlines()[-160:]]
 plan = Path("/root/install-plan.json")
 if plan.exists():
     report["plan_blockers"] = json.loads(plan.read_text()).get("blockers", [])
@@ -178,20 +178,30 @@ if [[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 ]]; then
   ssh "${SSH[@]}" 'cat /root/integrations-acceptance.json' > "$WORK/integrations.json" 2> "$WORK/integrations-errors.log" || true
 fi
 ssh "${SSH[@]}" 'cat /root/acceptance.json' > "$WORK/report.json" 2> "$WORK/report-errors.log" || true
-if python3 - "$WORK/report.json" "$INSTALL_CODE" "$WORK/image-sha256" "$WORK/integrations.json" <<'PY'
+if python3 - "$WORK/report.json" "$INSTALL_CODE" "$WORK/image-sha256" "$WORK/integrations.json" "$VERIFY_CODE" "$INTEGRATION_CODE" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 data = json.loads(path.read_text())
 assert isinstance(data.get("passed"), bool)
 data["install_exit_code"] = int(sys.argv[2])
+data["verify_exit_code"] = int(sys.argv[5])
+data["integration_exit_code"] = int(sys.argv[6])
 data["cloud_image_sha256"] = pathlib.Path(sys.argv[3]).read_text()
 integrations = pathlib.Path(sys.argv[4])
 data["integrations"] = json.loads(integrations.read_text()) if integrations.is_file() else {"passed": False, "skipped": True}
-data["passed"] = data["passed"] and data["install_exit_code"] == 0 and data["integrations"].get("passed") is True
+data["passed"] = data["passed"] and all(data[key] == 0 for key in ("install_exit_code", "verify_exit_code", "integration_exit_code")) and data["integrations"].get("passed") is True
 path.write_text(json.dumps(data, indent=2) + "\n")
 PY
 then
   install -m 600 "$WORK/report.json" "$REPORT"
+else
+  echo 'Ubuntu VM acceptance report is missing or invalid.' >&2
+  exit 1
 fi
 [[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 && "$INTEGRATION_CODE" == 0 ]] || { echo "Ubuntu VM acceptance failed; inspect the sanitized JSON report." >&2; exit 1; }
+python3 - "$REPORT" <<'PY'
+import json, sys
+if json.load(open(sys.argv[1])).get("passed") is not True:
+    raise SystemExit("The aggregated Ubuntu VM report did not pass")
+PY
 echo "Ubuntu 26.04 fresh installation passed; report: $REPORT"

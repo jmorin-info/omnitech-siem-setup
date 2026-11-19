@@ -145,10 +145,34 @@ post_entity() {
   fi
 }
 
+# A stream with no pipeline connection returns404 on a fresh Graylog instance.
+# Only that absence is optional; authentication and server errors remain fatal.
+pipeline_connections() {
+  local RES STATUS RC ARG
+  local -a GET_CURL=()
+  for ARG in "${CURL[@]}"; do
+    [[ "$ARG" == --fail ]] || GET_CURL+=("$ARG")
+  done
+  if RES="$("${GET_CURL[@]}" --fail-with-body --write-out '\n%{http_code}' "${API}/system/pipelines/connections/$1")"; then
+    RC=0
+  else
+    RC=$?
+  fi
+  STATUS="${RES##*$'\n'}"
+  RES="${RES%$'\n'*}"
+  if [[ "$RC" -eq 0 ]]; then
+    printf '%s\n' "$RES"
+  elif [[ "$STATUS" == 404 ]]; then
+    printf '{"pipeline_ids":[]}\n'
+  else
+    return "$RC"
+  fi
+}
+
 # connect_pipeline <stream_id> <pipeline_id> : ajoute sans ecraser les existants
 connect_pipeline() {
   local SID="$1" PID="$2" CURRENT
-  CURRENT="$(api_get "/system/pipelines/connections/${SID}" | jq -r '.pipeline_ids // [] | .[]' 2>/dev/null)"
+  CURRENT="$(pipeline_connections "${SID}" | jq -r '.pipeline_ids // [] | .[]' 2>/dev/null)"
   if echo "${CURRENT}" | grep -q "^${PID}$"; then skip "pipeline deja connecte au stream ${SID}"; return; fi
   jq -n --arg s "${SID}" --argjson p "$(printf '%s\n' ${CURRENT} ${PID} | grep -v '^$' | jq -R . | jq -s 'unique')" \
      '{stream_id:$s, pipeline_ids:$p}' \
