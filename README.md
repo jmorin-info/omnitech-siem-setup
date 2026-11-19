@@ -440,6 +440,11 @@ timeline, and the SEAL integration notes under `docs/`.*
 
 ## 10. Deployment
 
+For Ubuntu, follow the [step-by-step installation guide](docs/UBUNTU-DEMARRAGE.md).
+Ubuntu 24.04 is the supported Ubuntu route; 26.04 requires explicit experimental
+opt-in and a compatible kernel. Missing MongoDB/OpenSearch passwords can be
+generated locally with `sudo bash install.sh --generate-secrets` before planning.
+
 For guided installation and maintenance over SSH, run:
 
 ```bash

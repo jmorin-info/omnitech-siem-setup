@@ -7,6 +7,11 @@ does not automatically reproduce all of them.
 
 ## Fresh native installation
 
+For an Ubuntu walkthrough, see [UBUNTU-DEMARRAGE.md](UBUNTU-DEMARRAGE.md).
+Ubuntu 26.04 requires `--experimental-ubuntu-2604` and a compatible kernel; the
+MongoDB 8 noble packages are outside vendor support on that OS. Ubuntu 24.04 is
+the supported Ubuntu route for this stack.
+
 Follow [INSTALLATION.md](INSTALLATION.md) for prerequisites, platform selection,
 exact phase order, storage/network choices and acceptance checks. Ubuntu 22.04/24.04
 and Debian 12/13 amd64 are the installer targets. The Graylog compatibility matrix
@@ -17,7 +22,8 @@ list of officially supported OS versions.
 cp 00-vars.env.example 00-vars.env
 chmod 600 00-vars.env
 # Edit the site parameters and secrets.
-bash install.sh --plan
+sudo bash install.sh --generate-secrets
+sudo bash install.sh --plan
 sudo bash install.sh --apply
 ```
 

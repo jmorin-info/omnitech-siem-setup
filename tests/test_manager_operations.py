@@ -45,6 +45,21 @@ def test_mutation_requires_confirmation(manager):
         manager.run("install_apply", {}, confirmed="OUI")
 
 
+def test_installation_options_are_explicit_and_generation_is_separate(manager):
+    argv, env = manager.command("install_plan", {"experimental_ubuntu_2604": True, "allow_local_changes": True})
+    assert "--experimental-ubuntu-2604" in argv and "--allow-local-changes" in argv
+    assert "--plan" in argv and "--apply" not in argv and env == {}
+    for key in ("experimental_ubuntu_2604", "allow_local_changes"):
+        with pytest.raises(ValueError):
+            manager.command("install_apply", {key: "true"})
+    argv, _ = manager.command("install_secrets", {})
+    assert argv[-1] == "--generate-secrets" and "--apply" not in argv
+    with pytest.raises(ValueError, match="confirmation"):
+        manager.run("install_secrets", {})
+    with pytest.raises(ValueError):
+        manager.command("install_secrets", {"allow_local_changes": True})
+
+
 def test_preserves_existing_updater_state_by_explicit_path(manager):
     argv, env = manager.command("update_plan", {"target": "a"*40})
     assert argv[argv.index("--state-dir")+1] == str(manager.updater_state)

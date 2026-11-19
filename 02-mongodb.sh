@@ -15,6 +15,7 @@ source ./00-vars.env
 source ./stack-versions.env
 source ./lib-platform.sh
 omni_platform
+omni_mongodb_kernel_check
 [[ $EUID -eq 0 ]] || { echo "ERREUR: a lancer en root."; exit 1; }
 
 echo "==> [0/6] Controle AVX (CPU Proxmox = host ?)"

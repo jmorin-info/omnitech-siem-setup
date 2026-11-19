@@ -1,5 +1,7 @@
 # Installer une nouvelle instance
 
+Pour les commandes Ubuntu ligne par ligne, suivre [UBUNTU-DEMARRAGE.md](UBUNTU-DEMARRAGE.md).
+
 Le point d’entrée est `bash install.sh`. Sans `--apply`, il affiche un plan et ses
 prérequis sans installer de paquet, modifier de service ni appeler l’API Graylog.
 Pour un parcours guidé depuis SSH, lancer `sudo python3 tools/omni-manager.py` :
@@ -20,6 +22,7 @@ Certains de ces scripts sont des opérations de maintenance ou de purge.
 |---|---|
 | Ubuntu 22.04 LTS | Dépôt MongoDB `jammy`, réseau Netplan, nginx compatible |
 | Ubuntu 24.04 LTS | Dépôt MongoDB `noble`, réseau Netplan, nginx compatible |
+| Ubuntu 26.04 LTS | Expérimental, option `--experimental-ubuntu-2604` obligatoire ; paquets MongoDB `noble`, hors support officiel de cette pile et sous réserve du noyau |
 | Debian 12 | Dépôt MongoDB `bookworm`, réseau ifupdown |
 | Debian 13 | Installation de référence existante ; paquets MongoDB `bookworm`, hors liste actuelle des OS Graylog officiellement pris en charge |
 
@@ -47,8 +50,10 @@ git clone https://github.com/jmorin-info/omnitech-siem-setup.git
 cd omnitech-siem-setup
 cp 00-vars.env.example 00-vars.env
 chmod 600 00-vars.env
-# Renseigner identité, réseau, stockage, SMTP et les quatre secrets de la pile.
-bash install.sh --plan
+# Renseigner identité, réseau, stockage, SMTP et le secret administrateur Graylog.
+nano 00-vars.env
+sudo bash install.sh --generate-secrets
+sudo bash install.sh --plan
 sudo bash install.sh --apply
 ```
 
@@ -67,10 +72,21 @@ sudo bash install.sh --apply --resume
 ```
 
 La reprise exige le même commit, le même fichier de configuration et les mêmes
-options, avec un checkout sans modifications de fichiers suivis. Elle saute les phases terminées ; la phase échouée peut avoir laissé un
+options. Par défaut, les fichiers suivis doivent être propres. Pour un correctif
+local examiné, `--allow-local-changes` conserve les sources et enregistre leur
+empreinte avec une archive privée du diff ; aucun commit local n'est exigé.
+La reprise doit conserver ces sources et les options expérimentales éventuelles.
+Elle saute les phases terminées ; la phase échouée peut avoir laissé un
 état partiel et doit être inspectée avant la reprise. Le fichier
 `/etc/omni-siem/instance.json` enregistre l’origine et la révision après réussite.
 Le plan n’expose jamais les valeurs des secrets.
+
+`--generate-secrets` est une opération séparée pour une instance neuve : elle
+remplit les secrets MongoDB et OpenSearch absents ou `CHANGEME` sans afficher les
+valeurs et sans remplacer les secrets déjà configurés. Le mot de passe Graylog
+reste choisi par l'opérateur. Les prérequis CPU, RAM et noyau restent contrôlés :
+MongoDB 8 refuse les noyaux 6.19 à 7.0.13 inclus, selon ses
+[notes officielles](https://www.mongodb.com/docs/v8.0/release-notes/8.0/).
 
 ## Réseau, TLS et stockage
 

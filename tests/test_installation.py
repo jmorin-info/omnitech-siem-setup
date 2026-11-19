@@ -2,6 +2,8 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import os
+import json
+import shlex
 import subprocess
 
 import pytest
@@ -106,3 +108,129 @@ def test_compose_versions_match_native_reference():
     assert "image: opensearchproject/opensearch:" + versions["OPENSEARCH_PACKAGE_VERSION"] in compose
     assert "image: graylog/graylog:" + versions["GRAYLOG_PACKAGE_VERSION"].removesuffix("-1") in compose
     assert "profiles: [analytics]" in compose
+
+
+def test_ubuntu2604_requires_explicit_experimental_option():
+    assert installer.platform_check("ubuntu", "26.04")[0]
+    blockers, warnings = installer.platform_check("ubuntu", "26.04", True)
+    assert not blockers and any("noble" in warning for warning in warnings)
+    assert installer.platform_check("ubuntu", "99.04", True)[0]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="bash platform fixtures run on Linux")
+def test_ubuntu2604_repository_requires_opt_in(tmp_path):
+    release = tmp_path / "os-release"
+    release.write_text('ID=ubuntu\nVERSION_ID="26.04"\n')
+    command = 'source "$1"; omni_platform "$2" || exit; printf "%s" "$OMNI_MONGO_SUITE"'
+    argv = ["bash", "-c", command, "test", str(ROOT / "lib-platform.sh"), str(release)]
+    env = {**os.environ, "OMNI_EXPERIMENTAL_UBUNTU_2604": "0"}
+    assert subprocess.run(argv, env=env, capture_output=True).returncode != 0
+    env["OMNI_EXPERIMENTAL_UBUNTU_2604"] = "1"
+    result = subprocess.run(argv, env=env, capture_output=True, text=True, check=True)
+    assert result.stdout == "noble" and "EXPERIMENTAL" in result.stderr
+
+
+@pytest.mark.parametrize("release,blocked", [
+    ("6.8.0-99-generic", False), ("6.18.9", False), ("6.19.0-generic", True),
+    ("6.20.1", True), ("7.0.0", True), ("7.0.13-generic", True),
+    ("7.0.14-rc1", True), ("7.0.14-generic", False), ("7.1.0", False),
+])
+def test_mongodb_kernel_guard_matches_shell(release, blocked):
+    assert bool(installer.kernel_blocker(release)) == blocked
+    if os.name != "nt":
+        command = 'source "$1"; omni_mongodb_kernel_check "$2"'
+        result = subprocess.run(["bash", "-c", command, "test", str(ROOT / "lib-platform.sh"), release], capture_output=True)
+        assert (result.returncode != 0) == blocked
+
+
+@pytest.mark.skipif(os.name == "nt", reason="trusted configuration is read by bash")
+def test_secret_generation_preserves_credentials_and_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setattr(installer, "existing_install", lambda: [])
+    path = tmp_path / "00-vars.env"
+    path.write_text("# site comment\nGRAYLOG_ADMIN_PASS='dummy-chosen-admin'\nMONGO_ADMIN_PASS='dummy-existing-mongo'\n"
+                    "MONGO_GRAYLOG_PASS='CHANGEME'\nOPENSEARCH_BOOTSTRAP_PASS=''\nCUSTOM_SITE='preserve me'\n")
+    keys = installer.generate_missing_secrets(path)
+    assert keys == ["MONGO_GRAYLOG_PASS", "OPENSEARCH_BOOTSTRAP_PASS"]
+    values = installer.load_config(path)
+    assert values["GRAYLOG_ADMIN_PASS"] == "dummy-chosen-admin"
+    assert values["MONGO_ADMIN_PASS"] == "dummy-existing-mongo"
+    assert values["CUSTOM_SITE"] == "preserve me"
+    assert "# site comment" in path.read_text()
+    assert values[keys[0]] != values[keys[1]]
+    for key in keys:
+        assert len(values[key]) >= 40
+        assert any(c.isupper() for c in values[key]) and any(c.islower() for c in values[key])
+        assert any(c.isdigit() for c in values[key]) and "!" in values[key]
+    assert path.stat().st_mode & 0o077 == 0
+    before = path.read_bytes()
+    assert installer.generate_missing_secrets(path) == []
+    assert path.read_bytes() == before
+    monkeypatch.setattr(installer, "existing_install", lambda: ["/etc/mongod.conf"])
+    with pytest.raises(ValueError, match="fresh installation only"):
+        installer.generate_missing_secrets(path)
+    assert path.read_bytes() == before
+
+
+@pytest.fixture
+def installation_sandbox(tmp_path, monkeypatch):
+    root = tmp_path / "source"
+    root.mkdir()
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    script = root / "phase.sh"
+    script.write_text("# pristine source\n")
+    subprocess.run(["git", "add", "phase.sh"], cwd=root, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-qm", "fixture"], cwd=root, check=True)
+    config = root / "00-vars.env"
+    config.write_text("\n".join(key + "=" + shlex.quote(value) for key, value in valid_config().items()) + "\n")
+    config.chmod(0o600)
+    cpu, memory, release = (tmp_path / name for name in ("cpu", "memory", "os-release"))
+    cpu.write_text("flags : avx\n")
+    memory.write_text("MemTotal: 33554432 kB\n")
+    release.write_text('ID=ubuntu\nVERSION_ID="26.04"\n')
+    state = tmp_path / "state" / "install-state.json"
+    mapping = {"/proc/cpuinfo": cpu, "/proc/meminfo": memory, "/etc/os-release": release,
+               "/var/lib/omni-siem/install-state.json": state, "/etc/omni-siem/instance.json": tmp_path / "instance.json"}
+    monkeypatch.setattr(installer, "ROOT", root)
+    monkeypatch.setattr(installer, "PHASES", (("test", "phase.sh"),))
+    monkeypatch.setattr(installer, "Path", lambda value: mapping.get(str(value), Path(value)))
+    monkeypatch.setattr(installer, "read_os", lambda: ("ubuntu", "26.04"))
+    monkeypatch.setattr(installer, "load_config", lambda _: valid_config())
+    monkeypatch.setattr(installer, "existing_install", lambda: [])
+    monkeypatch.setattr(installer.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(installer.platform, "release", lambda: "6.8.0-generic")
+    monkeypatch.setattr(installer.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    return root, script, state
+
+
+def test_local_patch_installation_preserves_sources_without_committing(installation_sandbox, monkeypatch, capsys):
+    root, script, state = installation_sandbox
+    script.write_text("# reviewed local source\n")
+    before = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root)
+    assert installer.main(["--plan", "--experimental-ubuntu-2604"]) == 0
+    assert any("locally modified" in error for error in json.loads(capsys.readouterr().out)["blockers"])
+    flags = ["--experimental-ubuntu-2604", "--allow-local-changes"]
+    assert installer.main(["--plan", *flags]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["blockers"] == [] and not state.exists()
+    real_run = subprocess.run
+    def phase_run(argv, **kwargs):
+        if argv[0] == "bash":
+            assert kwargs["env"]["OMNI_EXPERIMENTAL_UBUNTU_2604"] == "1"
+            return subprocess.CompletedProcess(argv, 0)
+        return real_run(argv, **kwargs)
+    monkeypatch.setattr(subprocess, "run", phase_run)
+    assert installer.main(["--apply", *flags]) == 0
+    assert json.loads(state.read_text())["completed_phases"] == ["test"]
+    assert script.read_text() == "# reviewed local source\n"
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root) == before
+    snapshot = state.parent / "install-sources" / plan["source_fingerprint"]
+    patch = (snapshot / "local.patch").read_bytes()
+    assert b"reviewed local source" in patch
+    installer.snapshot_local_changes(root, snapshot, before.decode().strip(), installer.source_inventory(root)[1])
+    assert (snapshot / "local.patch").read_bytes() == patch
+    script.write_text("# changed after installation\n")
+    capsys.readouterr()
+    with pytest.raises(ValueError, match="resolve the plan"):
+        installer.main(["--apply", "--resume", *flags])
+    assert any("resume requires" in error for error in json.loads(capsys.readouterr().out)["blockers"])

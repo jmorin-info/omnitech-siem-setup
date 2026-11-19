@@ -63,6 +63,13 @@ les droits AD, les identifiants d’un tenant Microsoft365 ou les accès SQL SEA
 
 ## Installer ou reprendre une instance neuve
 
+Le parcours Ubuntu complet est dans [UBUNTU-DEMARRAGE.md](UBUNTU-DEMARRAGE.md).
+Le menu d'installation permet de générer les secrets MongoDB/OpenSearch manquants
+pour une instance neuve, sans remplacer ceux déjà configurés. Il permet aussi
+l'option Ubuntu 26.04 expérimentale et l'autorisation explicite de sources locales
+examinées ; les contrôles CPU, RAM, noyau et reprise restent actifs. Ces choix
+sont repris depuis l'état d'une installation interrompue du même dépôt.
+
 1. Enregistrer les paramètres nécessaires puis afficher le plan d’installation.
 2. Lire les blocages, les phases et les composants qui attendent une configuration
    externe. Corriger les prérequis avant d’appliquer.

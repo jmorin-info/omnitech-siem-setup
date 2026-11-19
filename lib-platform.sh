@@ -7,10 +7,28 @@ omni_platform() {
   case "${ID}:${VERSION_ID}" in
     ubuntu:22.04) OMNI_MONGO_OS=ubuntu; OMNI_MONGO_SUITE=jammy; OMNI_MONGO_COMPONENT=multiverse ;;
     ubuntu:24.04) OMNI_MONGO_OS=ubuntu; OMNI_MONGO_SUITE=noble; OMNI_MONGO_COMPONENT=multiverse ;;
+    ubuntu:26.04)
+      [[ "${OMNI_EXPERIMENTAL_UBUNTU_2604:-0}" == 1 ]] || {
+        echo "Ubuntu 26.04 requires explicit experimental opt-in; prefer Ubuntu 24.04 for this stack." >&2; return 1;
+      }
+      OMNI_MONGO_OS=ubuntu; OMNI_MONGO_SUITE=noble; OMNI_MONGO_COMPONENT=multiverse
+      echo "EXPERIMENTAL: Ubuntu 26.04 with MongoDB 8.0 packages for Ubuntu 24.04 (noble); no vendor support guarantee." >&2 ;;
     debian:12|debian:13) OMNI_MONGO_OS=debian; OMNI_MONGO_SUITE=bookworm; OMNI_MONGO_COMPONENT=main ;;
     *) echo "Unsupported platform: ${ID:-unknown} ${VERSION_ID:-unknown}." >&2; return 1 ;;
   esac
   OMNI_OS="$ID"; OMNI_OS_VERSION="$VERSION_ID"
+}
+
+omni_mongodb_kernel_check() {
+  local release="${1:-$(uname -r)}" major minor patch
+  if [[ "$release" =~ ^([0-9]+)\.([0-9]+)(\.([0-9]+))? ]]; then
+    major="${BASH_REMATCH[1]}"; minor="${BASH_REMATCH[2]}"; patch="${BASH_REMATCH[4]:-0}"
+    if (( major == 6 && minor >= 19 || major == 7 && minor == 0 && patch < 14 )) \
+       || { (( major == 7 && minor == 0 && patch == 14 )) && [[ "$release" == *rc* ]]; }; then
+      echo "MongoDB 8.0 is incompatible with kernel ${release}: use a compatible kernel (7.0.14+ fixes the affected range 6.19 through 7.0.13). Do not bypass this check." >&2
+      return 1
+    fi
+  fi
 }
 
 omni_api_setup() {

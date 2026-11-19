@@ -3,6 +3,13 @@
 Toutes les évolutions notables du dispositif. Format : date — changement.
 *Dernière revue : 2026-11-19.*
 
+## Installation Ubuntu et correctifs locaux
+
+- Parcours Ubuntu ligne par ligne ; Ubuntu 24.04 conseillé, Ubuntu 26.04 explicitement expérimental avec dépôt MongoDB noble et limites éditeur documentées.
+- Génération locale des secrets techniques manquants, valeurs existantes conservées ; aucun contournement CPU, RAM ou noyau incompatible MongoDB.
+- Option pour des sources locales examinées sans commit imposé, archive privée du diff, empreinte des fichiers et contrôle à la reprise et entre phases.
+- Mêmes options dans le menu SSH, avec tests des choix de plateforme, du noyau, des secrets et d'une installation simulée sans mutation système.
+
 ## Administration dans le terminal SSH
 
 - Nouveau lanceur `tools/omni-manager.py`, sans dépendance Python supplémentaire ni serveur web : configuration du site et saisie masquée des secrets, installation/reprise, mises à jour préparées et retour arrière, publication de la console, modules et historique.

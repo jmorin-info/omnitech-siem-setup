@@ -21,6 +21,7 @@ CONFIG_GROUPS = {
     "Notifications SMTP": ["SMTP_RELAY", "SMTP_PORT", "SMTP_FROM", "ALERT_EMAIL"],
 }
 ACTION_LABELS = {
+    "install_secrets": "Générer les secrets MongoDB/OpenSearch manquants pour une instance neuve",
     "install_plan": "Afficher le plan d'installation", "install_apply": "Installer le socle et la console sur cet hôte",
     "install_resume": "Reprendre l'installation enregistrée", "update_fetch": "Télécharger une révision dans le cache",
     "update_plan": "Afficher les différences de code", "update_stage": "Préparer le candidat",
@@ -58,11 +59,15 @@ class Terminal:
         self.target = ""
         self.transaction = ""
         self.triage = False
+        self.experimental_ubuntu_2604 = False
+        self.allow_local_changes = False
         previous_install = Path("/var/lib/omni-siem/install-state.json")
         if previous_install.is_file():
             recorded = json.loads(previous_install.read_text())
             if recorded.get("source_root") == str(self.manager.source):
                 self.triage = "triage" in recorded.get("extras", [])
+                self.experimental_ubuntu_2604 = recorded.get("experimental_ubuntu_2604", False)
+                self.allow_local_changes = recorded.get("allow_local_changes", False)
 
     def run(self, action, params=None):
         params = params or {}
@@ -112,7 +117,10 @@ class Terminal:
         while True:
             choice = menu("Installation neuve / reprise — aucune boucle sur les scripts", [
                 "Configurer l'instance", f"Option triage mail : {'activée' if self.triage else 'désactivée'}",
-                "Afficher le plan", "Installer le socle et la console", "Reprendre une installation interrompue"])
+                "Afficher le plan", "Installer le socle et la console", "Reprendre une installation interrompue",
+                "Générer les secrets techniques manquants (instance neuve)",
+                f"Ubuntu 26.04 expérimental : {'activé' if self.experimental_ubuntu_2604 else 'désactivé'}",
+                f"Sources locales modifiées et examinées : {'autorisées' if self.allow_local_changes else 'refusées'}"])
             if choice == 0:
                 return
             if choice == 1:
@@ -121,7 +129,16 @@ class Terminal:
                 self.triage = not self.triage
             elif choice in (3, 4, 5):
                 action = {3: "install_plan", 4: "install_apply", 5: "install_resume"}[choice]
-                self.run(action, {"triage": self.triage})
+                self.run(action, {"triage": self.triage, "experimental_ubuntu_2604": self.experimental_ubuntu_2604,
+                                  "allow_local_changes": self.allow_local_changes})
+            elif choice == 6:
+                self.run("install_secrets")
+            elif choice == 7:
+                print("Ubuntu 26.04 : paquets MongoDB noble, hors support officiel ; contrôle du noyau maintenu.")
+                self.experimental_ubuntu_2604 = not self.experimental_ubuntu_2604
+            elif choice == 8:
+                print("Examiner git diff avant d'autoriser : les sources seront conservées et leur empreinte enregistrée.")
+                self.allow_local_changes = not self.allow_local_changes
 
     def updates(self):
         while True:

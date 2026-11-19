@@ -17,7 +17,10 @@ from .modules import build_module_command
 from .storage import lock, write_private
 
 ACTIONS = {
-    "install_plan": {"triage"}, "install_apply": {"triage"}, "install_resume": {"triage"},
+    "install_plan": {"triage", "experimental_ubuntu_2604", "allow_local_changes"},
+    "install_apply": {"triage", "experimental_ubuntu_2604", "allow_local_changes"},
+    "install_resume": {"triage", "experimental_ubuntu_2604", "allow_local_changes"},
+    "install_secrets": set(),
     "update_fetch": {"ref"}, "update_plan": {"target"}, "update_stage": {"target"},
     "update_apply": {"target"}, "update_rollback": {"transaction"}, "update_recover": {"transaction"},
     "update_status": set(), "console_publish": set(),
@@ -26,7 +29,7 @@ ACTIONS = {
     "module_uninstall": {"module", "api", "installation_id", "ca", "api_token"},
     "module_uninstall_plan": {"module", "api", "installation_id", "ca", "api_token"},
 }
-WRITES = {"install_apply", "install_resume", "update_apply", "update_rollback", "update_recover", "console_publish", "module_install", "module_uninstall"}
+WRITES = {"install_apply", "install_resume", "install_secrets", "update_apply", "update_rollback", "update_recover", "console_publish", "module_install", "module_uninstall"}
 
 
 def redact(text, secrets):
@@ -59,13 +62,18 @@ class Manager:
             raise ValueError("Action ou paramètres non autorisés.")
         argv, env = [sys.executable], {}
         if action.startswith("install_"):
-            if not isinstance(params.get("triage", False), bool):
-                raise ValueError("Option triage invalide.")
-            argv += [str(self.source / "tools/install-platform.py"), "--plan" if action == "install_plan" else "--apply"]
+            for option in ("triage", "experimental_ubuntu_2604", "allow_local_changes"):
+                if not isinstance(params.get(option, False), bool):
+                    raise ValueError("Option d'installation invalide : " + option)
+            mode = "--generate-secrets" if action == "install_secrets" else "--plan" if action == "install_plan" else "--apply"
+            argv += [str(self.source / "tools/install-platform.py"), mode]
             if action == "install_resume":
                 argv.append("--resume")
             if params.get("triage"):
                 argv += ["--with", "triage"]
+            for option in ("experimental_ubuntu_2604", "allow_local_changes"):
+                if params.get(option):
+                    argv.append("--" + option.replace("_", "-"))
         elif action.startswith("update_"):
             name = {"update_apply": "apply-code"}.get(action, action.removeprefix("update_"))
             argv += [str(self.source / "tools/omni-update.py"), name,

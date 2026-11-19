@@ -31,9 +31,11 @@ echo "--- [1] Systeme"
 if omni_platform; then
   pass "${PRETTY_NAME} (package installation platform recognized)"
   [[ "${ID}:${VERSION_ID}" == debian:13 ]] && warn "Debian13 is the existing reference deployment; Graylog vendor matrix currently lists Debian12."
+  [[ "${ID}:${VERSION_ID}" == ubuntu:26.04 ]] && warn "Ubuntu 26.04 is experimental; MongoDB packages use the noble repository."
 else
   fail "OS unsupported: ${PRETTY_NAME:-unknown}"
 fi
+omni_mongodb_kernel_check && pass "Kernel not in MongoDB's known incompatible range" || fail "MongoDB kernel prerequisite failed"
 if grep -qw avx /proc/cpuinfo; then
   pass "AVX present ($(nproc) vCPU) - MongoDB OK"
 else
