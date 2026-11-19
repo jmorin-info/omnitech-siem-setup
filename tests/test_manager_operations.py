@@ -77,6 +77,14 @@ def test_redaction_handles_transformed_credentials_and_terminal_controls():
     assert "\x1b" not in result
 
 
+def test_redaction_handles_json_escaped_passwords():
+    secret = 'dummy-private-"quoted\\é'
+    for ascii_only in (False, True):
+        rendered = json.dumps({"credential": secret}, ensure_ascii=ascii_only)
+        result = json.loads(redact(rendered, [secret]))
+        assert result["credential"] == "[masqué]"
+
+
 def test_actual_job_streams_redacted_output_and_private_journal(manager, monkeypatch):
     secret = "dummy-private-job-value"
     monkeypatch.setattr(manager, "command", lambda action, params: ([sys.executable, "-c", 'import os,json;print(json.dumps({"token":os.environ["GRAYLOG_API_TOKEN"],"target":"a"*40}))'], {"GRAYLOG_API_TOKEN": secret}))

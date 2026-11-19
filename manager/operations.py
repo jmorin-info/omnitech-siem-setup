@@ -31,6 +31,8 @@ WRITES = {"install_apply", "install_resume", "update_apply", "update_rollback", 
 
 def redact(text, secrets):
     variants = {str(s) for s in secrets if s}
+    variants.update(json.dumps(secret, ensure_ascii=False)[1:-1] for secret in list(variants))
+    variants.update(json.dumps(secret, ensure_ascii=True)[1:-1] for secret in list(variants))
     variants.update(quote(secret, safe="") for secret in list(variants))
     variants.update(base64.b64encode((secret + ":token").encode()).decode() for secret in list(variants))
     for secret in sorted(variants, key=len, reverse=True):
