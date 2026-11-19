@@ -1,7 +1,16 @@
 # Journal des modifications — SIEM OMNITECH
 
 Toutes les évolutions notables du dispositif. Format : date — changement.
-*Dernière revue : 2026-11-12.*
+*Dernière revue : 2026-11-19.*
+
+## 2026-11-19 — Déploiement portable, console et modules d'intégration
+
+- Installation neuve Debian/Ubuntu par phases explicites, versions centralisées et paramètres réseau/stockage conservés sans activation explicite.
+- Publication de tous les assets SOC et des routes nginx manquantes, activation du backend géré avec contrôle de santé et retour arrière ; droits et chargement des secrets corrigés pour Docker.
+- Mise à jour du code depuis GitHub : révision figée, préparation isolée, détection de conflits, sauvegarde, retour arrière et reprise après interruption ; aucune migration implicite de base.
+- Modules Content Pack natifs WatchGuard, UniFi et Palo Alto, dashboards et tests d'exemples ; limites de format et de qualification documentées.
+- README, procédures d'installation/mise à jour/intégration et audit de portabilité daté actualisés ; suites hors ligne et CI. Installation de production non modifiée pendant ce travail.
+
 ## 2026-11-12 (soir : console SOC, SOAR, synchronisation du dépôt)
 - Console SOC : politique de sécurité du contenu stricte (`script-src 'self'`, plus aucun script en ligne). Les scripts sont dans `app*.js` et les anciens gestionnaires `onclick`/`oninput`/`onchange`/`onkeydown`/`onsubmit` sont exécutés par délégation (`app-csp.js`, analyseur restreint, sans `eval`). Le service worker met ces fichiers en cache, versionnés.
 - Console SOC : `SOC_ADMINS` renseigné ; notifications push réservées aux administrateurs SOC (abonnement, test et envoi), compte enregistré avec chaque abonnement.

@@ -15,6 +15,13 @@ console, and full physical-access-control (SEAL) correlation.
 
 ---
 
+> **Deployment status — 19 November 2026.** Start with the
+> [installation guide](docs/INSTALLATION.md), [safe code updates](docs/UPDATES.md),
+> [integration modules](docs/INTEGRATIONS-MODULAIRES.md) and
+> [portability audit](docs/AUDIT-PORTABILITE-2026-11-19.md).
+> The feature tour below describes the configured OMNITECH reference installation;
+> it is not a promise that every optional service is enabled by a fresh installation.
+
 ## Table of contents
 
 1. [What this is](#1-what-this-is)
@@ -55,8 +62,7 @@ It is **not** a vanilla Graylog install. On top of the ingest/search core it add
   volume exfiltration, lateral-movement, source-freshness watchdog, backup/health, …);
 - **SOAR-light** automated IP blocking wired back into the FortiGate;
 - a **purpose-built SOC console** (`/soc/`) and a **mobile PWA**;
-- everything provisioned **idempotently** by ~104 versioned shell scripts, so the entire
-  platform can be rebuilt from source.
+- versioned provisioning and maintenance scripts, with an explicit fresh-install profile and a separate code-update workflow.
 
 ---
 
@@ -434,69 +440,48 @@ timeline, and the SEAL integration notes under `docs/`.*
 
 ## 10. Deployment
 
-The whole platform is provisioned by **~104 idempotent shell scripts** (`00-preflight.sh` …
-`99-cert-orchestrator.sh`), each responsible for one concern and safe to re-run. A Docker
-variant exists for DR / staging.
-
-**High-level order**
-
-```
-00–09   preflight · base · MongoDB · OpenSearch · Graylog · NGINX/TLS · firewall · inputs · backup
-10–14   data model · enrichment · pipelines · detections · dashboards
-15–22   reports · M365 · vSphere · alert hygiene · routing
-27–49   hardening · VPN/TI · drift · retention · disk guard · LDAPS · canary · SOAR · MITRE · triage · UEBA/NDR
-50–79   enrichment lots · new sources · Vaultwarden · FortiDHCP · identity correlation · file audit ·
-        integrity · robot supervision · auto-updates · FortiManager · mobile PWA · threat-intel ·
-        leaks (GitHub / dark web) · SOC console · detection tuning · ML scoring · internal index set
-80–99   analytics dashboards · retention consolidation · detections backlog · services versioning ·
-        deception/honeytokens · attack graph · FortiClient EMS · DNS · Linux · Aruba · Entra ·
-        correlation · multi-site SOAR · index templates · cert orchestrator
-```
-
-### Prerequisites
-
-Checked by `./00-preflight.sh`, which prints a PASS / WARN / FAIL report:
-
-- Debian 13, root access, reachable apt mirrors;
-- a CPU with **AVX** (required by MongoDB 8);
-- at least 30 GB of RAM (OpenSearch and Graylog heaps are sized in `00-vars.env`);
-- a dedicated data disk for `/data`, encrypted with LUKS2 and unlocked by the TPM;
-- a resolvable FQDN and free input ports (443, 5044, 1514–1520, 12201).
-
-### Quick start
+Use the explicit installer for a **new host**. It installs the core stack, inputs,
+normalisation, initial detections/dashboards, backups and the complete `/soc/` console.
+Ubuntu 22.04/24.04 and Debian 12/13 amd64 are the installer targets; a full fresh-VM
+acceptance test remains required for the chosen host. Versions are pinned in
+[`stack-versions.env`](stack-versions.env).
 
 ```bash
 git clone https://github.com/jmorin-info/omnitech-siem-setup.git
-cd omnitech-siem-setup && chmod +x *.sh
-
-cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env
-$EDITOR 00-vars.env              # replace every CHANGEME, check every "A VERIFIER" line
-
-./00-preflight.sh --gen-vars     # host checks + suggested values
-./01-base.sh && ./02-mongodb.sh && ./03-opensearch.sh && ./04-graylog.sh
-./05-nginx-tls.sh && ./06-firewall.sh && ./07-inputs.sh && ./08-backup.sh
-./10-graylog-model.sh && ./11-graylog-enrichment.sh && ./12-graylog-pipelines.sh
-./13-graylog-alerts.sh && ./21-alert-hygiene.sh && ./14-graylog-dashboards.sh
+cd omnitech-siem-setup
+cp 00-vars.env.example 00-vars.env
+chmod 600 00-vars.env
+$EDITOR 00-vars.env
+bash install.sh --plan
+sudo bash install.sh --apply
 ```
 
-Then run the functional groups (detections, UEBA/NDR, SOAR, triage, reports, extra
-sources). A few numbers are shared by two scripts (38, 40, 48, 49, 84, 85, 97): always go by
-the full script name and its header. The French README has the exact order.
+Read [installation and acceptance checks](docs/INSTALLATION.md) before applying.
+The installer refuses an existing installation. It does not format a disk without
+explicit configuration, configure external equipment for you or enable all site-specific
+robots, active scans and response actions. The original OMNITECH installation includes
+additional configured services; the fresh profile does not claim identical capabilities.
 
-### Configuration
+For an **existing host**, use the [update workflow](docs/UPDATES.md): fetch an exact
+revision into an isolated cache, inspect the plan, stage it and apply the permitted
+code changes with backups and rollback. Tenant settings, secrets and databases are
+preserved. Database/package migrations require a separate procedure. Never execute
+all numbered scripts: some purge logs or recreate dashboards.
 
-All settings live in a single file, `00-vars.env`, which is never committed. Start from the
-commented template `00-vars.env.example`. Keep comments on their own lines: some Python
-collectors read this file and do not strip trailing comments. Every script sources
-`00-vars.env` first, then `lib-graylog.sh`. In the other order the API URL is empty and calls
-fail silently.
+For **WatchGuard, UniFi and Palo Alto**, use the
+[module catalogue and Content Pack workflow](docs/INTEGRATIONS-MODULAIRES.md).
+Packs include parsing, a stream and a dashboard, with format/version limits and
+sample-based tests. Qualification with your real device logs is still required.
+Official Illuminate packs have their own license requirements and are not redistributed.
 
-Service secrets (webhooks, API keys, service accounts) are listed in `SECRETS.example.md`;
-the real `SECRETS.md` is git-ignored. See [`docs/PRA-RECONSTRUCTION-SIEM.md`](docs/PRA-RECONSTRUCTION-SIEM.md)
-for a full rebuild procedure and [`docs/PROCEDURE-EXPLOITATION-SIEM.md`](docs/PROCEDURE-EXPLOITATION-SIEM.md)
-for operations.
+If `/soc/` returns **Not Found**, use port 443 through nginx, not Graylog's port 9000.
+On a native install, `sudo bash 71-soc-console.sh` installs missing console components
+and publishes every asset; it preserves existing backend configuration and nginx
+access rules. See [the diagnostic procedure](docs/CONSOLE-DEPLOIEMENT.md).
 
----
+Docker remains a distinct staging/DR profile; its scope and restoration requirements
+are in [the Docker guide](docker/README-DOCKER.en.md). A configuration restore is not
+a complete recovery of log data and all external collectors.
 
 ## 11. Operations &amp; resilience
 
@@ -568,7 +553,7 @@ management). See [`docs/ISO27001-MAPPING.md`](docs/ISO27001-MAPPING.md),
 
 ```
 .
-├── 00-preflight.sh … 99-cert-orchestrator.sh   # ~104 idempotent provisioning scripts
+├── 00-preflight.sh … 99-cert-orchestrator.sh   # provisioning and maintenance scripts (explicit selection required)
 ├── lib-graylog.sh                              # shared Graylog API helpers (paginated, idempotent)
 ├── triage/omni-alert-triage                    # alert-triage micro-service (+ .env template)
 ├── oms-xdr / oms-ml / oms-graph                # correlation, ML scoring, attack graph add-ons

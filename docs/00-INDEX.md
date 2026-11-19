@@ -1,5 +1,13 @@
 # Dossier documentaire SIEM OMNITECH — Index
 
+## Parcours installation et maintenance
+
+- [Installation neuve et périmètre des composants](INSTALLATION.md)
+- [Mises à jour, conservation de la configuration et retour arrière](UPDATES.md)
+- [Modules WatchGuard, UniFi et Palo Alto](INTEGRATIONS-MODULAIRES.md)
+- [Console `/soc/` : déploiement et diagnostic 404/502](CONSOLE-DEPLOIEMENT.md)
+- [Audit de portabilité daté](AUDIT-PORTABILITE-2026-11-19.md)
+
 | Réf | Document | Type ISO | Objet |
 |---|---|---|---|
 | POL | [POL-SUPERVISION-JOURNALISATION.md](POL-SUPERVISION-JOURNALISATION.md) | **Politique** | Engagements, périmètre, responsabilités, rétention — validée DSI |

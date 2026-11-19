@@ -1,5 +1,13 @@
 # OMNI SIEM — Documentation
 
+## Installation and maintenance
+
+- [Installation neuve et périmètre des composants](INSTALLATION.md)
+- [Mises à jour, conservation de la configuration et retour arrière](UPDATES.md)
+- [Modules WatchGuard, UniFi et Palo Alto](INTEGRATIONS-MODULAIRES.md)
+- [Console `/soc/` : déploiement et diagnostic 404/502](CONSOLE-DEPLOIEMENT.md)
+- [Audit de portabilité daté](AUDIT-PORTABILITE-2026-11-19.md)
+
 Complete documentation for the OMNI SIEM / SOC platform. Start with the
 [project README](../README.md) for the high-level tour, then use the map below.
 

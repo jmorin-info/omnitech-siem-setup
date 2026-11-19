@@ -1,7 +1,16 @@
 # Changelog — SIEM OMNITECH
 
 All notable changes to the platform. Format: date — change.
-*Last review: 2026-11-12.*
+*Last review: 2026-11-19.*
+
+## 2026-11-19 — Portable deployment, console repair and integration modules
+
+- Explicit fresh-install profile for Debian/Ubuntu, pinned stack versions and preserved host networking/storage unless explicitly configured.
+- Complete SOC assets and missing nginx routes, managed backend activation with health checks and rollback; Docker entrypoint permissions and secret loading fixed.
+- Separate GitHub code-update workflow: pinned revision, isolated stage, conflict checks, backups, rollback and crash recovery; no implicit database migration.
+- Native Content Pack modules for WatchGuard, UniFi and Palo Alto with format/sample tests, dashboards and documented qualification limits.
+- README, deployment/update/integration guides and dated portability audit updated; offline suites and CI added. Production reference left unchanged during this work.
+
 ## 2026-11-12 (evening: SOC console, SOAR, repository sync)
 - SOC console: strict Content Security Policy (`script-src 'self'`, no inline script left). Scripts live in `app*.js`; former `onclick`/`oninput`/`onchange`/`onkeydown`/`onsubmit` handlers run through delegation (`app-csp.js`, restricted parser, no `eval`). The service worker caches these versioned files.
 - SOC console: `SOC_ADMINS` set; push notifications restricted to SOC administrators (subscribe, test and send), with the account stored on each subscription.

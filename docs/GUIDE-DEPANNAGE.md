@@ -52,6 +52,13 @@ Référence technique exhaustive des incidents résolus : `CONTEXT.md` (section 
 
 ## 4. Console / authentification
 
+Pour un **Not Found sur `/soc/`**, contrôler le frontal HTTPS 443 (sans `:9000`),
+le vhost et tous les assets. La procédure actuelle est
+[CONSOLE-DEPLOIEMENT.md](CONSOLE-DEPLOIEMENT.md). Sur une installation native,
+`sudo bash 71-soc-console.sh` publie l'ensemble de la console et ajoute ses routes
+manquantes ; un service personnalisé existant reste préservé. Un 502 sur `/m/api/`
+demande un diagnostic du backend, distinct de la publication statique.
+
 | Symptôme | Cause | Solution |
 |---|---|---|
 | « invalid credentials » avec un compte AD admin | Port 636 (LDAPS) bloqué → backend non créé → compte AD inconnu | Ouvrir 636 (règle FortiGate 425) puis `bash 33-ldaps-auth.sh` |

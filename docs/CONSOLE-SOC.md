@@ -57,6 +57,13 @@ omni-mobile-api : auth Graylog (LDAPS) → cookie HMAC ; lecture OpenSearch ; SS
   (carte réversible pour l'Entité-360) — sert à produire des captures anonymisées. **Désactivé en exploitation.**
 
 ## Exploitation
+
+La procédure de déploiement et de réparation actuelle est
+[CONSOLE-DEPLOIEMENT.md](CONSOLE-DEPLOIEMENT.md) : publication de tous les assets,
+routes nginx, backend dédié sur installation neuve et conservation des services
+personnalisés. Une console HTTP 200 ne prouve pas que les sources ou les extensions
+ML/XDR/SOAR sont configurées. L'authentification utilise les comptes Graylog ;
+AD/LDAPS reste une configuration du site.
 - Backend : `systemctl status omni-mobile-api` ; conf `/etc/default/omni-mobile`.
 - Déploiement / mise à jour : `65-mobile-pwa.sh` (PWA + backend), `71-soc-console.sh` (console).
 - Bibliothèques front vendorées localement (`chart.min.js`, `cytoscape.min.js`) — aucun CDN au runtime.

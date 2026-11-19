@@ -9,7 +9,7 @@
 
 <br>
 
-![Graylog](https://img.shields.io/badge/Graylog-7.1-1971c2?logo=graylog&logoColor=white)
+![Graylog](https://img.shields.io/badge/Graylog-7.2-1971c2?logo=graylog&logoColor=white)
 ![OpenSearch](https://img.shields.io/badge/OpenSearch-2.19-005EB8?logo=opensearch&logoColor=white)
 ![MongoDB](https://img.shields.io/badge/MongoDB-8.0-13aa52?logo=mongodb&logoColor=white)
 ![Debian](https://img.shields.io/badge/Debian-13-A81D33?logo=debian&logoColor=white)
@@ -29,6 +29,12 @@
 > **Dépôt opérationnel interne.** Ce dépôt provisionne le SIEM de **production** d'OMNITECH SECURITY : il doit être traité comme de l'infrastructure-as-code sensible. Aucun secret réel n'est versionné (voir [Sécurité et secrets](#sécurité-et-secrets)).
 
 ---
+
+> **Mise au propre du 19 novembre 2026** : [installation](docs/INSTALLATION.md),
+> [mises à jour](docs/UPDATES.md), [modules](docs/INTEGRATIONS-MODULAIRES.md),
+> [audit de portabilité](docs/AUDIT-PORTABILITE-2026-11-19.md). Les capacités et captures
+> ci-dessous décrivent l'installation de référence ; les modules optionnels demandent
+> leur configuration et leur recette.
 
 ## Sommaire
 
@@ -62,17 +68,17 @@
 
 ## Présentation et objectifs
 
-Plateforme **SIEM + XDR + console SOC** complète et reproductible, déployée sur un serveur physique Debian 13 durci (`bx-it-graylog-vm`, le nom est historique), avec un kit d'enrôlement Windows/AD et Linux. Elle collecte Windows Security/Sysmon, FortiGate/FortiAnalyzer (3 sites), Microsoft 365, vSphere, ESET, Vaultwarden, Veeam, DNS, Linux, Aruba et Entra ID ; normalise tout dans un **schéma commun** ; exécute **234 règles de pipeline** et **142 définitions d'alerte** mappées **MITRE ATT&CK** ; ajoute une **analyse comportementale (UEBA/NDR)**, un **scoring ML (`oms-ml`)**, une **corrélation d'incidents kill-chain (`oms-xdr`)**, un **triage d'alertes intelligent** (scoring multi-signaux + LLM local — mail réservé au critique, boucle de faux positifs), un **SOAR léger** (blocage FortiGate multi-site BDX/IV/LC), une **console SOC web + PWA mobile** bilingue et **115 playbooks d'action** — le tout provisionné par des scripts **idempotents** et documenté pour l'**audit ISO 27001:2022**.
+Plateforme **SIEM + XDR + console SOC** complète et reproductible, déployée sur un serveur physique Debian 13 durci (`bx-it-graylog-vm`, le nom est historique), avec un kit d'enrôlement Windows/AD et Linux. Elle collecte Windows Security/Sysmon, FortiGate/FortiAnalyzer (3 sites), Microsoft 365, vSphere, ESET, Vaultwarden, Veeam, DNS, Linux, Aruba et Entra ID ; normalise tout dans un **schéma commun** ; exécute **234 règles de pipeline** et **142 définitions d'alerte** mappées **MITRE ATT&CK** ; ajoute une **analyse comportementale (UEBA/NDR)**, un **scoring ML (`oms-ml`)**, une **corrélation d'incidents kill-chain (`oms-xdr`)**, un **triage d'alertes intelligent** (scoring multi-signaux + LLM local — mail réservé au critique, boucle de faux positifs), un **SOAR léger** (blocage FortiGate multi-site BDX/IV/LC), une **console SOC web + PWA mobile** bilingue et **115 playbooks d'action** — avec des scripts de provisioning et de maintenance distincts et documenté pour l'**audit ISO 27001:2022**.
 
 Objectifs de conception :
 
-- **Tout est code** : chaque script est rejouable sans danger (`set -euo pipefail`, contrôles finaux), le dépôt est la source de vérité du provisioning.
+- **Déploiement explicite** : l'installateur sélectionne les phases du socle ; la maintenance, les purges et les migrations ont des procédures séparées.
 - **Précision avant volume** : tuning des faux positifs mesuré, triage systématique, le mail n'est envoyé que pour le critique.
 - **Auditable** : rétentions par paliers, chaîne d'intégrité HMAC (`omni-integrity`), générateur de preuves daté, mapping ISO 27001:2022.
 
 ## Overview (English)
 
-A complete, reproducible **SIEM + XDR + SOC console** deployed on a single hardened Debian 13 server, with a Windows/AD enrolment kit. It ingests Windows Security/Sysmon, FortiGate/FortiAnalyzer, Microsoft 365, vSphere, ESET, Vaultwarden and Veeam; normalises everything into a common schema; runs **234 pipeline rules** and **142 alert definitions** mapped to **MITRE ATT&CK**; adds behavioural analytics (UEBA/NDR), an ML scoring layer (`oms-ml`), kill-chain incident correlation (`oms-xdr`), an intelligent alert-triage layer (multi-signal scoring + local LLM — mail reserved for the critical few, false-positive feedback loop), light SOAR (multi-site FortiGate auto-block), a bilingual SOC web console + mobile PWA, and 115 action playbooks — all provisioned by idempotent scripts and documented for ISO 27001:2022 evidence. The rest of this document is in French; the SOC console itself is fully bilingual FR/EN.
+A complete, reproducible **SIEM + XDR + SOC console** deployed on a single hardened Debian 13 server, with a Windows/AD enrolment kit. It ingests Windows Security/Sysmon, FortiGate/FortiAnalyzer, Microsoft 365, vSphere, ESET, Vaultwarden and Veeam; normalises everything into a common schema; runs **234 pipeline rules** and **142 alert definitions** mapped to **MITRE ATT&CK**; adds behavioural analytics (UEBA/NDR), an ML scoring layer (`oms-ml`), kill-chain incident correlation (`oms-xdr`), an intelligent alert-triage layer (multi-signal scoring + local LLM — mail reserved for the critical few, false-positive feedback loop), light SOAR (multi-site FortiGate auto-block), a bilingual SOC web console + mobile PWA, and 115 action playbooks — with separate provisioning and maintenance procedures and documented for ISO 27001:2022 evidence. The rest of this document is in French; the SOC console itself is fully bilingual FR/EN.
 
 ## Aperçu visuel
 
@@ -213,70 +219,54 @@ Composants sur le serveur :
 
 ## Prérequis
 
-Contrôlés automatiquement par `./00-preflight.sh` (rapport PASS/WARN/FAIL) :
-
-- **OS** : Debian 13, accès root, dépôts apt joignables.
-- **CPU** : jeu d'instructions **AVX** obligatoire (MongoDB 8 ; sur Proxmox, type de CPU `host`).
-- **RAM** : 30 Go minimum validés par le preflight (heaps OpenSearch/Graylog dimensionnés dans `00-vars.env`).
-- **Disques** : un disque data dédié pour `/data` (chiffré LUKS2/TPM2 par le provisioning), détecté et proposé par le preflight.
-- **Réseau** : FQDN résolu, ports d'inputs libres (443, 5044, 1514-1520, 12201...), flux ouverts depuis les sources (voir `06-firewall.sh`).
-
-`./00-preflight.sh --gen-vars` génère `00-vars.env.autodetect` avec les suggestions à reporter dans `00-vars.env`.
+Pour une nouvelle installation : Ubuntu Server 24.04/22.04 ou Debian 12/13 amd64,
+systemd, CPU avec AVX, accès root, DNS/FQDN corrects et stockage dimensionné.
+La [procédure d'installation](docs/INSTALLATION.md) précise les versions, les
+contrôles et les limites de qualification. Le chiffrement LUKS/TPM de l'installation
+de référence est une opération distincte ; l'installateur ne le crée pas implicitement.
 
 ## Ordre d'installation
 
-Le socle s'installe strictement dans l'ordre numérique ; au-delà, les scripts sont regroupés par fonction et rejouables individuellement (idempotents).
+Un seul point d'entrée sélectionne les phases autorisées et installe aussi la
+console SOC et tous ses assets :
 
 ```bash
-cd omnitech-siem-setup && chmod +x *.sh
-cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env && $EDITOR 00-vars.env  # secrets CHANGEME
-
-./00-preflight.sh --gen-vars   # analyse l'hôte : AVX, RAM, disques, réseau, dépôts, ports
-./01-base.sh ./02-mongodb.sh ./03-opensearch.sh ./04-graylog.sh ./05-nginx-tls.sh
-./06-firewall.sh ./07-inputs.sh ./08-backup.sh ./09-snmpd.sh
-./10-graylog-model.sh ./11-graylog-enrichment.sh ./12-graylog-pipelines.sh
-./13-graylog-alerts.sh ./14-graylog-dashboards.sh
+git clone https://github.com/jmorin-info/omnitech-siem-setup.git
+cd omnitech-siem-setup
+cp 00-vars.env.example 00-vars.env
+chmod 600 00-vars.env
+$EDITOR 00-vars.env
+bash install.sh --plan
+sudo bash install.sh --apply
 ```
 
-Puis les groupes fonctionnels, dans cet ordre (chaque script documente ses prérequis en tête de fichier) :
+Le profil `core-soc` installe le socle et ses dashboards initiaux. Il refuse un
+SIEM déjà installé ; `--resume` reprend uniquement sa propre installation enregistrée.
+Les robots, XDR/ML/graphe, connecteurs nécessitant des identifiants externes, SOAR,
+scan actif et autres capacités spécifiques restent à configurer selon leur procédure.
+Une installation neuve ne reproduit pas automatiquement tous les outils actifs sur
+l'environnement OMNITECH. Voir le périmètre exact dans [INSTALLATION.md](docs/INSTALLATION.md).
 
-| # | Groupe | Scripts | Contenu |
-|---|---|---|---|
-| 1 | Socle et certificats | `00`-`09`, `98` | OS de base, MongoDB, OpenSearch, Graylog, nginx/TLS, pare-feu nftables, inputs, sauvegarde, SNMP, templates d'index |
-| 2 | Inputs et parsing | `07`, `10`-`12`, `16`-`19` | Inputs, modèle de données/index sets, enrichissement (lookups), **pipelines** ; M365 (`16`-`18`), vSphere (`19`) |
-| 3 | Streams et alertes | `13`, `21`, `22` | **Définitions d'alerte**, hygiène (grace/backlog), routage 2-tiers |
-| 4 | Dashboards | `14`, `82`, `84-dashboards-triage-site` | Tableaux de bord natifs, analytics, triage et multi-site (ce dernier en fin de séquence, voir tableau des doublons) |
-| 5 | Détections | `37`, `47`, `57`, `67`, `73`, `76`, `78`, `80`, `84-kerberoast-dedup`, `85-detection-extra3`, `85-detections-backlog`, `87`, `88`, `89` | MITRE, détections par familles, tuning FP, déception/honeytokens, graphe d'attaque, backlog de couverture |
-| 6 | UEBA / NDR | `40-ueba-ndr`, `43`, `48-ndr-scan`, `49-ldap-recon` | Scoring comportemental, tunnel DNS, beaconing, scan interne, reconnaissance LDAP |
-| 7 | Enrichissement | `11`, `49-enrich-lots`, `49-expo-port-class`, `50`, `51`, `97-enrich-alerts` | Lookups, segments réseau, classification d'exposition, threat-intel, enrichissement du contenu des alertes |
-| 8 | SOAR, triage, XDR, ML | `36`, `38-alert-triage`, `69`, `77`, `97-multisite-soar` + `oms-xdr/`, `oms-ml/`, `triage/` | Blocage FortiGate, triage mail, réponse AD (dry-run), corrélation, ML |
-| 9 | Supervision | `32`, `39`, `46`, `60`, `61`, `74`, `86` (+`09`, `62`) | SLA de collecte, self-health des robots, watchdog de sources, intégrité, versioning des services |
-| 10 | Rétention et purge | `31`, `41`, `53`, `54`, `79`, `83` (+`40-purge-logs`, manuel) | Rétentions différenciées, purge et repopulation |
-| 11 | Rapports et ISO | `15`, `34`, `45`, `68` (+`33`, `35`, `58`, `59`, `64`) | Rapports hebdo/mensuel, preuves ISO, LDAPS, canary, corrélation d'identité, audit fichiers |
-| 12 | Sources spéciales | `52`, `55`, `56`, `63`, `90`, `91`, `92`, `93`, `94`, `99-cert-orchestrator` | Vaultwarden, FortiDHCP, FortiManager, FortiClient EMS, DNS, Linux, Aruba, Entra ID, orchestrateur de certificats |
-| 13 | Fuites et dark web | `70`, `72` | GitHub, RansomLook, HIBP, Dehashed |
-| 14 | Console et kit | `65`, `71`, `75`, `81`, `95`, `96` | PWA mobile, console SOC, durcissement console, allowlists FP, publication du kit `/kit/`, corrélation cross-source |
+**Ne jamais exécuter tous les scripts numérotés par une boucle ou un joker.**
+Certains effacent les journaux, changent les rétentions ou recréent les dashboards.
+Les préfixes 38, 39, 40, 48, 49, 84, 85, 86 et 97 sont partagés : seul le nom complet
+identifie une opération.
 
-### Numéros dupliqués : ordre correct d'exécution
+Pour une installation existante, suivre [les mises à jour](docs/UPDATES.md) :
+révision figée, plan, préparation séparée, sauvegarde et retour arrière du code.
+L'outil préserve les secrets, les personnalisations et les bases ; les migrations
+de paquets/bases ne sont pas automatiques.
 
-Sept numéros sont **partagés par plusieurs scripts** (38, 40, 48, 49, 84, 85, 97) : se fier au **nom complet** du script et à son en-tête, jamais au seul numéro. Ordre correct :
+Les modules **WatchGuard, Ubiquiti UniFi et Palo Alto** sont documentés dans
+[INTEGRATIONS-MODULAIRES.md](docs/INTEGRATIONS-MODULAIRES.md), avec Content Packs,
+dashboards, paramètres et limites de formats. Une recette sur les journaux réels
+de vos équipements reste nécessaire. Les packs Illuminate officiels ne sont pas
+redistribués et ont leurs propres conditions de licence.
 
-| Numéro | Scripts | Ordre et conditions |
-|---|---|---|
-| 38 | `38-vuln-scan.sh` · `38-alert-triage.sh` | `38-vuln-scan` avec les détections (requiert l'inventaire `Get-OmniInventory.ps1`) ; `38-alert-triage` **après** `13` et `21` (il s'insère entre les alertes et le mail) |
-| 40 | `40-ueba-ndr.sh` · `40-purge-logs.sh` | `40-ueba-ndr` dans la séquence UEBA/NDR ; `40-purge-logs` est **manuel uniquement** (efface le contenu des index), jamais dans un rejeu automatique |
-| 48 | `48-m365-fail-codes.sh` · `48-ndr-scan.sh` | `48-m365-fail-codes` après `16`-`18` (M365) puis relancer `14` ; `48-ndr-scan` après `21` et `37`, puis relancer `13` et `14` |
-| 49 | `49-enrich-lots.sh` · `49-expo-port-class.sh` · `49-ldap-recon.sh` | Les deux enrichissements d'abord (prérequis `12` + `37`, relancer `13` et `14` ensuite), `49-ldap-recon` après (requiert le collecteur en place et `37`) |
-| 84 | `84-kerberoast-dedup.sh` · `84-dashboards-triage-site.sh` | `84-kerberoast-dedup` avec les détections ; `84-dashboards-triage-site` en **fin de séquence** (consomme `event_source:alert_triage` et `fortigate_site`, donc après `38-alert-triage` et `97-multisite-soar`) |
-| 85 | `85-detection-extra3.sh` · `85-detections-backlog.sh` | `85-detection-extra3` puis `85-detections-backlog` (tous deux après `13`, `21`, `37`) |
-| 97 | `97-multisite-soar.sh` · `97-enrich-alerts.sh` | `97-multisite-soar` d'abord (requiert `36` et le pipeline FortiGate de `12`) ; `97-enrich-alerts` en **dernier** (passe générique sur toutes les définitions d'alerte existantes) |
-
-Autres points d'attention :
-
-- Les dépendances sont indiquées en tête de chaque script (exemple : `39-collect-health.sh` requiert 21 et 12, et relance 13 et 14). Relancer `21-alert-hygiene.sh` après tout re-run de `13-graylog-alerts.sh`.
-- La numérotation comporte des trous (20, 23-29) : ils sont normaux, aucun script ne manque.
-
-> **Variante conteneurisée (DR / staging / démo)** — toute la plateforme (Graylog + OpenSearch + MongoDB + console + nginx TLS + oms-xdr) en `docker compose`, secrets durcis et restauration de la configuration complète depuis une sauvegarde : voir `docker/README-DOCKER.md`. La production reste le déploiement bare-metal chiffré LUKS.
+Un **Not Found sur `/soc/`** se diagnostique sur le frontal HTTPS port 443.
+`sudo bash 71-soc-console.sh` installe les composants manquants et publie tous les
+assets, en préservant la configuration existante. Voir
+[CONSOLE-DEPLOIEMENT.md](docs/CONSOLE-DEPLOIEMENT.md).
 
 ## Configuration : 00-vars.env
 
@@ -523,7 +513,13 @@ Preuves Annexe A produites par la plateforme : **A.8.15/8.16** (journalisation e
 
 ## Stack et versions épinglées
 
-Debian 13 · Graylog 7.1 · OpenSearch 2.19.x (3.x casse Graylog) · MongoDB 8.0 · Logstash 8.19 (collecte SQL SEAL) · Winlogbeat OSS 8.x. Les correctifs à l'intérieur de ces séries s'installent automatiquement chaque semaine (voir [Exploitation courante](#exploitation-courante)). Un changement de série majeure reste manuel : vérifier la matrice de compatibilité Graylog, puis mettre à jour `/etc/apt/preferences.d/oms-siem-series`.
+Les versions des nouvelles installations natives sont centralisées dans
+[`stack-versions.env`](stack-versions.env) : Graylog 7.2.2, OpenSearch 2.19.7,
+MongoDB 8.0.38. Le profil Docker possède ses images épinglées. Ce sont des références
+d'installation, pas une instruction de rétrograder une base existante. Toute montée
+de série exige une revue de la matrice de compatibilité et une sauvegarde restaurable.
+Les mécanismes historiques `oms-maj-siem` de l'installation OMNITECH sont distincts
+de l'outil de mise à jour du code du dépôt.
 
 ## Documentation associée
 
@@ -548,7 +544,7 @@ Le dépôt est publié sous licence **GNU GPLv3** (fichier `LICENSE`). Il reste 
 ---
 
 <div align="center">
-<sub>OMNITECH SECURITY — plateforme SIEM / XDR interne · provisionnée par scripts idempotents · secrets exclus par conception.</sub>
+<sub>OMNITECH SECURITY — plateforme SIEM / XDR interne · provisioning et maintenance versionnés · secrets exclus par conception.</sub>
 </div>
 
 > English version: [README.md](README.md). Documents are kept in French (`*.md`) with English translations (`*.en.md`).
