@@ -96,7 +96,8 @@ echo "      Detecte : iface=${CUR_IFACE:-?}  ip=${CUR_IP:-?}  gw=${CUR_GW:-?}"
   || warn "IP actuelle=${CUR_IP:-?} ; cible=${SIEM_IP} (normal si pas encore configuree)"
 [[ "${CUR_GW:-}" == "${SIEM_GW}" ]] && pass "Passerelle coherente (${SIEM_GW})" \
   || warn "SIEM_GW='${SIEM_GW}' mais passerelle active='${CUR_GW:-?}'"
-ping -c1 -W2 "${CUR_GW:-${SIEM_GW}}" >/dev/null 2>&1 && pass "Passerelle joignable" || fail "Passerelle injoignable"
+[[ -n "${CUR_IFACE:-}" && -n "${CUR_GW:-}" ]] && pass "Route IPv4 par defaut presente" || fail "Route IPv4 par defaut absente"
+ping -c1 -W2 "${CUR_GW:-${SIEM_GW}}" >/dev/null 2>&1 && pass "Passerelle joignable" || warn "ICMP passerelle sans reponse ; les controles HTTPS verifient la sortie reseau"
 # doublon de definition d'interface ?
 if [[ -f /etc/network/interfaces ]] && grep -qE "^\s*iface\s+${SIEM_IFACE}\b" /etc/network/interfaces \
    && [[ -f /etc/network/interfaces.d/siem ]]; then
@@ -107,11 +108,11 @@ echo "--- [5] DNS / NTP / depots"
 for R in "${DNS1}" "${DNS2}"; do
   ping -c1 -W2 "${R}" >/dev/null 2>&1 && pass "DC ${R} joignable (ICMP)" || warn "DC ${R} ne repond pas au ping"
 done
-RES="$(getent hosts "${SIEM_FQDN}" | awk '{print $1}' | head -1)"
-if [[ "${RES}" == "${SIEM_IP}" ]]; then pass "DNS: ${SIEM_FQDN} -> ${SIEM_IP}"
+RES="$(getent ahostsv4 "${SIEM_FQDN}" | awk '{print $1}' | sort -u)"
+if grep -Fxq "${SIEM_IP}" <<<"${RES}"; then pass "DNS IPv4: ${SIEM_FQDN} contient ${SIEM_IP}"
 elif [[ -n "${RES}" ]]; then fail "DNS: ${SIEM_FQDN} -> ${RES} (attendu ${SIEM_IP}) : corriger l'enregistrement A sur le DC"
 else warn "DNS: ${SIEM_FQDN} ne resout pas encore -> creer A + PTR sur ${DNS1}"; fi
-for URL in deb.debian.org repo.mongodb.org artifacts.opensearch.org packages.graylog2.org; do
+for URL in repo.mongodb.org artifacts.opensearch.org packages.graylog2.org; do
   curl -sI --connect-timeout 5 "https://${URL}" >/dev/null 2>&1 \
     && pass "HTTPS sortant OK vers ${URL}" || fail "Pas d'acces https://${URL} (regle FortiGate / proxy ?)"
 done

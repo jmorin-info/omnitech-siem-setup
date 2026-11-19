@@ -40,6 +40,13 @@ def test_install_allowlist_excludes_destructive_and_site_response_operations():
     assert not set(scripts).intersection({"36-soar.sh", "69-ad-response.sh", "38-vuln-scan.sh", "22-alert-routing.sh"})
 
 
+def test_optional_triage_precedes_detection_routing_and_verification_is_last():
+    phases = [name for name, _ in installer.installation_phases(["triage", "triage"])]
+    assert phases.index("pipelines") < phases.index("triage") < phases.index("detections")
+    assert phases.count("triage") == 1
+    assert phases[-1] == "verification" and phases.index("backups") < phases.index("verification")
+
+
 def test_existing_install_is_detected(tmp_path):
     config = tmp_path / "server.conf"
     assert installer.existing_install([config]) == []
@@ -136,11 +143,50 @@ def test_ubuntu2604_repository_requires_opt_in(tmp_path):
     ("7.0.14-rc1", True), ("7.0.14-generic", False), ("7.1.0", False),
 ])
 def test_mongodb_kernel_guard_matches_shell(release, blocked):
-    assert bool(installer.kernel_blocker(release)) == blocked
+    assert bool(installer.kernel_blocker(release, "fixture", "")) == blocked
     if os.name != "nt":
-        command = 'source "$1"; omni_mongodb_kernel_check "$2"'
+        command = 'source "$1"; omni_mongodb_kernel_check "$2" fixture ""'
         result = subprocess.run(["bash", "-c", command, "test", str(ROOT / "lib-platform.sh"), release], capture_output=True)
         assert (result.returncode != 0) == blocked
+
+
+@pytest.mark.parametrize("release,kernel_version,signature,blocked", [
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.14", False),
+    ("7.0.0-1017-azure", "#17~24.04.1-Ubuntu SMP", "Ubuntu 7.0.0-1017.17~24.04.1-azure 7.0.14", False),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.15", False),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.13", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.14-rc1", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu malformed", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Debian 7.0.0-38.38-generic 7.0.14", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-99.99-generic 7.0.14", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-lowlatency 7.0.14", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 6.8.0-38.38-generic 7.0.14", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.1.0", True),
+    ("7.0.0-38-generic", "#Debian SMP", "Ubuntu 7.0.0-38.38-generic 7.0.14", True),
+    ("6.19.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 6.19.0-38.38-generic 7.0.14", True),
+    ("6.8.0-generic", "#Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.13", False),
+    ("7.1.0-generic", "#Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.13", False),
+])
+def test_ubuntu_kernel_uses_running_kernel_upstream_signature(release, kernel_version, signature, blocked):
+    assert bool(installer.kernel_blocker(release, kernel_version, signature)) == blocked
+    if os.name != "nt":
+        command = 'source "$1"; omni_mongodb_kernel_check "$2" "$3" "$4"'
+        result = subprocess.run(["bash", "-c", command, "test", str(ROOT / "lib-platform.sh"),
+                                 release, kernel_version, signature], capture_output=True)
+        assert (result.returncode != 0) == blocked, result.stderr
+
+
+def test_kernel_guard_reads_ubuntu_metadata_automatically(tmp_path, monkeypatch):
+    signature = tmp_path / "version_signature"
+    signature.write_text("Ubuntu 7.0.0-38.38-generic 7.0.14\n")
+    monkeypatch.setattr(installer.platform, "version", lambda: "#38-Ubuntu SMP")
+    monkeypatch.setattr(installer, "Path", lambda _: signature)
+    assert installer.kernel_blocker("7.0.0-38-generic") is None
+    signature.write_text("Ubuntu 7.0.0-38.38-generic 7.0.13\n")
+    assert "upstream 7.0.13" in installer.kernel_blocker("7.0.0-38-generic")
+    signature.unlink()
+    assert installer.kernel_blocker("7.0.0-38-generic")
 
 
 @pytest.mark.skipif(os.name == "nt", reason="trusted configuration is read by bash")

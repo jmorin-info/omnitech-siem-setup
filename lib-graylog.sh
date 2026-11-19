@@ -119,12 +119,30 @@ ensure_pipeline() {
 # post_entity <path> : POST direct ; si l'API exige l'enveloppe CreateEntityRequest
 # ("entity cannot be null"), retente enveloppe. Echo la reponse brute.
 post_entity() {
-  local BODY RES; BODY="$(cat)"
-  RES="$(echo "${BODY}" | api_post "$1")"
-  if echo "${RES}" | grep -q "entity cannot be null"; then
-    RES="$(echo "${BODY}" | wrap_entity | api_post "$1")"
+  local BODY RES STATUS RC ARG
+  local -a ENTITY_CURL=()
+  BODY="$(cat)"
+  # --fail discards the validation body needed for Graylog 7's envelope fallback.
+  # Keep failure detection while capturing the HTTP status and validation body.
+  for ARG in "${CURL[@]}"; do
+    [[ "$ARG" == --fail ]] || ENTITY_CURL+=("$ARG")
+  done
+  if RES="$(printf '%s' "$BODY" | "${ENTITY_CURL[@]}" --fail-with-body \
+      --write-out '\n%{http_code}' -X POST "${API}$1" -d @-)"; then
+    RC=0
+  else
+    RC=$?
   fi
-  echo "${RES}"
+  STATUS="${RES##*$'\n'}"
+  RES="${RES%$'\n'*}"
+  if [[ "$RC" -eq 0 ]]; then
+    printf '%s\n' "$RES"
+  elif [[ "$STATUS" == 400 ]] && [[ "$RES" == *"entity cannot be null"* ]]; then
+    printf '%s' "$BODY" | wrap_entity | api_post "$1"
+  else
+    # Do not print rejected request bodies, which can contain credentials.
+    return "$RC"
+  fi
 }
 
 # connect_pipeline <stream_id> <pipeline_id> : ajoute sans ecraser les existants

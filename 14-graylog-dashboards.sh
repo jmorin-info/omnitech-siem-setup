@@ -205,13 +205,14 @@ def build(title, pages):
     search = post_entity("/views/search", {"queries": queries, "parameters": PARAMS})
     sid = search.get("id")
     if not sid:
-        print("    [!] search REFUSE:", str(search)[:300]); return
+        raise RuntimeError("Dashboard search creation failed; HTTP " + str(search.get("_http_error", "invalid response")))
     view = post_entity("/views", {"type": "DASHBOARD", "title": title, "summary": "",
         "description": "Provisionne par 14-graylog-dashboards.sh", "search_id": sid,
         "properties": [], "state": state})
     vid = view.get("id")
-    print(f"    [+] dashboard '{title}' ({vid}) - {len(pages)} pages" if vid
-          else f"    [!] view REFUSEE: {str(view)[:300]}")
+    if not vid:
+        raise RuntimeError("Dashboard view creation failed; HTTP " + str(view.get("_http_error", "invalid response")))
+    print(f"    [+] dashboard '{title}' ({vid}) - {len(pages)} pages")
 
 # =========================================================== definition SOC
 EVENTS = "000000000000000000000002"   # stream systeme "All events" (alertes declenchees)

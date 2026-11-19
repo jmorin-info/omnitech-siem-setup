@@ -29,7 +29,7 @@ def group(path):
         return "collectors"
     if path.startswith("deploye/") or path == "manifeste-deploye.txt":
         return "runtime"
-    if path in {"00-preflight.sh", "00-vars.env.example", "lib-graylog.sh", "lib-platform.sh", "stack-versions.env", "install.sh", "tools/install-platform.py", "tools/render-firewall.py"} or path.startswith("docker/") or path[:3] in {"01-", "02-", "03-", "04-", "05-", "06-", "07-", "08-", "10-", "11-", "12-", "13-", "14-"}:
+    if path in {"00-preflight.sh", "00-vars.env.example", "lib-graylog.sh", "lib-platform.sh", "stack-versions.env", "install.sh", "tools/install-platform.py", "tools/render-firewall.py", "tools/verify-installation.py"} or path.startswith("docker/") or path[:3] in {"01-", "02-", "03-", "04-", "05-", "06-", "07-", "08-", "10-", "11-", "12-", "13-", "14-"}:
         return "core"
     if path == "tools/omni-update.py" or path == "tools/omni-manager.py":
         return "updates"

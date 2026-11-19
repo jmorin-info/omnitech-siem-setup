@@ -709,8 +709,17 @@ echo "==> [4] Synchronisation des notifications sur les definitions OMNI"
 # 13/08/2026. $m (=email) ci-dessous le RETIRE s'il traine encore sur une def.
 TRIAGE_TITLE="OMNI - Triage (mail critique)"
 TRIAGE_ID="$(api_get "/events/notifications?per_page=100" | jq -r --arg t "${TRIAGE_TITLE}" '(.notifications // [])[] | select(.title==$t) | .id')"
-[[ -z "${TRIAGE_ID}" ]] && die "notif triage introuvable (lancer 38-alert-triage.sh d'abord)"
-W_ALL="$(jq -n --arg tr "${TRIAGE_ID}" --arg t "${TEAMS_ID}" '[{notification_id:$tr}] + (if $t != "" then [{notification_id:$t}] else [] end)')"
+if [[ -n "${TRIAGE_ID}" ]]; then
+  W_ALL="$(jq -n --arg tr "${TRIAGE_ID}" --arg t "${TEAMS_ID}" '[{notification_id:$tr}] + (if $t != "" then [{notification_id:$t}] else [] end)')"
+elif [[ "${OMNI_FRESH_INSTALL:-0}" == 1 ]]; then
+  # Le triage est une extension facultative du profil neuf. Sans cette extension,
+  # conserver les notifications natives, qui utilisent le relais SMTP du site.
+  # Sur une instance existante, ne pas modifier implicitement la politique mail.
+  warn "Triage facultatif absent : notifications natives mail/Teams pour cette installation neuve."
+  W_ALL="$(jq -n --arg m "${NOTIF_ID}" --arg t "${TEAMS_ID}" '[{notification_id:$m}] + (if $t != "" then [{notification_id:$t}] else [] end)')"
+else
+  die "notif triage introuvable (lancer 38-alert-triage.sh d'abord)"
+fi
 all_event_defs \
   | jq -r '(.event_definitions // .elements // [])[] | select(.title|startswith("OMNI")) | .id' \
   | while read -r DID; do

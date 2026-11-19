@@ -37,6 +37,7 @@ PHASES = (
     ("dashboards", "14-graylog-dashboards.sh"),
     ("console", "71-soc-console.sh"),
     ("backups", "08-backup.sh"),
+    ("verification", "tools/verify-installation.py"),
 )
 OPTIONAL = {"triage": ("triage", "38-alert-triage.sh")}
 SECRET_KEYS = ("GRAYLOG_ADMIN_PASS", "MONGO_ADMIN_PASS", "MONGO_GRAYLOG_PASS", "OPENSEARCH_BOOTSTRAP_PASS")
@@ -44,6 +45,13 @@ GENERATED_SECRET_KEYS = ("MONGO_ADMIN_PASS", "MONGO_GRAYLOG_PASS", "OPENSEARCH_B
 REQUIRED = ("SIEM_FQDN", "SIEM_HOSTNAME", "SIEM_DOMAIN", "SIEM_IP", "SIEM_PREFIX", "SIEM_GW", "SIEM_IFACE",
             "DNS1", "DNS2", "NTP1", "NTP2", "NET_ADMIN", "NET_BEATS", "OS_HEAP", "GL_HEAP",
             "MONGO_CACHE_GB", "JOURNAL_SIZE", "DATA_MOUNT", "BACKUP_DIR", "RETENTION_DAYS", "SMTP_RELAY", "SMTP_FROM", "ALERT_EMAIL")
+
+
+def installation_phases(extras):
+    phases = list(PHASES)
+    for extra in dict.fromkeys(extras):
+        phases.insert(next(index for index, (name, _) in enumerate(phases) if name == "detections"), OPTIONAL[extra])
+    return phases
 
 
 def load_config(path):
@@ -119,12 +127,30 @@ def platform_check(os_id, version, experimental=False):
     return ([] if (os_id, version) in supported else ["supported install platforms: Ubuntu 22.04/24.04, Debian 12/13 amd64"]), []
 
 
-def kernel_blocker(release):
-    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", release)
+def kernel_blocker(release, kernel_version=None, version_signature=None):
+    # Ubuntu keeps uname -r at 7.0.0 even after upstream fixes are backported.
+    # Match MongoDB 8.0.38's SERVER-131779 handling of the running Ubuntu kernel.
+    effective = release
+    kernel_version = platform.version() if kernel_version is None else kernel_version
+    if release.startswith("7.0.") and "Ubuntu" in kernel_version:
+        if version_signature is None:
+            try:
+                version_signature = Path("/proc/version_signature").read_text().splitlines()[0]
+            except (OSError, IndexError):
+                version_signature = ""
+        signature = re.fullmatch(r"Ubuntu\s+(7\.0\.\d+\S*)\s+(7\.0\.\d+\S*)\s*", version_signature)
+        if signature:
+            # The second field includes Ubuntu's upload number after its ABI.
+            # Ignore stale or unrelated fixture metadata instead of trusting it.
+            running = re.sub(r"^(\d+\.\d+\.\d+-\d+)\.[^-]+", r"\1", signature[1])
+            if running == release:
+                effective = signature[2]
+    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", effective)
     if match:
         version = tuple(int(value or 0) for value in match.groups())
-        if (6, 19, 0) <= version < (7, 0, 14) or version == (7, 0, 14) and "rc" in release:
-            return "MongoDB 8.0 cannot run on kernel " + release + "; use a compatible kernel (7.0.14+ fixes the affected 6.19–7.0.13 range)"
+        if (6, 19, 0) <= version < (7, 0, 14) or version == (7, 0, 14) and "rc" in effective:
+            detail = release + (" (upstream " + effective + ")" if effective != release else "")
+            return "MongoDB 8.0 cannot run on kernel " + detail + "; use a compatible kernel (7.0.14+ fixes the affected 6.19–7.0.13 range)"
     return None
 
 
@@ -254,9 +280,7 @@ def main(argv=None):
         blockers.append("tracked installation sources are locally modified; inspect git diff then use --allow-local-changes to preserve and snapshot them (no local commit required)")
     elif dirty.strip():
         warnings.append("Reviewed local source changes will be preserved and snapshotted; no Git reset, commit or overwrite is performed")
-    phases = list(PHASES)
-    for extra in dict.fromkeys(args.extras):
-        phases.insert(-2, OPTIONAL[extra])
+    phases = installation_phases(args.extras)
     state_path = Path("/var/lib/omni-siem/install-state.json")
     metadata_path = Path("/etc/omni-siem/instance.json")
     state = json.loads(state_path.read_text()) if state_path.exists() else None
@@ -301,7 +325,8 @@ def main(argv=None):
         write_private(state_path, state)
         if name == "triage":
             prepare_triage(cfg)
-        result = subprocess.run(["bash", str(ROOT / script)], cwd=ROOT, env=child_env)
+        interpreter = sys.executable if script.endswith(".py") else "bash"
+        result = subprocess.run([interpreter, str(ROOT / script)], cwd=ROOT, env=child_env)
         if result.returncode:
             raise ValueError(f"phase {name} failed (exit{result.returncode}); repair it and resume with the same options")
         state["completed_phases"].append(name)
