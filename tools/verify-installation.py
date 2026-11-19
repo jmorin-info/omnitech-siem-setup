@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime as dt
+import hashlib
 import http.client
 import importlib.util
 import json
@@ -19,6 +20,7 @@ from urllib.parse import quote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVICES = ("mongod", "opensearch", "graylog-server", "nginx", "omni-mobile-api")
+CORE_STREAMS = {"OMNI - Windows Security", "OMNI - Sysmon", "OMNI - Windows autres", "OMNI - FortiGate"}
 
 
 def request(url, auth=None, ca=None):
@@ -115,7 +117,7 @@ def evaluate(config, versions, *, fetch=request, service_active=active, database
 
     def streams():
         current = get("/streams")["streams"]
-        required = {"OMNI - Windows Security", "OMNI - Sysmon", "OMNI - Windows autres", "OMNI - FortiGate"}
+        required = CORE_STREAMS
         live = {item["title"] for item in current if not item.get("disabled", True)}
         return {"running_required": len(required)} if required <= live else False
     check("graylog:streams-running", streams)
@@ -125,8 +127,29 @@ def evaluate(config, versions, *, fetch=request, service_active=active, database
         installed = {item["title"] for item in get("/system/pipelines/rule")}
         return {"required": len(expected), "present": len(expected & installed)} if expected and expected <= installed else False
     check("graylog:pipeline-rules", rules)
-    check("graylog:pipelines", lambda: bool(get("/system/pipelines/pipeline")))
-    check("graylog:detections", lambda: get("/events/definitions?per_page=1&page=1").get("total", 0) > 0)
+    def pipelines():
+        streams_by_title = {item["title"]: item["id"] for item in get("/streams")["streams"]}
+        pipelines_by_title = {item["title"]: item["id"] for item in get("/system/pipelines/pipeline")}
+        if not CORE_STREAMS <= streams_by_title.keys() or not CORE_STREAMS <= pipelines_by_title.keys():
+            return False
+        for title in CORE_STREAMS:
+            connected = get("/system/pipelines/connections/" + streams_by_title[title]).get("pipeline_ids", [])
+            if pipelines_by_title[title] not in connected:
+                return False
+        return {"connected_required": len(CORE_STREAMS)}
+    check("graylog:pipelines", pipelines)
+
+    def detections():
+        names = set()
+        for page in range(1, 101):
+            data = get(f"/events/definitions?per_page=100&page={page}")
+            items = data.get("event_definitions", data.get("elements", []))
+            names.update(item["title"] for item in items)
+            if not items or page * 100 >= data.get("total", len(items)):
+                break
+        required = {"OMNI - DCSync suspect", "OMNI - Force brute (>=10 échecs / compte / 10 min)"}
+        return {"omni_definitions": sum(name.startswith("OMNI - ") for name in names)} if required <= names else False
+    check("graylog:detections", detections)
 
     def dashboard():
         data = get("/views?page=1&per_page=100")
@@ -136,8 +159,14 @@ def evaluate(config, versions, *, fetch=request, service_active=active, database
     check("nginx:configuration", lambda: run(["nginx", "-t"], capture_output=True, timeout=15).returncode == 0)
     web = "https://" + config["SIEM_FQDN"]
     cert = "/etc/nginx/ssl/graylog.crt"
-    for path in ("/soc/", "/soc/app-boot.js", "/soc/manifest.webmanifest", "/soc/sw.js", "/m/api/vapid"):
-        check("https:" + path, lambda path=path: bool(fetch(web + path, ca=cert)))
+    for path, local in (("/soc/", "index.html"), ("/soc/app-boot.js", "app-boot.js"),
+                        ("/soc/manifest.webmanifest", "manifest.webmanifest"), ("/soc/sw.js", "sw.js")):
+        def asset(path=path, local=local):
+            served = fetch(web + path, ca=cert)
+            expected = (source_root / "mobile/soc" / local).read_bytes()
+            return bool(expected) and hashlib.sha256(served).digest() == hashlib.sha256(expected).digest()
+        check("https:" + path, asset)
+    check("https:/m/api/vapid", lambda: isinstance(json.loads(fetch(web + "/m/api/vapid", ca=cert)).get("publicKey"), str))
     check("backups:timer", lambda: service_active("siem-backup.timer"))
     return checks
 
@@ -171,6 +200,7 @@ def main(argv=None):
         spec.loader.exec_module(module)
         os_id, os_version = module.read_os()
         report["platform"] = f"{os_id}:{os_version}"
+        report["source_revision"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         state_path = Path("/var/lib/omni-siem/install-state.json")
         if state_path.is_file():
             state = json.loads(state_path.read_text())

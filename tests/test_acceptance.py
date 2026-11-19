@@ -17,6 +17,10 @@ spec.loader.exec_module(verify)
 @pytest.fixture
 def installed(tmp_path):
     (tmp_path / "12-graylog-pipelines.sh").write_text('ensure_rule "rule-one" <<EOF\nensure_rule "rule-two" <<EOF\n')
+    assets = tmp_path / "mobile/soc"
+    assets.mkdir(parents=True)
+    for name in ("index.html", "app-boot.js", "manifest.webmanifest", "sw.js"):
+        (assets / name).write_bytes(b"public asset")
     config = {"SIEM_FQDN": "siem.example.test", "GRAYLOG_ADMIN_PASS": "dummy-admin-password",
               "MONGO_ADMIN_PASS": "dummy-database-admin", "MONGO_GRAYLOG_PASS": "dummy-database-graylog"}
     versions = {"MONGODB_PACKAGE_VERSION": "8.0.38", "OPENSEARCH_PACKAGE_VERSION": "2.19.7", "GRAYLOG_PACKAGE_VERSION": "7.2.2-1"}
@@ -25,19 +29,24 @@ def installed(tmp_path):
         "/system/inputs": {"inputs": [{"id": str(i), "title": title} for i, title in enumerate([
             "Winlogbeat (Beats TLS 5044)", "FortiAnalyzer (Syslog TCP 1514)", "FortiAnalyzer (Syslog UDP 1514)"])]},
         "/system/inputstates": {"states": [{"id": str(i), "state": "RUNNING"} for i in range(3)]},
-        "/streams": {"streams": [{"title": title, "disabled": False} for title in (
+        "/streams": {"streams": [{"id": "stream-" + title, "title": title, "disabled": False} for title in (
             "OMNI - Windows Security", "OMNI - Sysmon", "OMNI - Windows autres", "OMNI - FortiGate")]},
         "/system/pipelines/rule": [{"title": "rule-one"}, {"title": "rule-two"}],
-        "/system/pipelines/pipeline": [{"title": "core"}],
-        "/events/definitions?per_page=1&page=1": {"total": 1},
+        "/system/pipelines/pipeline": [{"title": title, "id": "pipeline-" + title} for title in verify.CORE_STREAMS],
+        "/events/definitions?per_page=100&page=1": {"total": 2, "event_definitions": [
+            {"title": "OMNI - DCSync suspect"}, {"title": "OMNI - Force brute (>=10 échecs / compte / 10 min)"}]},
         "/views?page=1&per_page=100": {"views": [{"title": "OMNI - SOC", "type": "DASHBOARD"}]},
     }
+    for title in verify.CORE_STREAMS:
+        responses["/system/pipelines/connections/stream-" + title] = {"pipeline_ids": ["pipeline-" + title]}
     def fetch(url, **kwargs):
         if "/api/" in url and ":9200" not in url and "/m/api/" not in url:
             assert kwargs["auth"] == config["GRAYLOG_ADMIN_PASS"]
             return json.dumps(responses[url.split("/api", 1)[1]]).encode()
         if url.endswith("/_cluster/health"):
             return b'{"status":"yellow"}'
+        if url.endswith("/m/api/vapid"):
+            return b'{"publicKey":""}'
         return b"public asset"
     package_versions = dict(zip(("mongodb-org-server", "opensearch", "graylog-server"), versions.values()))
     def run(argv, **kwargs):
@@ -54,7 +63,7 @@ def test_acceptance_requires_services_versions_auth_inputs_rules_dashboard_and_h
     assert "dummy-" not in json.dumps(checks)
 
 
-@pytest.mark.parametrize("missing", ["input", "rule", "dashboard", "detections", "service", "mongo"])
+@pytest.mark.parametrize("missing", ["input", "rule", "dashboard", "detections", "service", "mongo", "connection", "asset"])
 def test_partial_installation_fails_acceptance(installed, missing):
     config, versions, responses, kwargs = installed
     if missing == "input":
@@ -64,9 +73,13 @@ def test_partial_installation_fails_acceptance(installed, missing):
     elif missing == "dashboard":
         responses["/views?page=1&per_page=100"]["views"] = []
     elif missing == "detections":
-        responses["/events/definitions?per_page=1&page=1"]["total"] = 0
+        responses["/events/definitions?per_page=100&page=1"]["event_definitions"] = [{"title": "System definition"}]
     elif missing == "service":
         kwargs["service_active"] = lambda name: name != "mongod"
+    elif missing == "connection":
+        responses["/system/pipelines/connections/stream-OMNI - Sysmon"]["pipeline_ids"] = []
+    elif missing == "asset":
+        (kwargs["source_root"] / "mobile/soc/app-boot.js").write_bytes(b"expected Javascript")
     else:
         kwargs["database_auth"] = lambda *args: False
     assert any(not item["passed"] for item in verify.evaluate(config, versions, **kwargs))

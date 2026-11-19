@@ -37,6 +37,12 @@ echo "==> [3/6] /etc/opensearch/opensearch.yml"
 OS_DATA="/var/lib/opensearch"
 [[ -n "${DATA_MOUNT:-}" ]] && OS_DATA="${DATA_MOUNT}/opensearch"
 mkdir -p "${OS_DATA}" "${BACKUP_DIR}/opensearch-snapshots"
+# OpenSearch accesses this repository during startup, before the backup phase.
+chmod 751 "${BACKUP_DIR}"
+runuser -u opensearch -- test -x "${BACKUP_DIR}" || {
+  echo "BACKUP_DIR has an inaccessible parent; choose a traversable path such as /var/backups/omni-siem." >&2
+  exit 1
+}
 cat > /etc/opensearch/opensearch.yml <<EOF
 # OpenSearch - backend d'indexation Graylog (genere par 03-opensearch.sh)
 cluster.name: graylog

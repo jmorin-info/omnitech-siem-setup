@@ -326,7 +326,9 @@ def main(argv=None):
         if name == "triage":
             prepare_triage(cfg)
         interpreter = sys.executable if script.endswith(".py") else "bash"
-        result = subprocess.run([interpreter, str(ROOT / script)], cwd=ROOT, env=child_env)
+        # Package keyrings and parent directories must remain readable by services,
+        # even when the operator uses umask077. Secret files set private modes explicitly.
+        result = subprocess.run([interpreter, str(ROOT / script)], cwd=ROOT, env=child_env, umask=0o022)
         if result.returncode:
             raise ValueError(f"phase {name} failed (exit{result.returncode}); repair it and resume with the same options")
         state["completed_phases"].append(name)

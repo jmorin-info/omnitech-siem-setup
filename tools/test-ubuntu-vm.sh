@@ -43,6 +43,7 @@ with socket.socket() as sock:
 PY
 
 STAGE=image_download
+echo 'Ubuntu VM: downloading and checking the official image.'
 BASE=https://cloud-images.ubuntu.com/releases/26.04/release
 IMAGE=ubuntu-26.04-server-cloudimg-amd64.img
 curl --fail --silent --show-error --location --retry 3 --max-time 600 "$BASE/$IMAGE" -o "$WORK/$IMAGE"
@@ -80,6 +81,7 @@ printf 'instance-id: omni-ubuntu-test\nlocal-hostname: siem-lab\n' > "$WORK/meta
 cloud-localds "$WORK/seed.img" "$WORK/user-data" "$WORK/meta-data"
 git -C "$ROOT" bundle create "$WORK/source.bundle" HEAD > "$WORK/bundle.log" 2>&1
 STAGE=boot
+echo 'Ubuntu VM: booting the isolated guest.'
 qemu-system-x86_64 -enable-kvm -cpu host -smp 2 -m 16384 -display none \
   -drive "file=$WORK/guest.qcow2,format=qcow2,if=virtio" \
   -drive "file=$WORK/seed.img,format=raw,if=virtio" \
@@ -98,6 +100,7 @@ ssh "${SSH[@]}" 'timeout 300 cloud-init status --wait >/dev/null && apt-get upda
 scp -q -i "$WORK/id_vm" -P 22026 -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$WORK/known_hosts" "$WORK/source.bundle" root@127.0.0.1:/root/source.bundle > "$WORK/copy.log" 2>&1
 
 STAGE=installation
+echo 'Ubuntu VM: applying the complete fresh installation.'
 INSTALL_CODE=0
 ssh "${SSH[@]}" 'bash -s' > "$WORK/install.log" 2>&1 <<'GUEST' || INSTALL_CODE=$?
 set -euo pipefail
@@ -137,15 +140,43 @@ timeout 1800 bash install.sh --apply --experimental-ubuntu-2604 >/root/install-o
 GUEST
 
 STAGE=verification
+echo 'Ubuntu VM: checking installed services and published assets.'
 VERIFY_CODE=0
 ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && python3 tools/verify-installation.py --output /root/acceptance.json' > "$WORK/verify.log" 2>&1 || VERIFY_CODE=$?
+if [[ "$INSTALL_CODE" != 0 ]]; then
+  # Only the disposable test guest's redacted diagnostics may leave the VM.
+  ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && python3 -' > "$WORK/diagnose.log" 2>&1 <<'DIAG' || true
+import importlib.util, json
+from pathlib import Path
+from manager.operations import redact
+spec = importlib.util.spec_from_file_location("installer", "tools/install-platform.py")
+installer = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(installer)
+config = installer.load_config(Path("00-vars.env"))
+private = [value for key, value in config.items() if value and any(word in key for word in ("PASS", "SECRET", "TOKEN", "KEY", "CRED", "WEBHOOK"))]
+for name in ("/root/.graylog_password_secret", "/etc/mongod.keyfile"):
+    path = Path(name)
+    if path.exists():
+        private.extend(line for line in path.read_text().splitlines() if len(line) > 16)
+report_path = Path("/root/acceptance.json")
+report = json.loads(report_path.read_text())
+log = Path("/root/install-output.log")
+if log.exists():
+    report["failure_tail_redacted"] = [redact(line, private)[:1000] for line in log.read_text(errors="replace").splitlines()[-40:]]
+plan = Path("/root/install-plan.json")
+if plan.exists():
+    report["plan_blockers"] = json.loads(plan.read_text()).get("blockers", [])
+report_path.write_text(json.dumps(report, indent=2) + "\n")
+DIAG
+fi
 ssh "${SSH[@]}" 'cat /root/acceptance.json' > "$WORK/report.json" 2> "$WORK/report-errors.log" || true
-if python3 - "$WORK/report.json" "$INSTALL_CODE" <<'PY'
+if python3 - "$WORK/report.json" "$INSTALL_CODE" "$WORK/image-sha256" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 data = json.loads(path.read_text())
 assert isinstance(data.get("passed"), bool)
 data["install_exit_code"] = int(sys.argv[2])
+data["cloud_image_sha256"] = pathlib.Path(sys.argv[3]).read_text()
 data["passed"] = data["passed"] and data["install_exit_code"] == 0
 path.write_text(json.dumps(data, indent=2) + "\n")
 PY

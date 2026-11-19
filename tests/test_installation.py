@@ -280,3 +280,20 @@ def test_local_patch_installation_preserves_sources_without_committing(installat
     with pytest.raises(ValueError, match="resolve the plan"):
         installer.main(["--apply", "--resume", *flags])
     assert any("resume requires" in error for error in json.loads(capsys.readouterr().out)["blockers"])
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX child umask")
+def test_private_operator_umask_keeps_secrets_private_and_service_paths_readable(installation_sandbox):
+    root, script, state = installation_sandbox
+    script.write_text("mkdir runtime\ntouch runtime/public\n")
+    previous = os.umask(0o077)
+    try:
+        assert installer.main(["--apply", "--experimental-ubuntu-2604", "--allow-local-changes"]) == 0
+        current = os.umask(0o077)
+        assert current == 0o077
+    finally:
+        os.umask(previous)
+    assert (root / "runtime").stat().st_mode & 0o777 == 0o755
+    assert (root / "runtime/public").stat().st_mode & 0o777 == 0o644
+    assert (root / "00-vars.env").stat().st_mode & 0o077 == 0
+    assert state.stat().st_mode & 0o077 == 0
