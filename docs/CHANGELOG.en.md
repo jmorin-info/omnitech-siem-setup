@@ -3,6 +3,12 @@
 All notable changes to the platform. Format: date — change.
 *Last review: 2026-11-19.*
 
+## SSH terminal administration
+
+- Added `tools/omni-manager.py`, with no additional Python dependency or web server: site settings and hidden secret entry, installation/resume, staged code updates/rollback, console publication, integrations and history.
+- Existing tools use fixed argument lists, explicit mutation confirmation, a shared lock, configuration backups and private journals with known credentials redacted. Catalogue entries never execute purge scripts.
+- Every tracked file is classified by component, separating automated operations from extensions requiring site credentials and acceptance checks. Added the administration guide and regression tests.
+
 ## 2026-11-19 — Portable deployment, console repair and integration modules
 
 - Explicit fresh-install profile for Debian/Ubuntu, pinned stack versions and preserved host networking/storage unless explicitly configured.

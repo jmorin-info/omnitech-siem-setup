@@ -227,6 +227,18 @@ de référence est une opération distincte ; l'installateur ne le crée pas imp
 
 ## Ordre d'installation
 
+Une interface guidée est disponible directement dans le terminal SSH, sans
+installer de serveur web :
+
+```bash
+sudo python3 tools/omni-manager.py
+```
+
+Elle rassemble les paramètres et secrets du site, l'installation/reprise, les
+mises à jour, la publication de `/soc/`, les trois modules et les journaux.
+Le catalogue recense également les autres composants et leurs limites
+d'automatisation. Voir [le guide du gestionnaire SSH](docs/INTERFACE-ADMINISTRATION.md).
+
 Un seul point d'entrée sélectionne les phases autorisées et installe aussi la
 console SOC et tous ses assets :
 

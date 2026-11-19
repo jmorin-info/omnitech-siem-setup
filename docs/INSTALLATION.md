@@ -2,6 +2,9 @@
 
 Le point d’entrée est `bash install.sh`. Sans `--apply`, il affiche un plan et ses
 prérequis sans installer de paquet, modifier de service ni appeler l’API Graylog.
+Pour un parcours guidé depuis SSH, lancer `sudo python3 tools/omni-manager.py` :
+le menu prépare la configuration et délègue aux mêmes outils d'installation.
+Voir [INTERFACE-ADMINISTRATION.md](INTERFACE-ADMINISTRATION.md).
 Le profil `core-soc` installe la pile, la collecte de base, le modèle de données,
 les enrichissements, les détections de base, les dashboards natifs, la console
 `/soc/`, son backend et une sauvegarde applicative quotidienne.

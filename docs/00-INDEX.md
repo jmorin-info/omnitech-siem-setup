@@ -2,6 +2,7 @@
 
 ## Parcours installation et maintenance
 
+- [Interface d'administration dans le terminal SSH](INTERFACE-ADMINISTRATION.md)
 - [Installation neuve et périmètre des composants](INSTALLATION.md)
 - [Mises à jour, conservation de la configuration et retour arrière](UPDATES.md)
 - [Modules WatchGuard, UniFi et Palo Alto](INTEGRATIONS-MODULAIRES.md)

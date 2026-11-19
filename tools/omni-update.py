@@ -27,9 +27,9 @@ import uuid
 DEFAULT_REMOTE = "https://github.com/jmorin-info/omnitech-siem-setup.git"
 CORE = {"02-mongodb.sh", "03-opensearch.sh", "04-graylog.sh", "docker/docker-compose.yml", "deploye/apt/oms-siem-series", "versions.json", "stack-versions.env", "lib-platform.sh"}
 CODE_FILES = {"mobile/omni-mobile-api.py", "triage/omni-alert-triage", "triage/omni-alert-digest",
-              "tools/omni-integrations.py", "tools/omni-update.py", "tools/deploy-console.py",
+              "tools/omni-manager.py", "tools/omni-integrations.py", "tools/omni-update.py", "tools/deploy-console.py",
               "tools/manage-console-backend.py", "tools/install-console.sh", "71-soc-console.sh"}
-CODE_PREFIXES = ("mobile/soc/", "mobile/www/", "oms-xdr/oms_xdr/", "oms-ml/oms_ml/", "oms-graph/oms_graph/", "omni_update/", "omni_integrations/", "integrations/")
+CODE_PREFIXES = ("manager/", "mobile/soc/", "mobile/www/", "oms-xdr/oms_xdr/", "oms-ml/oms_ml/", "oms-graph/oms_graph/", "omni_update/", "omni_integrations/", "integrations/")
 CONFIG_SUFFIXES = (".env", ".yaml", ".yml", ".csv", ".key", ".pem", ".pfx", ".p12", ".cred")
 
 

@@ -1,5 +1,12 @@
 # Mises à jour de code avec conservation de la configuration locale
 
+Ces étapes sont également accessibles depuis l'interface terminal
+`sudo python3 tools/omni-manager.py`, menu « Préparer et appliquer une mise à jour ».
+Le gestionnaire réutilise `/var/lib/omni-siem-updater` par défaut ; conserver ce
+chemin si les mises à jour précédentes l'utilisaient. Voir
+[le guide SSH](INTERFACE-ADMINISTRATION.md). L'interface et son lanceur font partie
+du périmètre de mise à jour du code ; les bases restent en dehors.
+
 `tools/omni-update.py` prépare une révision Git précise, affiche les différences,
 sauvegarde les fichiers de code qu'il remplace et permet de revenir sur sa dernière
 transaction. Il fonctionne avec Python 3 et Git, sans dépendance Python supplémentaire.

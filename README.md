@@ -440,6 +440,19 @@ timeline, and the SEAL integration notes under `docs/`.*
 
 ## 10. Deployment
 
+For guided installation and maintenance over SSH, run:
+
+```bash
+sudo python3 tools/omni-manager.py
+```
+
+The terminal menus cover site configuration and hidden secret entry, fresh
+installation/resume, staged code updates/rollback, console publication, module
+management and operation history. No web administration server is started.
+The component catalogue accounts for all tracked project files and identifies
+extensions requiring site-specific setup. Read the
+[SSH administration guide](docs/INTERFACE-ADMINISTRATION.md).
+
 Use the explicit installer for a **new host**. It installs the core stack, inputs,
 normalisation, initial detections/dashboards, backups and the complete `/soc/` console.
 Ubuntu 22.04/24.04 and Debian 12/13 amd64 are the installer targets; a full fresh-VM

@@ -3,6 +3,12 @@
 Toutes les évolutions notables du dispositif. Format : date — changement.
 *Dernière revue : 2026-11-19.*
 
+## Administration dans le terminal SSH
+
+- Nouveau lanceur `tools/omni-manager.py`, sans dépendance Python supplémentaire ni serveur web : configuration du site et saisie masquée des secrets, installation/reprise, mises à jour préparées et retour arrière, publication de la console, modules et historique.
+- Réutilisation des outils existants avec des arguments contrôlés, confirmation des mutations, verrou partagé, configuration sauvegardée et journaux privés expurgés des secrets connus. Aucun script de purge lancé depuis le catalogue.
+- Inventaire de tous les fichiers suivis par composant, avec distinction entre opérations automatisées et extensions nécessitant des accès ou une recette du site ; guide `INTERFACE-ADMINISTRATION.md` et tests de régression.
+
 ## 2026-11-19 — Déploiement portable, console et modules d'intégration
 
 - Installation neuve Debian/Ubuntu par phases explicites, versions centralisées et paramètres réseau/stockage conservés sans activation explicite.
