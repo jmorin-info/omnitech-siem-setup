@@ -169,19 +169,29 @@ if plan.exists():
 report_path.write_text(json.dumps(report, indent=2) + "\n")
 DIAG
 fi
+INTEGRATION_CODE=1
+if [[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 ]]; then
+  STAGE=integration_packs
+  echo 'Ubuntu VM: installing integration packs and checking synthetic UDP events.'
+  INTEGRATION_CODE=0
+  ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && install -m 600 /dev/null /run/omni-isolated-vm-test && OMNI_ISOLATED_VM_TEST=1 python3 tools/test-integration-vm.py --output /root/integrations-acceptance.json' > "$WORK/integrations.log" 2>&1 || INTEGRATION_CODE=$?
+  ssh "${SSH[@]}" 'cat /root/integrations-acceptance.json' > "$WORK/integrations.json" 2> "$WORK/integrations-errors.log" || true
+fi
 ssh "${SSH[@]}" 'cat /root/acceptance.json' > "$WORK/report.json" 2> "$WORK/report-errors.log" || true
-if python3 - "$WORK/report.json" "$INSTALL_CODE" "$WORK/image-sha256" <<'PY'
+if python3 - "$WORK/report.json" "$INSTALL_CODE" "$WORK/image-sha256" "$WORK/integrations.json" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 data = json.loads(path.read_text())
 assert isinstance(data.get("passed"), bool)
 data["install_exit_code"] = int(sys.argv[2])
 data["cloud_image_sha256"] = pathlib.Path(sys.argv[3]).read_text()
-data["passed"] = data["passed"] and data["install_exit_code"] == 0
+integrations = pathlib.Path(sys.argv[4])
+data["integrations"] = json.loads(integrations.read_text()) if integrations.is_file() else {"passed": False, "skipped": True}
+data["passed"] = data["passed"] and data["install_exit_code"] == 0 and data["integrations"].get("passed") is True
 path.write_text(json.dumps(data, indent=2) + "\n")
 PY
 then
   install -m 600 "$WORK/report.json" "$REPORT"
 fi
-[[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 ]] || { echo "Ubuntu VM acceptance failed; inspect the sanitized JSON report." >&2; exit 1; }
+[[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 && "$INTEGRATION_CODE" == 0 ]] || { echo "Ubuntu VM acceptance failed; inspect the sanitized JSON report." >&2; exit 1; }
 echo "Ubuntu 26.04 fresh installation passed; report: $REPORT"

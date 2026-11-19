@@ -39,7 +39,7 @@ AUTH = base64.b64encode(f"admin:{os.environ['GRAYLOG_ADMIN_PASS']}".encode()).de
 def api(method, path, body=None):
     req = urllib.request.Request(API + path, method=method,
         data=json.dumps(body).encode() if body is not None else None,
-        headers={"Authorization": f"Basic {AUTH}", "Content-Type": "application/json",
+        headers={"Authorization": f"Basic {AUTH}", "Accept": "application/json", "Content-Type": "application/json",
                  "X-Requested-By": "14-dashboards"})
     try:
         with urllib.request.urlopen(req, context=CTX, timeout=60) as r:

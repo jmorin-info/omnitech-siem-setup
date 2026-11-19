@@ -8,6 +8,10 @@ on:
       - 'tools/test-ubuntu-vm.sh'
       - 'tools/install-platform.py'
       - 'tools/verify-installation.py'
+      - 'tools/test-integration-vm.py'
+      - 'omni_integrations/**'
+      - 'integrations/**'
+      - 'tools/install-firewall.py'
       - 'lib-graylog.sh'
       - '38-alert-triage.sh'
       - 'lib-platform.sh'
@@ -35,8 +39,8 @@ jobs:
           persist-credentials: false
       - name: Prepare isolated VM tools
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86 qemu-utils cloud-image-utils acl
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils genisoimage acl
           test -c /dev/kvm
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
       - name: Install and verify in a fresh Ubuntu 26.04 VM

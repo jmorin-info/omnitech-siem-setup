@@ -32,7 +32,7 @@ def request(url, auth=None, ca=None):
                                           context=ssl.create_default_context(cafile=ca))
     else:
         conn = http.client.HTTPConnection(target.hostname, target.port, timeout=15)
-    headers = {"X-Requested-By": "omni-acceptance"}
+    headers = {"X-Requested-By": "omni-acceptance", "Accept": "application/json"}
     if auth:
         headers["Authorization"] = "Basic " + base64.b64encode(("admin:" + auth).encode()).decode()
     try:
@@ -212,6 +212,10 @@ def main(argv=None):
         if config_path.is_symlink():
             raise ValueError("symlinked configuration")
         config = module.load_config(config_path)
+        graylog_config = Path("/etc/graylog/server/server.conf")
+        if not config.get("GRAYLOG_API_URL") and graylog_config.is_file():
+            if re.search(r"(?m)^http_enable_tls\s*=\s*true\s*$", graylog_config.read_text()):
+                config["GRAYLOG_API_URL"] = "https://" + config["SIEM_FQDN"] + ":9000/api"
         versions = dict(line.split("=", 1) for line in (ROOT / "stack-versions.env").read_text().splitlines()
                         if line and not line.startswith("#"))
         report["checks"] = evaluate(config, versions)

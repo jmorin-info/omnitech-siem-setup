@@ -59,7 +59,7 @@ omni_api_setup() {
   API="${API%/}"
   API_CA="${GRAYLOG_API_CA:-/etc/graylog/certs/omnitech-rootca.crt}"
   CURL=(curl --silent --show-error --fail --connect-timeout 10 --max-time 90
-        -u "admin:${GRAYLOG_ADMIN_PASS}" -H "Content-Type: application/json" -H "X-Requested-By: omni-provision")
+        -u "admin:${GRAYLOG_ADMIN_PASS}" -H "Accept: application/json" -H "Content-Type: application/json" -H "X-Requested-By: omni-provision")
   case "$API" in
     https://*) CURL+=(--cacert "$API_CA") ;;
     http://127.0.0.1:9000/api|http://localhost:9000/api) ;;
