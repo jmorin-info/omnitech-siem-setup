@@ -94,3 +94,19 @@ demandent leur configuration et leur propre recette.
 Les modifications publiées sur GitHub ne sont pas automatiquement appliquées
 aux services d'une production existante. Suivre [UPDATES.md](UPDATES.md), examiner
 les modifications locales et publier chaque composant concerné explicitement.
+
+## Recette navigateur de la console
+
+Depuis un environnement de test disposant de Python et Playwright :
+
+```bash
+python -m pip install playwright
+python -m playwright install chromium
+python tests/browser/console_smoke.py --screenshots /tmp/omni-console-captures
+```
+
+Cette recette intercepte toutes les requêtes et utilise uniquement des fixtures.
+Elle ne joint aucun SIEM. Elle vérifie six combinaisons de largeur et thème,
+la navigation, la recherche dans les journaux, les sources, le clavier, les
+libellés FR/EN, une panne 503, la récupération et les données en cache.
+Les captures ne constituent pas une preuve de collecte en production.

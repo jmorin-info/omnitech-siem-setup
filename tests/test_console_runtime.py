@@ -18,6 +18,25 @@ deploy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deploy)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="native Linux shell wrapper")
+def test_native_wrapper_exports_site_identity_and_log_scope(tmp_path):
+    shutil.copyfile(ROOT / "71-soc-console.sh", tmp_path / "71-soc-console.sh")
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "00-vars.env").write_text(
+        'SIEM_FQDN=siem.customer.test\nSIEM_IP=192.0.2.10\n'
+        'SOC_LOG_INDICES="customer-*,graylog_*"\nGRAYLOG_API_CA=/etc/site/ca.crt\n'
+        'SOC_ORIGINS=siem.customer.test,192.0.2.10\n')
+    (tmp_path / "tools/install-console.sh").write_text(
+        '#!/bin/bash\npython3 -c \'import json,os; print(json.dumps({k:os.environ.get(k) '
+        'for k in ("SIEM_FQDN","SIEM_IP","SOC_LOG_INDICES","GRAYLOG_API_CA","SOC_ORIGINS")}))\'\n')
+    result = subprocess.run(["bash", str(tmp_path / "71-soc-console.sh")], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "SIEM_FQDN": "siem.customer.test", "SIEM_IP": "192.0.2.10",
+        "SOC_LOG_INDICES": "customer-*,graylog_*", "GRAYLOG_API_CA": "/etc/site/ca.crt",
+        "SOC_ORIGINS": "siem.customer.test,192.0.2.10"}
+
+
 @pytest.mark.skipif(os.name != "posix", reason="Linux container entrypoint")
 @pytest.mark.parametrize("file_secret", [False, True])
 def test_container_entrypoint_runs_with_env_or_file_secrets(tmp_path, file_secret):
@@ -26,7 +45,8 @@ def test_container_entrypoint_runs_with_env_or_file_secrets(tmp_path, file_secre
     binary.chmod(0o755)
     env = {k: v for k, v in os.environ.items() if not k.startswith(("MOBILE_", "GRAYLOG_"))}
     env.update(PATH=str(tmp_path) + os.pathsep + env.get("PATH", ""),
-               MOBILE_DATA_DIR=str(tmp_path / "data"), MOBILE_SECRET="test-session", MOBILE_PUSH_SECRET="test-push")
+               MOBILE_DATA_DIR=str(tmp_path / "data"), MOBILE_SECRET="test-session", MOBILE_PUSH_SECRET="test-push",
+               SIEM_FQDN="siem.customer.test", SIEM_IP="192.0.2.10", SOC_LOG_INDICES="customer-*,graylog_*")
     if file_secret:
         secret = tmp_path / "secret"
         # A secret is data: shell substitution must never run.
@@ -37,6 +57,9 @@ def test_container_entrypoint_runs_with_env_or_file_secrets(tmp_path, file_secre
     assert (tmp_path / "data/started").read_text() == "ready"
     config = (tmp_path / "data/omni-mobile.conf").read_text()
     assert "MOBILE_ALLOW_HTTP_DOCKER=1" in config
+    assert "SIEM_FQDN=siem.customer.test\n" in config
+    assert "SIEM_IP=192.0.2.10\n" in config
+    assert "SOC_LOG_INDICES=customer-*,graylog_*\n" in config
     assert not (tmp_path / "injected").exists()
     assert ((tmp_path / "data/omni-mobile.conf").stat().st_mode & 0o077) == 0
 

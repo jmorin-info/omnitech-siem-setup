@@ -1,16 +1,8 @@
-# Index de la documentation — déplacé
+# Index de la documentation
 
-> **Dernière revue : 2026-06-14**
+Pour installer, mettre à jour ou ajouter des modules, commencer par
+[le parcours opérateur](DEMARRER.md).
 
-➡️ **L'index maître unique est désormais [`00-INDEX.md`](00-INDEX.md).**
-
-Ce fichier est conservé comme simple redirection (un seul index pour éviter la
-divergence). Toute la table des documents — objet, public cible, contrôle ISO
-associé — se trouve dans `00-INDEX.md`.
-
-À noter : les deux procédures d'exploitation sont **complémentaires**, pas
-redondantes —
-- `PROCEDURE-EXPLOITATION-SIEM.md` : exploitation courante, contrôles
-  quotidiens/périodiques, supervision des robots, capacité, maintenance.
-- `PRO-EXPLOITATION-SIEM.md` : traitement des alertes, **playbooks de réponse**,
-  classification des incidents, RACI, escalade.
+[L’index documentaire complet](00-INDEX.md) regroupe les références techniques,
+les procédures d’exploitation et les documents ISO. Ce fichier conserve les
+anciens liens vers l’index sans dupliquer son contenu.

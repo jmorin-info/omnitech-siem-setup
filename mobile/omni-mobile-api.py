@@ -18,6 +18,7 @@ import base64
 import hashlib
 import hmac
 import html as _eh
+import http.client
 import json
 import os
 import re
@@ -27,6 +28,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 
@@ -43,7 +45,7 @@ for path in (os.environ.get("MOBILE_CONFIG", "/etc/default/omni-mobile"),):
 
 LISTEN = (CONF.get("MOBILE_BIND", "127.0.0.1"), int(CONF.get("MOBILE_PORT", "8090")))
 OS_URL = CONF.get("OPENSEARCH", "http://127.0.0.1:9200")
-GL_URL = CONF.get("GRAYLOG_API", "https://bx-it-graylog-vm.omnitech.security:9000/api")
+GL_URL = CONF.get("GRAYLOG_API", "http://127.0.0.1:9000/api")
 GL_CACERT = CONF.get("GRAYLOG_CACERT", "/etc/graylog/certs/omnitech-rootca.crt")
 SECRET = CONF.get("MOBILE_SECRET", "change-me").encode()
 PUSH_SECRET = CONF.get("MOBILE_PUSH_SECRET", "change-me-push")
@@ -58,6 +60,24 @@ VAPID_PRIV_FILE = CONF.get("VAPID_PRIVATE_FILE", "/etc/omni-mobile/vapid_private
 VAPID_SUBJECT = CONF.get("VAPID_SUBJECT", "mailto:informatique@omnitech-security.fr")
 INTERNAL = ["omni-winsec", "omni-sysmon", "omni-winother", "omni-fortigate",
             "omni-m365", "omni-vsphere", "omni-fortimanager"]
+
+
+def log_index_patterns(value):
+    """Accept explicit site index prefixes, never all indices or system indices."""
+    patterns = [part.strip() for part in value.split(",")]
+    if not patterns or len(patterns) > 20:
+        raise ValueError("SOC_LOG_INDICES must list explicit site log index patterns")
+    for pattern in patterns:
+        if (not re.fullmatch(r"[a-z][a-z0-9_-]{1,100}\*?", pattern)
+                or pattern.startswith(("gl-", "gl_", "system", "security", "failed", "failure"))
+                or not re.search(r"[-_]", pattern.rstrip("*"))
+                or pattern in ("graylog*", "omni*")):
+            raise ValueError("SOC_LOG_INDICES contains an unsupported or system index pattern")
+    return ",".join(dict.fromkeys(patterns))
+
+
+LOG_INDICES = log_index_patterns(CONF.get("SOC_LOG_INDICES", "omni-*,graylog_*"))
+
 
 def _make_ssl_ctx():
     """Fail-closed : JAMAIS de TLS non verifie — les creds AD de l'utilisateur transitent
@@ -77,14 +97,50 @@ _ssl_ctx = _make_ssl_ctx()
 
 
 # --------------------------------------------------------------------------- util
+class SearchBackendError(RuntimeError):
+    """An unavailable or incomplete search is never evidence of zero events."""
+    def __init__(self, status=503):
+        self.status = status
+        super().__init__("search backend unavailable" if status == 503 else "search backend returned an invalid or incomplete response")
+
+
 def os_search(index: str, body: dict) -> dict:
+    # Shared business-log queries include native Content Packs, which inherit
+    # Graylog's default index set instead of an omni-* source-specific index.
+    if index == "omni-*":
+        index = LOG_INDICES
     req = urllib.request.Request(f"{OS_URL}/{index}/_search",
                                  data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     try:
-        return json.load(urllib.request.urlopen(req, timeout=30))
-    except urllib.error.URLError:
-        return {}
+        with urllib.request.urlopen(req, timeout=30) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as exc:
+        # Error bodies and URLs can contain query text or credentials.
+        raise SearchBackendError(503 if exc.code in (429, 502, 503, 504) else 502) from None
+    except (urllib.error.URLError, OSError):
+        raise SearchBackendError(503) from None
+    except (ValueError, UnicodeError):
+        raise SearchBackendError(502) from None
+    except http.client.HTTPException:
+        raise SearchBackendError(502) from None
+    if not isinstance(result, dict) or not isinstance(result.get("hits"), dict):
+        raise SearchBackendError(502)
+    hits = result["hits"]
+    total = hits.get("total")
+    count = total.get("value") if isinstance(total, dict) else total
+    if isinstance(count, bool) or not isinstance(count, int) or count < 0 or not isinstance(hits.get("hits"), list):
+        raise SearchBackendError(502)
+    if isinstance(total, int):
+        hits["total"] = {"value": total, "relation": "eq"}
+    shards = result.get("_shards", {})
+    if result.get("error") or result.get("timed_out") or not isinstance(shards, dict) or shards.get("failed", 0):
+        raise SearchBackendError(502)
+    aggregations = body.get("aggs") or body.get("aggregations")
+    if aggregations and (not isinstance(result.get("aggregations"), dict)
+                         or not set(aggregations).issubset(result["aggregations"])):
+        raise SearchBackendError(502)
+    return result
 
 
 # ------------------------------------------------- redaction (mode démo / captures)
@@ -656,6 +712,8 @@ def _linked_accounts(name, days=14):
             "aggs": {"u": {"terms": {"field": "user", "size": 50}}}})
         out = [b["key"] for b in res.get("aggregations", {}).get("u", {}).get("buckets", [])
                if b.get("key") and _identity_key(b["key"]) == key]
+    except SearchBackendError:
+        raise
     except Exception:
         out = []
     if real and real not in out:
@@ -782,7 +840,7 @@ def get_entity_search(q, size=8):
 
 
 def get_search(q, frm=0, size=25, days=2):
-    """Recherche plein-texte serveur sur les logs BRUTS (graylog_*/omni-*/gl-events_*) :
+    """Recherche plein-texte serveur sur les logs BRUTS du site (SOC_LOG_INDICES) :
     query_string OpenSearch (analyze_wildcard), fenetre par defaut 2j, retourne les
     champs cles. Permet de pivoter d'une alerte vers les evenements correles (Ctrl+K)."""
     q = (q or "").strip()
@@ -791,7 +849,7 @@ def get_search(q, frm=0, size=25, days=2):
     frm = max(0, min(int(frm), 2000))
     size = max(1, min(int(size), 50))
     try:
-        res = os_search("graylog_*,omni-*,gl-events_*", {
+        res = os_search(LOG_INDICES, {
             "size": size, "from": frm, "track_total_hits": True,
             "sort": [{"timestamp": {"order": "desc"}}],
             "query": {"bool": {"must": [{"query_string": {"query": q, "analyze_wildcard": True,
@@ -799,6 +857,8 @@ def get_search(q, frm=0, size=25, days=2):
                                "filter": [{"range": {"timestamp": {"gte": f"now-{int(days)}d"}}}]}},
             "_source": ["timestamp", "source", "event_source", "message", "short_message",
                         "user", "src_ip", "alert_tag", "event_action", "net_segment"]})
+    except SearchBackendError:
+        raise
     except Exception:
         return {"q": q, "total": 0, "results": [], "error": "requete invalide"}
     hits = res.get("hits", {})
@@ -1609,8 +1669,9 @@ def get_deploy():
     (Windows/Linux/Aruba via leur derniere activite), coordonnees du SIEM.
     Lecture seule ; alimente la page /soc « Deploiement »."""
     import os
-    siem = {"fqdn": "bx-it-graylog-vm.omnitech.security", "ip": "10.33.220.10",
+    siem = {"fqdn": CONF.get("SIEM_FQDN", "").strip(), "ip": CONF.get("SIEM_IP", "").strip(),
             "ports": {"windows": 5044, "linux": 1519, "aruba": 1520, "console": 443}}
+    siem["identity_configured"] = bool(siem["fqdn"] and siem["ip"])
     # artefacts + checksums (lus depuis SHA256SUMS)
     sums = {}
     try:
@@ -1706,7 +1767,9 @@ _SOAR_FEED = "/var/www/siem-kit/soar/blocklist.txt"
 _SOAR_DEC = "/var/log/omni-soar/decisions.log"
 SOC_REQ_DIR = CONF.get("SOC_REQ_DIR", "/var/lib/omni-mobile/soc-requests")
 SOC_ADMINS = {u.strip().lower() for u in CONF.get("SOC_ADMINS", "").split(",") if u.strip()}
-SOC_ORIGINS = {h.strip().lower() for h in CONF.get("SOC_ORIGINS", "bx-it-graylog-vm.omnitech.security,10.33.220.10").split(",") if h.strip()}
+_SITE_ORIGINS = ",".join(filter(None, (CONF.get("SIEM_FQDN", ""), CONF.get("SIEM_IP", ""),
+                                     urllib.parse.urlparse(GL_URL).hostname)))
+SOC_ORIGINS = {h.strip().lower() for h in CONF.get("SOC_ORIGINS", _SITE_ORIGINS).split(",") if h.strip()}
 
 def _jl(path, default):
     try:
@@ -1739,7 +1802,7 @@ def origin_ok(headers):
     return host in SOC_ORIGINS
 
 def soc_is_admin(user):
-    return bool(user) and (not SOC_ADMINS or user.lower() in SOC_ADMINS)
+    return bool(user) and user.lower() in SOC_ADMINS
 
 def get_soar():
     now = time.time()
@@ -1928,6 +1991,13 @@ class H(BaseHTTPRequestHandler):
             return {}
 
     def do_GET(self):
+        try:
+            return self._get()
+        except SearchBackendError as exc:
+            return self._json({"error": "search_unavailable", "available": False,
+                               "message": "Les données de recherche sont indisponibles. Réessayer après vérification du service."}, exc.status)
+
+    def _get(self):
         p = self.path.split("?")[0]
         if p == "/m/api/quick":          # lien signe depuis un mail -> page de CONFIRMATION (pas d'action en GET)
             import urllib.parse as _up
@@ -2115,6 +2185,15 @@ class H(BaseHTTPRequestHandler):
                     self.wfile.write(("data: " + json.dumps(ev) + "\n\n").encode()); self.wfile.flush()
                 self.wfile.write(b": hb\n\n"); self.wfile.flush()
                 _t.sleep(4)
+        except SearchBackendError:
+            # Headers are already sent: close the event stream after a safe error
+            # event instead of writing an invalid second HTTP response.
+            try:
+                self.wfile.write(b'event: unavailable\ndata: {"error":"search_unavailable","available":false}\n\n')
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            return
         except (BrokenPipeError, ConnectionResetError, OSError):
             return
 

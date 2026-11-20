@@ -15,10 +15,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="OMNI SOC">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<script src="/soc/app-boot.js?v=202611122130"></script><script src="/soc/app-csp.js?v=202611122130"></script>
+<script src="/soc/app-boot.js?v=2026112001"></script><script src="/soc/app-csp.js?v=2026112001"></script>
 <script src="/soc/chart.min.js"></script>
 <!-- cytoscape (graphe) + globe.gl (1,8 Mo, carte) : charges A LA DEMANDE (lazy) -> ne bloquent plus le rendu initial -->
-<script src="/soc/app-loader.js?v=202611122130"></script>
+<script src="/soc/app-loader.js?v=2026112001"></script>
 <style>
   :root{
     --bg:#070a11; --bg2:#0a0f18; --card:#0d131e; --card2:#111824; --bd:#1b2433; --bd2:#28354a;
@@ -728,6 +728,7 @@
   html[data-theme=light] #bnav{background:rgba(255,255,255,.96)}
   html[data-theme=light] .kpitrend.kt-bad{color:#a3162a;background:#fde4e7}html[data-theme=light] .kpitrend.kt-good{color:#13805b;background:#e3f6ee}
 </style>
+<link rel="stylesheet" href="/soc/app-professional.css?v=2026112001">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -798,13 +799,13 @@
       <a data-p="report"><span class="ic"><svg class="svi"><use href="#i-doc"></use></svg></span><span data-i18n="nav_report">Rapport</span></a>
       <a data-p="playbooks"><span class="ic"><svg class="svi"><use href="#i-help"></use></svg></span><span data-i18n="nav_playbooks">Playbooks</span></a>
     </nav>
-    <div class="side-foot">v3 · 12/11/2026 · installable<br>OpenSearch + oms-xdr</div>
+    <div class="side-foot">Console SOC · installable<br>OpenSearch + oms-xdr</div>
   </aside>
 
   <header>
     <h2 id="ptitle">Vue d'ensemble</h2>
     <span class="spacer"></span><button class="iconbtn" id="themeBtn" type="button" style="margin-right:8px" data-onclick="socThemeFlip()" aria-label="Basculer thème clair / sombre">☀ Clair</button>
-    <span class="pill"><span class="dot"></span> <span data-i18n="cluster_ok">Cluster opérationnel</span></span>
+    <span class="pill"><span class="dot"></span> <span data-i18n="cluster_ok">Console connectée</span></span>
     <span class="pill mono" id="clock">--:--:--</span>
     <span class="pill upd" id="updPill" title="Fraîcheur des données"><span class="updtxt">Mis à jour…</span></span>
     <select class="cadsel" id="cadSel" title="Cadence du rafraîchissement automatique" data-onchange="setCadence(this.value)" aria-label="Cadence de rafraîchissement">
@@ -996,8 +997,9 @@
   </div>
 </div>
 
-<script src="/soc/app.js?v=202611122130"></script>
-<script src="/soc/app-soar.js?v=202611122130"></script>
-<script src="/soc/app-v3.js?v=202611122130"></script><script src="/soc/app-handlers.js?v=202611122130"></script>
+<script src="/soc/app.js?v=2026112001"></script>
+<script src="/soc/app-soar.js?v=2026112001"></script>
+<script src="/soc/app-v3.js?v=2026112001"></script><script src="/soc/app-handlers.js?v=2026112001"></script>
+<script src="/soc/app-professional.js?v=2026112001"></script>
 </body>
 </html>

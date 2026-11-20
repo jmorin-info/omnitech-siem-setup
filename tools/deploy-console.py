@@ -75,9 +75,14 @@ def check_assets(source: Path):
 
 
 def publish(source: Path, destination: Path):
+    if destination.is_symlink():
+        raise ValueError("refusing a symlink for the public asset directory")
     destination.mkdir(parents=True, exist_ok=True)
     destination.chmod(0o755)
-    for path in asset_files(source):
+    # The new page and service worker must only become visible after their assets.
+    files = sorted(asset_files(source), key=lambda p: (
+        2 if p.name == "sw.js" else 1 if p.name == "index.html" else 0, p.as_posix()))
+    for path in files:
         target = destination / path.relative_to(source)
         target.parent.mkdir(parents=True, exist_ok=True)
         parent = target.parent

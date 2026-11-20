@@ -43,7 +43,11 @@ MOBILE_SUBS_FILE=${STATE}/subscriptions.json
 MOBILE_CASES_FILE=${STATE}/cases.json
 MOBILE_WATCH_FILE=${STATE}/watchlist.json
 MITRE_LOOKUP=${APP}/lookups/mitre-attack.csv
-SOC_ORIGINS=${SIEM_FQDN:-localhost}
+SOC_ORIGINS=${SOC_ORIGINS:-${SIEM_FQDN:-localhost}${SIEM_IP:+,$SIEM_IP}}
+SIEM_FQDN=${SIEM_FQDN:-}
+SIEM_IP=${SIEM_IP:-}
+SOC_LOG_INDICES=${SOC_LOG_INDICES:-omni-*,graylog_*}
+SOC_ADMINS=${SOC_ADMINS:-}
 EOF
     chown root:omni-console /etc/default/omni-mobile
     chmod 640 /etc/default/omni-mobile

@@ -1,5 +1,9 @@
 # Dossier documentaire SIEM OMNITECH — Index
 
+**Première visite : [Commencer avec OMNI SIEM](DEMARRER.md).** Choisir d'abord
+installation neuve, mise à jour ou ajout d'une source. Les documents ISO et
+les références de l'installation historique figurent plus bas.
+
 ## Parcours installation et maintenance
 
 - [Interface d'administration dans le terminal SSH](INTERFACE-ADMINISTRATION.md)
@@ -31,7 +35,7 @@
 ## Documents support SMSI / opérationnels (mêmes dossier `docs/`)
 
 > Documents factuels complémentaires, support à l'audit ISO et à l'exploitation.
-> L'index alternatif [INDEX-DOCUMENTATION.md](INDEX-DOCUMENTATION.md) en donne une lecture par niveau (fonctionnel vs SMSI).
+> Les anciens liens vers [INDEX-DOCUMENTATION.md](INDEX-DOCUMENTATION.md) redirigent vers cet index unique.
 
 | Document | Objet |
 |---|---|

@@ -1,78 +1,81 @@
-# Console SOC « OMNI SOC » — Guide
+# Utiliser la console SOC
 
-Console web + PWA mobile pour le pilotage du SIEM/XDR OMNITECH. **VPN-only**,
-authentification AD (déléguée à Graylog/LDAPS). Construite sur le backend
-`omni-mobile-api` (lecture OpenSearch, stdlib + pywebpush) servi par nginx.
-Interface premium (glassmorphism, glow, micro-interactions), accessible au clavier.
+La console se trouve à `https://VOTRE_FQDN/soc/`, sur le port HTTPS 443.
+Utiliser un compte autorisé par Graylog ; les comptes AD fonctionnent lorsque
+LDAPS est configuré sur le site. L’accès réseau dépend des ACL de votre installation.
+Pour installer la console ou résoudre un `Not Found`, suivre
+[le guide de déploiement](CONSOLE-DEPLOIEMENT.md).
 
-## Accès
-- **Console desktop** : `https://bx-it-graylog-vm.omnitech.security/soc/`
-- **App mobile (PWA)** : `https://bx-it-graylog-vm.omnitech.security/m/` → *Partager → Sur l'écran d'accueil* (installable, web-push).
-- Connexion : **compte AD** (les mêmes identifiants que la console Graylog).
-- Raccourcis : **Ctrl/Cmd + K** = palette (navigation + **recherche d'entité**) ; **?** = aide & raccourcis ; **Échap** = fermer ; **Entrée/Espace** = activer l'élément ciblé.
+## Trouver les bonnes informations
 
-## Pages (desktop)
-| Page | Contenu |
+La navigation regroupe les pages en quatre rubriques. Sur mobile, utiliser les
+onglets inférieurs et le menu pour accéder à l’ensemble des pages.
+
+| Rubrique | Pages et usage |
 |---|---|
-| **Vue d'ensemble** | KPI **avec tendance** (▲/▼ % vs période précédente), courbe détections 24 h, donut tactiques ATT&CK, top détections/sources, **Anomalies ML** + **Risque UEBA** (vrais scores), flux temps réel (SSE), origines géographiques |
-| **Incidents** | File de **cas** (oms-xdr) : statut, assignation, notes ; **disposition Vrai/Faux positif** → alimente le modèle ML de réduction de FP |
-| **Détections** | Liste **filtrable** (tactique/source) + **recherche libre** + **export CSV** ; sévérité réelle (`risk_severity`) + score de risque ; clic → Entité-360 |
-| **Matrice ATT&CK** | Heatmap tactiques × techniques, colorée par activité réelle (7 j), cellules cliquables (drill) |
-| **Graphe d'attaque** | Graphe entités ↔ techniques **filtrable** (tactique, seuil de volume, centrage d'entité) |
-| **Fuites & Dark Web** | Synthèse par catégorie (extorsion/identifiants/GitHub), RansomLook/HIBP/Dehashed, état « aucune fuite » rassurant |
-| **Santé & Collecte** | État cluster, **robots d'auto-supervision** (X/Y), **couverture de collecte (SLA)** + **hôtes go-dark**, fraîcheur par source |
-| **Rapport** | Synthèse exécutive imprimable (PDF) : KPI, couverture, **posture opérationnelle (robots/SLA)**, **entités à risque ML & UEBA**, incidents, sources |
-| **Entité-360** (volet) | Fiche d'une entité : **score ML + score UEBA**, tactiques, techniques ATT&CK, événements récents (pagination « charger plus ») |
+| Pilotage | **Vue d’ensemble** : indicateurs et activité ; **Incidents** : cas corrélés et suivi ; **Détections** : événements tagués, filtres et export CSV. |
+| Investigation | **Entités** : dossiers comptes et machines ; **ATT&CK** : techniques observées ; **Graphe d’attaque** et **Jumeau d’attaque** : relations et exposition ; **Playbooks** : guides de traitement. |
+| Visibilité | **Endpoint (EMS)**, **Réseau & Infra**, **Carte mondiale**, **Fuites & Dark Web** : informations des connecteurs configurés. |
+| Administration | **Santé & Collecte** : sources et fraîcheur ; **SOAR** : actions autorisées ; **Exploitation SIEM** : état opérationnel ; **Déploiement** : enrôlement ; **Rapport** : synthèse imprimable. |
 
-## Couche ML (oms-ml)
-La console surface les scores du paquet **`oms-ml`** (sklearn local, cf. `oms-ml/README.md`) :
-- **Anomalie non-supervisée** (IsolationForest) par entité → `ml_score` réinjecté en GELF (`event_source=ml_anomaly`), visible sur la Vue d'ensemble et l'Entité-360.
-- **Réduction de faux positifs supervisée** : entraînée à partir de la **disposition VP/FP** posée par les analystes à la clôture des cas (boucle fermée).
-- Les événements internes (`ueba_score`, `collecte_sla`, `siem_health`, `xdr_incident`, `ml_anomaly`) sont écrits dans l'index set **`omni-interne`** (cf. `79-interne-indexset.sh`) — sans quoi la console (qui lit `omni-*`) ne les verrait pas.
+Les pages des extensions restent dépendantes de leur configuration. Le profil
+d’installation de base n’active pas à lui seul ML, UEBA, XDR, les scans ou le SOAR.
+Un indicateur vide ne prouve pas que sa source est surveillée.
 
-## Ergonomie & UX
-- **Toasts** : retour non bloquant sur les actions (cas qualifié, export, session expirée, erreur réseau).
-- **Aide (?)** : raccourcis clavier, rôle de chaque page, glossaire des signaux (ML, UEBA, sévérité, go-dark, KEV).
-- **Densité** : bascule confortable/compact (persistée).
-- **Chargement** : squelettes au premier affichage, pastille « Mis à jour il y a Xs », **cadence de rafraîchissement** réglable (30 s / 60 s / pause).
-- **Accessibilité** : navigation et modales opérables au clavier (focus visible, focus-trap, ARIA).
+## Rechercher et ouvrir un dossier
 
-## PWA mobile
-Onglets **Synthèse** (KPI, courbe, tactiques), **Alertes**, **Incidents**, et **Menace** —
-parité console : niveau de menace + KPI, **anomalies ML & risque UEBA** (jauges), détections à sévérité colorée. Installable, web-push.
+La barre de recherche visible et **Ctrl/Cmd + K** ouvrent la recherche globale.
+Saisir un compte, une IP, une machine ou une expression, puis choisir la navigation,
+une entité ou la recherche dans les journaux. Cette dernière interroge le backend,
+avec une fenêtre par défaut de deux jours ; les filtres de la page Détections
+restent propres à cette page.
 
-## Architecture
-```
-Navigateur (VPN) → nginx 443 → /soc/ (statique) + /m/ (PWA) + /m/api/* (proxy → omni-mobile-api 127.0.0.1:8090)
-omni-mobile-api : auth Graylog (LDAPS) → cookie HMAC ; lecture OpenSearch ; SSE ; web-push VAPID
-```
-- **Endpoints** `/m/api/` : login, me, kpis, **kpi-trend**, timeseries, by-tactic, top-detections, top-sources,
-  alerts, cases (+POST case avec `disposition`), detections, **entity-search**, entity (size/from + scores), attack-matrix,
-  graph, **leaks2**, health, report, geo, risk, stream (SSE), vapid/subscribe (push).
-- **Performance** : micro-cache mémoire à TTL (30 s, `MOBILE_CACHE_TTL`) sur les agrégations lourdes
-  (attack-matrix, report, kpis, health, geo, terms) — matrice ATT&CK ~783→7 ms, rapport ~811→3 ms.
-- **Sécurité** : VPN-only, cookie HttpOnly+Secure+SameSite=Strict, rate-limit login (5/15 min),
-  en-têtes CSP/HSTS/X-Frame-Options (`75-console-hardening.sh`).
-- **Mode rédaction** (`MOBILE_REDACT=1`) : pseudonymise comptes/hôtes/IP/SID de façon cohérente
-  (carte réversible pour l'Entité-360) — sert à produire des captures anonymisées. **Désactivé en exploitation.**
+Les résultats et indicateurs cliquables permettent d’ouvrir les événements ou
+le dossier de l’entité. Utiliser **Échap** pour fermer une fenêtre,
+**Tab** pour parcourir les commandes et **Entrée/Espace** pour activer une commande.
+**?** ouvre l’aide et les raccourcis.
 
-## Exploitation
+Les modules WatchGuard, UniFi et Palo Alto disposent aussi de leurs dashboards
+dans **Graylog > Dashboards**. Ils n’ajoutent pas automatiquement une nouvelle page
+spécialisée à `/soc/`. Leurs événements normalisés peuvent alimenter les vues
+globales et la recherche selon `SOC_LOG_INDICES` ; voir
+[les modules](INTEGRATIONS-MODULAIRES.md) et
+[le périmètre des indices](CONSOLE-DEPLOIEMENT.md#identité-du-site-et-journaux-affichés).
 
-La procédure de déploiement et de réparation actuelle est
-[CONSOLE-DEPLOIEMENT.md](CONSOLE-DEPLOIEMENT.md) : publication de tous les assets,
-routes nginx, backend dédié sur installation neuve et conservation des services
-personnalisés. Une console HTTP 200 ne prouve pas que les sources ou les extensions
-ML/XDR/SOAR sont configurées. L'authentification utilise les comptes Graylog ;
-AD/LDAPS reste une configuration du site.
-- Backend : `systemctl status omni-mobile-api` ; conf `/etc/default/omni-mobile`.
-- Déploiement / mise à jour : `65-mobile-pwa.sh` (PWA + backend), `71-soc-console.sh` (console).
-- Bibliothèques front vendorées localement (`chart.min.js`, `cytoscape.min.js`) — aucun CDN au runtime.
-- **Tests** (hors-ligne, sans OpenSearch) : `./run-tests.sh` — rédaction (`_rd`/`_scrub`) + oms-ml (anomalie, gating FP) ; 23 tests.
+## Lire les états de disponibilité
 
-## Évolutions de novembre 2026
+La date d’actualisation concerne le dernier chargement réussi des données
+principales. Le bouton de rafraîchissement permet de réessayer ; la cadence est
+réglable dans l’en-tête.
 
-- Bande « À traiter » en tête de la vue d'ensemble, chaque élément étant cliquable.
-- Page « SOAR — blocages » : IP bloquées, pays, motif, expiration, lien vers Graylog et bouton « Débloquer » avec confirmation (et option « ne plus jamais bloquer », motif obligatoire). La demande est mise en file et traitée par un service root qui journalise chaque action.
-- Page « Exploitation SIEM » : mises à jour automatiques, snapshots et test de restauration, sauvegarde, disques, services en échec, certificat, versions.
-- Lien « Graylog » sur chaque incident, thème clair optionnel, pages Déploiement et Rapport préchargées.
-- L'accès reste réservé aux comptes AD vérifiés par Graylog ; les actions qui modifient un état contrôlent leur origine.
+- **Actualisation échouée / données indisponibles** : la lecture n’a pas abouti.
+  Le niveau de menace ne doit pas être interprété comme nominal.
+- **Données en cache** : la PWA affiche une ancienne copie, avec sa date. Elle
+  permet la consultation hors ligne ; les actions nécessitent une connexion.
+- **Session expirée** : se reconnecter. La déconnexion purge le cache des lectures.
+
+Une console connectée n’atteste pas de la bonne santé de toute la collecte.
+Contrôler **Santé & Collecte**, puis les inputs, pipelines et erreurs d’indexation
+dans Graylog pour vérifier une source.
+
+## Traiter un incident
+
+Lorsque XDR est installé, la page Incidents permet de filtrer les cas, ouvrir leur
+dossier, assigner un analyste et ajouter des notes. Qualifier un cas **vrai positif**
+ou **faux positif** avant sa clôture ; cette disposition alimente le modèle de
+réduction des faux positifs lorsque la couche ML est activée.
+
+Les actions SOAR demandent les droits et services du site, une confirmation et,
+selon l’action, un motif. Leur présence dans la navigation ne les active pas.
+
+## Affichage et maintenance
+
+Le thème clair ou sombre et la densité d’affichage sont conservés dans le navigateur.
+La langue se choisit avec **FR/EN**. La console `/soc/` est installable comme PWA ;
+la page historique `/m/` reste disponible lorsque déployée par le site.
+
+Après une mise à jour, accepter **Recharger** lorsque la PWA propose sa nouvelle
+version. Pour publier le code ou diagnostiquer une ancienne copie, suivre
+[la mise à jour et l’alignement des fichiers servis](UPDATES.md).
+Les administrateurs trouveront la configuration et les contrôles dans
+[CONSOLE-DEPLOIEMENT.md](CONSOLE-DEPLOIEMENT.md).

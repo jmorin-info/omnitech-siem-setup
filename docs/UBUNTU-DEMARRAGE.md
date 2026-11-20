@@ -114,8 +114,8 @@ sudo bash install.sh --apply --resume
 
 Ne pas régénérer les secrets, modifier la configuration ou changer de révision
 pendant une reprise. L'état est enregistré dans
-`/var/lib/omni-siem/install-state.json`. Une reprise saute les phases terminées ;
-elle exige l'examen de l'état laissé par la phase en erreur.
+`/var/lib/omni-siem/install-state.json`. Une reprise saute le provisioning déjà
+terminé et rejoue les contrôles finaux ; examiner l'état laissé par la phase en erreur.
 
 ## 5. Interface dans le terminal et WatchGuard
 
@@ -199,3 +199,30 @@ leur différence Git et leur manifeste sous
 `/var/lib/omni-siem/install-sources/<empreinte>/`, puis enregistre leur empreinte.
 Des sources modifiées ensuite bloquent la reprise. Ce mécanisme ne permet pas de
 réinstaller une instance existante ni de contourner AVX, RAM, secrets ou noyau.
+
+## Installation déjà terminée avec des correctifs manuels
+
+Si une ancienne installation affiche `finished_at`, cela indique la fin du
+parcours enregistré, sans prouver que les étapes contournées ont réussi.
+Un timer actif ne prouve pas qu’une sauvegarde a été produite ; un HTTP 200
+sur `/soc/` ne prouve pas que les détections sont installées.
+
+Conserver les sources modifiées et le fichier privé `00-vars.env`. Après
+rapprochement du code selon [la procédure de mise à jour](UPDATES.md), exécuter
+le vérificateur de la révision examinée :
+
+```bash
+sudo python3 tools/verify-installation.py --output /var/lib/omni-siem/acceptance.json
+sudo systemctl status siem-backup.service --no-pager
+```
+
+Réparer les contrôles en échec un par un, avec sauvegarde et examen du script
+concerné. Ne pas effacer l’état, changer son empreinte à la main, relancer toute
+l’installation ou rendre une erreur de notification silencieuse pour forcer
+une validation. `--resume` exige les mêmes sources et paramètres ; il ne reprend
+pas automatiquement une installation modifiée avec une nouvelle révision.
+
+Le profil de base livre ses détections et son dashboard SOC. Les nombreuses
+détections de l’installation de référence proviennent aussi des extensions,
+qui demandent leurs sources et une configuration propre au site.
+WatchGuard s’ajoute séparément avec [le gestionnaire de modules](INTEGRATIONS-MODULAIRES.md).

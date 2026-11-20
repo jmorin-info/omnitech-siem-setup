@@ -1,7 +1,15 @@
 # Journal des modifications — SIEM OMNITECH
 
 Toutes les évolutions notables du dispositif. Format : date — changement.
-*Dernière revue : 2026-11-19.*
+*Dernière revue : 2026-11-20.*
+
+## 2026-11-20 - Console et documentation opérateur
+
+- Présentation revue pour `/soc/` : navigation regroupée, recherche visible, titres de page, thèmes clair/sombre et affichage mobile.
+- Erreurs et réponses OpenSearch incomplètes distinguées d’un résultat vide ; affichage explicite des indisponibilités, du cache et du dernier rafraîchissement réussi.
+- Journaux des modules natifs inclus dans le périmètre configurable des vues globales ; identité du site sans repli sur l’installation de référence.
+- Cache PWA versionné avec les nouveaux assets ; publication des dépendances avant la page et le service worker.
+- Parcours documentaire unique, guide utilisateur de la console actualisé et procédure de comparaison du code avec les fichiers réellement servis.
 
 ## Qualification de l'installation Ubuntu 26.04
 

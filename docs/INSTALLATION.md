@@ -2,8 +2,9 @@
 
 Pour les commandes Ubuntu ligne par ligne, suivre [UBUNTU-DEMARRAGE.md](UBUNTU-DEMARRAGE.md).
 
-Le point d’entrée est `bash install.sh`. Sans `--apply`, il affiche un plan et ses
-prérequis sans installer de paquet, modifier de service ni appeler l’API Graylog.
+Le point d'entrée est `bash install.sh`. Sans option, ou avec `--plan`, il affiche
+un plan sans installer de paquet, modifier de service ni appeler l'API Graylog.
+`--generate-secrets` est une opération distincte qui écrit les secrets manquants.
 Pour un parcours guidé depuis SSH, lancer `sudo python3 tools/omni-manager.py` :
 le menu prépare la configuration et délègue aux mêmes outils d'installation.
 Voir [INTERFACE-ADMINISTRATION.md](INTERFACE-ADMINISTRATION.md).
@@ -81,7 +82,8 @@ options. Par défaut, les fichiers suivis doivent être propres. Pour un correct
 local examiné, `--allow-local-changes` conserve les sources et enregistre leur
 empreinte avec une archive privée du diff ; aucun commit local n'est exigé.
 La reprise doit conserver ces sources et les options expérimentales éventuelles.
-Elle saute les phases terminées ; la phase échouée peut avoir laissé un
+Elle saute les phases de provisioning terminées et rejoue la vérification finale.
+La phase échouée peut avoir laissé un
 état partiel et doit être inspectée avant la reprise. Le fichier
 `/etc/omni-siem/instance.json` enregistre l’origine et la révision après réussite.
 Le plan n’expose jamais les valeurs des secrets.

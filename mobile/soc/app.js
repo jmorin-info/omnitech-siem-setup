@@ -1,6 +1,14 @@
 const API="/m/api", $=s=>document.querySelector(s);
 function ic(n){return '<svg class="svi" aria-hidden="true" focusable="false"><use href="#i-'+n+'"></use></svg>';}
-const j=(u,o)=>fetch(API+u,{credentials:"same-origin",...o}).then(r=>{if(r.status===401)throw"auth";return r.json()});
+const j=(u,o)=>fetch(API+u,{credentials:"same-origin",...o}).then(r=>{
+  if(r.status===401)throw"auth";
+  if(!r.ok){const e=new Error("SIEM request failed");e.status=r.status;throw e;}
+  return r.json().then(data=>{
+    const cached=Number(r.headers.get("X-SOC-Cache"))||0;
+    if(cached&&data&&typeof data==="object")Object.defineProperty(data,"_socCachedAt",{value:cached});
+    return data;
+  });
+});
 const esc=s=>(s==null?"":""+s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 const nice=s=>esc((s||"").toString().replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()));
 const ago=t=>{if(!t)return"";let d=(Date.now()-new Date((""+t).replace(" ","T").replace(/(Z|[+-]\d\d:?\d\d)?$/,"Z")).getTime())/1000;
@@ -13,7 +21,7 @@ let LANG=localStorage.getItem("soc_lang")||"fr";
 const I18N={
  fr:{
   nav_overview:"Vue d'ensemble",nav_incidents:"Incidents",nav_detections:"Détections",nav_attack:"ATT&CK",nav_graph:"Graphe d'attaque",nav_twin:"Jumeau d'attaque",twin_loading:"Chargement du jumeau d'attaque…",nav_ems:"Endpoint (EMS)",ems_loading:"Chargement de la télémétrie endpoint…",nav_network:"Réseau & Infra",net_loading:"Chargement de l'activité réseau & infra…",nav_deploy:"Déploiement",dep_loading:"Chargement du centre de déploiement…",nav_globe:"Carte mondiale",globe_threat:"menace",globe_traffic:"trafic",globe_topc:"Top pays · menace",globe_win:"3 h",globe_live:"Flux en direct",nav_leaks:"Fuites & Dark Web",nav_health:"Santé & Collecte",nav_report:"Rapport",nav_playbooks:"Playbooks",pb_title:"Playbooks de réponse",pb_sub:"guide d'action par détection, regroupé par tactique ATT&CK",pb_search:"Rechercher une détection, technique, mot-clé…",pb_none:"Aucune détection ne correspond.",nav_entities:"Entités",ent_pgt:"Recherche d'entités",ent_pgs:"comptes & machines — dossier 360° unifié",ent_ph:"Compte AD, e-mail, ou nom de machine…",ent_topu:"Comptes les plus actifs",ent_topm:"Machines les plus actives",ent_res:"Résultats",ent_nores:"Aucune entité trouvée.",tl_title:"Chronologie unifiée",tl_sub:"— détections + échecs d'authentification, par date",tl_ok:"réussi",tl_fail:"échoué",maint_title:"Maintenance requise",watch_on:"Surveillée",watch_off:"Surveiller",watch_hint:"Ajouter/retirer de la liste de surveillance",watch_added:"Ajoutée à la surveillance",watch_removed:"Retirée de la surveillance",watch_section:"Sous surveillance",
-  cluster_ok:"Cluster opérationnel",dens_comfort:"Confort",dens_compact:"Compact",
+  cluster_ok:"Console connectée",dens_comfort:"Confort",dens_compact:"Compact",
   al_search:"Recherche et navigation (Ctrl ou Cmd + K)",al_refresh:"Rafraîchir les données",al_density:"Basculer la densité d'affichage",al_help:"Ouvrir l'aide et les raccourcis clavier",al_logout:"Se déconnecter",al_lang:"Changer la langue (FR/EN)",
   t_search:"Recherche (Ctrl/Cmd+K)",t_refresh:"Rafraîchir maintenant",t_help:"Aide et raccourcis (touche ?)",t_logout:"Se déconnecter",t_lang:"Langue : Français — cliquer pour English",
   login_account:"Compte AD",login_password:"Mot de passe",login_signin:"Se connecter",
@@ -34,7 +42,7 @@ const I18N={
  },
  en:{
   nav_overview:"Overview",nav_incidents:"Incidents",nav_detections:"Detections",nav_attack:"ATT&CK",nav_graph:"Attack graph",nav_twin:"Attack twin",twin_loading:"Loading the attack twin…",nav_ems:"Endpoint (EMS)",ems_loading:"Loading endpoint telemetry…",nav_network:"Network & Infra",net_loading:"Loading network & infra activity…",nav_deploy:"Deployment",dep_loading:"Loading the deployment center…",nav_globe:"World map",globe_threat:"threat",globe_traffic:"traffic",globe_topc:"Top countries · threats",globe_win:"3 h",globe_live:"Live flows",nav_leaks:"Leaks & Dark Web",nav_health:"Health & Collection",nav_report:"Report",nav_playbooks:"Playbooks",pb_title:"Response playbooks",pb_sub:"action guide per detection, grouped by ATT&CK tactic",pb_search:"Search a detection, technique, keyword…",pb_none:"No matching detection.",nav_entities:"Entities",ent_pgt:"Entity search",ent_pgs:"accounts & machines — unified 360° dossier",ent_ph:"AD account, email, or machine name…",ent_topu:"Most active accounts",ent_topm:"Most active machines",ent_res:"Results",ent_nores:"No entity found.",tl_title:"Unified timeline",tl_sub:"— detections + auth failures, by date",tl_ok:"success",tl_fail:"failed",maint_title:"Maintenance required",watch_on:"Watched",watch_off:"Watch",watch_hint:"Add/remove from watchlist",watch_added:"Added to watchlist",watch_removed:"Removed from watchlist",watch_section:"Watchlist",
-  cluster_ok:"Cluster operational",dens_comfort:"Comfort",dens_compact:"Compact",
+  cluster_ok:"Console connected",dens_comfort:"Comfort",dens_compact:"Compact",
   al_search:"Search and navigation (Ctrl or Cmd + K)",al_refresh:"Refresh data",al_density:"Toggle display density",al_help:"Open help and keyboard shortcuts",al_logout:"Sign out",al_lang:"Change language (FR/EN)",
   t_search:"Search (Ctrl/Cmd+K)",t_refresh:"Refresh now",t_help:"Help and shortcuts (press ?)",t_logout:"Sign out",t_lang:"Language: English — click for Français",
   login_account:"AD account",login_password:"Password",login_signin:"Sign in",
@@ -323,22 +331,30 @@ const noLeg={plugins:{legend:{display:false}}};
 
 async function loadAll(){
   RELOADING=true;setSpin(true);tickUpd();
+  let completed=false,cachedAt=0;
   try{
-    const [k,ts,tac,det,src,inc,mtx]=await Promise.all([
-      j("/kpis"),j("/timeseries"),j("/by-tactic"),j("/top-detections"),j("/top-sources"),j("/cases"),j("/attack-matrix")]);
+    const [k,ts,tac,det,src,inc,mtx,health,risk]=await Promise.all([
+      j("/kpis"),j("/timeseries"),j("/by-tactic"),j("/top-detections"),j("/top-sources"),j("/cases"),j("/attack-matrix"),j("/health"),j("/risk")]);
+    const cachedTimes=[k,ts,tac,det,src,inc,mtx,health,risk].map(data=>data._socCachedAt||0).filter(Boolean);
+    cachedAt=cachedTimes.length?Math.min(...cachedTimes):0;
     renderKpis(k.kpis); renderTs(ts.series); renderTac(tac.data); renderDet(det.data);
-    renderSrc(src.data); renderMatrix(mtx.matrix); renderCases(inc.cases); loadDetections();
+    renderSrc(src.data); renderMatrix(mtx.matrix); renderCases(inc.cases); renderHealth(health); renderRisk(risk); loadDetections();
+    completed=true;
     j("/leaks2").then(l=>renderLeaks(l)).catch(()=>{});
-    j("/health").then(h=>renderHealth(h)).catch(()=>{});
-    j("/risk").then(r=>renderRisk(r)).catch(()=>{});
     j("/kpi-trend").then(t=>renderKpiTrend(t.trend)).catch(()=>{});
     if(window.loadTodo)loadTodo();
     j("/geo").then(g=>renderGeo(g)).catch(()=>{});
     j("/attack-graph").then(a=>renderSentinelPosture(a)).catch(()=>{});
     // /graph et /report : charges a l'ouverture de leur onglet (cf. routeur #nav) -
     // evite de relancer le graphe lourd + la matrice 300-termes toutes les 60 s.
-  }catch(e){if(e==="auth"){toastWarn("Session expirée — reconnexion à la console SOC…",{title:"Session",sticky:true});setTimeout(()=>location.reload(),1200);}else{toastNet();}}
-  finally{RELOADING=false;setSpin(false);document.body.classList.remove("firstload");markUpdated();}
+  }catch(e){renderUnavailable();if(e==="auth"){toastWarn("Session expirée — reconnexion à la console SOC…",{title:"Session",sticky:true});setTimeout(()=>location.reload(),1200);}else{toastNet();}}
+  finally{
+    RELOADING=false;setSpin(false);document.body.classList.remove("firstload");
+    document.body.classList.toggle("data-stale",!completed||!!cachedAt);
+    if(completed&&!cachedAt){LAST_REFRESH_FAILED=false;markUpdated();}
+    else{LAST_REFRESH_FAILED=true;tickUpd();}
+    document.dispatchEvent(new CustomEvent("soc:data-state",{detail:{ok:completed&&!cachedAt,cachedAt:cachedAt,lastSuccess:UPD_AT}}));
+  }
 }
 let TOPE=[];let MLT=[];let GUIDANCE={};
 function toggleG(id){const e=$("#"+id);if(e)e.style.display=e.style.display==="none"?"block":"none";}
@@ -400,10 +416,21 @@ function renderSentinelPosture(d){const c=$("#sentinelCard"),b=$("#sentinelBody"
     +tile(chk,(EN?"chokepoints":"chokepoints"),'amb')
     +tile(spof,(EN?"single points":"points uniques"),spof?'red':'cy');
   c.style.display="block";}
+function renderUnavailable(){
+  const label=LANG==="en"?"Data unavailable":"Données indisponibles";
+  const threat=$("#threat");if(threat)threat.className="threat amb";
+  const title=$("#tlabel");if(title)title.textContent=LANG==="en"?"UNAVAILABLE":"INDISPONIBLE";
+  const subtitle=$("#tsub");if(subtitle)subtitle.textContent=label;
+  ["#tstats","#topEnt","#mlTop","#uebaTop","#hkpis","#hsrc","#hdark","#hint"].forEach(id=>{
+    const el=$(id);if(el){el.textContent=label;el.classList.add("data-unavailable");}
+  });
+}
 function renderRisk(d){d=d||{};
+  if(!["CRITIQUE","ELEVE","SURVEILLE","NOMINAL"].includes(d.threat_level)){renderUnavailable();throw new Error("Invalid risk response");}
+  document.querySelectorAll(".data-unavailable").forEach(el=>el.classList.remove("data-unavailable"));
   const M={CRITIQUE:["red","Compromission probable — action immédiate"],ELEVE:["amb","Activité critique en cours"],SURVEILLE:["blu","Signaux à surveiller"],NOMINAL:["grn","Aucune menace active"]};
-  const m=M[d.threat_level]||M.NOMINAL;const t=$("#threat");
-  if(t){t.className="threat "+m[0];$("#tlabel").textContent=d.threat_level||"NOMINAL";$("#tsub").textContent="Niveau de menace · "+m[1];
+  const m=M[d.threat_level]||M.NOMINAL;const threat=$("#threat");
+  if(threat){threat.className="threat "+m[0];$("#tlabel").textContent=d.threat_level||"NOMINAL";$("#tsub").textContent="Niveau de menace · "+m[1];
     // Pas de doublon des KPI (deja dans la rangee canonique) : on pointe l'entite prioritaire.
     const te=(d.top_entities||[])[0];
     $("#tstats").innerHTML=te?`<div style="font-size:12px;color:var(--mut);align-self:center;white-space:nowrap">${(LANG==="en")?"Priority watch":"À surveiller"} · <b style="color:var(--fg)" class="mono">${esc(((te.k||"")+"").split("\\").pop())}</b></div>`:"";}
@@ -919,7 +946,7 @@ function entScoreBanner(d){
   return out;
 }
 /* ===== Polish chargement / rafraichissement (additif) ===== */
-var UPD_AT=0, UPD_T=null, REFRESH_T=null, RELOADING=false;
+var UPD_AT=0, UPD_T=null, REFRESH_T=null, RELOADING=false, LAST_REFRESH_FAILED=false;
 function fmtAgoShort(ms){
   if(!ms)return "jamais";
   var s=Math.max(0,Math.floor((Date.now()-ms)/1000));
@@ -932,6 +959,7 @@ function tickUpd(){
   var el=$("#updPill");if(!el)return;
   var lbl=el.querySelector(".updtxt");if(!lbl)return;
   if(RELOADING){lbl.textContent="actualisation…";return;}
+  if(LAST_REFRESH_FAILED){lbl.textContent=LANG==="en"?"Refresh failed · last success: "+fmtAgoShort(UPD_AT):"Actualisation échouée · dernier succès : "+fmtAgoShort(UPD_AT);return;}
   lbl.textContent="Mis à jour "+fmtAgoShort(UPD_AT);
 }
 function setSpin(on){
