@@ -91,6 +91,7 @@ class FakeGraylog:
         self.installed = installed or []
         self.remote = remote
         self.conflict = conflict
+        self.input_state = "STOPPED"
 
     def call(self, method, path, body=None):
         self.calls.append((method, path, body))
@@ -114,7 +115,14 @@ class FakeGraylog:
             return []
         if method == "POST" and path.endswith("/installations"):
             return {"_id": "a" * 24, "entities": [{"content_pack_entity_id": stable_id("watchguard", "stream"),
-                "id": "b" * 24, "type": {"name": "stream", "version": "1"}, "found_on_system": False}]}
+                "id": "b" * 24, "type": {"name": "stream", "version": "1"}, "found_on_system": False},
+                {"content_pack_entity_id": stable_id("watchguard", "input"), "id": "c" * 24,
+                 "type": {"name": "input", "version": "1"}, "found_on_system": False}]}
+        if method == "GET" and path == "/system/inputstates/" + "c" * 24:
+            return {"id": "c" * 24, "state": self.input_state}
+        if method == "PUT" and path == "/system/inputstates/" + "c" * 24:
+            self.input_state = "RUNNING"
+            return {"id": "c" * 24}
         if method == "POST" and (path == "/system/content_packs" or path.endswith("/resume")):
             return {}
         if method == "GET" and path.endswith("/uninstall_details"):
@@ -133,7 +141,8 @@ def test_install_defaults_to_read_only_plan():
     assert {method for method, _, _ in client.calls} == {"GET"}
 
 
-def test_apply_uploads_then_installs_then_only_activates_owned_stream():
+def test_apply_uploads_then_installs_then_only_activates_owned_stream_and_input(monkeypatch):
+    monkeypatch.setattr("omni_integrations.client.time.sleep", lambda _: None)
     client, module = FakeGraylog(), load_module("watchguard")
     plan = install(client, module, parameters(module), apply=True)
     assert plan["action"] == "installed"
@@ -141,7 +150,8 @@ def test_apply_uploads_then_installs_then_only_activates_owned_stream():
     pack = build_pack(module)
     assert writes == [("POST", "/system/content_packs"),
                       ("POST", f"/system/content_packs/{pack['id']}/1/installations"),
-                      ("POST", "/streams/" + "b" * 24 + "/resume")]
+                      ("POST", "/streams/" + "b" * 24 + "/resume"),
+                      ("PUT", "/system/inputstates/" + "c" * 24)]
     request = [body for method, path, body in client.calls if method == "POST" and path.endswith("/installations")][0]
     assert request["entity"]["parameters"] == parameters(module)
     assert request["share_request"] == {"selected_grantee_capabilities": {}}
@@ -152,6 +162,53 @@ def test_identical_installed_module_is_idempotent_even_with_apply():
     client = FakeGraylog(remote=build_pack(module), installed=[{"_id": "a" * 24, "content_pack_revision": 1, "parameters": parameters(module)}])
     assert install(client, module, parameters(module), apply=True)["action"] == "already-installed"
     assert {method for method, _, _ in client.calls} == {"GET"}
+
+
+@pytest.mark.parametrize("initial", ["RUNNING", "FAILED", "STOPPED"])
+def test_only_new_input_is_started_and_running_input_is_preserved(monkeypatch, initial):
+    monkeypatch.setattr("omni_integrations.client.time.sleep", lambda _: None)
+    client, module = FakeGraylog(), load_module("watchguard")
+    client.input_state = initial
+    assert install(client, module, parameters(module), apply=True)["action"] == "installed"
+    starts = [path for method, path, _ in client.calls if method == "PUT"]
+    assert starts == ([] if initial == "RUNNING" else ["/system/inputstates/" + "c" * 24])
+
+
+@pytest.mark.parametrize("ownership", [True, None, "missing", "duplicate"])
+def test_reused_or_ambiguous_input_is_never_activated(monkeypatch, ownership):
+    monkeypatch.setattr("omni_integrations.client.time.sleep", lambda _: None)
+    client, module = FakeGraylog(), load_module("watchguard")
+    original = client.call
+    def call(method, path, body=None):
+        result = original(method, path, body)
+        if method == "POST" and path.endswith("/installations"):
+            item = result["entities"][-1]
+            if ownership == "missing":
+                result["entities"].pop()
+            elif ownership == "duplicate":
+                result["entities"].append(dict(item))
+            else:
+                item["found_on_system"] = ownership
+        return result
+    client.call = call
+    with pytest.raises(RuntimeError, match="owned input"):
+        install(client, module, parameters(module), apply=True)
+    assert not any(method == "PUT" or path.endswith("/resume") for method, path, _ in client.calls)
+
+
+def test_failed_new_input_is_not_reported_installed_or_restarted_repeatedly(monkeypatch):
+    monkeypatch.setattr("omni_integrations.client.time.sleep", lambda _: None)
+    client, module = FakeGraylog(), load_module("watchguard")
+    original = client.call
+    def call(method, path, body=None):
+        result = original(method, path, body)
+        if method == "GET" and path.startswith("/system/inputstates/"):
+            result["state"] = "FAILED"
+        return result
+    client.call = call
+    with pytest.raises(RuntimeError, match="failed to start"):
+        install(client, module, parameters(module), apply=True)
+    assert len([1 for method, _, _ in client.calls if method == "PUT"]) == 1
 
 
 @pytest.mark.parametrize("scenario", ["changed-pack", "port-conflict", "other-revision", "other-parameters"])

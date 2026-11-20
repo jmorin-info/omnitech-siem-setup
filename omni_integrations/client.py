@@ -5,6 +5,7 @@ import ipaddress
 import json
 import re
 import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -138,6 +139,34 @@ def plan_install(client, module, params):
             "network": "dedicated raw UDP input; firewall and Docker port publication are managed separately"}
 
 
+def _start_new_input(client, input_id):
+    """Let native creation settle, then start only this newly owned input once."""
+    previous, stable, requested = None, 0, False
+    for _ in range(60):
+        try:
+            response = client.call("GET", "/system/inputstates/" + input_id)
+            if not isinstance(response, dict) or response.get("id") != input_id:
+                raise ValueError("Unexpected native input state response")
+            state = response.get("state")
+        except ApiError as exc:
+            if exc.status != 404:
+                raise
+            state = "NOT_FOUND"
+        stable = stable + 1 if state == previous else 1
+        previous = state
+        if state == "RUNNING" and stable >= 2:
+            return
+        if state in ("FAILED", "STOPPED", "TERMINATED", "NOT_FOUND") and stable >= 3:
+            if requested:
+                raise RuntimeError("New module input failed to start; inspect System > Inputs before retrying")
+            # Content-pack creation and static-field events can race. Never
+            # restart a running input or an input from an existing installation.
+            client.call("PUT", "/system/inputstates/" + input_id)
+            requested, previous, stable = True, None, 0
+        time.sleep(1)
+    raise RuntimeError("New module input did not become RUNNING; inspect System > Inputs before retrying")
+
+
 def install(client, module, params, *, apply=False):
     plan = plan_install(client, module, params)
     if not apply or plan["action"] == "already-installed":
@@ -151,12 +180,16 @@ def install(client, module, params, *, apply=False):
         "share_request": {"selected_grantee_capabilities": {}}})
     # Graylog 7.2 StreamFacade creates streams paused regardless of disabled=false.
     # Activate only the newly installed, owned stream; an existing paused stream is preserved.
-    owned = [entity for entity in installation.get("entities", [])
-             if entity.get("content_pack_entity_id") == stable_id(module["id"], "stream")
-             and entity.get("type", {}).get("name") == "stream" and entity.get("found_on_system") is False]
-    if len(owned) != 1 or not re.fullmatch(r"[a-f0-9]{24}", owned[0].get("id", "")):
-        raise RuntimeError("Pack installed but owned stream could not be identified; inspect Content Packs before retrying")
-    client.call("POST", "/streams/" + owned[0]["id"] + "/resume")
+    owned = {}
+    for kind in ("stream", "input"):
+        entities = [entity for entity in installation.get("entities", [])
+                    if entity.get("content_pack_entity_id") == stable_id(module["id"], kind)
+                    and entity.get("type", {}).get("name") == kind and entity.get("found_on_system") is False]
+        if len(entities) != 1 or not re.fullmatch(r"[a-f0-9]{24}", entities[0].get("id", "")):
+            raise RuntimeError("Pack installed but owned " + kind + " could not be identified; inspect Content Packs before retrying")
+        owned[kind] = entities[0]["id"]
+    client.call("POST", "/streams/" + owned["stream"] + "/resume")
+    _start_new_input(client, owned["input"])
     plan["action"], plan["installation_id"] = "installed", installation.get("_id")
     return plan
 
