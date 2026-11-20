@@ -930,6 +930,7 @@ echo "==> [6/6] Ordre des processeurs (Filter Chain -> Pipelines -> GeoIP)"
 CURRENT="$(api_get "/system/messageprocessors/config")"
 NEW="$(echo "${CURRENT}" | jq '
   .processor_order as $o
+  | (.disabled_processors // []) as $disabled
   | ($o | map(select(.name != "GeoIP Resolver" and .name != "Pipeline Processor"))) as $base
   | ($o | map(select(.name == "Pipeline Processor"))) as $pp
   | ($o | map(select(.name == "GeoIP Resolver"))) as $geo
@@ -937,7 +938,7 @@ NEW="$(echo "${CURRENT}" | jq '
      then "Stream Rule Processor" else "Message Filter Chain" end) as $anchor
   | ($base | map(if .name == $anchor then [., $pp[0]] else [.] end)
      | flatten | map(select(. != null))) + $geo
-  | {processor_order: ., disabled_processors: []}')"
+  | {processor_order: ., disabled_processors: $disabled}')"
 if [[ "$(echo "${CURRENT}" | jq -c '.processor_order')" == "$(echo "${NEW}" | jq -c '.processor_order')" ]]; then
   skip "ordre deja correct"
 else
