@@ -188,15 +188,19 @@ def build(title, pages):
     queries, state = [], {}
     for p in pages:
         qid = str(uuid.uuid4())
+        # An empty stream filter otherwise falls back to all authorized streams.
+        configured = bool(p["streams"])
+        page_query = p.get("query_string", "") if configured else "*:* AND NOT *:*"
+        page_title = p["title"] if configured else p["title"] + " (source non configurée)"
         for w in p["widgets"]:
             w["wid"], w["stid"] = str(uuid.uuid4()), str(uuid.uuid4())
-        queries.append({"id": qid, "query": {"type": "elasticsearch", "query_string": p.get("query_string", "")},
+        queries.append({"id": qid, "query": {"type": "elasticsearch", "query_string": page_query},
             "timerange": {"type": "relative", "range": p.get("page_range", 86400)},
             "filter": {"type": "or", "filters": [{"type": "stream", "id": s} for s in p["streams"]]},
             "filters": [],
             "search_types": [st_messages(w) if w["viz"] == "messages" else st_pivot(w) for w in p["widgets"]]})
         state[qid] = {"selected_fields": None, "static_message_list_id": None,
-            "titles": {"tab": {"title": p["title"]}, "widget": {w["wid"]: w["title"] for w in p["widgets"]}},
+            "titles": {"tab": {"title": page_title}, "widget": {w["wid"]: w["title"] for w in p["widgets"]}},
             "widgets": [widget(w) for w in p["widgets"]],
             "widget_mapping": {w["wid"]: [w["stid"]] for w in p["widgets"]},
             "positions": {w["wid"]: {"col": w["pos"][0], "row": w["pos"][1],

@@ -12,8 +12,10 @@ import os
 from pathlib import Path
 import socket
 import ssl
+import subprocess
 import sys
 import tempfile
+import tarfile
 import time
 import urllib.request
 import urllib.error
@@ -108,6 +110,27 @@ def console_session(password):
     return False
 
 
+def backup_test(config):
+    """Run the installed backup job only inside the guarded disposable VM."""
+    result = subprocess.run(["systemctl", "start", "siem-backup.service"], capture_output=True, timeout=420)
+    directory = Path(config["BACKUP_DIR"])
+    mongo = [path for path in (directory / "mongo").glob("graylog-mongo-*.archive.gz") if path.stat().st_size > 0]
+    archives = sorted((directory / "configs").glob("siem-configs-*.tar.gz"), key=lambda path: path.stat().st_mtime)
+    names = []
+    if archives:
+        with tarfile.open(archives[-1]) as archive:
+            names = archive.getnames()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    with opener.open("http://127.0.0.1:9200/_snapshot/graylog_fs/_all", timeout=15) as response:
+        snapshots = json.load(response).get("snapshots", [])
+    facts = {"job_success": result.returncode == 0, "mongo_archive": bool(mongo),
+             "site_configuration": any(name.endswith("/00-vars.env") or name == "00-vars.env" for name in names),
+             "console_configuration": "etc/default/omni-mobile" in names,
+             "snapshot_success": any(item.get("state") == "SUCCESS" and item.get("snapshot", "").startswith("snap-") for item in snapshots)}
+    facts["passed"] = all(facts.values())
+    return facts
+
+
 def test_module(client, module, report):
     report["stage"] = "install"
     plan = install(client, module, parameters(module), apply=True)
@@ -185,7 +208,8 @@ def main(argv=None):
                     result["operation"] = str(exc)
         report["fixtures_expected"] = sum(item.get("fixtures_expected", 0) for item in report["modules"])
         report["fixtures_received"] = sum(item.get("fixtures_received", 0) for item in report["modules"])
-        report["passed"] = report["console_login_logout"] and len(report["modules"]) == 3 and report["fixtures_expected"] == 10 and all(
+        report["backup"] = backup_test(config)
+        report["passed"] = report["backup"]["passed"] and report["console_login_logout"] and len(report["modules"]) == 3 and report["fixtures_expected"] == 10 and all(
             item["passed"] for item in report["modules"])
     except Exception as exc:
         report["error_type"] = type(exc).__name__

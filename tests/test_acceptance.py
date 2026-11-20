@@ -137,3 +137,21 @@ def test_dashboard_creation_failure_cannot_mark_phase_successful(responses):
     exec(compile(ast.Module(body=[build], type_ignores=[]), "dashboard-build", "exec"), namespace)
     with pytest.raises(RuntimeError, match="creation failed"):
         namespace["build"]("test", [])
+
+
+@pytest.mark.parametrize("streams", [[], ["a" * 24]])
+def test_dashboard_without_its_optional_source_cannot_show_other_streams(streams):
+    shell = (ROOT / "14-graylog-dashboards.sh").read_text()
+    source = shell.split("python3 - <<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+    build = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "build")
+    sent = []
+    def post(path, body):
+        sent.append(body)
+        return {"id": "fixture"}
+    namespace = {"uuid": uuid, "PARAMS": [], "post_entity": post, "COMMON_HL": []}
+    exec(compile(ast.Module(body=[build], type_ignores=[]), "dashboard-build", "exec"), namespace)
+    namespace["build"]("test", [{"title": "Optional source", "streams": streams, "widgets": []}])
+    query = sent[0]["queries"][0]
+    tab = next(iter(sent[1]["state"].values()))["titles"]["tab"]["title"]
+    assert query["query"]["query_string"] == ("" if streams else "*:* AND NOT *:*")
+    assert ("source non configurée" in tab) == (not streams)

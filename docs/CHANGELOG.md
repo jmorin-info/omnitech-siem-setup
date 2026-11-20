@@ -9,6 +9,7 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
 - Notifications natives sans triage optionnel, ordre des phases corrigé, enveloppes API Graylog 7 réessayées correctement et refus explicite des dashboards absents.
 - Pare-feu persistant sans effacement des tables tierces ; préflight IPv4 et connectivité adaptés.
 - Recette finale obligatoire des services et entités, contrôle des assets HTTPS, workflow VM Ubuntu 26.04 et tests des trois packs sur dix messages synthétiques réellement indexés.
+- Première connexion des pipelines et sources facultatives absentes traitées explicitement ; sauvegarde réelle contrôlée, secrets du site inclus et rétention limitée aux sauvegardes natives réussies.
 
 ## Installation Ubuntu et correctifs locaux
 

@@ -143,10 +143,18 @@ STAGE=verification
 echo 'Ubuntu VM: checking installed services and published assets.'
 VERIFY_CODE=0
 ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && python3 tools/verify-installation.py --output /root/acceptance.json' > "$WORK/verify.log" 2>&1 || VERIFY_CODE=$?
-if [[ "$INSTALL_CODE" != 0 ]]; then
+INTEGRATION_CODE=1
+if [[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 ]]; then
+  STAGE=integration_packs
+  echo 'Ubuntu VM: checking console sessions, integration events and a complete backup.'
+  INTEGRATION_CODE=0
+  ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && install -m 600 /dev/null /run/omni-isolated-vm-test && OMNI_ISOLATED_VM_TEST=1 python3 tools/test-integration-vm.py --output /root/integrations-acceptance.json' > "$WORK/integrations.log" 2>&1 || INTEGRATION_CODE=$?
+  ssh "${SSH[@]}" 'cat /root/integrations-acceptance.json' > "$WORK/integrations.json" 2> "$WORK/integrations-errors.log" || true
+fi
+if [[ "$INSTALL_CODE" != 0 || "$VERIFY_CODE" != 0 || "$INTEGRATION_CODE" != 0 ]]; then
   # Only the disposable test guest's redacted diagnostics may leave the VM.
   ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && python3 -' > "$WORK/diagnose.log" 2>&1 <<'DIAG' || true
-import importlib.util, json
+import base64, importlib.util, json
 from pathlib import Path
 from manager.operations import redact
 spec = importlib.util.spec_from_file_location("installer", "tools/install-platform.py")
@@ -154,28 +162,24 @@ installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 config = installer.load_config(Path("00-vars.env"))
 private = [value for key, value in config.items() if value and any(word in key for word in ("PASS", "SECRET", "TOKEN", "KEY", "CRED", "WEBHOOK"))]
+private.append(base64.b64encode(("admin:" + config["GRAYLOG_ADMIN_PASS"]).encode()).decode())
 for name in ("/root/.graylog_password_secret", "/etc/mongod.keyfile"):
     path = Path(name)
     if path.exists():
         private.extend(line for line in path.read_text().splitlines() if len(line) > 16)
 report_path = Path("/root/acceptance.json")
 report = json.loads(report_path.read_text())
-log = Path("/root/install-output.log")
-if log.exists():
-    report["failure_tail_redacted"] = [redact(line, private)[:1000] for line in log.read_text(errors="replace").splitlines()[-160:]]
+for name, key, count in (("/root/install-output.log", "failure_tail_redacted", 160),
+                         ("/var/log/graylog-server/server.log", "graylog_tail_redacted", 60),
+                         ("/var/log/siem-backup.log", "backup_tail_redacted", 40)):
+    log = Path(name)
+    if log.exists():
+        report[key] = [redact(line, private)[:1000] for line in log.read_text(errors="replace").splitlines()[-count:]]
 plan = Path("/root/install-plan.json")
 if plan.exists():
     report["plan_blockers"] = json.loads(plan.read_text()).get("blockers", [])
 report_path.write_text(json.dumps(report, indent=2) + "\n")
 DIAG
-fi
-INTEGRATION_CODE=1
-if [[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 ]]; then
-  STAGE=integration_packs
-  echo 'Ubuntu VM: installing integration packs and checking synthetic UDP events.'
-  INTEGRATION_CODE=0
-  ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && install -m 600 /dev/null /run/omni-isolated-vm-test && OMNI_ISOLATED_VM_TEST=1 python3 tools/test-integration-vm.py --output /root/integrations-acceptance.json' > "$WORK/integrations.log" 2>&1 || INTEGRATION_CODE=$?
-  ssh "${SSH[@]}" 'cat /root/integrations-acceptance.json' > "$WORK/integrations.json" 2> "$WORK/integrations-errors.log" || true
 fi
 ssh "${SSH[@]}" 'cat /root/acceptance.json' > "$WORK/report.json" 2> "$WORK/report-errors.log" || true
 if python3 - "$WORK/report.json" "$INSTALL_CODE" "$WORK/image-sha256" "$WORK/integrations.json" "$VERIFY_CODE" "$INTEGRATION_CODE" <<'PY'

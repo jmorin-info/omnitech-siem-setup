@@ -32,6 +32,7 @@
 
 > **Mise au propre du 19 novembre 2026** : [installation](docs/INSTALLATION.md),
 > [Ubuntu ligne par ligne](docs/UBUNTU-DEMARRAGE.md),
+> [qualification sur VM](docs/QUALIFICATION-UBUNTU2604.md),
 > [mises à jour](docs/UPDATES.md), [modules](docs/INTEGRATIONS-MODULAIRES.md),
 > [audit de portabilité](docs/AUDIT-PORTABILITE-2026-11-19.md). Les capacités et captures
 > ci-dessous décrivent l'installation de référence ; les modules optionnels demandent

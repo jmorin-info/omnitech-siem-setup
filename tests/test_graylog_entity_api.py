@@ -15,7 +15,7 @@ pytestmark = pytest.mark.skipif(os.name == "nt" or not shutil.which("jq"), reaso
 
 
 @pytest.mark.parametrize("status,needs_envelope,expected_calls", [
-    (200, False, 1), (400, True, 2), (400, False, 1), (401, False, 1), (500, True, 1),
+    (200, False, 1), (400, True, 2), (400, False, 1), (401, False, 1), (500, True, 1), (302, True, 1),
 ])
 def test_post_entity_only_retries_the_specific_envelope_validation(status, needs_envelope, expected_calls):
     calls = []
@@ -59,7 +59,7 @@ def test_post_entity_only_retries_the_specific_envelope_validation(status, needs
         thread.join()
 
 
-@pytest.mark.parametrize("status,existing", [(404, []), (200, ["existing-pipeline"]), (401, []), (500, [])])
+@pytest.mark.parametrize("status,existing", [(404, []), (200, ["existing-pipeline"]), (401, []), (500, []), (302, [])])
 def test_new_pipeline_connections_allow_only_404_and_preserve_existing(status, existing):
     connected, writes = list(existing), []
     class Handler(BaseHTTPRequestHandler):

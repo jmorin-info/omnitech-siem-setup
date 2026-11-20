@@ -127,7 +127,7 @@ post_entity() {
   for ARG in "${CURL[@]}"; do
     [[ "$ARG" == --fail ]] || ENTITY_CURL+=("$ARG")
   done
-  if RES="$(printf '%s' "$BODY" | "${ENTITY_CURL[@]}" --fail-with-body \
+  if RES="$(printf '%s' "$BODY" | "${ENTITY_CURL[@]}" \
       --write-out '\n%{http_code}' -X POST "${API}$1" -d @-)"; then
     RC=0
   else
@@ -135,13 +135,14 @@ post_entity() {
   fi
   STATUS="${RES##*$'\n'}"
   RES="${RES%$'\n'*}"
-  if [[ "$RC" -eq 0 ]]; then
+  if [[ "$RC" -eq 0 && "$STATUS" == 2?? ]]; then
     printf '%s\n' "$RES"
-  elif [[ "$STATUS" == 400 ]] && [[ "$RES" == *"entity cannot be null"* ]]; then
+  elif [[ "$RC" -eq 0 && "$STATUS" == 400 ]] && [[ "$RES" == *"entity cannot be null"* ]]; then
     printf '%s' "$BODY" | wrap_entity | api_post "$1"
   else
     # Do not print rejected request bodies, which can contain credentials.
-    return "$RC"
+    printf 'Graylog POST failed (HTTP %s).\n' "$STATUS" >&2
+    return "$((RC == 0 ? 22 : RC))"
   fi
 }
 
@@ -153,19 +154,20 @@ pipeline_connections() {
   for ARG in "${CURL[@]}"; do
     [[ "$ARG" == --fail ]] || GET_CURL+=("$ARG")
   done
-  if RES="$("${GET_CURL[@]}" --fail-with-body --write-out '\n%{http_code}' "${API}/system/pipelines/connections/$1")"; then
+  if RES="$("${GET_CURL[@]}" --write-out '\n%{http_code}' "${API}/system/pipelines/connections/$1")"; then
     RC=0
   else
     RC=$?
   fi
   STATUS="${RES##*$'\n'}"
   RES="${RES%$'\n'*}"
-  if [[ "$RC" -eq 0 ]]; then
+  if [[ "$RC" -eq 0 && "$STATUS" == 2?? ]]; then
     printf '%s\n' "$RES"
-  elif [[ "$STATUS" == 404 ]]; then
+  elif [[ "$RC" -eq 0 && "$STATUS" == 404 ]]; then
     printf '{"pipeline_ids":[]}\n'
   else
-    return "$RC"
+    printf 'Graylog pipeline connection lookup failed (HTTP %s).\n' "$STATUS" >&2
+    return "$((RC == 0 ? 22 : RC))"
   fi
 }
 

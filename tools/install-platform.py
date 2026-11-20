@@ -94,6 +94,9 @@ def validate_config(config):
         errors.append("DATA_DISK must be empty for pre-mounted storage, or explicitly authorized with ALLOW_FORMAT_DATA_DISK=1")
     if config.get("THP_MODE", "preserve") not in ("preserve", "enable", "disable"):
         errors.append("THP_MODE must be preserve, enable or disable")
+    timeout = config.get("BACKUP_SNAPSHOT_TIMEOUT_SECONDS", "3600")
+    if not re.fullmatch(r"[1-9][0-9]*", timeout) or not 1 <= int(timeout) <= 86400:
+        errors.append("BACKUP_SNAPSHOT_TIMEOUT_SECONDS must be an integer from1 to86400")
     ssh_source = os.environ.get("SSH_CONNECTION", "").split()
     if ssh_source:
         try:

@@ -61,6 +61,13 @@ def test_memory_budget_rejects_32gb_defaults_on_a_16gb_vm():
     assert len(installer.resource_blockers(config, 16 * 1024 * 1024)) == 2
 
 
+@pytest.mark.parametrize("timeout", ["0", "86401", "NaN", "1; false"])
+def test_snapshot_timeout_is_rejected_before_any_install_phase(timeout):
+    config = valid_config()
+    config["BACKUP_SNAPSHOT_TIMEOUT_SECONDS"] = timeout
+    assert any("BACKUP_SNAPSHOT_TIMEOUT_SECONDS" in error for error in installer.validate_config(config))
+
+
 def test_existing_install_is_detected(tmp_path):
     config = tmp_path / "server.conf"
     assert installer.existing_install([config]) == []

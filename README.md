@@ -444,6 +444,8 @@ For Ubuntu, follow the [step-by-step installation guide](docs/UBUNTU-DEMARRAGE.m
 Ubuntu 24.04 is the supported Ubuntu route; 26.04 requires explicit experimental
 opt-in and a compatible kernel. Missing MongoDB/OpenSearch passwords can be
 generated locally with `sudo bash install.sh --generate-secrets` before planning.
+The [Ubuntu VM qualification](docs/QUALIFICATION-UBUNTU2604.md) checks the fresh
+stack, console, integration packs and an actual backup; reports identify the tested commit.
 
 For guided installation and maintenance over SSH, run:
 

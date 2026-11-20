@@ -257,6 +257,8 @@ ensure_event() {
   local TITLE="$1" PRIO="$2" QUERY="$3" STREAMS="$4" GROUPBY="$5" SERIES="$6" COND="$7" WITHIN="$8" EVERY="$9"
   local GRACE="${10:-10}"
   local EXIST ID
+  jq -e 'type=="array" and all(.[]; type=="string" and test("^[0-9a-fA-F]{24}$"))' <<<"${STREAMS}" >/dev/null \
+    || die "missing or invalid source stream for event '${TITLE}'"
   EXIST="$(event_def_id "${TITLE}")"
   if [[ -n "${EXIST}" ]]; then skip "evenement '${TITLE}' existe"; return 0; fi
   ID="$(jq -n --arg t "${TITLE}" --argjson p "${PRIO}" --arg q "${QUERY}" \
@@ -288,7 +290,7 @@ ensure_event() {
     notification_settings: { grace_period_ms: $g, backlog_size: 5 },
     notifications: [ { notification_id: $n, notification_parameters: null } ]
   }' | post_entity "/events/definitions?schedule=true" | jqr '.id')"
-  [[ -n "${ID}" && "${ID}" != "null" ]] && ok "evenement '${TITLE}'" || warn "evenement '${TITLE}' REFUSE"
+  [[ -n "${ID}" && "${ID}" != "null" ]] && ok "evenement '${TITLE}'" || die "evenement '${TITLE}' REFUSE"
 }
 
 NOCOND='{"expression":null}'
@@ -645,9 +647,13 @@ ensure_event "OMNI - Usage de credentials explicites (RunAs / latéral)" 2 \
   '["explicit_cred_src"]' "${COUNT_SERIES}" "$(count_ge 8)" 30 15 60
 
 # ===== Alertes Lot 3 (detections de profondeur, multi-agent) =====
-ensure_event "OMNI - Exfiltration par volume (flux sortant anormal)" 2 \
-  'event_source:ndr_exfil AND alert_tag:data_exfil' "[\"${ST_INT}\"]" \
-  '["entity_host"]' "${COUNT_SERIES}" "$(count_ge 1)" 120 60
+if [[ -n "${ST_INT}" ]]; then
+  ensure_event "OMNI - Exfiltration par volume (flux sortant anormal)" 2 \
+    'event_source:ndr_exfil AND alert_tag:data_exfil' "[\"${ST_INT}\"]" \
+    '["entity_host"]' "${COUNT_SERIES}" "$(count_ge 1)" 120 60
+else
+  skip "source NDR interne absente -> detection d'exfiltration non activee"
+fi
 ensure_event "OMNI - Accès credentials GPP/SYSVOL (T1552.006)" 3 \
   'alert_tag:gpp_creds_access' "[\"${ST_WINSEC}\"]" \
   '["user"]' "${COUNT_SERIES}" "$(count_ge 1)" 30 10

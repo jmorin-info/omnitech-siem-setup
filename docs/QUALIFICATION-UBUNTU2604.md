@@ -26,6 +26,9 @@ exécute [tools/test-ubuntu-vm.sh](../tools/test-ubuntu-vm.sh) :
 7. Installation native des trois packs WatchGuard/UniFi/Palo Alto, vérification
    de leurs entités et six widgets par dashboard, envoi des dix fixtures UDP,
    contrôle des champs réellement indexés et de leur routage vers les streams.
+8. Exécution du job de sauvegarde installé : archive MongoDB et tar de
+   configuration valides, présence des secrets du site et de la configuration
+   console dans l'archive privée, snapshot OpenSearch terminé en `SUCCESS`.
 
 Le rapport `ubuntu-2604-acceptance` contient le commit, le noyau, l'empreinte de
 l'image, les résultats des contrôles et des modules. Le résultat global n'est
@@ -63,12 +66,17 @@ du laboratoire ; ce n'est pas un diagnostic à exécuter sur un SIEM existant.
   elle est requise. Les autres erreurs restent des erreurs.
 - Sans triage optionnel, une instance neuve utilise les notifications natives.
   Si le triage est choisi, sa phase précède le routage des détections.
+- Une connexion de pipeline absente sur un stream neuf est créée ; un collecteur
+  NDR facultatif absent ne produit pas une définition avec un identifiant vide.
 - Une création de dashboard refusée et une recette finale échouée arrêtent
   l'installation ; elles ne sont plus présentées comme une réussite.
 - Le préflight examine IPv4 sans confondre une réponse AAAA, et distingue un
   filtrage ICMP d'une absence de connectivité HTTPS.
 - Le pare-feu conserve le fichier de démarrage et les tables tierces, applique
   uniquement sa table et restaure les fichiers en cas d'échec.
+- La première sauvegarde n'exige pas un snapshot de la veille. Le job vérifie
+  réellement ses archives et son snapshot courant ; il conserve les sauvegardes
+  précédentes en cas d'échec et ne purge que les préfixes qu'il possède.
 
 Le comportement du garde noyau suit le
 [code MongoDB 8.0.38](https://raw.githubusercontent.com/mongodb/mongo/r8.0.38/src/mongo/db/startup_check_rseq.cpp)

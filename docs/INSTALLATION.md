@@ -167,6 +167,22 @@ Vérifier aussi la connexion console, les inputs RUNNING, les dashboards et un
 une machine isolée avant d’annoncer un PRA opérationnel. Un HTTP 200 de `/soc/`
 valide la publication des fichiers, pas la collecte ou toutes les extensions.
 
+Pour tester le job installé et consulter son résultat :
+
+```bash
+sudo systemctl start siem-backup.service
+sudo systemctl show siem-backup.service -p Result -p ExecMainStatus
+```
+
+Le job contrôle les archives MongoDB/configuration et attend le `SUCCESS` du
+snapshot courant. `BACKUP_SNAPSHOT_TIMEOUT_SECONDS` règle cette attente
+(3 600 secondes par défaut, à adapter au volume et au stockage). Le premier jour
+ne réclame pas un snapshot de la veille. La rétention ne s'exécute qu'après une
+sauvegarde réussie, sur les seuls noms natifs ; les snapshots tiers sont conservés.
+Les archives privées incluent le fichier du site, la configuration et l'état
+console, ainsi que les fragments de pare-feu présents. Les exporter vers un
+stockage protégé hors du serveur. Le succès du job ne remplace pas une restauration testée.
+
 ## Variante Docker
 
 Le bundle Docker contient la pile, nginx et la console, avec les mêmes versions

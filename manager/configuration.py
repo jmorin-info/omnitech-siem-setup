@@ -27,6 +27,7 @@ FIELDS = {
     "MONGO_CACHE_GB": ("Cache MongoDB en Go", "positive"), "JOURNAL_SIZE": ("Journal Graylog", "size"),
     "DATA_MOUNT": ("Volume de données déjà préparé", "path"), "BACKUP_DIR": ("Répertoire de sauvegarde", "path"),
     "RETENTION_DAYS": ("Rétention locale des sauvegardes", "positive_integer"),
+    "BACKUP_SNAPSHOT_TIMEOUT_SECONDS": ("Attente maximale du snapshot (secondes)", "snapshot_timeout"),
     "SMTP_RELAY": ("Relais SMTP", "name"), "SMTP_PORT": ("Port SMTP", "port"),
     "SMTP_FROM": ("Adresse d'envoi", "email"), "ALERT_EMAIL": ("Destinataire des alertes", "email"),
     "GRAYLOG_API_URL": ("URL API Graylog (vide : détection)", "api_optional"),
@@ -89,6 +90,8 @@ def validate_values(values, secrets):
             if kind == "positive" and (not math.isfinite(float(value)) or float(value) <= 0):
                 raise ValueError()
             if kind == "positive_integer" and (not value.isdigit() or int(value) < 1):
+                raise ValueError()
+            if kind == "snapshot_timeout" and (not re.fullmatch(r"[1-9][0-9]*", value) or not 1 <= int(value) <= 86400):
                 raise ValueError()
             if kind == "heap" and not re.fullmatch(r"[1-9][0-9]*[gm]", value):
                 raise ValueError()
