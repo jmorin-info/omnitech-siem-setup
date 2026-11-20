@@ -1,5 +1,8 @@
 # Deployment
 
+Start with [the practical paths](DEMARRER.md): fresh installation, existing-host
+updates or adding a source. This page summarizes their scope.
+
 The repository supports a fresh **core SOC** installation and separate workflows
 for code updates, integration packs and disaster recovery. The configured OMNITECH
 reference installation has additional services and site settings; a fresh install

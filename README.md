@@ -2,6 +2,8 @@
 
 <img src="docs/captures/01-overview.png" alt="OMNI SOC — overview console" width="94%">
 
+<small>Current console with synthetic demonstration data. Other reference screenshots may show the earlier interface.</small>
+
 # OMNI SIEM — Detection &amp; Response Platform
 
 **A self-hosted, on-premise SIEM/SOC platform for OMNITECH Security**
@@ -9,16 +11,16 @@ Built on Graylog · OpenSearch · MongoDB, extended with a custom detection engi
 a scoring-based alert-triage service, automated response (SOAR), a purpose-built SOC
 console, and full physical-access-control (SEAL) correlation.
 
-`~20 log sources` · `197 detections` · `250 pipeline rules` · `40 pipelines` · `22 streams` · `MITRE ATT&CK-mapped` · `ISO 27001-aligned`
+`Modular log sources` · `Detection pipelines` · `SOC dashboards` · `MITRE ATT&CK-mapped` · `ISO 27001-aligned`
 
 </div>
 
 ---
 
-> **Deployment status — 19 November 2026.** Start with the
-> [installation guide](docs/INSTALLATION.md), [safe code updates](docs/UPDATES.md),
-> [integration modules](docs/INTEGRATIONS-MODULAIRES.md) and
-> [portability audit](docs/AUDIT-PORTABILITE-2026-11-19.md).
+> **Start here:** [choose a deployment or maintenance path](docs/DEMARRER.md).
+> [Fresh Ubuntu installation](docs/UBUNTU-DEMARRAGE.md) ·
+> [existing-instance code updates](docs/UPDATES.md) ·
+> [WatchGuard, UniFi and Palo Alto modules](docs/INTEGRATIONS-MODULAIRES.md).
 > The feature tour below describes the configured OMNITECH reference installation;
 > it is not a promise that every optional service is enabled by a fresh installation.
 
@@ -71,7 +73,7 @@ It is **not** a vanilla Graylog install. On top of the ingest/search core it add
 | Area | Capability |
 |---|---|
 | **Ingestion** | 15 Graylog inputs (Beats/TLS, Syslog TCP/UDP, GELF) across ~20 logical sources |
-| **Normalisation** | 40 pipelines / 250 rules — every source normalised to a common schema (`event_source`, `event_action`, `alert_tag`, `src_ip`, `user`, `host`, MITRE fields…) |
+| **Normalisation** | Source-specific pipelines and rules — every source normalised to a common schema (`event_source`, `event_action`, `alert_tag`, `src_ip`, `user`, `host`, MITRE fields…) |
 | **Detection** | 197 event definitions (192 enabled), each mapped to a MITRE ATT&CK technique/tactic |
 | **Correlation** | Cross-source kill-chain correlation on canonical identity/host/IP keys → incidents |
 | **Triage** | Tiered decisioning (Critical / grey zone / noise) + LLM judge for the grey zone + learned false-positive suppression |
@@ -234,7 +236,7 @@ tactic. Detections are grouped by kill-chain phase:
 - **Health / assurance** — backup failure/absence, disk pressure, certificate expiry,
   robot self-supervision, repo/production drift, log-integrity chain.
 
-Normalisation and enrichment run in **40 pipelines / 250 rules**: GeoIP, threat-intel
+Normalisation and enrichment run in **source-specific pipelines and rules**: GeoIP, threat-intel
 (Tor/Spamhaus/URLhaus/abuse.ch), MITRE lookup by `alert_tag`, per-source field mapping, and
 noise/false-positive allow-lists learned over time.
 
@@ -472,7 +474,8 @@ cd omnitech-siem-setup
 cp 00-vars.env.example 00-vars.env
 chmod 600 00-vars.env
 $EDITOR 00-vars.env
-bash install.sh --plan
+sudo bash install.sh --generate-secrets
+sudo bash install.sh --plan
 sudo bash install.sh --apply
 ```
 
@@ -554,7 +557,7 @@ More in [`docs/GUIDE-DEPANNAGE.md`](docs/GUIDE-DEPANNAGE.md) and the French READ
   `127.0.0.1` only. Nginx (443) and the inputs are the only exposed ports, behind nftables
   and the perimeter firewall.
 - Production robots that are patched in place are copied back into `deploye/` with
-  `sync-deploye.sh`. It strips credentials from URLs, runs a secret scan and refuses to
+  `synchro-manifeste.sh`. It compares the manifest files, runs a secret scan and refuses to
   commit if anything shows up.
 
 ---
@@ -582,7 +585,7 @@ management). See [`docs/ISO27001-MAPPING.md`](docs/ISO27001-MAPPING.md),
 ├── lookups/                                     # 20 lookup tables (guidance, MITRE, allow-lists…)
 ├── kit/  windows/  fortigate/                   # collector kits & source configs
 ├── docker/                                      # Docker variant (DR / staging)
-├── deploye/  sync-deploye.sh                    # production state of robots, units, APT pins (copied back from the server)
+├── deploye/  synchro-manifeste.sh               # reference robots, units and APT pins; manifest-based synchronization
 ├── tests/  run-tests.sh                         # test harness
 └── docs/                                        # full documentation set (see below)
 ```

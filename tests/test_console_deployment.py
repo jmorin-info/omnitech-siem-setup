@@ -49,6 +49,21 @@ def test_complete_assets_are_published_without_backend_or_secrets(tmp_path):
     assert not list(tmp_path.rglob("*.env"))
 
 
+def test_failed_asset_write_keeps_the_previous_page_and_service_worker(tmp_path):
+    source = tmp_path / "source"
+    destination = tmp_path / "public"
+    source.mkdir()
+    destination.mkdir()
+    for name in ("index.html", "app.js", "sw.js"):
+        (source / name).write_text("new")
+        (destination / name).write_text("previous")
+    with patch.object(deploy.os, "replace", side_effect=OSError("storage unavailable")):
+        with pytest.raises(OSError):
+            deploy.publish(source, destination)
+    assert (destination / "index.html").read_text() == "previous"
+    assert (destination / "sw.js").read_text() == "previous"
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX nginx worker permissions")
 def test_public_assets_remain_readable_with_private_installer_umask(tmp_path):
     old_umask = os.umask(0o027)

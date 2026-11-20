@@ -10,6 +10,7 @@ import http.cookiejar
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import ssl
 import subprocess
@@ -57,18 +58,52 @@ def isolated_configuration():
 
 def indexed_messages(module_id, since):
     query = {"size": 100, "query": {"bool": {"filter": [
-        {"term": {"omni_integration_id": module_id}}, {"range": {"timestamp": {"gte": since}}}]}}}
-    request = urllib.request.Request("http://127.0.0.1:9200/_search", method="POST",
+        {"term": {"omni_integration_id": module_id}},
+        {"range": {"timestamp": {"gte": since, "format": "epoch_millis"}}}]}}}
+    request = urllib.request.Request("http://127.0.0.1:9200/_search?allow_partial_search_results=false", method="POST",
         data=json.dumps(query).encode(), headers={"Content-Type": "application/json"})
     # Loopback is fixed: neither caller configuration nor environment can select another server.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     with opener.open(request, timeout=15) as response:
-        return [item["_source"] for item in json.load(response).get("hits", {}).get("hits", [])]
+        return indexed_sources(json.load(response))
+
+
+def indexed_sources(result):
+    if (not isinstance(result, dict) or result.get("error") or result.get("timed_out")
+            or not isinstance(result.get("_shards"), dict) or result["_shards"].get("failed") != 0
+            or not isinstance(result.get("hits"), dict) or not isinstance(result["hits"].get("hits"), list)):
+        raise RuntimeError("Lab search returned an invalid or incomplete response")
+    if any(not isinstance(item, dict) or not isinstance(item.get("_source"), dict) for item in result["hits"]["hits"]):
+        raise RuntimeError("Lab search returned invalid source documents")
+    return [item["_source"] for item in result["hits"]["hits"]]
 
 
 def input_running(client, input_id):
     states = client.call("GET", "/system/inputstates")["states"]
     return any(item.get("id") == input_id and item.get("state") == "RUNNING" for item in states)
+
+
+def input_evidence(client, input_id, module_id, port, fixtures):
+    """Diagnose lab delivery without publishing a log or arbitrary field value."""
+    state = client.call("GET", "/system/inputstates/" + input_id)
+    saved = client.call("GET", "/system/inputs/" + input_id)
+    fields = saved.get("static_fields", {})
+    request = urllib.request.Request("http://127.0.0.1:9200/_search", method="POST",
+        data=json.dumps({"size": 100, "query": {"term": {"gl2_source_input": input_id}}}).encode(),
+        headers={"Content-Type": "application/json"})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open(request, timeout=15) as response:
+        messages = indexed_sources(json.load(response))
+    listening = subprocess.run(["ss", "-H", "-lun", "sport", "=", ":" + str(port)],
+                               capture_output=True, text=True, timeout=10)
+    allowed = {"RUNNING", "STARTING", "STOPPING", "STOPPED", "TERMINATED", "FAILED"}
+    return {"input_state": state.get("state") if state.get("state") in allowed else "unknown",
+            "udp_socket_present": listening.returncode == 0 and bool(listening.stdout.strip()),
+            "static_tag_saved": fields.get("omni_integration_id") == module_id,
+            "indexed_by_input": len(messages),
+            "tag_present": sum(item.get("omni_integration_id") == module_id for item in messages),
+            "exact_fixture_matches": sum(any(item.get("message") == fixture["message"] for item in messages) for fixture in fixtures),
+            "processing_errors": sum(bool(item.get("gl2_processing_error")) for item in messages)}
 
 
 def fixture_results(fixtures, messages, module_id, stream_id):
@@ -83,6 +118,85 @@ def fixture_results(fixtures, messages, module_id, stream_id):
                         "routed_to_module_stream": routed,
                         "mismatched_fields": sorted(key for key, value in expected.items() if best.get(key) != value)})
     return results
+
+
+def dashboard_result_evidence(job, view, module_id, fixtures):
+    """Retain flags/counts only, never a returned log, search error or field value."""
+    evidence = {"completed": False, "error_free": False, "search_type_results": 0,
+                "six_search_types": False, "volume_positive": False,
+                "fixtures_visible": False, "messages_scoped": False, "passed": False}
+    execution = job.get("execution", {})
+    evidence["completed"] = execution.get("done") is True
+    if (not evidence["completed"] or execution.get("cancelled") is not False
+            or execution.get("completed_exceptionally") is not False or job.get("errors")):
+        return evidence
+    results = job.get("results", {})
+    states = view.get("state", {})
+    if len(states) != 1 or set(results) != set(states):
+        return evidence
+    query_id, state = next(iter(states.items()))
+    result = results[query_id]
+    if result.get("state") != "COMPLETED" or result.get("errors"):
+        return evidence
+    evidence["error_free"] = True
+    types = result.get("search_types", {})
+    mapping = state.get("widget_mapping", {})
+    expected = {identifier for identifiers in mapping.values() for identifier in identifiers}
+    widget_types = {"aggregation": "pivot", "messages": "messages"}
+    expected_types = {identifier: widget_types[widget["type"]]
+                      for widget in state.get("widgets", []) if widget.get("type") in widget_types
+                      for identifier in mapping.get(widget["id"], [])}
+    evidence["search_type_results"] = len(types)
+    evidence["six_search_types"] = (len(mapping) == len(expected) == len(types) == 6
+                                     and expected == set(types) == set(expected_types)
+                                     and all(item.get("type") == expected_types[identifier] for identifier, item in types.items()))
+    if any(item.get("errors") for item in types.values()):
+        evidence["error_free"] = False
+    if not evidence["six_search_types"] or not evidence["error_free"]:
+        return evidence
+    volume_ids = mapping.get(stable_id(module_id, "widget-0"), [])
+    message_ids = mapping.get(stable_id(module_id, "widget-logs"), [])
+    if len(volume_ids) != 1 or len(message_ids) != 1:
+        return evidence
+    volume, messages = types[volume_ids[0]], types[message_ids[0]]
+    if volume.get("type") != "pivot" or messages.get("type") != "messages":
+        return evidence
+    counts = [value.get("value") for row in volume.get("rows", []) for value in row.get("values", [])
+              if value.get("key") == ["count()"]]
+    evidence["volume_positive"] = any(isinstance(count, (int, float)) and not isinstance(count, bool)
+                                      and count >= len(fixtures) > 0 for count in counts)
+    logs = [item.get("message", {}) for item in messages.get("messages", [])]
+    evidence["fixtures_visible"] = bool(fixtures) and all(
+        any(log.get("message") == fixture["message"] for log in logs) for fixture in fixtures)
+    evidence["messages_scoped"] = bool(logs) and all(log.get("omni_integration_id") == module_id for log in logs)
+    evidence["passed"] = all(evidence[key] for key in (
+        "completed", "error_free", "six_search_types", "volume_positive", "fixtures_visible", "messages_scoped"))
+    return evidence
+
+
+def execute_dashboard(client, view, module_id, fixtures):
+    """Execute the existing saved search in the guarded disposable VM only.
+
+    Graylog 7.2.2 SearchResource exposes POST {id}/execute and GET status/{jobId};
+    SearchJobDTO supplies execution and QueryResult supplies search_types/errors.
+    No saved query, view, source stream or parameter is rewritten for this proof.
+    """
+    search_id = view.get("search_id", "")
+    if not isinstance(search_id, str) or not re.fullmatch(r"[a-f0-9]{24}", search_id):
+        raise ValueError("the installed dashboard must reference its saved search")
+    job = client.call("POST", "/views/search/" + search_id + "/execute", {})
+    job_id = job.get("id", "")
+    # InMemorySearchJobService.create() uses new ObjectId().toHexString().
+    if not isinstance(job_id, str) or not re.fullmatch(r"[a-f0-9]{24}", job_id):
+        raise ValueError("the dashboard search returned an invalid job identifier")
+    for attempt in range(60):
+        job = client.call("GET", "/views/search/status/" + job_id)
+        if job.get("execution", {}).get("done") is True:
+            return dashboard_result_evidence(job, view, module_id, fixtures)
+        time.sleep(1)
+    evidence = dashboard_result_evidence(job, view, module_id, fixtures)
+    evidence["timed_out"] = True
+    return evidence
 
 
 def console_session(password):
@@ -166,7 +280,10 @@ def test_module(client, module, report):
     fixtures = json.loads((CATALOG / module["id"] / "fixtures.json").read_text())
     # Graylog timestamps have millisecond precision; do not exclude a datagram
     # received in the same millisecond as this Python microsecond timestamp.
-    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=2)).isoformat()
+    # Graylog's native mapping uses a space-separated millisecond date format.
+    # An explicit epoch format also works across index sets and cannot produce
+    # a silent shard parse failure from a Python ISO timestamp.
+    since = int((dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=2)).timestamp() * 1000)
     report["stage"] = "udp_fixtures"
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
         for fixture in fixtures:
@@ -179,9 +296,12 @@ def test_module(client, module, report):
             break
         time.sleep(2)
     report["fixtures_received"] = sum(item["received"] for item in report["fixtures"])
+    report["delivery_evidence"] = input_evidence(client, input_id, module["id"], module["default_port"], fixtures)
+    report["stage"] = "dashboard_search"
+    report["dashboard_search"] = execute_dashboard(client, view, module["id"], fixtures)
     report["passed"] = all(report.get(key) is True for key in (
         "installed", "stream_running", "pipeline_connected", "dashboard_scoped", "input_running")) and all(
-        item["received"] and item["normalized"] and item["routed_to_module_stream"] for item in report["fixtures"])
+        item["received"] and item["normalized"] and item["routed_to_module_stream"] for item in report["fixtures"]) and report["dashboard_search"]["passed"]
     report["stage"] = "complete"
 
 

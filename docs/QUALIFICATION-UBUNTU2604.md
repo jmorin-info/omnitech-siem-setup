@@ -4,6 +4,27 @@ Ubuntu 26.04 demande `--experimental-ubuntu-2604`. Cette option conserve les
 versions épinglées et les contrôles réels ; elle ne constitue pas un engagement
 de support des éditeurs. Voir [le parcours opérateur](UBUNTU-DEMARRAGE.md).
 
+## Résultat constaté le 21 novembre 2026
+
+La [recette 44908196520](https://github.com/jmorin-info/omnitech-siem-setup/actions/runs/44908196520)
+a réussi sur le commit `e02fb9ca6b08a0ecd83440a6d8cc9ff9bb4c14d4`.
+Son artefact `ubuntu-2604-acceptance` contient la preuve expurgée des secrets.
+
+| Contrôle | Résultat |
+|---|---|
+| Environnement | Ubuntu 26.04 amd64, 16 Gio, deux vCPU, Python 3.14.4 |
+| Noyau | `7.0.0-43-generic`, signature amont Ubuntu `7.0.14` |
+| Socle | 16 phases terminées, 25 contrôles de réception positifs, 52 règles de base et 41 définitions OMNI |
+| Modules révision 2 | WatchGuard, UniFi et Palo Alto installés, entrées RUNNING, streams actifs et pipelines connectés |
+| Collecte synthétique | 10/10 messages reçus, normalisés et routés, aucun champ d'erreur de traitement constaté |
+| Dashboards | 6/6 recherches exécutées pour chacun des trois modules, compteurs et journaux présents, périmètre du module respecté |
+| Console | Connexion et déconnexion HTTPS avec une vraie session réussies |
+| Sauvegarde | Job réussi, archives MongoDB et configuration vérifiées, snapshot OpenSearch `SUCCESS` |
+
+Cette preuve est rattachée à ce commit et à cette image. Les exécutions suivantes
+du workflow qualifient leurs propres révisions ; consulter leur résultat avant
+de conclure à la validation d'une autre version.
+
 ## Recette reproductible sur une VM isolée
 
 Le workflow [Ubuntu 26.04 fresh VM](https://github.com/jmorin-info/omnitech-siem-setup/actions/workflows/ubuntu-vm.yml)
@@ -26,6 +47,9 @@ exécute [tools/test-ubuntu-vm.sh](../tools/test-ubuntu-vm.sh) :
 7. Installation native des trois packs WatchGuard/UniFi/Palo Alto, vérification
    de leurs entités et six widgets par dashboard, envoi des dix fixtures UDP,
    contrôle des champs réellement indexés et de leur routage vers les streams.
+   Après injection des fixtures d'un module, exécution de sa recherche sauvegardée
+   par l'API Graylog : job terminé sans erreur, six résultats correspondant aux
+   widgets, compteur de volume positif et présence des journaux injectés du module.
 8. Exécution du job de sauvegarde installé : archive MongoDB et tar de
    configuration valides, présence des secrets du site et de la configuration
    console dans l'archive privée, snapshot OpenSearch terminé en `SUCCESS`.
@@ -53,6 +77,15 @@ ancien `ubuntu-vm-report.json`. Archiver le rapport précédent ou choisir un
 nouveau chemin avec `OMNI_VM_REPORT=/chemin/rapport-neuf.json`.
 `tools/test-integration-vm.py` écrit des données et exige l'identité et le marqueur
 du laboratoire ; ce n'est pas un diagnostic à exécuter sur un SIEM existant.
+
+La recette des dashboards utilise les routes natives Graylog 7.2.2 :
+[`SearchResource`](https://github.com/Graylog2/graylog2-server/blob/7.2.2/graylog2-server/src/main/java/org/graylog/plugins/views/search/rest/SearchResource.java)
+pour exécuter la recherche sauvegardée et attendre son statut,
+[`SearchJobDTO`](https://github.com/Graylog2/graylog2-server/blob/7.2.2/graylog2-server/src/main/java/org/graylog/plugins/views/search/rest/SearchJobDTO.java)
+et [`QueryResult`](https://github.com/Graylog2/graylog2-server/blob/7.2.2/graylog2-server/src/main/java/org/graylog/plugins/views/search/QueryResult.java)
+pour vérifier l'achèvement et les erreurs. Elle ne réécrit ni recherche ni dashboard.
+Le rapport conserve uniquement des indicateurs et des nombres, sans corps des
+messages ni détails des erreurs de recherche. Un job incomplet ou expiré échoue.
 
 ## Corrections contrôlées
 
@@ -94,3 +127,19 @@ demandent leur configuration et leur propre recette.
 Les modifications publiées sur GitHub ne sont pas automatiquement appliquées
 aux services d'une production existante. Suivre [UPDATES.md](UPDATES.md), examiner
 les modifications locales et publier chaque composant concerné explicitement.
+
+## Recette navigateur de la console
+
+Depuis un environnement de test disposant de Python et Playwright :
+
+```bash
+python -m pip install playwright
+python -m playwright install chromium
+python tests/browser/console_smoke.py --screenshots /tmp/omni-console-captures
+```
+
+Cette recette intercepte toutes les requêtes et utilise uniquement des fixtures.
+Elle ne joint aucun SIEM. Elle vérifie six combinaisons de largeur et thème,
+la navigation, la recherche dans les journaux, les sources, le clavier, les
+libellés FR/EN, une panne 503, la récupération et les données en cache.
+Les captures ne constituent pas une preuve de collecte en production.

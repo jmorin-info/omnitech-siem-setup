@@ -113,6 +113,12 @@ services:
       - MOBILE_SECRET=${MOBILE_SECRET:?definir dans .env (secret HMAC de session console)}
       - MOBILE_PUSH_SECRET=${MOBILE_PUSH_SECRET:-}
       - MOBILE_REDACT=${MOBILE_REDACT:-0}
+      - SIEM_FQDN=${SERVER_NAME:-omni-siem.local}
+      - SIEM_IP=${SIEM_IP:-}
+      - SOC_ORIGINS=${SERVER_NAME:-omni-siem.local}
+      - SOC_LOG_INDICES=${SOC_LOG_INDICES:-omni-*,graylog_*}
+      - SOC_EXPECTED_SOURCES=${SOC_EXPECTED_SOURCES:-}
+      - SOC_ADMINS=${SOC_ADMINS:-}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:soc@omnitech-security.fr}
     volumes:

@@ -46,6 +46,76 @@ service ; une mise à jour du dépôt ne met pas nécessairement à jour son `Ex
 Les endpoints de SOAR, graphe ou supervision qui dépendent d'autres services peuvent
 rester indisponibles tant que ces extensions ne sont pas configurées.
 
+### Identité du site et journaux affichés
+
+Sur une installation native, le backend lit `/etc/default/omni-mobile`. Les nouvelles
+installations y inscrivent les valeurs du site ; une configuration existante est
+conservée. Pour l'adapter, modifier les seules variables nécessaires, puis lancer
+`sudo systemctl restart omni-mobile-api` :
+
+```ini
+SIEM_FQDN=siem.example.interne
+SIEM_IP=192.0.2.10
+SOC_ORIGINS=siem.example.interne,192.0.2.10
+SOC_LOG_INDICES=omni-*,graylog_*
+SOC_ADMINS=analyste-responsable
+```
+
+Remplacer le nom et l'adresse d'exemple. `SIEM_FQDN` et `SIEM_IP` alimentent la page
+Déploiement ; aucun nom ni adresse du site de référence ne sert de valeur de repli.
+`SOC_ORIGINS` contient les noms ou IP autorisés pour les actions provenant du
+navigateur, sans schéma ni chemin. À défaut, le backend utilise l'identité du site
+et le nom de son API Graylog. L'authentification reste assurée par Graylog.
+
+`SOC_ADMINS` énumère les identifiants Graylog autorisés aux demandes SOAR et aux
+notifications push, séparés par des virgules. Une liste vide n’accorde ces droits
+à personne. Conserver les comptes autorisés existants lors d’une mise à jour.
+Les lectures de la console utilisent le périmètre OpenSearch du backend : elles
+ne reproduisent pas les restrictions par stream de chaque compte Graylog.
+Réserver donc l’accès à la console aux opérateurs habilités à voir ces journaux.
+
+`SOC_LOG_INDICES` délimite les indices des journaux utilisés par la recherche et
+les vues globales. Sa valeur par défaut inclut `graylog_*`, utilisé par les modules
+natifs WatchGuard, UniFi et Palo Alto, en plus des sources `omni-*`. Ajouter les
+préfixes propres au site si ses index sets utilisent d'autres noms, par exemple
+`omni-*,graylog_*,client-*`. Les motifs doivent comporter un préfixe explicite avec
+un tiret ou un soulignement ; `*`, `_all`, les préfixes système et les chemins sont
+refusés. Les requêtes dédiées aux événements Graylog ou à une source particulière
+gardent leur périmètre propre.
+
+En Docker, renseigner `SIEM_IP` et `SOC_LOG_INDICES` dans `docker/.env` ;
+`SERVER_NAME` fournit le FQDN et l'origine autorisée. Puis recréer le service :
+`docker compose up -d console`. Une erreur OpenSearch renvoie un état indisponible
+(`502` ou `503`) ; elle ne doit pas être interprétée comme l'absence de journaux
+ou une situation nominale.
+
+### Choisir les sources dont la collecte doit être surveillée
+
+`SOC_EXPECTED_SOURCES` définit les seules sources attendues par le site, avec leur
+délai maximal sans journal en minutes. Par exemple :
+
+```ini
+SOC_EXPECTED_SOURCES=watchguard:120,unifi:240,paloalto:120
+```
+
+N'ajouter que les sources effectivement prévues. Les noms correspondent au champ
+`event_source` des journaux ; utiliser des minuscules, chiffres, tirets ou
+soulignements, en commençant par une lettre. Chaque source apparaît une seule fois,
+avec un seuil entier compris entre `1` et `43200` minutes. Une configuration
+invalide empêche le démarrage du backend, sans afficher les valeurs saisies.
+
+Une valeur explicitement vide (`SOC_EXPECTED_SOURCES=`) ne déclare aucune source
+attendue : les journaux reçus restent visibles, sans inventer de collecteurs
+manquants. Les nouvelles installations natives et Docker écrivent cette valeur
+vide. Pour préserver les installations historiques, l'absence complète de cette
+variable conserve la liste des onze sources historiques et leurs seuils.
+
+En natif, renseigner cette variable dans `00-vars.env` avant une nouvelle
+installation ; sur un serveur déjà installé, adapter `/etc/default/omni-mobile`
+puis redémarrer `omni-mobile-api`. En Docker, la définir dans `docker/.env` puis
+recréer le service `console`. Ces réglages suivent les arrivées de journaux ; ils
+ne créent ni input, ni règle de pare-feu, ni configuration sur l'équipement.
+
 ## Distinguer les erreurs
 
 | Symptôme | Vérifications et action |

@@ -113,9 +113,10 @@ echo "==> [4/4] Ordre des processeurs (GeoIP en DERNIER, apres les pipelines)"
 CURRENT_ORDER="$(api_get "/system/messageprocessors/config")"
 NEW_ORDER="$(echo "${CURRENT_ORDER}" | jq '
   .processor_order as $o
+  | (.disabled_processors // []) as $disabled
   | ($o | map(select(.name=="GeoIP Resolver"))) as $geo
   | ($o | map(select(.name!="GeoIP Resolver"))) + $geo
-  | {processor_order: ., disabled_processors: []}')"
+  | {processor_order: ., disabled_processors: $disabled}')"
 if [[ "$(echo "${CURRENT_ORDER}" | jq -c '.processor_order')" == "$(echo "${NEW_ORDER}" | jq -c '.processor_order')" ]]; then
   skip "ordre deja correct"
 else

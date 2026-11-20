@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "unifi",
   "name": "Ubiquiti UniFi Network",
-  "revision": 1,
+  "revision": 2,
   "status": "preview",
   "default_port": 1522,
   "supported_format": "UniFi Network CEF SIEM export with Ubiquiti vendor and UniFi Network product; legacy device syslog is retained as unparsed",

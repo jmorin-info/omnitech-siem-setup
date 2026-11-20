@@ -94,6 +94,40 @@ fichiers est aussi signalée. Une montée de version des bases exige ses sauvega
 son ordre de migration et son test de restauration ; le retour arrière du code ne
 permet pas de rétrograder une base déjà migrée.
 
+## Garder GitHub et les fichiers réellement servis cohérents
+
+Le dépôt est la référence du code partagé. Les secrets, certificats, adresses,
+ACL et données de chaque site restent locaux. Il n’existe pas de synchronisation
+automatique bidirectionnelle : avant publication, comparer les adaptations du
+serveur, intégrer les correctifs réutilisables au dépôt puis déployer la révision
+testée. Une personnalisation du site n’a pas à être publiée sur GitHub.
+
+Pour la console, comparer trois emplacements : les sources `mobile/soc/` du dépôt,
+les fichiers publics sous `/var/www/siem-soc/`, et le backend réellement lancé.
+Les deux premiers peuvent différer même lorsque Git ne signale aucun changement.
+
+```bash
+git status --short
+git log -1 --oneline
+systemctl show omni-mobile-api -p ExecStart --no-pager
+sha256sum mobile/omni-mobile-api.py
+sha256sum mobile/soc/index.html /var/www/siem-soc/index.html
+sha256sum mobile/soc/app.js /var/www/siem-soc/app.js
+```
+
+Comparer aussi l’empreinte du fichier Python indiqué dans `ExecStart`. Un ancien
+service peut encore lancer une autre copie du projet. Ne pas remplacer son unité,
+son environnement ou ses adaptations sans examiner ces différences.
+
+Avant publication, conserver une sauvegarde privée du backend, des assets publics
+et de `/etc/default/omni-mobile`. Après publication, vérifier les empreintes des
+fichiers servis, la connexion, la recherche et les tableaux de bord. Tester aussi
+le rechargement proposé par la PWA : un navigateur ouvert peut encore utiliser
+l’ancienne version. Consigner le commit publié et les résultats de ces contrôles.
+
+Les changements du socle, packs Graylog et services optionnels ont leurs étapes
+d’activation propres ; publier la console ne les migre pas.
+
 ## Retour arrière et interruption
 
 ```bash

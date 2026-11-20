@@ -5,6 +5,6 @@ set -euo pipefail
 cd "$(dirname "$0")"
 if [[ -f ./00-vars.env ]]; then
   source ./00-vars.env
-  export SIEM_FQDN
+  export SIEM_FQDN SIEM_IP GRAYLOG_API_CA SOC_ORIGINS SOC_LOG_INDICES SOC_ADMINS SOC_EXPECTED_SOURCES
 fi
 exec bash ./tools/install-console.sh --apply

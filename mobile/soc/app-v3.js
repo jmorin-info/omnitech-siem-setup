@@ -3,7 +3,7 @@
    filtres des incidents, pastilles, états de chargement et d'erreur, état réel du SIEM dans l'en-tête. */
 (function(){
 "use strict";
-var V3="v3 · 12/11/2026";
+var V3="v5 · 20/11/2026";
 try{SOC_BUILD="v3 · build 2026-11-12";}catch(e){}
 var q1=function(s){return document.querySelector(s);};
 var EN=function(){try{return LANG==="en";}catch(e){return false;}};
@@ -43,17 +43,35 @@ function purgeData(){
   try{if(window.caches)caches.delete("soc-data-v1");}catch(e){}
   try{var c=navigator.serviceWorker&&navigator.serviceWorker.controller;if(c)c.postMessage({type:"purge-data"});}catch(e){}}
 var _fetch=window.fetch;
+var API_SEQUENCE=0,API_REQUESTS=Object.create(null);
 window.fetch=function(input){
   var url=typeof input==="string"?input:((input&&input.url)||"");
+  var method=String((arguments[1]&&arguments[1].method)||(input&&input.method)||"GET").toUpperCase();
+  var observed=null,requestId=0;
+  try{var target=new URL(url,location.href);
+    if(method==="GET"&&appOn()&&target.origin===location.origin&&target.pathname.indexOf("/m/api/")===0){
+      var path=target.pathname.slice(6);
+      if(!/^\/(?:login|logout|me|vapid|stream|subscriptions)$/.test(path)){
+        observed=path;requestId=++API_SEQUENCE;API_REQUESTS[path]=requestId;
+      }
+    }
+  }catch(e){}
+  function report(ok,cachedAt){
+    if(!observed||API_REQUESTS[observed]!==requestId)return;
+    document.dispatchEvent(new CustomEvent("soc:api-state",{detail:{path:observed,ok:ok,cachedAt:cachedAt||0}}));
+  }
   var p=_fetch.apply(window,arguments);
   if(url.indexOf("/m/api/")<0)return p;
   return p.then(function(r){
     var c=r.headers.get("X-SOC-Cache");
-    if(c)setOffline(+c);else setOnline();
+    var cachedAt=Number(c)||0;
+    if(!r.ok)report(false,0);
+    else if(observed)r.clone().json().then(function(body){report(!(body&&body.error)&&!(body&&body.available===false),cachedAt);},function(){report(false,0);});
+    if(c)setOffline(+c);else if(r.status>=500)setOffline(0);else if(r.ok)setOnline();
     if(r.status===401&&url.indexOf("/m/api/login")<0)purgeData();
     if(r.ok&&/\/m\/api\/siem-ops(\?|$)/.test(url))r.clone().json().then(updCluster).catch(function(){});
     return r;
-  },function(e){setOffline(0);throw e;});
+  },function(e){report(false,0);setOffline(0);throw e;});
 };
 if(typeof logout==="function"){var _lo=logout;window.logout=function(){purgeData();try{if(navigator.clearAppBadge)navigator.clearAppBadge();}catch(e){}return _lo.apply(this,arguments);};}
 
@@ -122,7 +140,7 @@ function caseTitle(x){var r=String(x.rule||"");
 /* ---------- en-tête compact (mobile) ---------- */
 var MQ=window.matchMedia?matchMedia("(max-width:820px)"):null;
 if(typeof tickUpd==="function"){var _tu=tickUpd;window.tickUpd=function(){var r=_tu.apply(this,arguments);
-  try{if(MQ&&MQ.matches&&!RELOADING){var el=q1("#updPill .updtxt");if(el)el.textContent=fmtAgoShort(UPD_AT);}}catch(e){}return r;};}
+  try{if(MQ&&MQ.matches&&!RELOADING&&!LAST_REFRESH_FAILED){var el=q1("#updPill .updtxt");if(el)el.textContent=fmtAgoShort(UPD_AT);}}catch(e){}return r;};}
 (function(){var b=document.querySelector('header button[data-onclick="openPal()"]');if(b){b.id="palBtn";b.innerHTML=ic("search")+'<span class="kk">⌘K</span>';}})();
 
 /* ---------- incidents : filtres ---------- */

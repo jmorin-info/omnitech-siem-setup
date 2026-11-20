@@ -8,14 +8,15 @@
  * - Mise à jour : la nouvelle version attend ; la page propose « Recharger » (message skip-waiting).
  */
 "use strict";
-const VERSION = "soc-v4-202611122130";
+const VERSION = "soc-v5-2026112001";
 const SHELL_CACHE = "soc-shell-" + VERSION;
 const DATA_CACHE = "soc-data-v1";
 const CFG_CACHE = "soc-cfg";
 const DATA_MAX_AGE_MS = 24 * 3600 * 1000;
 const SHELL = [
   "/soc/", "/soc/manifest.webmanifest", "/soc/chart.min.js",
-  "/soc/app-boot.js?v=202611122130", "/soc/app-csp.js?v=202611122130", "/soc/app-loader.js?v=202611122130", "/soc/app.js?v=202611122130", "/soc/app-soar.js?v=202611122130", "/soc/app-v3.js?v=202611122130", "/soc/app-handlers.js?v=202611122130",
+  "/soc/app-boot.js?v=2026112001", "/soc/app-csp.js?v=2026112001", "/soc/app-loader.js?v=2026112001", "/soc/app.js?v=2026112001", "/soc/app-soar.js?v=2026112001", "/soc/app-v3.js?v=2026112001", "/soc/app-handlers.js?v=2026112001",
+  "/soc/app-professional.css?v=2026112001", "/soc/app-professional.js?v=2026112001",
   "/soc/icons/icon-192.png", "/soc/icons/icon-512.png", "/soc/icons/maskable-192.png",
   "/soc/icons/badge-96.png", "/soc/icons/favicon-32.png", "/soc/icons/apple-touch-180.png"
 ];
@@ -102,7 +103,7 @@ self.addEventListener("fetch", (e) => {
   // fichiers statiques de /soc/ : cache d'abord, puis réseau (et mise en cache)
   e.respondWith((async () => {
     const c = await caches.open(SHELL_CACHE);
-    const hit = await c.match(req, { ignoreSearch: !/^\/soc\/app[\w-]*\.js$/.test(u.pathname) });
+    const hit = await c.match(req, { ignoreSearch: !/^\/soc\/app[\w-]*\.(?:js|css)$/.test(u.pathname) });
     if (hit) return hit;
     const r = await fetch(req);
     if (r && r.ok && r.type === "basic" && !/\.(html)$/.test(u.pathname)) c.put(req, r.clone());

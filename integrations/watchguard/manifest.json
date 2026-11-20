@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "watchguard",
   "name": "WatchGuard Firebox",
-  "revision": 1,
+  "revision": 2,
   "status": "preview",
   "default_port": 1521,
   "supported_format": "Fireware traffic messages: syslog firewall msg_id form or Traffic Monitor form; IPv4 TCP/UDP only",

@@ -5,6 +5,7 @@ import ipaddress
 import json
 import re
 import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -115,6 +116,10 @@ def plan_install(client, module, params):
         raise ValueError("Stream Rule Processor must be enabled before Pipeline Processor")
     if names.index("Stream Rule Processor") > names.index("Pipeline Processor"):
         raise ValueError("Stream routing must run before Pipeline Processor; configuration will not be changed automatically")
+    filters = [entry for entry in order.get("processor_order", []) if entry.get("name") == "Message Filter Chain"]
+    if (not filters or filters[0].get("class_name") in disabled or "Message Filter Chain" in disabled
+            or names.index("Message Filter Chain") > names.index("Stream Rule Processor")):
+        raise ValueError("Message Filter Chain must be enabled before stream routing to attach input static fields; configuration will not be changed automatically")
     inputs = client.call("GET", "/system/inputs")["inputs"]
     for source in inputs:
         if source.get("title") == "OMNI integration - " + module["name"] + " UDP":
@@ -138,6 +143,53 @@ def plan_install(client, module, params):
             "network": "dedicated raw UDP input; firewall and Docker port publication are managed separately"}
 
 
+def _start_new_input(client, input_id):
+    """Serialize native creation/reload cleanup before starting the new input once.
+
+    Graylog starts inputs asynchronously and static fields emit InputUpdated.
+    Stopping an input removes it from InputRegistry after transport/metric cleanup;
+    require that absence to settle before a single explicit start. This helper is
+    called only for a newly created, owned input, never for an existing install.
+    """
+    path = "/system/inputstates/" + input_id
+    def state():
+        try:
+            response = client.call("GET", path)
+            if not isinstance(response, dict) or response.get("id") != input_id:
+                raise ValueError("Unexpected native input state response")
+            return response.get("state")
+        except ApiError as exc:
+            if exc.status != 404:
+                raise
+            return "NOT_FOUND"
+
+    # DELETE here stops the runtime; it does not delete the persisted input.
+    # Even an early RUNNING state can belong to a native launch still racing
+    # with static-field reloads. Do not start over a live or half-stopped input.
+    client.call("DELETE", path)
+    absent = 0
+    for _ in range(60):
+        absent = absent + 1 if state() == "NOT_FOUND" else 0
+        if absent >= 6:
+            break
+        time.sleep(1)
+    else:
+        raise RuntimeError("New module input did not stop cleanly; inspect System > Inputs before retrying")
+
+    client.call("PUT", path)
+    previous, stable = None, 0
+    for _ in range(60):
+        current = state()
+        stable = stable + 1 if current == previous else 1
+        previous = current
+        if current == "RUNNING" and stable >= 6:
+            return
+        if current in ("FAILED", "STOPPED", "TERMINATED", "NOT_FOUND") and stable >= 3:
+            raise RuntimeError("New module input failed to start; inspect System > Inputs before retrying")
+        time.sleep(1)
+    raise RuntimeError("New module input did not become RUNNING; inspect System > Inputs before retrying")
+
+
 def install(client, module, params, *, apply=False):
     plan = plan_install(client, module, params)
     if not apply or plan["action"] == "already-installed":
@@ -151,12 +203,16 @@ def install(client, module, params, *, apply=False):
         "share_request": {"selected_grantee_capabilities": {}}})
     # Graylog 7.2 StreamFacade creates streams paused regardless of disabled=false.
     # Activate only the newly installed, owned stream; an existing paused stream is preserved.
-    owned = [entity for entity in installation.get("entities", [])
-             if entity.get("content_pack_entity_id") == stable_id(module["id"], "stream")
-             and entity.get("type", {}).get("name") == "stream" and entity.get("found_on_system") is False]
-    if len(owned) != 1 or not re.fullmatch(r"[a-f0-9]{24}", owned[0].get("id", "")):
-        raise RuntimeError("Pack installed but owned stream could not be identified; inspect Content Packs before retrying")
-    client.call("POST", "/streams/" + owned[0]["id"] + "/resume")
+    owned = {}
+    for kind in ("stream", "input"):
+        entities = [entity for entity in installation.get("entities", [])
+                    if entity.get("content_pack_entity_id") == stable_id(module["id"], kind)
+                    and entity.get("type", {}).get("name") == kind and entity.get("found_on_system") is False]
+        if len(entities) != 1 or not re.fullmatch(r"[a-f0-9]{24}", entities[0].get("id", "")):
+            raise RuntimeError("Pack installed but owned " + kind + " could not be identified; inspect Content Packs before retrying")
+        owned[kind] = entities[0]["id"]
+    client.call("POST", "/streams/" + owned["stream"] + "/resume")
+    _start_new_input(client, owned["input"])
     plan["action"], plan["installation_id"] = "installed", installation.get("_id")
     return plan
 

@@ -7,7 +7,7 @@ de façon reproductible, sans identifiants d'une installation existante.
 ```bash
 python3 tools/omni-integrations.py list
 python3 tools/omni-integrations.py validate
-python3 tools/omni-integrations.py export unifi --output /tmp/unifi-r1.json
+python3 tools/omni-integrations.py export unifi --output /tmp/unifi-r2.json
 ```
 
 Les trois modules sont en préversion : leurs contrats de format sont testés hors
