@@ -64,7 +64,9 @@ def mongo_auth(password, user, database):
 
 
 def pipeline_titles(source):
-    return set(re.findall(r'^\s*ensure_rule\s+["\']([^"\']+)["\']', source, re.M))
+    # A referenced rule may come from an optional historical script. Requiring
+    # only ensure_rule declarations would accept an unresolved base pipeline.
+    return set(re.findall(r'^\s*(?:ensure_rule|rule)\s+["\']([^"\']+)["\']', source, re.M))
 
 
 def evaluate(config, versions, *, fetch=request, service_active=active, database_auth=mongo_auth,

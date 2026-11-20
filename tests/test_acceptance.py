@@ -65,6 +65,21 @@ def test_acceptance_requires_services_versions_auth_inputs_rules_dashboard_and_h
     assert "dummy-" not in json.dumps(checks)
 
 
+def test_acceptance_rejects_an_undeclared_rule_referenced_by_a_pipeline(installed):
+    config, versions, _, kwargs = installed
+    path = kwargs["source_root"] / "12-graylog-pipelines.sh"
+    path.write_text(path.read_text() + '\npipeline "fixture"\nstage 5 match either\nrule "missing-from-optional-lot"\nend\n')
+    checks = verify.evaluate(config, versions, **kwargs)
+    assert next(item for item in checks if item["name"] == "graylog:pipeline-rules")["passed"] is False
+
+
+def test_base_pipeline_rules_do_not_require_an_optional_installation_lot():
+    import re
+    source = (ROOT / "12-graylog-pipelines.sh").read_text()
+    declared = set(re.findall(r'^ensure_rule "([^"]+)"', source, re.M))
+    assert verify.pipeline_titles(source) == declared
+
+
 @pytest.mark.parametrize("missing", ["input", "rule", "dashboard", "detections", "service", "mongo", "connection", "asset"])
 def test_partial_installation_fails_acceptance(installed, missing):
     config, versions, responses, kwargs = installed

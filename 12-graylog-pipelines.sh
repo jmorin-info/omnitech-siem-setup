@@ -693,6 +693,18 @@ then
 end
 EOF
 
+# Cette regle du pipeline de base ne depend pas du lot optionnel 49.
+# La table correspondante est creee par 11-graylog-enrichment.sh.
+ensure_rule "omni-forti-05-severity" <<'EOF'
+rule "omni-forti-05-severity"
+when
+  to_string($message.event_source) == "fortigate"
+  AND has_field("level")
+then
+  set_field("forti_severity_num", to_long(lookup_value("omni-forti-severity", to_string($message.level)), 0));
+end
+EOF
+
 # user="N/A" (logs traffic) ou user=<une IP> : valeurs parasites du FAZ qui
 # polluent les tableaux "comptes vises" et les agregations par utilisateur.
 # Le champ syslog "source" valait "logver=..." (1er token non-RFC) pour ~8M
