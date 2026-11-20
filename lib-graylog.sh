@@ -119,18 +119,62 @@ ensure_pipeline() {
 # post_entity <path> : POST direct ; si l'API exige l'enveloppe CreateEntityRequest
 # ("entity cannot be null"), retente enveloppe. Echo la reponse brute.
 post_entity() {
-  local BODY RES; BODY="$(cat)"
-  RES="$(echo "${BODY}" | api_post "$1")"
-  if echo "${RES}" | grep -q "entity cannot be null"; then
-    RES="$(echo "${BODY}" | wrap_entity | api_post "$1")"
+  local BODY RES STATUS RC ARG
+  local -a ENTITY_CURL=()
+  BODY="$(cat)"
+  # --fail discards the validation body needed for Graylog 7's envelope fallback.
+  # Keep failure detection while capturing the HTTP status and validation body.
+  for ARG in "${CURL[@]}"; do
+    [[ "$ARG" == --fail ]] || ENTITY_CURL+=("$ARG")
+  done
+  if RES="$(printf '%s' "$BODY" | "${ENTITY_CURL[@]}" \
+      --write-out '\n%{http_code}' -X POST "${API}$1" -d @-)"; then
+    RC=0
+  else
+    RC=$?
   fi
-  echo "${RES}"
+  STATUS="${RES##*$'\n'}"
+  RES="${RES%$'\n'*}"
+  if [[ "$RC" -eq 0 && "$STATUS" == 2?? ]]; then
+    printf '%s\n' "$RES"
+  elif [[ "$RC" -eq 0 && "$STATUS" == 400 ]] && [[ "$RES" == *"entity cannot be null"* ]]; then
+    printf '%s' "$BODY" | wrap_entity | api_post "$1"
+  else
+    # Do not print rejected request bodies, which can contain credentials.
+    printf 'Graylog POST failed (HTTP %s).\n' "$STATUS" >&2
+    return "$((RC == 0 ? 22 : RC))"
+  fi
+}
+
+# A stream with no pipeline connection returns404 on a fresh Graylog instance.
+# Only that absence is optional; authentication and server errors remain fatal.
+pipeline_connections() {
+  local RES STATUS RC ARG
+  local -a GET_CURL=()
+  for ARG in "${CURL[@]}"; do
+    [[ "$ARG" == --fail ]] || GET_CURL+=("$ARG")
+  done
+  if RES="$("${GET_CURL[@]}" --write-out '\n%{http_code}' "${API}/system/pipelines/connections/$1")"; then
+    RC=0
+  else
+    RC=$?
+  fi
+  STATUS="${RES##*$'\n'}"
+  RES="${RES%$'\n'*}"
+  if [[ "$RC" -eq 0 && "$STATUS" == 2?? ]]; then
+    printf '%s\n' "$RES"
+  elif [[ "$RC" -eq 0 && "$STATUS" == 404 ]]; then
+    printf '{"pipeline_ids":[]}\n'
+  else
+    printf 'Graylog pipeline connection lookup failed (HTTP %s).\n' "$STATUS" >&2
+    return "$((RC == 0 ? 22 : RC))"
+  fi
 }
 
 # connect_pipeline <stream_id> <pipeline_id> : ajoute sans ecraser les existants
 connect_pipeline() {
   local SID="$1" PID="$2" CURRENT
-  CURRENT="$(api_get "/system/pipelines/connections/${SID}" | jq -r '.pipeline_ids // [] | .[]' 2>/dev/null)"
+  CURRENT="$(pipeline_connections "${SID}" | jq -r '.pipeline_ids // [] | .[]' 2>/dev/null)"
   if echo "${CURRENT}" | grep -q "^${PID}$"; then skip "pipeline deja connecte au stream ${SID}"; return; fi
   jq -n --arg s "${SID}" --argjson p "$(printf '%s\n' ${CURRENT} ${PID} | grep -v '^$' | jq -R . | jq -s 'unique')" \
      '{stream_id:$s, pipeline_ids:$p}' \

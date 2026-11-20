@@ -42,6 +42,7 @@ ensure_lookup "logon-type"           "OMNI LogonType -> libelle"            "log
 ensure_lookup "logon-failure"        "OMNI SubStatus 4625/4776 -> raison"   "win-logon-failure.csv"  "code"        "reason"
 ensure_lookup "kerb-failure"         "OMNI Code echec Kerberos -> raison"   "kerb-failure-codes.csv" "code"        "reason"
 ensure_lookup "priv-group-rid"       "OMNI RID groupe privilegie -> nom"    "priv-group-rids.csv"    "rid"         "group_label"
+ensure_lookup "forti-severity"       "OMNI niveau FortiGate -> severite numerique" "forti-severity.csv" "level" "num"
 
 # ------------------------------------------------------------------- 2. GeoIP
 echo "==> [2/4] GeoIP (DB-IP Lite, format mmdb)"

@@ -25,6 +25,10 @@ def test_fixtures_and_native_dependency_contract(module):
     entities = pack["entities"]
     kinds = {e["type"]["name"] for e in entities}
     assert kinds == {"input", "stream", "pipeline", "pipeline_rule", "dashboard"}
+    input_data = next(e["data"] for e in entities if e["type"]["name"] == "input")
+    # InputFacade.addStaticFields resolves values using ValueReference.asString.
+    assert all(item["@type"] == "string" and isinstance(item["@value"], str)
+               for item in input_data["static_fields"].values())
     stream_id = stable_id(module["id"], "stream")
     pipeline = next(e["data"] for e in entities if e["type"]["name"] == "pipeline")
     assert pipeline["connected_streams"] == [{"@type": "string", "@value": stream_id}]
@@ -37,10 +41,19 @@ def test_fixtures_and_native_dependency_contract(module):
     assert "csv_to_map(to_string" not in generated_source
     view = next(e for e in entities if e["type"]["name"] == "dashboard")
     assert view["type"]["version"] == "2"
+    # Content Pack MessageListEntity has no fields property; columns belong to
+    # the message-list widget config, unlike a native saved-search request.
+    for query in view["data"]["search"]["queries"]:
+        for search_type in query["search_types"]:
+            if search_type["type"] == "messages":
+                assert "fields" not in search_type
     query_ids = {q["id"] for q in view["data"]["search"]["queries"]}
     assert set(view["data"]["state"]) == query_ids
     for state in view["data"]["state"].values():
         assert len(state["widgets"]) == 6
+        # Graylog 7.2 WidgetEntity uses the outer type as its WidgetConfigDTO
+        # discriminator: native names are lowercase, unlike UI class constants.
+        assert [w["type"] for w in state["widgets"]] == ["aggregation"] * 5 + ["messages"]
         assert {w["id"] for w in state["widgets"]} == set(state["positions"])
         assert all(w["streams"] == [stream_id] for w in state["widgets"])
     encoded = json.dumps(pack)

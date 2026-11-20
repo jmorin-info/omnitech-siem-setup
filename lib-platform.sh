@@ -20,12 +20,28 @@ omni_platform() {
 }
 
 omni_mongodb_kernel_check() {
-  local release="${1:-$(uname -r)}" major minor patch
-  if [[ "$release" =~ ^([0-9]+)\.([0-9]+)(\.([0-9]+))? ]]; then
+  local release="${1:-$(uname -r)}" kernel_version="${2-$(uname -v)}"
+  local signature="${3-}" effective major minor patch signature_build
+  effective="$release"
+  # MongoDB 8.0.37+ reads Ubuntu's upstream patch level (SERVER-131779).
+  if [[ "$release" == 7.0.* && "$kernel_version" == *Ubuntu* ]]; then
+    if (( $# < 3 )) && [[ -r /proc/version_signature ]]; then
+      IFS= read -r signature < /proc/version_signature || true
+    fi
+    if [[ "$signature" =~ ^Ubuntu[[:space:]]+(7\.0\.[0-9]+[^[:space:]]*)[[:space:]]+(7\.0\.[0-9]+[^[:space:]]*)[[:space:]]*$ ]]; then
+      signature_build="${BASH_REMATCH[1]}"
+      effective="${BASH_REMATCH[2]}"
+      if [[ "$signature_build" =~ ^([0-9]+\.[0-9]+\.[0-9]+-[0-9]+)\.[^-]+(.*)$ ]]; then
+        signature_build="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+      fi
+      [[ "$signature_build" == "$release" ]] || effective="$release"
+    fi
+  fi
+  if [[ "$effective" =~ ^([0-9]+)\.([0-9]+)(\.([0-9]+))? ]]; then
     major="${BASH_REMATCH[1]}"; minor="${BASH_REMATCH[2]}"; patch="${BASH_REMATCH[4]:-0}"
     if (( major == 6 && minor >= 19 || major == 7 && minor == 0 && patch < 14 )) \
-       || { (( major == 7 && minor == 0 && patch == 14 )) && [[ "$release" == *rc* ]]; }; then
-      echo "MongoDB 8.0 is incompatible with kernel ${release}: use a compatible kernel (7.0.14+ fixes the affected range 6.19 through 7.0.13). Do not bypass this check." >&2
+       || { (( major == 7 && minor == 0 && patch == 14 )) && [[ "$effective" == *rc* ]]; }; then
+      echo "MongoDB 8.0 is incompatible with kernel ${release} (checked upstream ${effective}): use a compatible kernel (7.0.14+ fixes the affected range 6.19 through 7.0.13). Do not bypass this check." >&2
       return 1
     fi
   fi
@@ -43,7 +59,7 @@ omni_api_setup() {
   API="${API%/}"
   API_CA="${GRAYLOG_API_CA:-/etc/graylog/certs/omnitech-rootca.crt}"
   CURL=(curl --silent --show-error --fail --connect-timeout 10 --max-time 90
-        -u "admin:${GRAYLOG_ADMIN_PASS}" -H "Content-Type: application/json" -H "X-Requested-By: omni-provision")
+        -u "admin:${GRAYLOG_ADMIN_PASS}" -H "Accept: application/json" -H "Content-Type: application/json" -H "X-Requested-By: omni-provision")
   case "$API" in
     https://*) CURL+=(--cacert "$API_CA") ;;
     http://127.0.0.1:9000/api|http://localhost:9000/api) ;;

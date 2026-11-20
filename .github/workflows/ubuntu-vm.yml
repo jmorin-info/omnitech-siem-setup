@@ -1,0 +1,54 @@
+name: Ubuntu 26.04 fresh VM
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/ubuntu2604-validation]
+    paths:
+      - '.github/workflows/ubuntu-vm.yml'
+      - 'tools/test-ubuntu-vm.sh'
+      - 'tools/install-platform.py'
+      - 'tools/verify-installation.py'
+      - 'tools/test-integration-vm.py'
+      - 'omni_integrations/**'
+      - 'integrations/**'
+      - 'tools/install-firewall.py'
+      - 'lib-graylog.sh'
+      - '38-alert-triage.sh'
+      - 'lib-platform.sh'
+      - 'stack-versions.env'
+      - '00-vars.env.example'
+      - 'install.sh'
+      - '[0-1][0-9]-*.sh'
+      - '71-soc-console.sh'
+      - 'tools/install-console.sh'
+      - 'tools/deploy-console.py'
+      - 'tools/render-firewall.py'
+permissions:
+  contents: read
+concurrency:
+  group: ubuntu-vm-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  fresh-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prepare isolated VM tools
+        run: |
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils genisoimage acl
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+      - name: Install and verify in a fresh Ubuntu 26.04 VM
+        run: bash tools/test-ubuntu-vm.sh
+      - name: Upload sanitized acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-2604-acceptance
+          path: ubuntu-vm-report.json
+          if-no-files-found: warn

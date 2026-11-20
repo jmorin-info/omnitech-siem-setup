@@ -96,6 +96,7 @@ sudo bash install.sh --apply
 sudo systemctl is-active mongod opensearch graylog-server nginx omni-mobile-api
 sudo systemctl status siem-backup.timer --no-pager
 curl -fsS http://127.0.0.1:8090/m/api/vapid
+sudo python3 tools/verify-installation.py --output /var/lib/omni-siem/acceptance.json
 ```
 
 Ouvrir ensuite `https://VOTRE_FQDN/soc/` depuis un poste autorisé par `WEB_NET`.
@@ -138,6 +139,18 @@ MongoDB annonce Ubuntu 26.04 à partir de MongoDB 9.0.4 ; MongoDB 9 dépasse la
 compatibilité actuelle de Graylog 7.2. Le projet conserve MongoDB 8.0.38 et utilise
 le dépôt Ubuntu 24.04 `noble` uniquement après accord explicite de l'opérateur :
 
+Sur une VM 26.04 neuve issue d'une ancienne image, appliquer d'abord les mises
+à jour Ubuntu, puis redémarrer pour charger le noyau corrigé :
+
+```bash
+sudo apt-get update
+sudo apt-get upgrade -y
+sudo reboot
+```
+
+Après reconnexion SSH, revenir dans le dossier du dépôt, vérifier `uname -r`
+et `cat /proc/version_signature`, puis poursuivre :
+
 ```bash
 sudo bash install.sh --generate-secrets
 sudo bash install.sh --plan --experimental-ubuntu-2604
@@ -150,6 +163,8 @@ sudo bash install.sh --apply --resume --experimental-ubuntu-2604
 **Le noyau reste un prérequis réel.** MongoDB documente une incompatibilité des
 noyaux Linux 6.19 à 7.0.13 inclus, corrigée à partir de 7.0.14. L'installateur
 refuse cette plage avant le provisioning, même avec l'option expérimentale.
+Pour les noyaux Ubuntu `7.0.0-*`, il vérifie la version amont enregistrée dans
+`/proc/version_signature` : une ABI courte ne signifie pas que le correctif manque.
 Utiliser Ubuntu 24.04 avec un noyau compatible ou faire valider un noyau corrigé
 par l'administrateur du système. Docker ne contourne pas cette incompatibilité.
 
@@ -159,8 +174,9 @@ Références vérifiées le 19 novembre 2026 :
 - [Plateformes MongoDB Community](https://www.mongodb.com/docs/community-platform-support/).
 - [Notes MongoDB 8.0 et incompatibilité noyau](https://www.mongodb.com/docs/v8.0/release-notes/8.0/).
 
-La syntaxe et les scénarios de contrôle sont testés automatiquement. Une
-installation complète sur VM Ubuntu 26.04 vierge n'a pas été validée.
+La [procédure de qualification sur VM](QUALIFICATION-UBUNTU2604.md) décrit les
+contrôles et donne accès aux rapports du workflow. Vérifier le résultat du commit
+concerné : un plan vide ou des tests de syntaxe ne constituent pas une recette complète.
 
 ## Correctif ZIP ou fichiers locaux modifiés
 

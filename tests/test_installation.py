@@ -28,6 +28,7 @@ def valid_config():
     config.update(SIEM_FQDN="siem.example.test", SIEM_HOSTNAME="siem", SIEM_DOMAIN="example.test",
                   SIEM_IFACE="ens18", SIEM_IP="192.0.2.10", SIEM_GW="192.0.2.1",
                   DNS1="192.0.2.53", DNS2="192.0.2.54", NET_ADMIN="192.0.2.0/24", NET_BEATS="198.51.100.0/24")
+    config.update(OS_HEAP="4g", GL_HEAP="2g", MONGO_CACHE_GB="1")
     return config
 
 
@@ -38,6 +39,33 @@ def test_install_allowlist_excludes_destructive_and_site_response_operations():
     assert scripts.index("07-inputs.sh") < scripts.index("10-graylog-model.sh")
     assert not any("purge" in script for script in scripts)
     assert not set(scripts).intersection({"36-soar.sh", "69-ad-response.sh", "38-vuln-scan.sh", "22-alert-routing.sh"})
+
+
+def test_optional_triage_precedes_detection_routing_and_verification_is_last():
+    phases = [name for name, _ in installer.installation_phases(["triage", "triage"])]
+    assert phases.index("pipelines") < phases.index("triage") < phases.index("detections")
+    assert phases.count("triage") == 1
+    assert phases[-1] == "verification" and phases.index("backups") < phases.index("verification")
+
+
+def test_memory_budget_rejects_32gb_defaults_on_a_16gb_vm():
+    config = valid_config()
+    config.update(OS_HEAP="12g", GL_HEAP="4g")
+    assert installer.resource_blockers(config, 16 * 1024 * 1024)
+    assert installer.resource_blockers(config, 32 * 1024 * 1024) == []
+    config.update(OS_HEAP="4096m", GL_HEAP="2g")
+    assert installer.resource_blockers(config, 16 * 1024 * 1024) == []
+    config["MONGO_CACHE_GB"] = "NaN"
+    assert installer.resource_blockers(config, 16 * 1024 * 1024)
+    config["OS_HEAP"] = "wrong"
+    assert len(installer.resource_blockers(config, 16 * 1024 * 1024)) == 2
+
+
+@pytest.mark.parametrize("timeout", ["0", "86401", "NaN", "1; false"])
+def test_snapshot_timeout_is_rejected_before_any_install_phase(timeout):
+    config = valid_config()
+    config["BACKUP_SNAPSHOT_TIMEOUT_SECONDS"] = timeout
+    assert any("BACKUP_SNAPSHOT_TIMEOUT_SECONDS" in error for error in installer.validate_config(config))
 
 
 def test_existing_install_is_detected(tmp_path):
@@ -136,11 +164,50 @@ def test_ubuntu2604_repository_requires_opt_in(tmp_path):
     ("7.0.14-rc1", True), ("7.0.14-generic", False), ("7.1.0", False),
 ])
 def test_mongodb_kernel_guard_matches_shell(release, blocked):
-    assert bool(installer.kernel_blocker(release)) == blocked
+    assert bool(installer.kernel_blocker(release, "fixture", "")) == blocked
     if os.name != "nt":
-        command = 'source "$1"; omni_mongodb_kernel_check "$2"'
+        command = 'source "$1"; omni_mongodb_kernel_check "$2" fixture ""'
         result = subprocess.run(["bash", "-c", command, "test", str(ROOT / "lib-platform.sh"), release], capture_output=True)
         assert (result.returncode != 0) == blocked
+
+
+@pytest.mark.parametrize("release,kernel_version,signature,blocked", [
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.14", False),
+    ("7.0.0-1017-azure", "#17~24.04.1-Ubuntu SMP", "Ubuntu 7.0.0-1017.17~24.04.1-azure 7.0.14", False),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.15", False),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.13", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.14-rc1", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu malformed", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Debian 7.0.0-38.38-generic 7.0.14", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-99.99-generic 7.0.14", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-lowlatency 7.0.14", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 6.8.0-38.38-generic 7.0.14", True),
+    ("7.0.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.1.0", True),
+    ("7.0.0-38-generic", "#Debian SMP", "Ubuntu 7.0.0-38.38-generic 7.0.14", True),
+    ("6.19.0-38-generic", "#38-Ubuntu SMP", "Ubuntu 6.19.0-38.38-generic 7.0.14", True),
+    ("6.8.0-generic", "#Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.13", False),
+    ("7.1.0-generic", "#Ubuntu SMP", "Ubuntu 7.0.0-38.38-generic 7.0.13", False),
+])
+def test_ubuntu_kernel_uses_running_kernel_upstream_signature(release, kernel_version, signature, blocked):
+    assert bool(installer.kernel_blocker(release, kernel_version, signature)) == blocked
+    if os.name != "nt":
+        command = 'source "$1"; omni_mongodb_kernel_check "$2" "$3" "$4"'
+        result = subprocess.run(["bash", "-c", command, "test", str(ROOT / "lib-platform.sh"),
+                                 release, kernel_version, signature], capture_output=True)
+        assert (result.returncode != 0) == blocked, result.stderr
+
+
+def test_kernel_guard_reads_ubuntu_metadata_automatically(tmp_path, monkeypatch):
+    signature = tmp_path / "version_signature"
+    signature.write_text("Ubuntu 7.0.0-38.38-generic 7.0.14\n")
+    monkeypatch.setattr(installer.platform, "version", lambda: "#38-Ubuntu SMP")
+    monkeypatch.setattr(installer, "Path", lambda _: signature)
+    assert installer.kernel_blocker("7.0.0-38-generic") is None
+    signature.write_text("Ubuntu 7.0.0-38.38-generic 7.0.13\n")
+    assert "upstream 7.0.13" in installer.kernel_blocker("7.0.0-38-generic")
+    signature.unlink()
+    assert installer.kernel_blocker("7.0.0-38-generic")
 
 
 @pytest.mark.skipif(os.name == "nt", reason="trusted configuration is read by bash")
@@ -234,3 +301,32 @@ def test_local_patch_installation_preserves_sources_without_committing(installat
     with pytest.raises(ValueError, match="resolve the plan"):
         installer.main(["--apply", "--resume", *flags])
     assert any("resume requires" in error for error in json.loads(capsys.readouterr().out)["blockers"])
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX child umask")
+def test_private_operator_umask_keeps_secrets_private_and_service_paths_readable(installation_sandbox):
+    root, script, state = installation_sandbox
+    script.write_text("mkdir runtime\ntouch runtime/public\n")
+    previous = os.umask(0o077)
+    try:
+        assert installer.main(["--apply", "--experimental-ubuntu-2604", "--allow-local-changes"]) == 0
+        current = os.umask(0o077)
+        assert current == 0o077
+    finally:
+        os.umask(previous)
+    assert (root / "runtime").stat().st_mode & 0o777 == 0o755
+    assert (root / "runtime/public").stat().st_mode & 0o777 == 0o644
+    assert (root / "00-vars.env").stat().st_mode & 0o077 == 0
+    assert state.stat().st_mode & 0o077 == 0
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Bash verification fixture")
+def test_resume_reruns_read_only_verification_without_reprovisioning(installation_sandbox, monkeypatch):
+    root, script, state = installation_sandbox
+    monkeypatch.setattr(installer, "PHASES", (("verification", "phase.sh"),))
+    script.write_text("echo checked >> checks.log\n")
+    flags = ["--apply", "--experimental-ubuntu-2604", "--allow-local-changes"]
+    assert installer.main(flags) == 0
+    assert installer.main([*flags, "--resume"]) == 0
+    assert (root / "checks.log").read_text().splitlines() == ["checked", "checked"]
+    assert json.loads(state.read_text())["completed_phases"] == ["verification"]

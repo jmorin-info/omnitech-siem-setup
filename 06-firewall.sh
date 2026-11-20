@@ -10,10 +10,6 @@ TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT
 python3 ./tools/render-firewall.py > "$TMP"
 nft -c -f "$TMP"
-if [[ -f /etc/nftables.conf ]]; then
-  install -d -m 700 /var/backups/omni-siem
-  cp -p /etc/nftables.conf "/var/backups/omni-siem/nftables.$(date +%s).conf"
-fi
-install -m 600 "$TMP" /etc/nftables.conf
-systemctl enable nftables
-systemctl restart nftables
+# Apply only our table. Restarting nftables invokes its global ExecStop flush.
+# The helper preserves the boot configuration and adds a dedicated include.
+python3 ./tools/install-firewall.py --candidate "$TMP"

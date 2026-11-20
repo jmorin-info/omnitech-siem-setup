@@ -37,6 +37,7 @@ PHASES = (
     ("dashboards", "14-graylog-dashboards.sh"),
     ("console", "71-soc-console.sh"),
     ("backups", "08-backup.sh"),
+    ("verification", "tools/verify-installation.py"),
 )
 OPTIONAL = {"triage": ("triage", "38-alert-triage.sh")}
 SECRET_KEYS = ("GRAYLOG_ADMIN_PASS", "MONGO_ADMIN_PASS", "MONGO_GRAYLOG_PASS", "OPENSEARCH_BOOTSTRAP_PASS")
@@ -44,6 +45,13 @@ GENERATED_SECRET_KEYS = ("MONGO_ADMIN_PASS", "MONGO_GRAYLOG_PASS", "OPENSEARCH_B
 REQUIRED = ("SIEM_FQDN", "SIEM_HOSTNAME", "SIEM_DOMAIN", "SIEM_IP", "SIEM_PREFIX", "SIEM_GW", "SIEM_IFACE",
             "DNS1", "DNS2", "NTP1", "NTP2", "NET_ADMIN", "NET_BEATS", "OS_HEAP", "GL_HEAP",
             "MONGO_CACHE_GB", "JOURNAL_SIZE", "DATA_MOUNT", "BACKUP_DIR", "RETENTION_DAYS", "SMTP_RELAY", "SMTP_FROM", "ALERT_EMAIL")
+
+
+def installation_phases(extras):
+    phases = list(PHASES)
+    for extra in dict.fromkeys(extras):
+        phases.insert(next(index for index, (name, _) in enumerate(phases) if name == "detections"), OPTIONAL[extra])
+    return phases
 
 
 def load_config(path):
@@ -86,6 +94,9 @@ def validate_config(config):
         errors.append("DATA_DISK must be empty for pre-mounted storage, or explicitly authorized with ALLOW_FORMAT_DATA_DISK=1")
     if config.get("THP_MODE", "preserve") not in ("preserve", "enable", "disable"):
         errors.append("THP_MODE must be preserve, enable or disable")
+    timeout = config.get("BACKUP_SNAPSHOT_TIMEOUT_SECONDS", "3600")
+    if not re.fullmatch(r"[1-9][0-9]*", timeout) or not 1 <= int(timeout) <= 86400:
+        errors.append("BACKUP_SNAPSHOT_TIMEOUT_SECONDS must be an integer from1 to86400")
     ssh_source = os.environ.get("SSH_CONNECTION", "").split()
     if ssh_source:
         try:
@@ -93,6 +104,22 @@ def validate_config(config):
                 errors.append("current SSH client is outside NET_ADMIN; firewall installation would disconnect it")
         except (KeyError, ValueError):
             errors.append("cannot validate SSH client against NET_ADMIN")
+    return errors
+
+
+def resource_blockers(config, total_kib):
+    errors, heap_gib = [], {}
+    for key in ("OS_HEAP", "GL_HEAP"):
+        match = re.fullmatch(r"([1-9][0-9]*)([gGmM])", config.get(key, ""))
+        if not match:
+            errors.append(key + " must be a JVM size such as 4g or 2048m")
+        else:
+            heap_gib[key] = int(match[1]) * (1 if match[2].lower() == "g" else 1 / 1024)
+    cache = config.get("MONGO_CACHE_GB", "")
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", cache) or float(cache) < 0.25:
+        errors.append("MONGO_CACHE_GB must be a number of at least 0.25")
+    elif len(heap_gib) == 2 and sum(heap_gib.values()) + float(cache) + 3 > total_kib / (1024 * 1024):
+        errors.append("configured JVM heaps plus MongoDB cache leave less than3GB for the OS and services; reduce OS_HEAP/GL_HEAP or allocate more RAM")
     return errors
 
 
@@ -119,12 +146,30 @@ def platform_check(os_id, version, experimental=False):
     return ([] if (os_id, version) in supported else ["supported install platforms: Ubuntu 22.04/24.04, Debian 12/13 amd64"]), []
 
 
-def kernel_blocker(release):
-    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", release)
+def kernel_blocker(release, kernel_version=None, version_signature=None):
+    # Ubuntu keeps uname -r at 7.0.0 even after upstream fixes are backported.
+    # Match MongoDB 8.0.38's SERVER-131779 handling of the running Ubuntu kernel.
+    effective = release
+    kernel_version = platform.version() if kernel_version is None else kernel_version
+    if release.startswith("7.0.") and "Ubuntu" in kernel_version:
+        if version_signature is None:
+            try:
+                version_signature = Path("/proc/version_signature").read_text().splitlines()[0]
+            except (OSError, IndexError):
+                version_signature = ""
+        signature = re.fullmatch(r"Ubuntu\s+(7\.0\.\d+\S*)\s+(7\.0\.\d+\S*)\s*", version_signature)
+        if signature:
+            # The second field includes Ubuntu's upload number after its ABI.
+            # Ignore stale or unrelated fixture metadata instead of trusting it.
+            running = re.sub(r"^(\d+\.\d+\.\d+-\d+)\.[^-]+", r"\1", signature[1])
+            if running == release:
+                effective = signature[2]
+    match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", effective)
     if match:
         version = tuple(int(value or 0) for value in match.groups())
-        if (6, 19, 0) <= version < (7, 0, 14) or version == (7, 0, 14) and "rc" in release:
-            return "MongoDB 8.0 cannot run on kernel " + release + "; use a compatible kernel (7.0.14+ fixes the affected 6.19–7.0.13 range)"
+        if (6, 19, 0) <= version < (7, 0, 14) or version == (7, 0, 14) and "rc" in effective:
+            detail = release + (" (upstream " + effective + ")" if effective != release else "")
+            return "MongoDB 8.0 cannot run on kernel " + detail + "; use a compatible kernel (7.0.14+ fixes the affected 6.19–7.0.13 range)"
     return None
 
 
@@ -247,6 +292,8 @@ def main(argv=None):
         total_kib = int(Path("/proc/meminfo").read_text().split("MemTotal:", 1)[1].split()[0])
         if total_kib < 15 * 1024 * 1024:
             blockers.append("core SOC profile requires at least16GB host RAM (adjust JVM heaps to host capacity)")
+        if cfg:
+            blockers.extend(resource_blockers(cfg, total_kib))
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT, text=True)
     source_fingerprint, source_manifest = source_inventory(ROOT)
@@ -254,9 +301,7 @@ def main(argv=None):
         blockers.append("tracked installation sources are locally modified; inspect git diff then use --allow-local-changes to preserve and snapshot them (no local commit required)")
     elif dirty.strip():
         warnings.append("Reviewed local source changes will be preserved and snapshotted; no Git reset, commit or overwrite is performed")
-    phases = list(PHASES)
-    for extra in dict.fromkeys(args.extras):
-        phases.insert(-2, OPTIONAL[extra])
+    phases = installation_phases(args.extras)
     state_path = Path("/var/lib/omni-siem/install-state.json")
     metadata_path = Path("/etc/omni-siem/instance.json")
     state = json.loads(state_path.read_text()) if state_path.exists() else None
@@ -274,7 +319,7 @@ def main(argv=None):
             "blockers": blockers, "warnings": warnings, "source_fingerprint": source_fingerprint,
             "external_components": ["M365/SEAL/vendor collectors need their own credentials and source configuration", "ML/XDR/graph, SOAR and active scans are not enabled by this profile"],
             "database_policy": "fresh install only; no existing database upgrade or overwrite"}
-    print(json.dumps(plan, indent=2, ensure_ascii=False))
+    print(json.dumps(plan, indent=2, ensure_ascii=False), flush=True)
     if not args.apply:
         return 0
     if blockers:
@@ -293,7 +338,7 @@ def main(argv=None):
     child_env = dict(os.environ, OMNI_FRESH_INSTALL="1")
     child_env["OMNI_EXPERIMENTAL_UBUNTU_2604"] = "1" if args.experimental_ubuntu_2604 else "0"
     for name, script in phases:
-        if name in state["completed_phases"]:
+        if name in state["completed_phases"] and name != "verification":
             continue
         if source_inventory(ROOT)[0] != source_fingerprint:
             raise ValueError("installation sources changed during execution; stop and review before resuming")
@@ -301,10 +346,14 @@ def main(argv=None):
         write_private(state_path, state)
         if name == "triage":
             prepare_triage(cfg)
-        result = subprocess.run(["bash", str(ROOT / script)], cwd=ROOT, env=child_env)
+        interpreter = sys.executable if script.endswith(".py") else "bash"
+        # Package keyrings and parent directories must remain readable by services,
+        # even when the operator uses umask077. Secret files set private modes explicitly.
+        result = subprocess.run([interpreter, str(ROOT / script)], cwd=ROOT, env=child_env, umask=0o022)
         if result.returncode:
             raise ValueError(f"phase {name} failed (exit{result.returncode}); repair it and resume with the same options")
-        state["completed_phases"].append(name)
+        if name not in state["completed_phases"]:
+            state["completed_phases"].append(name)
         write_private(state_path, state)
     state["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
     write_private(state_path, state)

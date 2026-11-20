@@ -693,6 +693,18 @@ then
 end
 EOF
 
+# Cette regle du pipeline de base ne depend pas du lot optionnel 49.
+# La table correspondante est creee par 11-graylog-enrichment.sh.
+ensure_rule "omni-forti-05-severity" <<'EOF'
+rule "omni-forti-05-severity"
+when
+  to_string($message.event_source) == "fortigate"
+  AND has_field("level")
+then
+  set_field("forti_severity_num", to_long(lookup_value("omni-forti-severity", to_string($message.level)), 0));
+end
+EOF
+
 # user="N/A" (logs traffic) ou user=<une IP> : valeurs parasites du FAZ qui
 # polluent les tableaux "comptes vises" et les agregations par utilisateur.
 # Le champ syslog "source" valait "logver=..." (1er token non-RFC) pour ~8M
@@ -918,6 +930,7 @@ echo "==> [6/6] Ordre des processeurs (Filter Chain -> Pipelines -> GeoIP)"
 CURRENT="$(api_get "/system/messageprocessors/config")"
 NEW="$(echo "${CURRENT}" | jq '
   .processor_order as $o
+  | (.disabled_processors // []) as $disabled
   | ($o | map(select(.name != "GeoIP Resolver" and .name != "Pipeline Processor"))) as $base
   | ($o | map(select(.name == "Pipeline Processor"))) as $pp
   | ($o | map(select(.name == "GeoIP Resolver"))) as $geo
@@ -925,7 +938,7 @@ NEW="$(echo "${CURRENT}" | jq '
      then "Stream Rule Processor" else "Message Filter Chain" end) as $anchor
   | ($base | map(if .name == $anchor then [., $pp[0]] else [.] end)
      | flatten | map(select(. != null))) + $geo
-  | {processor_order: ., disabled_processors: []}')"
+  | {processor_order: ., disabled_processors: $disabled}')"
 if [[ "$(echo "${CURRENT}" | jq -c '.processor_order')" == "$(echo "${NEW}" | jq -c '.processor_order')" ]]; then
   skip "ordre deja correct"
 else
