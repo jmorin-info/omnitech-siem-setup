@@ -47,6 +47,9 @@ def test_fixtures_and_native_dependency_contract(module):
     assert set(view["data"]["state"]) == query_ids
     for state in view["data"]["state"].values():
         assert len(state["widgets"]) == 6
+        # Graylog 7.2 WidgetEntity uses the outer type as its WidgetConfigDTO
+        # discriminator: native names are lowercase, unlike UI class constants.
+        assert [w["type"] for w in state["widgets"]] == ["aggregation"] * 5 + ["messages"]
         assert {w["id"] for w in state["widgets"]} == set(state["positions"])
         assert all(w["streams"] == [stream_id] for w in state["widgets"])
     encoded = json.dumps(pack)

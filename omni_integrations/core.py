@@ -138,7 +138,9 @@ def dashboard(module, stream_id):
         query = {"type": "elasticsearch", "query_string": query_string}
         pivots = [] if field is None else [{"type": "values", "fields": [field], "config": {"limit": 15, "skip_empty_values": True}}]
         groups = [] if field is None else [{"type": "values", "fields": [field], "limit": 15, "skip_empty_values": True}]
-        widgets.append({"id": wid, "type": "AGGREGATION", "filter": None, "filters": [], "timerange": None,
+        # Native WidgetConfigDTO names are lowercase. The web interface uses
+        # uppercase constants internally, then lowercases them in Widget.toJSON().
+        widgets.append({"id": wid, "type": "aggregation", "filter": None, "filters": [], "timerange": None,
                         "query": query, "streams": [stream_id], "stream_categories": [],
                         "config": {"visualization": visualization, "row_pivots": pivots, "column_pivots": [],
                                    "series": [{"config": {}, "function": "count()"}], "sort": [], "rollup": True,
@@ -150,7 +152,7 @@ def dashboard(module, stream_id):
         mapping[wid], titles[wid] = [sid], title
     wid, sid = stable_id(slug, "widget-logs"), stable_id(slug, "search-logs")
     fields = ["timestamp", "source", "event_action", "src_ip", "dest_ip", "user", "omni_parse_status", "message"]
-    widgets.append({"id": wid, "type": "MESSAGES", "filter": None, "filters": [], "timerange": None,
+    widgets.append({"id": wid, "type": "messages", "filter": None, "filters": [], "timerange": None,
                     "query": {"type": "elasticsearch", "query_string": "*"}, "streams": [stream_id],
                     "config": {"fields": fields, "show_message_row": False, "decorators": [], "sort": []}})
     searches.append({"id": sid, "type": "messages", "name": "messages", "query": {"type": "elasticsearch", "query_string": "*"},
