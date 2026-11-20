@@ -155,7 +155,7 @@ def dashboard(module, stream_id):
                     "config": {"fields": fields, "show_message_row": False, "decorators": [], "sort": []}})
     searches.append({"id": sid, "type": "messages", "name": "messages", "query": {"type": "elasticsearch", "query_string": "*"},
                      "streams": [stream_id], "filter": None, "filters": [], "timerange": None,
-                     "limit": 50, "offset": 0, "sort": [{"field": "timestamp", "order": "DESC"}], "fields": [], "decorators": []})
+                     "limit": 50, "offset": 0, "sort": [{"field": "timestamp", "order": "DESC"}], "decorators": []})
     positions[wid] = {"col": 1, "row": 7, "width": 12, "height": 5}
     mapping[wid], titles[wid] = [sid], "Journaux et investigation"
     state = {"selected_fields": None, "static_message_list_id": None, "titles": {"tab": {"title": module["name"]}, "widget": titles},

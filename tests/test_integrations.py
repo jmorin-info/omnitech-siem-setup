@@ -37,6 +37,12 @@ def test_fixtures_and_native_dependency_contract(module):
     assert "csv_to_map(to_string" not in generated_source
     view = next(e for e in entities if e["type"]["name"] == "dashboard")
     assert view["type"]["version"] == "2"
+    # Content Pack MessageListEntity has no fields property; columns belong to
+    # the message-list widget config, unlike a native saved-search request.
+    for query in view["data"]["search"]["queries"]:
+        for search_type in query["search_types"]:
+            if search_type["type"] == "messages":
+                assert "fields" not in search_type
     query_ids = {q["id"] for q in view["data"]["search"]["queries"]}
     assert set(view["data"]["state"]) == query_ids
     for state in view["data"]["state"].values():
