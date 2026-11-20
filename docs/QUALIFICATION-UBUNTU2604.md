@@ -26,6 +26,9 @@ exécute [tools/test-ubuntu-vm.sh](../tools/test-ubuntu-vm.sh) :
 7. Installation native des trois packs WatchGuard/UniFi/Palo Alto, vérification
    de leurs entités et six widgets par dashboard, envoi des dix fixtures UDP,
    contrôle des champs réellement indexés et de leur routage vers les streams.
+   Après injection des fixtures d'un module, exécution de sa recherche sauvegardée
+   par l'API Graylog : job terminé sans erreur, six résultats correspondant aux
+   widgets, compteur de volume positif et présence des journaux injectés du module.
 8. Exécution du job de sauvegarde installé : archive MongoDB et tar de
    configuration valides, présence des secrets du site et de la configuration
    console dans l'archive privée, snapshot OpenSearch terminé en `SUCCESS`.
@@ -53,6 +56,15 @@ ancien `ubuntu-vm-report.json`. Archiver le rapport précédent ou choisir un
 nouveau chemin avec `OMNI_VM_REPORT=/chemin/rapport-neuf.json`.
 `tools/test-integration-vm.py` écrit des données et exige l'identité et le marqueur
 du laboratoire ; ce n'est pas un diagnostic à exécuter sur un SIEM existant.
+
+La recette des dashboards utilise les routes natives Graylog 7.2.2 :
+[`SearchResource`](https://github.com/Graylog2/graylog2-server/blob/7.2.2/graylog2-server/src/main/java/org/graylog/plugins/views/search/rest/SearchResource.java)
+pour exécuter la recherche sauvegardée et attendre son statut,
+[`SearchJobDTO`](https://github.com/Graylog2/graylog2-server/blob/7.2.2/graylog2-server/src/main/java/org/graylog/plugins/views/search/rest/SearchJobDTO.java)
+et [`QueryResult`](https://github.com/Graylog2/graylog2-server/blob/7.2.2/graylog2-server/src/main/java/org/graylog/plugins/views/search/QueryResult.java)
+pour vérifier l'achèvement et les erreurs. Elle ne réécrit ni recherche ni dashboard.
+Le rapport conserve uniquement des indicateurs et des nombres, sans corps des
+messages ni détails des erreurs de recherche. Un job incomplet ou expiré échoue.
 
 ## Corrections contrôlées
 
