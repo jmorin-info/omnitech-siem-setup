@@ -182,7 +182,8 @@ def build_pack(module):
         return item["id"]
     entity("input", "input", {"title": value("OMNI integration - " + module["name"] + " UDP"),
         "type": value("org.graylog2.inputs.raw.udp.RawUDPInput"), "global": value(True), "extractors": [],
-        "static_fields": {"omni_integration_id": value(slug), "omni_module_revision": value(module["revision"])},
+        # Graylog InputFacade resolves every static field through asString().
+        "static_fields": {"omni_integration_id": value(slug), "omni_module_revision": value(str(module["revision"]))},
         "configuration": {"bind_address": parameter("bind_address"), "port": parameter("port"),
                           "recv_buffer_size": value(1048576), "number_worker_threads": value(2), "charset_name": value("UTF-8")}})
     stream = entity("stream", "stream", {"title": value("OMNI integration - " + module["name"]),

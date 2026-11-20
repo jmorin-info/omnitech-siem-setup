@@ -25,6 +25,10 @@ def test_fixtures_and_native_dependency_contract(module):
     entities = pack["entities"]
     kinds = {e["type"]["name"] for e in entities}
     assert kinds == {"input", "stream", "pipeline", "pipeline_rule", "dashboard"}
+    input_data = next(e["data"] for e in entities if e["type"]["name"] == "input")
+    # InputFacade.addStaticFields resolves values using ValueReference.asString.
+    assert all(item["@type"] == "string" and isinstance(item["@value"], str)
+               for item in input_data["static_fields"].values())
     stream_id = stable_id(module["id"], "stream")
     pipeline = next(e["data"] for e in entities if e["type"]["name"] == "pipeline")
     assert pipeline["connected_streams"] == [{"@type": "string", "@value": stream_id}]
