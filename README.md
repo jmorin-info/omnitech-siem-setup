@@ -33,7 +33,7 @@ console, and full physical-access-control (SEAL) correlation.
 5. [Detection engine](#5-detection-engine)
 6. [Alert triage &amp; notifications](#6-alert-triage--notifications)
 7. [Automated response (SOAR)](#7-automated-response-soar)
-8. [The SOC console](#8-the-soc-console)
+8. [The SOC console](#8-visualisation--graylog-dashboards--soc-console)
 9. [Physical security correlation (SEAL)](#9-physical-security-correlation-seal)
 10. [Deployment](#10-deployment)
 11. [Operations &amp; resilience](#11-operations--resilience)
@@ -48,7 +48,7 @@ console, and full physical-access-control (SEAL) correlation.
 OMNI SIEM is a **production security-monitoring platform** that ingests logs from the
 whole OMNITECH estate — Windows domain, FortiGate firewalls (multi-site), Microsoft 365 /
 Entra ID, VMware vSphere, endpoint AV/EDR, a WAF, the physical access-control system, and
-more — normalises them, runs **197 detections** mapped to MITRE ATT&CK, correlates them
+more — normalises them, runs **210 detections** mapped to MITRE ATT&CK, correlates them
 into incidents, decides which alerts truly deserve a human's attention, and drives both a
 real-time SOC console and automated response.
 
@@ -60,10 +60,10 @@ It is **not** a vanilla Graylog install. On top of the ingest/search core it add
 - an **alert-triage micro-service** (`omni-alert-triage`) that scores every alert, correlates
   kill-chains across sources, suppresses noise, and — for the grey zone — asks an LLM judge
   whether the alert warrants an e-mail, then renders a clean, professional notification;
-- a fleet of **~39 analytics robots** (UEBA geo-velocity, beaconing/C2, DNS tunnelling,
+- a fleet of **scheduled robots** (51 `omni-*`/`oms-*` systemd timers on 21 Nov 2026: UEBA geo-velocity, beaconing/C2, DNS tunnelling,
   volume exfiltration, lateral-movement, source-freshness watchdog, backup/health, …);
 - **SOAR-light** automated IP blocking wired back into the FortiGate;
-- a **purpose-built SOC console** (`/soc/`) and a **mobile PWA**;
+- a **purpose-built SOC console** (`/soc/`), installable as a PWA (the former `/m/` PWA has redirected to `/soc/` since 12 Nov 2026);
 - versioned provisioning and maintenance scripts, with an explicit fresh-install profile and a separate code-update workflow.
 
 ---
@@ -72,9 +72,9 @@ It is **not** a vanilla Graylog install. On top of the ingest/search core it add
 
 | Area | Capability |
 |---|---|
-| **Ingestion** | 15 Graylog inputs (Beats/TLS, Syslog TCP/UDP, GELF) across ~20 logical sources |
+| **Ingestion** | 14 Graylog inputs (Beats/TLS, Syslog TCP/UDP, GELF) across ~20 logical sources |
 | **Normalisation** | Source-specific pipelines and rules — every source normalised to a common schema (`event_source`, `event_action`, `alert_tag`, `src_ip`, `user`, `host`, MITRE fields…) |
-| **Detection** | 197 event definitions (192 enabled), each mapped to a MITRE ATT&CK technique/tactic |
+| **Detection** | 210 event definitions (199 enabled, measured on 21 Nov 2026), each mapped to a MITRE ATT&CK technique/tactic |
 | **Correlation** | Cross-source kill-chain correlation on canonical identity/host/IP keys → incidents |
 | **Triage** | Tiered decisioning (Critical / grey zone / noise) + LLM judge for the grey zone + learned false-positive suppression |
 | **Notifications** | One clean, sober HTML e-mail per real alert, with facts, ATT&CK badge, an action playbook, and one-click console / block / false-positive links |
@@ -131,16 +131,16 @@ The detailed view:
                          ┌──────────────────────────────────────────────────────┐
    Log sources           │                    bx-it-graylog-vm                    │
  ─────────────           │                                                        │
-  Winlogbeat  ──TLS 5044─▶│  Graylog inputs ─▶ pipelines (40) ─▶ streams (22)      │
+  Winlogbeat  ──TLS 5044─▶│  Graylog inputs ─▶ pipelines (40) ─▶ streams (21)      │
   FortiGate   ──Syslog───▶│      │              normalise/enrich       │           │
   (via FAZ)               │      │              tag MITRE / alert_tag  │           │
   M365/Entra  ──GELF─────▶│      ▼                                     ▼           │
   vSphere     ──Syslog───▶│  OpenSearch (indices on /data, 7.3 TB) ◀── event       │
   ESET / EMS  ──Syslog───▶│      ▲                                   definitions   │
-  Aruba/Linux ──Syslog───▶│      │                                    (197)        │
+  Aruba/Linux ──Syslog───▶│      │                                    (210)        │
   Vaultwarden ──GELF─────▶│      │                                     │           │
   SEAL (phys) ──GELF─────▶│      │                                     ▼           │
-  …                       │  analytics robots (39) ──GELF re-inject──▶ alerts       │
+  …                       │  robot timers (51)     ──GELF re-inject──▶ alerts       │
                           │  (UEBA, NDR, watchdog, health)             │           │
                           │                                            ▼           │
                           │                                   ┌─────────────────┐  │
@@ -174,7 +174,7 @@ The detailed view:
 | `omni-soar` | 8088 | Auto-block webhook → FortiGate address group |
 | `omni-mobile-api` | — | Backend for the mobile PWA and the `/soc/` console |
 | `omni-source-watchdog` | — (timer) | Per-source freshness monitoring (silent-source detection) |
-| ~35 analytics robots | — (timers) | UEBA / NDR / health / enrichment |
+| 51 robot timers | — (timers) | UEBA / NDR / health / enrichment |
 
 ---
 
@@ -202,7 +202,7 @@ watched for silence by the source-freshness watchdog.
 | NinjaOne (inventory) | — | `inventory` | Asset inventory |
 | Veeam | Winlogbeat ("Veeam Backup" channel) | `veeam` | Backup job success / warning / failure |
 | ADCS | — | `adcs` | Certificate-services abuse (ESC1–ESC8) |
-| Certificate parc | GELF UDP | `cert_parc` | Certificate-orchestrator inventory & expiry |
+| Certificate parc | Winlogbeat (`OMNI-Certificats` channel) | `cert_parc` | Windows certificate inventory & expiry. The certificate-orchestrator feed (GELF UDP 12201, `99-cert-orchestrator.sh`) is ready but not applied in production (21 Nov 2026) |
 | Windows DNS | Winlogbeat (DNSServer/Audit) | `dns` | DNS record changes, cache flush, sensitive zones |
 | **SEAL** (physical) | GELF TCP | `seal` | Badge access, doors, alarms, intrusion, dead-man switches |
 
@@ -214,7 +214,7 @@ watched for silence by the source-freshness watchdog.
 
 ## 5. Detection engine
 
-**197 event definitions** (192 enabled), each tagged with a MITRE ATT&CK technique and
+**210 event definitions** (199 enabled on 21 Nov 2026), each tagged with a MITRE ATT&CK technique and
 tactic. Detections are grouped by kill-chain phase:
 
 - **Initial access** — malicious-IP VPN logins, M365 legacy-auth (MFA bypass), foreign M365
@@ -523,7 +523,7 @@ a complete recovery of log data and all external collectors.
   5. reboot if the kernel asks for it, with a full post-boot check;
   6. an e-mail report.
 
-  Upgrades stay inside pinned series (Graylog 7.1, OpenSearch 2.19, MongoDB 8.0,
+  Upgrades stay inside pinned series (Graylog 7.2, OpenSearch 2.19, MongoDB 8.0,
   Logstash 8.19, see `/etc/apt/preferences.d/oms-siem-series`). Moving to a new major series
   is a deliberate, manual decision. Dry run: `oms-maj-siem --simuler`.
 - **Retention** — ISO-aligned per-source retention tiers (e.g. FortiGate/Sysmon 90 d,
