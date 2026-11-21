@@ -22,6 +22,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 | [Architecture](architecture/ARCHITECTURE.md) | Composants, flux et choix techniques (en anglais) |
 | [Dossier d'architecture et d'exploitation](architecture/DOSSIER-ARCHITECTURE-SIEM.md) | Document « DOS » du corpus ISO : composants, flux, mise en production, sauvegarde |
 | [Sources de données](DATA-SOURCES.md) | Sources collectées, transports et champs (en anglais) |
+| [Feuille de route](ROADMAP.md) | Axes d'amélioration, état fait / en cours / à faire |
 | [Glossaire](reference/GLOSSAIRE.md) | Termes techniques pour lecteurs non spécialistes |
 
 ## Installer
