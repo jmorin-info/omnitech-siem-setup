@@ -103,7 +103,7 @@ documented by the IT Department.
 - Full configuration backed up **every night (03:15)**, AES-256 encrypted,
   offloaded outside the VM (`\\10.33.50.5\Public\SIEM`),
   14-day retention, **automatic alert on failure or absence**.
-- Rebuild procedure documented and tested (`RESTORE.md`); target for
+- Rebuild procedure documented and tested (`docs/exploitation/RESTORE.md`); target for
   resuming collection: **≤ 4 h** after a replacement VM is made available
   (historical logs are not restored).
 - Capacity safeguards: alert at 80% of data volume, automatic emergency
@@ -165,7 +165,7 @@ prohibited.
 - System/network administrators are made aware of logging requirements
   (upkeep of the audit policy, agents, forwarding).
 - Any security or SIEM operational incident feeds a lessons-learned entry
-  recorded in `CONTEXT.md` (pitfalls and resolutions) and, where relevant,
+  recorded in `docs/reference/CONTEXT.md` (pitfalls and resolutions) and, where relevant,
   drives an evolution of this policy or the standard.
 - **Review**: annual at a minimum, and after any major incident, significant
   architecture change or regulatory change.

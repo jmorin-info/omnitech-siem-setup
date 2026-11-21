@@ -103,7 +103,7 @@ l'objet d'un gel manuel documenté par la DSI.
 - Configuration complète sauvegardée **chaque nuit (03:15)**, chiffrée
   AES-256, externalisée hors de la VM (`\\10.33.50.5\Public\SIEM`),
   rétention 14 jours, **alerte automatique en cas d'échec ou d'absence**.
-- Procédure de reconstruction documentée et testée (`RESTORE.md`) ;
+- Procédure de reconstruction documentée et testée (`docs/exploitation/RESTORE.md`) ;
   objectif de reprise de la collecte : **≤ 4 h** après mise à disposition
   d'une VM de remplacement (les journaux historiques ne sont pas restaurés).
 - Garde-fous capacité : alerte à 80 % du volume de données, purge d'urgence
@@ -164,7 +164,7 @@ dans un registre des dérogations. Une dérogation sans échéance est interdite
 - Les administrateurs systèmes/réseau sont sensibilisés aux exigences de
   journalisation (maintien de l'audit policy, des agents, du forwarding).
 - Tout incident de sécurité ou d'exploitation du SIEM alimente un retour
-  d'expérience consigné dans `CONTEXT.md` (pièges et résolutions) et, si
+  d'expérience consigné dans `docs/reference/CONTEXT.md` (pièges et résolutions) et, si
   pertinent, fait évoluer cette politique ou le standard.
 - **Revue** : annuelle a minima, et après tout incident majeur, changement
   d'architecture significatif ou évolution réglementaire.

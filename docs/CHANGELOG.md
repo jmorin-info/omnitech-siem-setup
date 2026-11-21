@@ -348,6 +348,6 @@ après revue (relancer ensuite `57` puis `14`).
   vSphere, déploiement des agents Windows (NinjaOne + GPO).
 
 ---
-*Tenir à jour à chaque évolution. Référence technique détaillée : `CONTEXT.md`
+*Tenir à jour à chaque évolution. Référence technique détaillée : `docs/reference/CONTEXT.md`
 (racine du dépôt). Voir aussi `INTEGRATION-SOURCES.md`, `INVENTAIRE-SOURCES.md`,
 `POLITIQUE-RETENTION.md` et `REPONSE-AUTOMATISEE.md` dans `docs/`.*

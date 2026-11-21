@@ -4,7 +4,7 @@
 
 Ce document décrit la **remise en service du SIEM sur un serveur de
 remplacement** en cas de perte de la VM `bx-it-graylog-vm`. Il complète la
-procédure technique détaillée `RESTORE.md` (commandes exactes) par le cadre
+procédure technique détaillée `docs/exploitation/RESTORE.md` (commandes exactes) par le cadre
 de continuité : objectifs, scénarios, rôles, validation.
 
 ## 1. Objectifs de continuité
@@ -28,7 +28,7 @@ logs antérieurs est perdu mais la collecte temps réel redémarre immédiatemen
 | **Passphrase de déchiffrement** | Coffre-fort (`BACKUP_PASSPHRASE`) | ⚠️ À DÉPOSER AU COFFRE |
 | Mot de passe `admin` local de secours | Coffre-fort | ✅ |
 | Identifiants `svc_siem` (SMB) | Coffre-fort | ✅ |
-| Procédure technique | `RESTORE.md` (inclus dans l'archive) | ✅ |
+| Procédure technique | `docs/exploitation/RESTORE.md` (inclus dans l'archive) | ✅ |
 | Réservation IP/DNS `10.33.220.10` / FQDN | DNS interne + /etc/hosts | ✅ |
 | **Clé HMAC d'intégrité** `/etc/graylog/omni-integrity.key` | Coffre-fort + hors-bande | ⚠️ sans elle, la chaîne d'intégrité passée n'est plus **vérifiable** (perte de valeur probante) |
 | **Passphrase de secours LUKS `/data`** + **sauvegarde chiffrée du header** (header **inline** ; `omni-luks-header-*.img.enc`) | Passphrase → Coffre-fort ; header → SMB `/SIEM/luks/` (+ inclus dans le backup config chiffré quotidien) | ⚠️ sans la **passphrase**, `/data` est irrécupérable si le TPM/carte mère change ; le header inline est **sauvegardé/restaurable** (`luksHeaderRestore`) |

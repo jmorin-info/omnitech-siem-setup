@@ -18,7 +18,7 @@ cd "$(dirname "$0")"
 source ./00-vars.env
 [[ $EUID -eq 0 ]] || { echo "ERREUR: a lancer en root."; exit 1; }
 [[ -n "${M365_TENANT_ID:-}" && -n "${M365_CLIENT_ID:-}" && -n "${M365_CLIENT_SECRET:-}" ]] \
-  || { echo "ERREUR: variables M365_* absentes de 00-vars.env (cf. M365.md)"; exit 1; }
+  || { echo "ERREUR: variables M365_* absentes de 00-vars.env (cf. docs/sources/M365.md)"; exit 1; }
 
 echo "==> [1/3] /etc/default/omni-m365"
 cat > /etc/default/omni-m365 <<EOF

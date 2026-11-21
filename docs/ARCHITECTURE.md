@@ -88,4 +88,4 @@ the attack surface and the maintenance burden low.
 - The data volume is encrypted at rest (LUKS); the LUKS header is backed up off-box.
 - Every service runs under systemd hardening (restricted capabilities, `Restart=on-failure`).
 - Secrets live in `00-vars.env` (root, `600`) and per-service `.env` files; none are committed
-  (see `SECRETS.example.md`).
+  (see `docs/securite-conformite/SECRETS.example.md`).

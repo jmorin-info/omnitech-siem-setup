@@ -56,12 +56,12 @@ les références de l'installation historique figurent plus bas.
 
 | Document | Objet |
 |---|---|
-| `GUIDE.md` | « Comprendre le SIEM en 15 min » : schéma de flux, rôle des pages, analyses expliquées |
-| `CONTEXT.md` | Mémoire technique complète : historique, pièges connus (API 7.x), incidents résolus |
-| `RESTORE.md` | Restauration complète du SIEM depuis une sauvegarde config |
+| `docs/demarrage/GUIDE.md` | « Comprendre le SIEM en 15 min » : schéma de flux, rôle des pages, analyses expliquées |
+| `docs/reference/CONTEXT.md` | Mémoire technique complète : historique, pièges connus (API 7.x), incidents résolus |
+| `docs/exploitation/RESTORE.md` | Restauration complète du SIEM depuis une sauvegarde config |
 | `README.fr.md` § Exploitation courante | Mises à jour automatiques (`oms-maj-siem`), snapshots sélectifs (`oms-snap-siem`), SOAR et déblocage d'une IP, synchronisation `deploye/` |
-| `VEEAM.md` | Intégration Veeam Backup & Replication |
-| `VSPHERE.md` | Intégration ESXi / vCenter |
+| `docs/sources/VEEAM.md` | Intégration Veeam Backup & Replication |
+| `docs/sources/VSPHERE.md` | Intégration ESXi / vCenter |
 | `windows/README-WINDOWS.md` | Volet Windows/AD : agents, GPO, NinjaOne |
 | `fortigate/0*.conf` | Configurations FortiGate (UTM, VPN, proxy, policies) |
 

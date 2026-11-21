@@ -82,7 +82,7 @@ api_get '/system/pipelines/rule' | jq 'length'             # expected: 234 rules
 api_get '/streams' | jq '.total'                           # expected: 18 streams
 ```
 
-2. MITRE ATT&CK coverage: `docs/COUVERTURE-MITRE-ATTACK.md` and `docs/mitre-navigator-layer.json` (prioritized backlog: `DETECTION-BACKLOG.md`, register: `docs/REGISTRE-DETECTIONS.md`).
+2. MITRE ATT&CK coverage: `docs/COUVERTURE-MITRE-ATTACK.md` and `docs/mitre-navigator-layer.json` (prioritized backlog: `docs/detection/DETECTION-BACKLOG.md`, register: `docs/REGISTRE-DETECTIONS.md`).
 
 3. Notification channels (5):
 
@@ -289,9 +289,9 @@ Archive scope (`30-backup-config.sh`): full working tree of the repository (unco
 ls -lh /home/siem-backup/mongo/graylog-mongo-$(date +%Y%m%d)-*.archive.gz   # expected: today's dump
 ```
 
-Observed on 07/02: `graylog-mongo-20260702-0230.archive.gz` dated the same day (02:30). Mongo restore proven for real on 06/26 (WiredTiger incident, see `RESTORE.md`). Known gap: no dump on 06/26 (day of the crash), a failure that stayed silent.
+Observed on 07/02: `graylog-mongo-20260702-0230.archive.gz` dated the same day (02:30). Mongo restore proven for real on 06/26 (WiredTiger incident, see `docs/exploitation/RESTORE.md`). Known gap: no dump on 06/26 (day of the crash), a failure that stayed silent.
 
-3. Additional safety nets: Veeam VM backup, backed-up LUKS header, `RESTORE.md` and `docs/PRA-RECONSTRUCTION-SIEM.md` procedures.
+3. Additional safety nets: Veeam VM backup, backed-up LUKS header, `docs/exploitation/RESTORE.md` and `docs/PRA-RECONSTRUCTION-SIEM.md` procedures.
 
 ### Gaps and minimal action (critical point)
 
@@ -314,7 +314,7 @@ Observed on 07/02: `graylog-mongo-20260702-0230.archive.gz` dated the same day (
 ls /root/omnitech-siem-setup/docs/ | wc -l    # expected: ~40 documents (index: docs/00-INDEX.md)
 ```
 
-Cornerstones: `docs/DOSSIER-ARCHITECTURE-SIEM.md`, `docs/PRA-RECONSTRUCTION-SIEM.md`, `RESTORE.md`, `docs/GUIDE-DEPANNAGE.md`, `docs/PRO-EXPLOITATION-SIEM.md`, `docs/POL-SUPERVISION-JOURNALISATION.md`.
+Cornerstones: `docs/DOSSIER-ARCHITECTURE-SIEM.md`, `docs/PRA-RECONSTRUCTION-SIEM.md`, `docs/exploitation/RESTORE.md`, `docs/GUIDE-DEPANNAGE.md`, `docs/PRO-EXPLOITATION-SIEM.md`, `docs/POL-SUPERVISION-JOURNALISATION.md`.
 
 2. Reproducible provisioning: about a hundred idempotent numbered bash scripts at the root of the repository, the source of truth for the configuration (no orphan binary or systemd unit).
 
@@ -324,7 +324,7 @@ Cornerstones: `docs/DOSSIER-ARCHITECTURE-SIEM.md`, `docs/PRA-RECONSTRUCTION-SIEM
 
 - Versioned-repository drift: `git -C /root/omnitech-siem-setup status --porcelain` shows about thirty modified files, 3 staged deletions and untracked files (including `99-cert-orchestrator.sh`, `97-multisite-soar.sh`, `38-alert-triage.sh`, `triage/omni-alert-triage`); last commit 06/23, identical to remote. The encrypted backup limits the loss risk to 24 h, but for an auditor the versioned repository does not reflect production. Action: commit + push of the current state, then periodic drift check.
 - No formal approval (name, date, version) on the procedures: see A.5.25.
-- Installation order documented only up to script 14: complete the sequencing in `docs/00-INDEX.md` or `RESTORE.md`.
+- Installation order documented only up to script 14: complete the sequencing in `docs/00-INDEX.md` or `docs/exploitation/RESTORE.md`.
 
 ---
 

@@ -255,7 +255,7 @@ Single dashboard `requires={}` → 100% OSS (no Enterprise required).
   (`svc_siem` account, cred 600) — 14-day retention on both sides.
 - GELF status → "OMNI - Interne SIEM" stream → failure/absence alerts (mail).
 - `32-disk-guard.sh` + 6 h timer: 80% alert, emergency purge 88%→82%.
-- Restore: `RESTORE.md` / `PRA-RECONSTRUCTION-SIEM.md` (quarterly test — see PRO §2).
+- Restore: `docs/exploitation/RESTORE.md` / `PRA-RECONSTRUCTION-SIEM.md` (quarterly test — see PRO §2).
 
 ## 9. Infrastructure as Code (reference = these scripts, not the console)
 

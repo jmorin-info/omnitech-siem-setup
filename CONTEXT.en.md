@@ -146,7 +146,7 @@ delete the dashboard then re-run `14-graylog-dashboards.sh`.
 
 Order: NETLOGON\SIEM drop → `Deploy-AuditGPO.ps1` (pilot then prod) →
 `Deploy-AgentsGPO.ps1` (whole-domain deployment via GPO/scheduled task;
-NinjaOne = alternative channel) → FortiAnalyzer (see `FORTIANALYZER.md`).
+NinjaOne = alternative channel) → FortiAnalyzer (see `docs/sources/FORTIANALYZER.md`).
 - GPO `OMNI-AUDIT-Baseline`: advanced audit (CSV), cmdline in 4688,
   ScriptBlock+Module logging, Security 2 GB, SCENoApplyLegacyAuditPolicy.
 - `winlogbeat.yml` collects: Security (targeted EventID list), Sysmon (all),
@@ -222,7 +222,7 @@ the rules/pipelines if the source changes).
 ## 8. Remaining work (backlog)
 1. Mass Sysmon/Winlogbeat deployment: `windows/Deploy-AgentsGPO.ps1`
    (pilot → prod); NinjaOne as a complement off-domain.
-2. FortiAnalyzer: follow `FORTIANALYZER.md` (syslog TCP 1514 forwarding,
+2. FortiAnalyzer: follow `docs/sources/FORTIANALYZER.md` (syslog TCP 1514 forwarding,
    severity/vpn/admin/UTM filters; Graylog already ready).
 3. Restrict `NET_ADMIN` (nftables) to the actual admin VLAN.
 4. Test real mail sending (System > Notifications > Test) from VLAN 220.
@@ -240,7 +240,7 @@ the rules/pipelines if the source changes).
 - Dashboard OMNI - SOC: 8 pages (added "Alerts" and "Hunting" - LSASS,
   Office->shell, AppData/Temp, Run persistence, pipes, outbound binaries).
 - Read-only account `soc-viewer` (Reader role) created.
-- `ISO27001.md`: Annex A 2022 self-assessment (covered vs 9 gaps including
+- `docs/securite-conformite/ISO27001.md`: Annex A 2022 self-assessment (covered vs 9 gaps including
   NAS export of backups, restore test, named accounts).
 
 ## 7quinquies. Exchange/SharePoint - O365 Management Activity (06/11)
@@ -430,7 +430,7 @@ notification received, including Teams.
   -> local copy /var/backups/siem + export `//10.33.50.5/Public/SIEM`,
   14 d retention on both sides. Status auto-sent as GELF (12201) ->
   alerts "SIEM config backup failed" + "absent >26h" (21 section [4/4]).
-  Full rebuild procedure: `RESTORE.md` (test it once on a throwaway
+  Full rebuild procedure: `docs/exploitation/RESTORE.md` (test it once on a throwaway
   VM!). REMAINING ON JULIEN'S SIDE: FortiGate ELK Network rule -> H_OMS_FILES
   SMB service (mount cifs errors 115 otherwise) + possible /root/.smb-siem.cred
   if guest is refused (username/password/domain, chmod 600).

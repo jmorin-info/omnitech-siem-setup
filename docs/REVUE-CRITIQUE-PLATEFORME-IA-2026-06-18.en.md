@@ -3,7 +3,7 @@
 **OMNITECH SECURITY — 2026-06-18 — intended for: Julien Morin (CISO/dev)**
 **Subject:** reconcile the 3 research dossiers (`/tmp/prompt/compass_*.md`) with the real state of
 `omnitech-siem-setup`, challenge their assumptions, and settle an executable sequence.
-**Sources:** the 3 artifacts; `CONTEXT.md` (1007 l.), `README.md`, `docs/`, script-by-script inventory
+**Sources:** the 3 artifacts; `docs/reference/CONTEXT.md` (1007 l.), `README.md`, `docs/`, script-by-script inventory
 (59 scripts / 10,238 lines of bash + 26 Python microservices `/usr/local/sbin/omni-*`).
 
 ---
@@ -31,7 +31,7 @@
 ## 1. The central mismatch: "to be built" vs "already in prod"
 
 The three dossiers describe a BUILD as if the detection/correlation/response layer did not exist.
-Quantified reconciliation (the "already done" % is the inventory's self-assessment, corroborated by `CONTEXT.md`):
+Quantified reconciliation (the "already done" % is the inventory's self-assessment, corroborated by `docs/reference/CONTEXT.md`):
 
 | What the docs propose to "build" | Reality in `omnitech-siem-setup` | Already done |
 |---|---|---|
@@ -129,7 +129,7 @@ if the RAG is *validated* as necessary. **Do not import a framework to host an e
 **D. Presidio: the right risk, but the wrong architecture.** Doc 3 is right to hammer on the modest FR recall
 (~0.74, FR phone numbers at 0%). But it misses a decisive subtlety: **your data is largely
 structured** — Graylog gives you `user`, `host`, `src_ip`, `dest_ip`, `process_name`… (known schema,
-listed in `CONTEXT.md`). We **do not need** probabilistic NER to anonymize a known field: we
+listed in `docs/reference/CONTEXT.md`). We **do not need** probabilistic NER to anonymize a known field: we
 **tokenize it deterministically** (100% recall on those fields). Presidio only serves for the **residual
 free text** (command lines, message bodies). Correct architecture:
 *deterministic per-field tokenization (spine) → Presidio/regex on the free text (backstop) → fail-closed.*
@@ -193,7 +193,7 @@ and **nominative auth** (LDAPS exists, but a shared `admin` account is still use
 1. **🔴 Key-person / absence of version control — CRITICAL, IMMEDIATE.**
    `git` is **not installed**; **no repository** under `/root`. **10,238 lines** of production bash (59 scripts)
    + **26 Python microservices** are **under no versioning**. No test, no CI, no shellcheck.
-   The only net: the daily AES-256 tar to SMB. The operational knowledge lives in `CONTEXT.md` (a
+   The only net: the daily AES-256 tar to SMB. The operational knowledge lives in `docs/reference/CONTEXT.md` (a
    changelog) **and in your head**. If you leave tomorrow, it is a black box. *ISO note: it is also a hole
    in change management (A.8.32) and in clause 10.* **→ P0 action, before any AI (cf. §7).**
 2. **🟠 Indirect prompt injection** (as soon as an LLM reads logs). Handled by the architecture (deterministic

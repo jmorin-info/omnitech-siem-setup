@@ -317,6 +317,6 @@ after review (then re-run `57` followed by `14`).
   vSphere, Windows agent deployment (NinjaOne + GPO).
 
 ---
-*Keep up to date with every change. Detailed technical reference: `CONTEXT.md`
+*Keep up to date with every change. Detailed technical reference: `docs/reference/CONTEXT.md`
 (repo root). See also `INTEGRATION-SOURCES.md`, `INVENTAIRE-SOURCES.md`,
 `POLITIQUE-RETENTION.md` and `REPONSE-AUTOMATISEE.md` in `docs/`.*

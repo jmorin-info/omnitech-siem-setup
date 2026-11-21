@@ -146,7 +146,7 @@ supprimer le dashboard puis relancer `14-graylog-dashboards.sh`.
 
 Ordre : dépôt NETLOGON\SIEM → `Deploy-AuditGPO.ps1` (pilote puis prod) →
 `Deploy-AgentsGPO.ps1` (déploiement domaine entier par GPO/tâche planifiée ;
-NinjaOne = canal alternatif) → FortiAnalyzer (cf. `FORTIANALYZER.md`).
+NinjaOne = canal alternatif) → FortiAnalyzer (cf. `docs/sources/FORTIANALYZER.md`).
 - GPO `OMNI-AUDIT-Baseline` : audit avancé (CSV), cmdline dans 4688,
   ScriptBlock+Module logging, Security 2 Go, SCENoApplyLegacyAuditPolicy.
 - `winlogbeat.yml` collecte : Security (liste EventID ciblée), Sysmon (tout),
@@ -222,7 +222,7 @@ des règles/pipelines si la source change).
 ## 8. Reste à faire (backlog)
 1. Déploiement de masse Sysmon/Winlogbeat : `windows/Deploy-AgentsGPO.ps1`
    (pilote → prod) ; NinjaOne en complément hors domaine.
-2. FortiAnalyzer : suivre `FORTIANALYZER.md` (forwarding syslog TCP 1514,
+2. FortiAnalyzer : suivre `docs/sources/FORTIANALYZER.md` (forwarding syslog TCP 1514,
    filtres severity/vpn/admin/UTM ; Graylog déjà prêt).
 3. Restreindre `NET_ADMIN` (nftables) au VLAN d'admin réel.
 4. Tester l'envoi mail réel (System > Notifications > Test) depuis le VLAN 220.
@@ -240,7 +240,7 @@ des règles/pipelines si la source change).
 - Dashboard OMNI - SOC : 8 pages (ajout "Alertes" et "Hunting" - LSASS,
   Office->shell, AppData/Temp, persistance Run, pipes, binaires sortants).
 - Compte lecture seule `soc-viewer` (role Reader) cree.
-- `ISO27001.md` : auto-evaluation Annexe A 2022 (couvert vs 9 ecarts dont
+- `docs/securite-conformite/ISO27001.md` : auto-evaluation Annexe A 2022 (couvert vs 9 ecarts dont
   export NAS des sauvegardes, test de restauration, comptes nominatifs).
 
 ## 7quinquies. Exchange/SharePoint - O365 Management Activity (11/06)
@@ -430,7 +430,7 @@ notification recue, Teams compris.
   -> copie locale /var/backups/siem + export `//10.33.50.5/Public/SIEM`,
   retention 14 j des deux cotes. Statut auto-envoye en GELF (12201) ->
   alertes "Backup config SIEM en echec" + "absent >26h" (21 section [4/4]).
-  Procedure de reconstruction complete : `RESTORE.md` (tester 1 fois sur VM
+  Procedure de reconstruction complete : `docs/exploitation/RESTORE.md` (tester 1 fois sur VM
   jetable !). RESTE COTE JULIEN : regle FortiGate Reseau ELK -> H_OMS_FILES
   service SMB (mount cifs en erreur 115 sinon) + eventuel /root/.smb-siem.cred
   si guest refuse (username/password/domain, chmod 600).

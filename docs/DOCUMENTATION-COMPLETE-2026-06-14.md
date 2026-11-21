@@ -154,11 +154,11 @@ hebdomadaires et mensuelles documentées. Aucun coût de licence.
 
 | Document | Objet |
 |---|---|
-| `GUIDE.md` | « Comprendre le SIEM en 15 min » : schéma de flux, rôle des pages, analyses expliquées |
-| `CONTEXT.md` | Mémoire technique complète : historique, pièges connus (API 7.x), incidents résolus |
-| `RESTORE.md` | Restauration complète du SIEM depuis une sauvegarde config |
-| `VEEAM.md` | Intégration Veeam Backup & Replication |
-| `VSPHERE.md` | Intégration ESXi / vCenter |
+| `docs/demarrage/GUIDE.md` | « Comprendre le SIEM en 15 min » : schéma de flux, rôle des pages, analyses expliquées |
+| `docs/reference/CONTEXT.md` | Mémoire technique complète : historique, pièges connus (API 7.x), incidents résolus |
+| `docs/exploitation/RESTORE.md` | Restauration complète du SIEM depuis une sauvegarde config |
+| `docs/sources/VEEAM.md` | Intégration Veeam Backup & Replication |
+| `docs/sources/VSPHERE.md` | Intégration ESXi / vCenter |
 | `windows/README-WINDOWS.md` | Volet Windows/AD : agents, GPO, NinjaOne |
 | `fortigate/0*.conf` | Configurations FortiGate (UTM, VPN, proxy, policies) |
 
@@ -295,7 +295,7 @@ l'objet d'un gel manuel documenté par la DSI.
 - Configuration complète sauvegardée **chaque nuit (03:15)**, chiffrée
   AES-256, externalisée hors de la VM (`\\10.33.50.5\Public\SIEM`),
   rétention 14 jours, **alerte automatique en cas d'échec ou d'absence**.
-- Procédure de reconstruction documentée et testée (`RESTORE.md`) ;
+- Procédure de reconstruction documentée et testée (`docs/exploitation/RESTORE.md`) ;
   objectif de reprise de la collecte : **≤ 4 h** après mise à disposition
   d'une VM de remplacement (les journaux historiques ne sont pas restaurés).
 - Garde-fous capacité : alerte à 80 % du volume de données, purge d'urgence
@@ -356,7 +356,7 @@ dans un registre des dérogations. Une dérogation sans échéance est interdite
 - Les administrateurs systèmes/réseau sont sensibilisés aux exigences de
   journalisation (maintien de l'audit policy, des agents, du forwarding).
 - Tout incident de sécurité ou d'exploitation du SIEM alimente un retour
-  d'expérience consigné dans `CONTEXT.md` (pièges et résolutions) et, si
+  d'expérience consigné dans `docs/reference/CONTEXT.md` (pièges et résolutions) et, si
   pertinent, fait évoluer cette politique ou le standard.
 - **Revue** : annuelle a minima, et après tout incident majeur, changement
   d'architecture significatif ou évolution réglementaire.
@@ -639,14 +639,14 @@ mail/Teams → triage humain (la présente procédure).
 | Vérifier un hôte côté SIEM | recherche `source:<hostname>` sur 15 min |
 | Rejouer le provisionnement | scripts dans l'ordre : `10 → 11 → 12 → 13 → 14` puis **toujours** `21` (tuning alertes) et `31` (rétentions) |
 | Sauvegarde manuelle | `bash 30-backup-config.sh` |
-| Restauration | `RESTORE.md` |
+| Restauration | `docs/exploitation/RESTORE.md` |
 | État services | `systemctl status graylog-server opensearch mongod nginx` ; timers : `systemctl list-timers omni-*` |
 | Santé indexation | console System→Overview + Indexer failures |
 | Ajouter une source syslog | nouvel input + stream + règle pipeline de normalisation (STD §3) + retention + page dashboard — via nouveaux scripts IaC |
 
 ## 5. Incidents connus et résolutions (mémo)
 
-Voir `CONTEXT.md` (sections « PIÈGE À RETENIR ») — notamment : listes
+Voir `docs/reference/CONTEXT.md` (sections « PIÈGE À RETENIR ») — notamment : listes
 EventID trop longues (canal Security muet), tempête d'alertes / grâces,
 panne silencieuse Teams (Power Automate), stream M365 qui avale le GELF,
 locale FR (`auditpol` « Réussite »), TLS 1.2 obligatoire (Server 2016),
@@ -995,7 +995,7 @@ Dashboard unique `requires={}` → 100 % OSS (pas d'Enterprise requis).
   (compte `svc_siem`, cred 600) — rétention 14 j des deux côtés.
 - Statut GELF → stream « OMNI - Interne SIEM » → alertes échec/absence (mail).
 - `32-disk-guard.sh` + timer 6 h : alerte 80 %, purge d'urgence 88 %→82 %.
-- Restauration : `RESTORE.md` / `PRA-RECONSTRUCTION-SIEM.md` (test trimestriel — voir PRO §2).
+- Restauration : `docs/exploitation/RESTORE.md` / `PRA-RECONSTRUCTION-SIEM.md` (test trimestriel — voir PRO §2).
 
 ## 9. Infrastructure as Code (référence = ces scripts, pas la console)
 
@@ -1212,7 +1212,7 @@ Légende statut : ✅ Conforme · 🟡 Partiel (action en cours) · ⬜ À trait
 
 Ce document décrit la **remise en service du SIEM sur un serveur de
 remplacement** en cas de perte de la VM `bx-it-graylog-vm`. Il complète la
-procédure technique détaillée `RESTORE.md` (commandes exactes) par le cadre
+procédure technique détaillée `docs/exploitation/RESTORE.md` (commandes exactes) par le cadre
 de continuité : objectifs, scénarios, rôles, validation.
 
 ## 1. Objectifs de continuité
@@ -1236,7 +1236,7 @@ logs antérieurs est perdu mais la collecte temps réel redémarre immédiatemen
 | **Passphrase de déchiffrement** | Coffre-fort (`BACKUP_PASSPHRASE`) | ⚠️ À DÉPOSER AU COFFRE |
 | Mot de passe `admin` local de secours | Coffre-fort | ✅ |
 | Identifiants `svc_siem` (SMB) | Coffre-fort | ✅ |
-| Procédure technique | `RESTORE.md` (inclus dans l'archive) | ✅ |
+| Procédure technique | `docs/exploitation/RESTORE.md` (inclus dans l'archive) | ✅ |
 | Réservation IP/DNS `10.33.220.10` / FQDN | DNS interne + /etc/hosts | ✅ |
 | **Clé HMAC d'intégrité** `/etc/graylog/omni-integrity.key` | Coffre-fort + hors-bande | ⚠️ sans elle, la chaîne d'intégrité passée n'est plus **vérifiable** (perte de valeur probante) |
 | **Passphrase de secours LUKS `/data`** + **sauvegarde chiffrée du header** (header **inline** ; `omni-luks-header-*.img.enc`) | Passphrase → Coffre-fort ; header → SMB `/SIEM/luks/` (+ inclus dans le backup config chiffré quotidien) | ⚠️ sans la **passphrase**, `/data` est irrécupérable si le TPM/carte mère change ; le header inline est **sauvegardé/restaurable** (`luksHeaderRestore`) |
@@ -1401,8 +1401,8 @@ ces contrôles, et ce document comme preuve de couverture.
 
 ---
 *Support technique au SMSI OMNITECH — à valider et dater par le RSSI.
-Dernière revue : **2026-06-14**. Voir aussi `GUIDE.md` (vue d'ensemble),
-`CONTEXT.md` (détail d'implémentation), `INVENTAIRE-SOURCES.md` (actifs A.5.9),
+Dernière revue : **2026-06-14**. Voir aussi `docs/demarrage/GUIDE.md` (vue d'ensemble),
+`docs/reference/CONTEXT.md` (détail d'implémentation), `INVENTAIRE-SOURCES.md` (actifs A.5.9),
 `REGISTRE-DETECTIONS.md` (règles A.8.16) et `POLITIQUE-RETENTION.md` (durées).*
 
 
@@ -2276,8 +2276,8 @@ Tous planifiés (timers systemd), **auto-supervisés** par `omni-self-health` :
 - Sauvegarde config = reconstruction rapide de la configuration.
 
 ---
-*Voir `GUIDE.md` (vue d'ensemble accessible), `PROCEDURE-INCIDENT.md` (réponse),
-`ISO27001-MAPPING.md` (contrôles), `CONTEXT.md` (détail technique).*
+*Voir `docs/demarrage/GUIDE.md` (vue d'ensemble accessible), `PROCEDURE-INCIDENT.md` (réponse),
+`ISO27001-MAPPING.md` (contrôles), `docs/reference/CONTEXT.md` (détail technique).*
 
 
 <a id="doc-17"></a>
@@ -2709,7 +2709,7 @@ certificat LDAPS vérifié (`Verify return code: 0`).*
 # Guide de dépannage — SIEM OMNITECH
 
 *Version 1.1 — révisé le 14/06/2026 — Classification : interne. Format : symptôme → cause → solution.
-Référence technique exhaustive des incidents résolus : `CONTEXT.md` (section « PIÈGE À RETENIR »).*
+Référence technique exhaustive des incidents résolus : `docs/reference/CONTEXT.md` (section « PIÈGE À RETENIR »).*
 
 > Sources actuellement collectées : AD/Sysmon (Winlogbeat, Beats TLS 5044), FortiGate (via
 > FortiAnalyzer, syslog 1514 TCP/UDP), Microsoft 365 (GELF HTTP 12201, collecte *pull*),
@@ -2816,7 +2816,7 @@ tail -f /var/log/graylog-server/server.log
 
 ---
 
-> En cas d'incident non listé : consigner symptôme + résolution dans `CONTEXT.md`
+> En cas d'incident non listé : consigner symptôme + résolution dans `docs/reference/CONTEXT.md`
 > (section « PIÈGE À RETENIR ») pour enrichir ce guide.
 > Voir aussi : `INTEGRATION-SOURCES.md`, `POLITIQUE-RETENTION.md`, `PROCEDURE-INCIDENT.md`.
 
@@ -3132,7 +3132,7 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
   vSphere, déploiement des agents Windows (NinjaOne + GPO).
 
 ---
-*Tenir à jour à chaque évolution. Référence technique détaillée : `CONTEXT.md`
+*Tenir à jour à chaque évolution. Référence technique détaillée : `docs/reference/CONTEXT.md`
 (racine du dépôt). Voir aussi `INTEGRATION-SOURCES.md`, `INVENTAIRE-SOURCES.md`,
 `POLITIQUE-RETENTION.md` et `REPONSE-AUTOMATISEE.md` dans `docs/`.*
 

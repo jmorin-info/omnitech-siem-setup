@@ -146,7 +146,7 @@ flowchart LR
 |---|---|
 | **Detection engineering** | **règles** de pipeline sur les streams sources (AD/Sysmon, FortiGate x3 sites, FortiManager, M365, vSphere...) : événements tagués (`alert_tag`) + **définitions d'alerte**, fenêtres glissantes |
 | **Triage d'alertes intelligent** | `omni-alert-triage` : score multi-signaux (tier, priorité, actif critique, threat-intel, hors-heures, kill-chain) + jugement LLM de la zone grise ; mail réservé au critique, Teams en firehose, bruit écarté ; boucle de faux positifs (`omni-fp`, scopée + TTL, jamais sur un critique). Tout passe par le triage : zéro mail direct |
-| **MITRE ATT&CK** | `alert_tag` vers techniques/tactiques, score de risque 0-10, couche ATT&CK Navigator + matrice de couverture interactive + backlog de couverture (analyse de lacunes, `DETECTION-BACKLOG.md`) |
+| **MITRE ATT&CK** | `alert_tag` vers techniques/tactiques, score de risque 0-10, couche ATT&CK Navigator + matrice de couverture interactive + backlog de couverture (analyse de lacunes, `docs/detection/DETECTION-BACKLOG.md`) |
 | **Recherche d'entités et dossier 360** | Tout compte ou machine : identité unifiée, authentifications, logons, détections, chronologie, guides ; score de risque fusionné (ML + UEBA + sévérité), entités classées par risque, watchlist |
 | **Console SOC visuelle** | Tableaux de bord natifs par domaine (identité, M365, réseau, Aruba/Linux/EMS, endpoint...) + carte mondiale 3D des flux temps réel + recherche plein-texte (palette Ctrl+K, pivot alerte vers logs bruts) |
 | **Corrélation d'identité** | `SECURITY\rdupont`, `adm-rdupont`, `rdupont@dom` reconnus comme une seule personne (comptes liés agrégés) ; machines jamais fusionnées |
@@ -302,7 +302,7 @@ $EDITOR 00-vars.env    # remplacer chaque CHANGEME
 - `00-vars.env.example` est le **gabarit commenté** : identité machine, réseau, disques, heaps, ports, intégrations. Les valeurs `CHANGEME` sont des secrets à définir localement.
 - Les lignes marquées `A VERIFIER` doivent être contrôlées avant tout lancement.
 - Placer les commentaires **sur des lignes séparées** : certains collecteurs Python relisent ce fichier (`load_env`) et ne strippent pas les commentaires en fin de ligne.
-- Les secrets annexes (comptes de service, webhooks, clés API) sont recensés dans `SECRETS.example.md` (gabarit ; le fichier réel `SECRETS.md` est ignoré par git).
+- Les secrets annexes (comptes de service, webhooks, clés API) sont recensés dans `docs/securite-conformite/SECRETS.example.md` (gabarit ; le fichier réel `SECRETS.md` est ignoré par git).
 
 Tous les scripts sourcent ce fichier en premier, puis `lib-graylog.sh` (voir [Dépannage](#dépannage) : l'ordre est impératif).
 
@@ -323,7 +323,7 @@ Tout hôte s'enrôle en **une commande**, depuis la page **Déploiement** de la 
 
 ## Intégration FortiGate / FortiAnalyzer multi-site
 
-- Les **3 FortiGate** (sites BDX / IV / LC) journalisent vers le **FortiAnalyzer**, qui forwarde en syslog/CEF vers les inputs 1514/5555 du SIEM. Configuration côté Fortinet : dossier `fortigate/` (logging UTM, forwarding FAZ, durcissement VPN, policies UTM par site) et guide `FORTIANALYZER.md`.
+- Les **3 FortiGate** (sites BDX / IV / LC) journalisent vers le **FortiAnalyzer**, qui forwarde en syslog/CEF vers les inputs 1514/5555 du SIEM. Configuration côté Fortinet : dossier `fortigate/` (logging UTM, forwarding FAZ, durcissement VPN, policies UTM par site) et guide `docs/sources/FORTIANALYZER.md`.
 - Le pipeline enrichit chaque événement d'un champ **`fortigate_site`** (lookup `lookups/fortigate-sites.csv`) : dashboards, détections et triage sont déclinés par site.
 - Le **SOAR** (`36-soar.sh`, `97-multisite-soar.sh`) publie une **blocklist threat-feed** consommée par les FortiGate des trois sites (feeders WAF / password spray / brute-force VPN ; sans identifiant sur les firewalls, TTL, liste blanche, audit).
 - Sources Fortinet complémentaires : FortiManager (`63`), FortiClient EMS en syslog TLS (`90`), FortiGate DHCP (`56`).
@@ -354,7 +354,7 @@ Tout hôte s'enrôle en **une commande**, depuis la page **Déploiement** de la 
 | `lookups/` | Tables CSV (EventID, MITRE, segments réseau, sites FortiGate, `alert-guidance.json`...) |
 | `tests/` · `run-tests.sh` | Suite de tests hors ligne (py_compile + pytest : backend mobile, oms-ml, oms-xdr) |
 | `docs/` | Corpus ISO 27001 (politique, standards, procédures, PRA, registres), architecture, guide de dépannage, captures — index : `docs/00-INDEX.md` |
-| `00-vars.env.example` · `SECRETS.example.md` | **Gabarits** de configuration et de secrets (valeurs réelles jamais versionnées) |
+| `00-vars.env.example` · `docs/securite-conformite/SECRETS.example.md` | **Gabarits** de configuration et de secrets (valeurs réelles jamais versionnées) |
 
 ## Validation post-installation
 
@@ -417,7 +417,7 @@ Points d'attention sur les snapshots OpenSearch :
 
 Procédures de restauration :
 
-- **`RESTORE.md`** — restauration complète pas à pas depuis l'archive chiffrée (VM de remplacement, même IP/FQDN, redémarrage de la collecte).
+- **`docs/exploitation/RESTORE.md`** — restauration complète pas à pas depuis l'archive chiffrée (VM de remplacement, même IP/FQDN, redémarrage de la collecte).
 - **`docs/PRA-RECONSTRUCTION-SIEM.md`** — plan de reconstruction (objectifs de continuité, scénarios, rôles, validation), référence ISO A.8.13 / A.5.30.
 - **`docker/README-DOCKER.md`** — restauration de la configuration dans la stack conteneurisée (DR/staging).
 
@@ -425,7 +425,7 @@ Le serveur est physique : il n'est **pas** sauvegardé en image par Veeam. La re
 
 ## Dépannage
 
-Guide complet symptôme / cause / solution : **`docs/GUIDE-DEPANNAGE.md`**. Référence exhaustive des incidents résolus : `CONTEXT.md` (sections « PIEGE A RETENIR »). Pièges récurrents à connaître avant d'intervenir :
+Guide complet symptôme / cause / solution : **`docs/GUIDE-DEPANNAGE.md`**. Référence exhaustive des incidents résolus : `docs/reference/CONTEXT.md` (sections « PIEGE A RETENIR »). Pièges récurrents à connaître avant d'intervenir :
 
 | Piège | Règle |
 |---|---|
@@ -519,7 +519,7 @@ Une partie des robots est corrigée directement en production, dans `/usr/local/
 - **Réponse AD non armée** : la désactivation de compte via LDAPS reste en dry-run (double verrou), en attente d'accès API / délégation AD.
 - **OpenSearch 3.x incompatible** avec Graylog 7.1 : rester en 2.19.x (paquets tenus en hold, voir [Stack et versions épinglées](#stack-et-versions-épinglées)).
 - **Fenêtre TOFU** : le CA interne n'est épinglé qu'après le premier contact HTTPS du kit d'enrôlement (fenêtre MITM au premier appel uniquement, réseau interne).
-- **Les logs ne sont pas dans la sauvegarde config** : l'archive chiffrée quotidienne couvre la configuration complète, pas les indices OpenSearch ; la profondeur d'historique repose sur les snapshots sélectifs (`oms-snap-siem`), qui ne couvrent pas tout : Sysmon et les autres journaux Windows en sont exclus, et seules les fenêtres récentes des gros index sont gardées. Après une restauration config seule, l'historique repart de zéro (voir `RESTORE.md`).
+- **Les logs ne sont pas dans la sauvegarde config** : l'archive chiffrée quotidienne couvre la configuration complète, pas les indices OpenSearch ; la profondeur d'historique repose sur les snapshots sélectifs (`oms-snap-siem`), qui ne couvrent pas tout : Sysmon et les autres journaux Windows en sont exclus, et seules les fenêtres récentes des gros index sont gardées. Après une restauration config seule, l'historique repart de zéro (voir `docs/exploitation/RESTORE.md`).
 - **Numérotation des scripts** : plusieurs numéros sont partagés (38, 40, 48, 49, 84, 85, 97) — se référer au [tableau des doublons](#numéros-dupliqués--ordre-correct-dexécution) et à l'en-tête de chaque script.
 
 ## Sécurité et secrets
@@ -535,14 +535,14 @@ Une partie des robots est corrigée directement en production, dans `/usr/local/
 Preuves Annexe A produites par la plateforme : **A.8.15/8.16** (journalisation et surveillance), **A.8.8** (vulnérabilités), **A.5.7** (renseignement sur les menaces), **A.8.11** (masquage), **A.5.25/5.26** (réponse à incident), **A.8.13** (sauvegarde), **A.5.37 / A.8.32** (procédures et gestion du changement — ce dépôt), **Clause 10** (amélioration continue).
 
 - **Rétentions différenciées par paliers (90 / 180 / 365 jours)** provisionnées en code (`41-retention-iso.sh`, `83-retention-consolidee.sh`) et adaptées à la valeur probante de chaque source ; politique de référence : `docs/POLITIQUE-RETENTION.md`.
-- **Mapping et preuves** : mapping complet des mesures dans `docs/ISO27001-MAPPING.md` (synthèse à la racine : `ISO27001.md`), générateur de preuves daté (`68-iso-evidence.sh`) et corpus de preuves dans `docs/ISO27001-preuves.md` ; registres, procédures et audits indexés par `docs/00-INDEX.md`.
+- **Mapping et preuves** : mapping complet des mesures dans `docs/ISO27001-MAPPING.md` (synthèse à la racine : `docs/securite-conformite/ISO27001.md`), générateur de preuves daté (`68-iso-evidence.sh`) et corpus de preuves dans `docs/ISO27001-preuves.md` ; registres, procédures et audits indexés par `docs/00-INDEX.md`.
 - **Intégrité** : chaîne anti-altération HMAC (`omni-integrity`), sauvegardes chiffrées exportées hors de l'hôte.
 
 ## État et feuille de route
 
 **Production.**
 
-**Livré** : corrélation XDR + triage LLM local (`oms-xdr`), triage de mail intelligent (`omni-alert-triage` — scoring multi-signaux + LLM de la zone grise + boucle de faux positifs `omni-fp`, avec bouton « FP » par alerte dans la console `/soc/`), scoring ML (`oms-ml`), FortiGate multi-site (BDX/IV/LC, enrichissement par site + feeder SOAR WAF), console SOC + PWA bilingues (recherche d'entités, dossier 360, chronologie unifiée, corrélation d'identité, 115 playbooks intégrés, scores ML/UEBA, graphe d'attaque, SLA collecte et santé des robots), threat-intel filtrée en qualité + surveillance des fuites, matrice ATT&CK + backlog de couverture (`DETECTION-BACKLOG.md`), actionneur AD (dry-run), registre clause 10.
+**Livré** : corrélation XDR + triage LLM local (`oms-xdr`), triage de mail intelligent (`omni-alert-triage` — scoring multi-signaux + LLM de la zone grise + boucle de faux positifs `omni-fp`, avec bouton « FP » par alerte dans la console `/soc/`), scoring ML (`oms-ml`), FortiGate multi-site (BDX/IV/LC, enrichissement par site + feeder SOAR WAF), console SOC + PWA bilingues (recherche d'entités, dossier 360, chronologie unifiée, corrélation d'identité, 115 playbooks intégrés, scores ML/UEBA, graphe d'attaque, SLA collecte et santé des robots), threat-intel filtrée en qualité + surveillance des fuites, matrice ATT&CK + backlog de couverture (`docs/detection/DETECTION-BACKLOG.md`), actionneur AD (dry-run), registre clause 10.
 
 **À venir** : isolation d'endpoint ESET + armement de la réponse AD (en attente d'accès API / délégation), couche LLM cloud optionnelle (conseil) avec tokenisation déterministe.
 
@@ -560,16 +560,16 @@ de l'outil de mise à jour du code du dépôt.
 
 | Document | Contenu |
 |---|---|
-| `GUIDE.md` | Présentation vulgarisée de la plateforme (lecteur non technique) |
-| `CONTEXT.md` | Référence technique exhaustive : historique, décisions, pièges rencontrés |
+| `docs/demarrage/GUIDE.md` | Présentation vulgarisée de la plateforme (lecteur non technique) |
+| `docs/reference/CONTEXT.md` | Référence technique exhaustive : historique, décisions, pièges rencontrés |
 | `docs/00-INDEX.md` | Index du corpus documentaire ISO (politique, standards, procédures, registres, audits) |
 | `docs/DOSSIER-ARCHITECTURE-SIEM.md` | Dossier d'architecture |
 | `docs/GUIDE-DEPANNAGE.md` | Dépannage symptôme / cause / solution |
-| `RESTORE.md` · `docs/PRA-RECONSTRUCTION-SIEM.md` | Restauration pas à pas · plan de reconstruction (PRA) |
-| `FORTIANALYZER.md` · `M365.md` · `VSPHERE.md` · `VEEAM.md` | Guides d'intégration par source |
-| `ISO27001.md` · `docs/ISO27001-MAPPING.md` · `docs/ISO27001-preuves.md` | Synthèse, mapping et preuves ISO 27001:2022 |
+| `docs/exploitation/RESTORE.md` · `docs/PRA-RECONSTRUCTION-SIEM.md` | Restauration pas à pas · plan de reconstruction (PRA) |
+| `docs/sources/FORTIANALYZER.md` · `docs/sources/M365.md` · `docs/sources/VSPHERE.md` · `docs/sources/VEEAM.md` | Guides d'intégration par source |
+| `docs/securite-conformite/ISO27001.md` · `docs/ISO27001-MAPPING.md` · `docs/ISO27001-preuves.md` | Synthèse, mapping et preuves ISO 27001:2022 |
 | `docs/POLITIQUE-RETENTION.md` | Politique de rétention des journaux |
-| `DETECTION-BACKLOG.md` | Backlog de couverture MITRE ATT&CK (analyse de lacunes) |
+| `docs/detection/DETECTION-BACKLOG.md` | Backlog de couverture MITRE ATT&CK (analyse de lacunes) |
 | `windows/README-WINDOWS.md` · `docker/README-DOCKER.md` | Volet Windows/AD · déploiement conteneurisé |
 
 ## Licence

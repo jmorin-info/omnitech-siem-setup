@@ -4,7 +4,7 @@
 
 This document describes the **recommissioning of the SIEM on a replacement
 server** in the event of loss of the `bx-it-graylog-vm` VM. It complements the
-detailed technical procedure `RESTORE.md` (exact commands) with the continuity
+detailed technical procedure `docs/exploitation/RESTORE.md` (exact commands) with the continuity
 framework: objectives, scenarios, roles, validation.
 
 ## 1. Continuity objectives
@@ -28,7 +28,7 @@ to the same FQDN/IP).
 | **Decryption passphrase** | Vault (`BACKUP_PASSPHRASE`) | ⚠️ TO BE DEPOSITED IN THE VAULT |
 | Local emergency `admin` password | Vault | ✅ |
 | `svc_siem` credentials (SMB) | Vault | ✅ |
-| Technical procedure | `RESTORE.md` (included in the archive) | ✅ |
+| Technical procedure | `docs/exploitation/RESTORE.md` (included in the archive) | ✅ |
 | IP/DNS reservation `10.33.220.10` / FQDN | Internal DNS + /etc/hosts | ✅ |
 | **Integrity HMAC key** `/etc/graylog/omni-integrity.key` | Vault + out-of-band | ⚠️ without it, the past integrity chain can no longer be **verified** (loss of evidentiary value) |
 | **LUKS emergency passphrase for `/data`** + **encrypted header backup** (header **inline**; `omni-luks-header-*.img.enc`) | Passphrase → Vault; header → SMB `/SIEM/luks/` (+ included in the daily encrypted config backup) | ⚠️ without the **passphrase**, `/data` is unrecoverable if the TPM/motherboard changes; the inline header is **backed up/restorable** (`luksHeaderRestore`) |

@@ -513,7 +513,7 @@ a complete recovery of log data and all external collectors.
   off the host. Indexed logs are covered by **selective, incremental OpenSearch snapshots**
   (`oms-snap-siem`, 01:30): rolling windows for the big indices, small ones in full, plus a
   weekly test restore. Restore with `include_aliases=false` so the Graylog write alias is
-  never moved. Full procedure: [`RESTORE.md`](RESTORE.md).
+  never moved. Full procedure: [`docs/exploitation/RESTORE.md`](docs/exploitation/RESTORE.md).
 - **Automatic updates** — Debian security fixes through `unattended-upgrades`. The SIEM stack
   is handled by `oms-maj-siem` every Sunday at 04:30:
   1. pre-checks (`/data` mounted, OpenSearch green, Graylog API up, free space);
@@ -628,9 +628,9 @@ The complete documentation set lives under [`docs/`](docs/) — start at
 | Executive summary | [`docs/SYNTHESE-EXECUTIVE.md`](docs/SYNTHESE-EXECUTIVE.md) |
 
 > Source-specific integration notes (kept from the original French documentation):
-> [`VEEAM.md`](VEEAM.md), [`M365.md`](M365.md),
-> [`VSPHERE.md`](VSPHERE.md), [`FORTIANALYZER.md`](FORTIANALYZER.md),
-> [`GUIDE.md`](GUIDE.md), [`CONTEXT.md`](CONTEXT.md).
+> [`docs/sources/VEEAM.md`](docs/sources/VEEAM.md), [`docs/sources/M365.md`](docs/sources/M365.md),
+> [`docs/sources/VSPHERE.md`](docs/sources/VSPHERE.md), [`docs/sources/FORTIANALYZER.md`](docs/sources/FORTIANALYZER.md),
+> [`docs/demarrage/GUIDE.md`](docs/demarrage/GUIDE.md), [`docs/reference/CONTEXT.md`](docs/reference/CONTEXT.md).
 
 ---
 
