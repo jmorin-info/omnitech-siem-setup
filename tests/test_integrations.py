@@ -222,10 +222,10 @@ def test_cleanup_that_never_finishes_cannot_start_a_second_transport(monkeypatch
     client, module = FakeGraylog(), load_module("watchguard")
     original = client.call
     def not_removed(method, path, body=None):
-        result = original(method, path, body)
         if method == "GET" and path.startswith("/system/inputstates/"):
+            client.calls.append((method, path, body))
             return {"id": "c" * 24, "state": "STOPPING"}
-        return result
+        return original(method, path, body)
     client.call = not_removed
     with pytest.raises(RuntimeError, match="stop cleanly"):
         install(client, module, parameters(module), apply=True)
