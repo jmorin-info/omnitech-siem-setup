@@ -57,6 +57,9 @@ omni_api_setup() {
     fi
   fi
   API="${API%/}"
+  # L'API REST de Graylog est servie sous /api : une URL de site sans ce suffixe
+  # (cas du 00-vars.env de production) renverrait la page HTML de l'interface.
+  [[ "$API" == */api ]] || API="$API/api"
   API_CA="${GRAYLOG_API_CA:-/etc/graylog/certs/omnitech-rootca.crt}"
   CURL=(curl --silent --show-error --fail --connect-timeout 10 --max-time 90
         -u "admin:${GRAYLOG_ADMIN_PASS}" -H "Accept: application/json" -H "Content-Type: application/json" -H "X-Requested-By: omni-provision")
