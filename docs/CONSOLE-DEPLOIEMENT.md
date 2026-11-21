@@ -116,6 +116,132 @@ puis redémarrer `omni-mobile-api`. En Docker, la définir dans `docker/.env` pu
 recréer le service `console`. Ces réglages suivent les arrivées de journaux ; ils
 ne créent ni input, ni règle de pare-feu, ni configuration sur l'équipement.
 
+## Espace Administration
+
+Fonctionnement et matrice des actions : [CONSOLE-SOC.md](CONSOLE-SOC.md#espace-administration).
+
+### Paramètres du backend (`/etc/default/omni-mobile`)
+
+Toutes les variables sont facultatives ; les valeurs indiquées sont les défauts.
+
+```ini
+# Clone du dépôt utilisé pour lookups et oms-graph (lu aussi depuis l'environnement)
+OMNI_REPO_DIR=/opt/omni-siem/repository
+# Dérivés surchargeables : OMS_GRAPH_DIR, OMS_GRAPH_PY, OMS_GRAPH_CFG, MITRE_LOOKUP
+# Rôles et audit
+SOC_ADMIN_DIR=/var/lib/omni-mobile/admin
+SOC_DEFAULT_ROLE=analyste
+# Écritures d'administration limitées aux réseaux internes
+SOC_ADMIN_INTERNAL_ONLY=1
+SOC_ADMIN_NETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128,fc00::/7
+# Validation par un second administrateur, validité d'une demande (s), simulation globale
+SOC_ADMIN_SELF_APPROVE=0
+SOC_ADMIN_APPROVAL_TTL=86400
+SOC_ADMIN_DRY_RUN=0
+SOC_ADMIN_WRITES_PER_5MIN=30
+# Copie GELF du journal d'audit (vide = désactivée)
+SOC_ADMIN_GELF_URL=http://127.0.0.1:12201/gelf
+# Détections Graylog : fichier contenant un jeton d'accès (vide = onglet indisponible)
+SOC_GRAYLOG_TOKEN_FILE=
+# Services redémarrables (doivent aussi figurer dans SOC_EXEC_RESTARTABLE de l'exécuteur)
+SOC_ADMIN_RESTARTABLE=
+```
+
+Les chemins des services réutilisés ont des défauts conformes à la production et ne sont
+à surcharger que sur une autre installation : `SOC_TRIAGE_URL`, `SOC_TRIAGE_ENV`,
+`SOC_SOAR_URL`, `SOC_SOAR_ENV`, `SOC_SOAR_STATE`, `SOC_SOAR_META`, `SOC_SOAR_EXCL`,
+`SOC_SOAR_FIX`, `SOC_SOAR_DEC`, `SOC_SYSTEMCTL`. Une plage invalide dans `SOC_ADMIN_NETS`
+empêche le démarrage du backend.
+
+Sur une installation neuve où le backend tourne sous le compte `omni-console`,
+`/etc/omni-alert-triage.env` n'est généralement pas lisible par ce compte : l'onglet
+Paramètres l'indique et l'ajout de faux positifs échoue faute de jeton de triage.
+
+Les chemins d'état (`MOBILE_SUBS_FILE`, `MOBILE_CASES_FILE`, `MOBILE_WATCH_FILE`,
+`SOC_REQ_DIR`, `SOC_ADMIN_DIR`) se lisent dans ce fichier ou, à défaut, dans
+l'environnement. Avec `OMNI_TEST_MODE=1` (imposé par la suite de tests), le backend et
+l'exécuteur refusent de démarrer si l'un d'eux vise `/var/lib`, `/etc`, `/var/www`,
+`/var/log`, `/usr` ou `/opt/oms-*`, et aucune copie GELF n'est émise.
+
+Le venv du backend s'installe à partir de `mobile/requirements.txt` (pywebpush et ses
+dépendances, versions alignées sur le venv en service le 21/11/2026).
+
+### Exécuteur privilégié
+
+Le backend est confiné (écriture limitée à `/var/lib/omni-mobile`). Les actions qui
+modifient `/etc/omni-soar/*` ou `/etc/omni-alert-triage.env`, ou redémarrent un service,
+sont déposées dans `SOC_ADMIN_DIR/exec/pending` puis appliquées par
+`omni-soc-admin-exec` (root, oneshot, déclenché par une unité path et un timer de
+rattrapage de 5 minutes ; fichiers dans `mobile/` et `mobile/systemd/`). Sans exécuteur
+installé, ces demandes restent à l'état « Transmise à l'exécuteur » ; l'onglet Supervision
+affiche son dernier passage. Sa liste blanche de redémarrages (`SOC_EXEC_RESTARTABLE` dans
+`/etc/default/omni-soc-admin-exec`, modèle `mobile/systemd/omni-soc-admin-exec.default.example`)
+est vide par défaut.
+
+### Jeton Graylog pour les détections
+
+Créer dans Graylog un utilisateur de service dédié (par exemple `soc-console`), limité à
+la lecture et à la modification des définitions d'événements, puis un jeton d'accès pour
+cet utilisateur. Déposer ce jeton dans `/etc/omni-mobile/graylog-admin.token` (droits
+`600`, jamais dans le dépôt) et renseigner
+`SOC_GRAYLOG_TOKEN_FILE=/etc/omni-mobile/graylog-admin.token`.
+
+### Configuration nginx non versionnée
+
+Le vhost en service référence des éléments absents du dépôt : les zones `limit_req`
+`omni_api` (utilisée par `location /m/api/`) et `omni_auth` (login Graylog), déclarées dans
+`/etc/nginx/conf.d/omni-ratelimit.conf`, et `/var/www/siem-mobile/sw-retire.js` (retrait de
+l'ancien service worker `/m/`). Les conserver lors d'une réinstallation ; sur un nouveau
+serveur, déclarer ces zones avant de reprendre ce vhost, sinon `nginx -t` échoue. Leur
+versionnement relève du chantier de déploiement. L'espace Administration n'ajoute aucune
+route nginx : il passe par `location /m/api/`, qui doit continuer à poser
+`proxy_set_header X-Real-IP $remote_addr;` (utilisé pour la restriction réseau).
+
+### Déployer cette version en production
+
+Commandes à exécuter par l'administrateur, après fusion de la branche dans `main`.
+Aujourd'hui, `omni-mobile-api` exécute `/root/omnitech-siem-setup/mobile/omni-mobile-api.py`
+avec le venv de cette ancienne copie ; la procédure le repointe vers le clone de référence.
+
+1. Mettre à jour le clone : `cd /opt/omni-siem/repository && git pull --ff-only`.
+2. Sauvegarder : `TS=$(date +%Y%m%d-%H%M%S)`, puis
+   `cp -a /etc/default/omni-mobile /etc/default/omni-mobile.avant-admin-$TS` et
+   `cp -a /var/www/siem-soc /var/backups/siem-soc.avant-admin-$TS`.
+3. Créer le venv : `python3 -m venv /opt/omni-siem/repository/mobile/.venv`, puis
+   `/opt/omni-siem/repository/mobile/.venv/bin/pip install -r /opt/omni-siem/repository/mobile/requirements.txt`.
+4. Ajouter à `/etc/default/omni-mobile` (sans rien retirer) : `OMNI_REPO_DIR=/opt/omni-siem/repository`
+   et, tant que le clone n'a pas de venv oms-graph,
+   `OMS_GRAPH_PY=/root/omnitech-siem-setup/oms-graph/.venv/bin/python`.
+5. Créer le drop-in `/etc/systemd/system/omni-mobile-api.service.d/20-depot-reference.conf`
+   contenant une section `[Service]`, une ligne `ExecStart=` vide puis
+   `ExecStart=/opt/omni-siem/repository/mobile/.venv/bin/python /opt/omni-siem/repository/mobile/omni-mobile-api.py`.
+   **Ne pas redémarrer le service avant que le venv de l'étape 3 existe** : sans lui,
+   le service échoue au démarrage (`status=203/EXEC`).
+6. Installer l'exécuteur :
+   `install -m 755 /opt/omni-siem/repository/mobile/omni-soc-admin-exec /usr/local/sbin/`,
+   `install -m 644 /opt/omni-siem/repository/mobile/systemd/omni-soc-admin-exec.service /opt/omni-siem/repository/mobile/systemd/omni-soc-admin-exec.path /opt/omni-siem/repository/mobile/systemd/omni-soc-admin-exec.timer /etc/systemd/system/`,
+   et, si absent, copier `omni-soc-admin-exec.default.example` vers `/etc/default/omni-soc-admin-exec` (droits `640`).
+7. Publier les assets : `install -m 644 /opt/omni-siem/repository/mobile/soc/*.js /opt/omni-siem/repository/mobile/soc/*.css /opt/omni-siem/repository/mobile/soc/index.html /var/www/siem-soc/`,
+   puis `chown www-data:www-data /var/www/siem-soc/*.js /var/www/siem-soc/*.css /var/www/siem-soc/index.html`.
+8. Activer : `systemctl daemon-reload`,
+   `systemctl enable --now omni-soc-admin-exec.path omni-soc-admin-exec.timer`,
+   `systemctl restart omni-mobile-api`.
+9. Contrôler : `systemctl show omni-mobile-api -p ExecStart --value`,
+   `curl -fsS http://127.0.0.1:8090/m/api/vapid`, `journalctl -u omni-mobile-api -n 30 --no-pager`.
+
+Ensuite, depuis un poste du réseau interne, ouvrir `/soc/`, accepter **Recharger** (service
+worker `soc-v6-2026112101`), vérifier l'entrée **Administration** avec un compte de
+`SOC_ADMINS`, lancer une **simulation** (par exemple un blocage SOAR) et contrôler qu'elle
+apparaît dans l'onglet **Journal** avec une chaîne vérifiée. Facultatif, une fois
+`audit.jsonl` créé : `chattr +a /var/lib/omni-mobile/admin/audit.jsonl` interdit la
+réécriture du journal tout en autorisant les ajouts.
+
+Retour arrière : supprimer le drop-in `20-depot-reference.conf`, restaurer
+`/etc/default/omni-mobile.avant-admin-$TS` et `/var/backups/siem-soc.avant-admin-$TS`,
+désactiver `omni-soc-admin-exec.path` et `omni-soc-admin-exec.timer`, puis
+`systemctl daemon-reload` et `systemctl restart omni-mobile-api`. L'ancienne version
+ignore les fichiers de `/var/lib/omni-mobile/admin`.
+
 ## Distinguer les erreurs
 
 | Symptôme | Vérifications et action |

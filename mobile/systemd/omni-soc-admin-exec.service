@@ -1,0 +1,12 @@
+[Unit]
+Description=OMNI - exécuteur des actions d'administration approuvées dans la console /soc
+Documentation=file:///opt/omni-siem/repository/docs/CONSOLE-SOC.md
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-soc-admin-exec
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+# /usr et /boot en lecture seule. /etc reste inscriptible : le remplacement atomique
+# (fichier temporaire + rename) de /etc/omni-alert-triage.env exige d'écrire dans /etc.
+ProtectSystem=true
