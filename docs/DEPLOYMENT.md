@@ -1,93 +1,208 @@
-# Deployment
+# Déploiement
 
-Start with [the practical paths](DEMARRER.md): fresh installation, existing-host
-updates or adding a source. This page summarizes their scope.
+Cette page décrit le parcours complet : installation neuve, redéploiement d'un
+composant, vérification et retour arrière. Les prérequis et options de
+l'installation neuve sont détaillés dans [INSTALLATION.md](INSTALLATION.md), les
+mises à jour de code dans [UPDATES.md](UPDATES.md), la console dans
+[CONSOLE-DEPLOIEMENT.md](CONSOLE-DEPLOIEMENT.md).
 
-The repository supports a fresh **core SOC** installation and separate workflows
-for code updates, integration packs and disaster recovery. The configured OMNITECH
-reference installation has additional services and site settings; a fresh install
-does not automatically reproduce all of them.
+## Dépôt canonique
 
-## Fresh native installation
+Le code s'exécute depuis **un seul** clone Git : `/opt/omni-siem/repository`
+(variable `OMNI_SIEM_HOME`). Les robots de `/usr/local/sbin` y lisent
+`00-vars.env`, les unités systemd y trouvent les scripts et les venvs Python
+(`mobile/.venv`, `oms-xdr/.venv`, `oms-graph/.venv`, `oms-ml/.venv`).
 
-For an Ubuntu walkthrough, see [UBUNTU-DEMARRAGE.md](UBUNTU-DEMARRAGE.md).
-Ubuntu 26.04 requires `--experimental-ubuntu-2604` and a compatible kernel; the
-MongoDB 8 noble packages are outside vendor support on that OS. Ubuntu 24.04 is
-the supported Ubuntu route for this stack.
+- Les scripts shell exécutés depuis le dépôt utilisent
+  `${OMNI_SIEM_HOME:-/opt/omni-siem/repository}` ou leur propre répertoire.
+- Les fichiers déployés (robots, unités) contiennent le chemin par défaut en clair ;
+  avec un autre emplacement, `omni-deploy` le remplace au moment du déploiement
+  (`--home` ou `OMNI_SIEM_HOME`).
+- `omni-deploy` refuse d'appliquer depuis une autre copie que le dépôt canonique.
 
-Follow [INSTALLATION.md](INSTALLATION.md) for prerequisites, platform selection,
-exact phase order, storage/network choices and acceptance checks. Ubuntu 22.04/24.04
-and Debian 12/13 amd64 are the installer targets. The Graylog compatibility matrix
-must be checked for the selected versions; Debian 13 remains outside its current
-list of officially supported OS versions.
+**Différence avec l'installation historique** : la production de référence exécute
+encore une partie de son code depuis `/root/omnitech-siem-setup` (9 unités, 25 robots,
+venvs). Le dépôt ne contient plus ce chemin, sauf dans les unités de base recopiées
+de la production, neutralisées par des drop-ins `50-depot-reference.conf`, et dans
+`mobile/omni-mobile-api.py` (`OMS_GRAPH_DIR`, valeur par défaut de `MITRE_LOOKUP`),
+à corriger par le chantier console. La migration est décrite en section 6.
+
+## 1. Installation neuve
 
 ```bash
-cp 00-vars.env.example 00-vars.env
-chmod 600 00-vars.env
-# Edit the site parameters and secrets.
+sudo git clone https://github.com/jmorin-info/omnitech-siem-setup.git /opt/omni-siem/repository
+cd /opt/omni-siem/repository
+cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env   # puis renseigner le site
 sudo bash install.sh --generate-secrets
 sudo bash install.sh --plan
 sudo bash install.sh --apply
+sudo python3 tools/omni-healthcheck.py
 ```
 
-The installer uses an explicit phase list, records progress and refuses an existing
-SIEM. It includes the core stack, initial inputs/model/pipelines/detections/dashboards,
-nginx, the complete SOC console and a daily application backup. A failed installation
-can be resumed only with the same source revision, configuration and options.
+`install.sh` applique une liste explicite de phases (profil `core-soc`), enregistre
+sa progression et refuse une machine déjà installée. **Ne jamais exécuter tous les
+scripts numérotés** : certains purgent, changent la rétention ou recréent des
+dashboards. Les robots, unités et venvs des extensions (ML/XDR/graphe, SOAR,
+M365, SEAL...) ne sont pas installés par ce profil : après leur configuration, ils
+se déploient avec `omni-deploy` (section 2).
 
-**Never execute every numbered script.** Some are destructive maintenance operations,
-change retention, enable site-specific responses or delete/recreate dashboards. An
-existence check in a helper does not guarantee full convergence or preservation of
-user edits. The native installer is not a generic migration tool.
+## 2. Redéployer un composant : `tools/omni-deploy.py`
 
-## Existing installations
-
-Use [UPDATES.md](UPDATES.md) to fetch a fixed Git revision into an isolated cache,
-inspect differences, prepare a staged release and apply permitted code files with
-backups. Local code conflicts stop the update. Tenant configuration, secrets and
-databases are preserved. Database/package changes require their own compatibility
-review, backups and migration procedure. A code rollback cannot undo a database migration.
-
-After updating console code, use [CONSOLE-DEPLOIEMENT.md](CONSOLE-DEPLOIEMENT.md) to
-publish all assets and activate a backend owned by the new installer. Legacy service
-paths and customized nginx locations are preserved and require explicit review.
-
-## Source modules
-
-[INTEGRATIONS-MODULAIRES.md](INTEGRATIONS-MODULAIRES.md) describes the WatchGuard,
-UniFi and Palo Alto catalogue, native Content Pack export/installation, dashboards,
-parameters and sample-based tests. Actual devices must be configured to forward logs
-and qualified against the supported format. Official Illuminate content is licensed
-separately and is not redistributed here.
-
-M365/Entra, SEAL, ML/XDR/graph, SOAR, AD response, active scans and business-specific
-inventories require their own credentials, configuration and acceptance checks. See
-[the optional-component table](INSTALLATION.md#outils-et-connecteurs-optionnels).
-
-## Docker and recovery
-
-The [Docker guide](../docker/README-DOCKER.en.md) describes a distinct staging/DR
-profile. Its containers do not include every native service. An empty stack needs
-configuration packs or a compatible backup plus device-side setup.
-
-A recovery operation is distinct from an update. Review [RESTORE.md](../RESTORE.md)
-and [PRA-RECONSTRUCTION-SIEM.md](PRA-RECONSTRUCTION-SIEM.md), use the backed-up version
-manifest and test a real restore on an isolated host. Older version numbers and
-object counts in historical procedures describe those dates; they must not be used
-to downgrade today's databases. MongoDB configuration dumps do not contain OpenSearch
-log data, external secrets, device settings or the entire operational state.
-
-## Validation
+Sens unique dépôt vers système, piloté par `manifeste-deploye.txt`. **Plan par
+défaut** ; `--apply` après lecture du plan.
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-bash run-tests.sh
-python3 tools/audit-portability.py > /tmp/siem-portability.json
+python3 tools/omni-deploy.py deploy all                 # plan complet (lecture seule)
+python3 tools/omni-deploy.py deploy robots systemd      # plan limité
+sudo python3 tools/omni-deploy.py deploy robots --apply
+sudo python3 tools/omni-deploy.py deploy systemd --filtre '*/oms-graph.service.d/*' --apply
+python3 tools/omni-deploy.py history
 ```
 
-The suites use simulated clients and synthetic data. A real nginx test runs when
-nginx is installed. Passing these tests does not substitute for a fresh VM install,
-real device parsing checks or a disaster-recovery exercise. The dated
-[portability audit](AUDIT-PORTABILITE-2026-11-19.md) records the initial findings and
-reference production state without applying changes to that SIEM.
+| Composant | Cibles | Actions associées |
+|---|---|---|
+| `venvs` | `<dépôt>/{mobile,oms-xdr,oms-graph,oms-ml}/.venv` | construction depuis `requirements.txt`, `pip check` ; l'ancien venv est conservé pour le retour arrière |
+| `robots` | `/usr/local/sbin`, `/usr/local/lib` | redémarrage des seuls services longs actifs qui exécutent le robot |
+| `etc`, `opt` | fichiers suivis de `/etc` et `/opt` | aucune |
+| `logstash` | `/etc/logstash` | aucun redémarrage automatique (signalé) |
+| `systemd` | unités et drop-ins `omni-*`, `oms-*`, `siem-*` | `daemon-reload`, redémarrage des services longs et timers modifiés s'ils sont actifs |
+| `nginx` | `/etc/nginx/snippets` | `nginx -t` puis `reload` |
+| `console` | `/var/www/siem-soc`, `/var/www/siem-mobile` (toutes les ressources, page puis service worker en dernier) | aucune ; les routes nginx relèvent de `tools/deploy-console.py` |
+| `apt` | préférences APT | jamais incluses dans `all` ; aucune commande apt |
+
+`all` désigne tous les composants sauf `apt`, dans l'ordre du tableau (venvs en premier).
+
+Garanties :
+
+- **Idempotence** : un fichier identique n'est pas réécrit ; un second `--apply`
+  sans changement ne crée pas de transaction.
+- **Sauvegarde** : chaque fichier remplacé est copié dans
+  `/var/lib/omni-siem-deploy/transactions/<id>/backup/` avant écriture atomique ;
+  le propriétaire est conservé. Unités, nginx et console reçoivent 0644, sauf fichier
+  portant un secret `Environment=` ; un fichier identique mais en 0600 ou 0664 est
+  seulement remis en 0644. Les autres composants gardent leurs droits actuels.
+- **Blocages** (rien n'est écrit) : source absente, cible en lien symbolique, cible
+  dans le dépôt, mot de passe masqué par `synchro-manifeste.sh`, robot référençant
+  l'ancien chemin, **exécutable d'un `ExecStart` effectif absent** (venv non
+  construit, robot non déployé), dépôt non canonique.
+- **Retour arrière automatique** si `daemon-reload`, `nginx -t`, un redémarrage
+  échoue ou si un service redémarré n'est plus actif 5 secondes après : tous les
+  fichiers et venvs de la transaction sont restaurés et les services qui tournaient
+  avant sont relancés.
+- Un verrou empêche deux déploiements simultanés.
+
+Les deux sens ne se confondent pas : `synchro-manifeste.sh` recopie dans le dépôt
+un changement fait en production (production vers dépôt), `omni-deploy` déploie le
+dépôt (dépôt vers production). `generer-manifeste.sh` liste toujours les fichiers de
+`deploye/sbin` et `deploye/systemd`, même pas encore en service.
+
+Racine factice pour répéter un déploiement hors production (aucune commande système) :
+
+```bash
+python3 tools/omni-deploy.py --root /tmp/racine --home "$PWD" deploy all --apply
+```
+
+## 3. Vérifier : `tools/omni-healthcheck.py`
+
+Lecture seule, à lancer après une installation, un déploiement ou un redémarrage
+(`omni-deploy deploy --apply` le lance de lui-même) :
+
+```bash
+sudo python3 tools/omni-healthcheck.py          # ou : make health ; --json pour l'outillage
+```
+
+Contrôles critiques : `mongod`, `opensearch`, `graylog-server`, `nginx`,
+`omni-mobile-api` et les services longs activés du dépôt actifs ; timers activés en
+marche ; ports 443, 9000, 9200, 27017, 8090 en écoute ; OpenSearch vert ou jaune ;
+API Graylog (`lbstatus`, `lifecycle=running`, tous les inputs RUNNING) ; backend
+`/m/api/vapid` et page `https://<fqdn>/soc/` en HTTP 200 (certificat vérifié avec la
+CA du site). Avertissements : unités en échec, disques au-delà de 85 %, fichiers en
+service référençant encore `/root/omnitech-siem-setup`, certificat non approuvé.
+Code de sortie 1 si un contrôle critique échoue. Les identifiants viennent de
+`00-vars.env` (ou `GRAYLOG_API_TOKEN`) et ne sont jamais affichés. `verif-post-reboot.sh`
+reste disponible pour les contrôles propres au redémarrage (LUKS, TPM, noyau).
+
+## 4. Revenir en arrière
+
+```bash
+python3 tools/omni-deploy.py rollback <transaction>          # plan
+sudo python3 tools/omni-deploy.py rollback <transaction> --apply
+```
+
+Le retour arrière restaure les sauvegardes, supprime les fichiers créés, remet les
+venvs précédents et les droits d'origine, puis relance `daemon-reload`, nginx et les
+services concernés. Il refuse un fichier modifié depuis la transaction (`--force`
+pour l'écraser après examen). Il ne concerne que les fichiers de la transaction :
+ni base de données, ni configuration Graylog, ni code mis à jour par `omni-update`.
+
+## 5. Gestionnaire SSH
+
+`sudo python3 tools/omni-manager.py`, entrée « Déployer les composants maison /
+contrôle de santé » : choix du composant dans une liste fermée, plan, déploiement
+après confirmation `OUI`, contrôle de santé, historique, plan et application d'un
+retour arrière. Aucune commande libre n'est transmise.
+
+## 6. Migration de la production vers le dépôt canonique
+
+Alignée sur le plan du rapport de cohérence du 21/11/2026 (§ 5). Prérequis : cette
+branche fusionnée et `/opt/omni-siem/repository` à jour et propre.
+
+```bash
+cd /opt/omni-siem/repository
+bash tools/migrer-chemin-canonique.sh             # plan, lecture seule
+sudo bash tools/migrer-chemin-canonique.sh --apply
+```
+
+`--apply` : archive l'ancienne copie, `/etc/systemd/system` et `/etc/nginx` dans
+`/var/backups/omni-siem` ; ajoute `MITRE_LOOKUP` à `/etc/default/omni-mobile` s'il
+manque ; construit et vérifie les venvs **avant tout repointage** ; pose les drop-ins
+`50-depot-reference.conf` **une transaction par service** (oms-graph,
+oms-graph-respond, oms-ml-anomaly, oms-ml-fp, oms-xdr, omni-backup-config,
+omni-disk-guard, omni-mobile-api), avec arrêt au premier échec ; déploie les robots ;
+remet les unités en 0644 ; lance le contrôle de santé. Les services `oneshot`
+repointés ne sont pas démarrés : les tester avec `systemctl start <service>` puis
+`journalctl -u <service>`.
+
+Non traité automatiquement :
+
+- `omni-iso-evidence` reste sur l'ancienne copie : il écrit `docs/EVIDENCE-AUDIT-*`
+  dans son répertoire de travail ; un répertoire de sortie dédié est à décider.
+- Après 24 h sans incident (étape 4 du plan) :
+  `mv /root/omnitech-siem-setup /root/omnitech-siem-setup.retire-$(date +%Y%m%d) && ln -s /opt/omni-siem/repository /root/omnitech-siem-setup`.
+  Ne retirer l'ancienne copie qu'après correction d'`OMS_GRAPH_DIR` dans le backend.
+- Après 7 jours : retrait des copies obsolètes (étape 5 du rapport de cohérence).
+
+## 7. Intégration continue
+
+`.github/workflows/check.yml` :
+
+| Tâche | Contenu |
+|---|---|
+| `offline` | `bash run-tests.sh` (dont `tools/check-manifest.py`), inventaire de portabilité |
+| `lint` | `tools/ci-lint.sh` : ShellCheck niveau warning, Ruff erreurs bloquantes |
+| `secrets-and-manifest` | `scan-depot.sh --arbre` (motifs de secrets sur tous les fichiers suivis), messages de commit, manifeste, plan `omni-deploy` complet en racine factice |
+
+`ubuntu-vm.yml` installe une VM Ubuntu 26.04 vierge et lance la réception.
+
+Exclusions ShellCheck justifiées dans `.shellcheckrc` (SC1090/SC1091 sources
+calculées, SC2034 compteurs de boucle, SC2164 `cd` historiques) ; constats acceptés
+un par un dans `tools/shellcheck-baseline.txt`, dont un **défaut réel non corrigé**
+(`49-enrich-lots.sh`, `$message` non échappé dans un heredoc). Ruff vise Python 3.12 :
+`triage/omni-alert-digest` n'est pas compatible avec Python 3.11 ni 3.10. Le scan
+de secrets repose sur des expressions régulières, sans outil dédié de type gitleaks.
+
+En local :
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt -r requirements-lint.txt
+bash run-tests.sh
+PATH="$PWD/.venv/bin:$PATH" bash tools/ci-lint.sh
+bash scan-depot.sh --arbre
+```
+
+## Docker et reprise
+
+Le [bundle Docker](../docker/README-DOCKER.md) est un profil distinct (préproduction,
+PRA) : ses conteneurs n'incluent pas tous les services natifs. Une reprise après
+sinistre n'est pas un déploiement : voir [RESTORE.md](../RESTORE.md) et
+[PRA-RECONSTRUCTION-SIEM.md](PRA-RECONSTRUCTION-SIEM.md).
