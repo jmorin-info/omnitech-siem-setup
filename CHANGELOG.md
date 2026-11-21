@@ -16,17 +16,36 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 - Contrôle automatique des liens internes de la documentation
   (`tools/check-doc-links.py`), exécuté par `run-tests.sh`.
+- Index unique de la documentation `docs/README.md`, organisé par parcours.
+- Inventaire des scripts de provisioning (`docs/reference/SCRIPTS-PROVISIONING.md`),
+  feuille de route (`docs/ROADMAP.md`), guide d'exploitation
+  (`docs/exploitation/GUIDE-EXPLOITATION.md`), aperçu visuel
+  (`docs/demarrage/APERCU-VISUEL.md`).
+- Fichiers de gouvernance : `CONTRIBUTING.md`, `SECURITY.md`, `.github/CODEOWNERS`,
+  modèle de demande de fusion, modèles de tickets, `.editorconfig`.
 
 ### Modifié
 
 - Documentation rangée par usage sous `docs/` (démarrage, architecture,
   exploitation, sécurité et conformité, sources, détection, référence, archives).
 - Scripts ponctuels datés regroupés dans `tools/ponctuel/` avec leur statut.
+- `README.md` et `README.fr.md` réécrits en présentations concises, avec des
+  chiffres relevés en lecture seule et les limites connues.
+- `RESTORE.md` : versions de la pile alignées sur MongoDB 8.0, OpenSearch 2.19
+  et Graylog 7.2.
+- `.gitignore` : copies datées `*.avant-*`, environnements virtuels, rapports
+  d'intégration continue.
 - Politique linguistique : le français est la langue de référence ; les
   traductions anglaises non maintenues sont archivées dans `docs/archives/en/`.
 - `68-iso-evidence.sh` écrit les dossiers de preuves dans
   `docs/archives/preuves-iso/` ; `57-mitre-coverage.sh` écrit le calque
   ATT&CK Navigator dans `docs/detection/`.
+
+### Supprimé
+
+- Index concurrents supprimés : `INDEX-DOCUMENTATION.md`, sa traduction et l'index anglais `00-INDEX.en.md` ;
+  `docs/00-INDEX.md` et `docs/DEMARRER.md` deviennent des redirections.
+- Émojis retirés de la documentation.
 
 ## [2026-11-21] — Recette native des trois modules
 
