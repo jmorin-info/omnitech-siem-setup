@@ -19,10 +19,10 @@
 #   a 3000 (on est a ~157) : des mois de marge. L'optimisation shards sera
 #   retravaillee proprement plus tard (rotation hebdo testee set par set).
 #
-#   DRY-RUN par defaut. Appliquer : APPLY=1 ./revert-index-rotation-legacy.sh
+#   DRY-RUN par defaut. Appliquer : APPLY=1 tools/ponctuel/revert-index-rotation-legacy.sh
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "root requis"

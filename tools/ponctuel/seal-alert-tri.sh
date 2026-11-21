@@ -69,11 +69,11 @@
 #   HYP-011  console     sessions multi-IP (Medium)
 #   HYP-012  console     compte multi-sites (Medium ; def cassee cote source, cf. LACUNES)
 #
-# Usage :  bash tools/seal-alert-tri.sh          # DRY-RUN (GET only, defaut)
-#          APPLY=1 bash tools/seal-alert-tri.sh  # applique (PUT idempotents)
+# Usage :  bash tools/ponctuel/seal-alert-tri.sh          # DRY-RUN (GET only, defaut)
+#          APPLY=1 bash tools/ponctuel/seal-alert-tri.sh  # applique (PUT idempotents)
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 # shellcheck disable=SC1091
 source 00-vars.env

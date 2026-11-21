@@ -3,8 +3,8 @@
 # Deploiement des correctifs de l'audit alerting/correlation du 17/07/2026.
 # A LANCER PAR L'OPERATEUR (le harnais bloque les mutations de prod en autonomie).
 #
-#   bash tools/deploy-audit-fixes-2026-07-17.sh            # tout, dans l'ordre
-#   STEP=1 bash tools/deploy-audit-fixes-2026-07-17.sh     # une seule etape
+#   bash tools/ponctuel/deploy-audit-fixes-2026-07-17.sh            # tout, dans l'ordre
+#   STEP=1 bash tools/ponctuel/deploy-audit-fixes-2026-07-17.sh     # une seule etape
 #
 # set -e : arret au premier echec. Chaque etape est idempotente (rejouable).
 # Rien ici ne touche : le routage event_source (LOT E), les signaux XDR morts
@@ -16,7 +16,7 @@
 #   systemctl restart omni-alert-triage
 # =============================================================================
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 STEP="${STEP:-all}"
 log(){ printf '\n== %s\n' "$*"; }
 run(){ [ "$STEP" = all ] || [ "$STEP" = "$1" ]; }

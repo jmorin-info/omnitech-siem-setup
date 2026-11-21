@@ -16,11 +16,11 @@
 #      ne le compte plus comme brute-force (19-vsphere.sh). On cree ici UNE
 #      detection agregee (>=50 / 6 h) pour le signaler une fois, pas 11 500 fois.
 #
-#   DRY-RUN par defaut. Appliquer : APPLY=1 ./fp-tuning2-2026-09-23.sh
+#   DRY-RUN par defaut. Appliquer : APPLY=1 tools/ponctuel/fp-tuning2-2026-09-23.sh
 #   Idempotent.
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 source ./00-vars.env
 source ./lib-graylog.sh
 require_api

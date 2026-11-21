@@ -20,12 +20,12 @@
 #   rotation en SizeOptimizing, min P30D) pour eviter toute rotation pendant la
 #   reindexation.
 #
-#   DRY-RUN par defaut (n'ecrit RIEN). Appliquer : APPLY=1 ./reclaim-shards-reindex.sh
+#   DRY-RUN par defaut (n'ecrit RIEN). Appliquer : APPLY=1 tools/ponctuel/reclaim-shards-reindex.sh
 #   Garde-fou : refuse de supprimer > MAX_DELETE index par prefixe sans FORCE=1.
 #   Idempotent : relance sans effet si un prefixe est deja consolide (1 index).
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "root requis"
@@ -70,12 +70,12 @@ echo "  ------------------------------------------------------------------"
 echo "  Shards recuperables immediatement (index anciens a supprimer) : ${TOTAL_RECLAIM}"
 
 if (( ABORT == 1 && FORCE != 1 )); then
-  warn "Un prefixe depasse MAX_DELETE=${MAX_DELETE}. ARRET. Passer outre : FORCE=1 APPLY=1 ./reclaim-shards-reindex.sh"
+  warn "Un prefixe depasse MAX_DELETE=${MAX_DELETE}. ARRET. Passer outre : FORCE=1 APPLY=1 tools/ponctuel/reclaim-shards-reindex.sh"
   exit 2
 fi
 
 if [[ "$APPLY" != "1" ]]; then
-  echo; warn "DRY-RUN : aucune ecriture. Appliquer : APPLY=1 ./reclaim-shards-reindex.sh"
+  echo; warn "DRY-RUN : aucune ecriture. Appliquer : APPLY=1 tools/ponctuel/reclaim-shards-reindex.sh"
   exit 0
 fi
 

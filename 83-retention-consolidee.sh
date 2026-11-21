@@ -25,7 +25,7 @@
 #   Appliquer : APPLY=1 ./83-retention-consolidee.sh
 #   Garde-fou : refuse si un prefixe supprimerait > MAX_DELETE index sans FORCE=1.
 #   La recuperation IMMEDIATE des index quotidiens deja crees (sources muettes)
-#   est traitee separement par reclaim-shards-reindex.sh (reindexation, 0 perte).
+#   est traitee separement par tools/ponctuel/reclaim-shards-reindex.sh (reindexation, 0 perte).
 #
 #   Volet 1 de 41 (regles drop_message stage 30 de reduction de bruit) N'EST PAS
 #   repris ici : il reste gere par 41. Ce script ne touche QUE la retention, le

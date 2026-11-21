@@ -11,11 +11,11 @@
 #   3. RAT/RMM      : retirer TeamViewer (outil support IT sanctionne, usage org-wide).
 #   4. SEAL QA      : desactiver DMS-004/006/008 sur bx-qa-seal-vm (non-prod ; OMEGA conserve).
 #
-#   DRY-RUN par defaut (GET seulement, imprime le diff). Appliquer : APPLY=1 ./fp-tuning-2026-09.sh
+#   DRY-RUN par defaut (GET seulement, imprime le diff). Appliquer : APPLY=1 tools/ponctuel/fp-tuning-2026-09.sh
 #   Idempotent (re-applique = sans effet si deja conforme).
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 source ./00-vars.env
 source ./lib-graylog.sh
 require_api

@@ -15,10 +15,10 @@
 #   Les deux passent en evenement NON-ALERTANT : la donnee reste indexee et
 #   exploitable (chasse, correlation, tableaux de bord), elle ne declenche plus de
 #   mail. Reversible : remettre alert=true.
-#   DRY-RUN par defaut. Appliquer : APPLY=1 ./fp-tuning4-2026-09-23.sh
+#   DRY-RUN par defaut. Appliquer : APPLY=1 tools/ponctuel/fp-tuning4-2026-09-23.sh
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 source ./00-vars.env
 source ./lib-graylog.sh
 require_api

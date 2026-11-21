@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Montee Graylog 7.1.3 -> 7.1.5. A LANCER PAR L'OPERATEUR :
-#   ! bash /root/omnitech-siem-setup/tools/upgrade-graylog-715.sh
+#   ! bash /root/omnitech-siem-setup/tools/ponctuel/upgrade-graylog-715.sh
 #
 # L'assistant a DEJA fait le travail de securite (17/07/2026 ~23:57) :
 #   - mongodump FRAIS et verifie restaurable :
