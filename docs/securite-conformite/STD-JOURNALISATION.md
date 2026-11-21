@@ -147,14 +147,14 @@ La corrélation d'événements multi-sources exige une horloge commune :
 
 | Mesure | État |
 |---|---|
-| Console et API en HTTPS uniquement (TLS, CA interne) | ✅ |
-| Pare-feu hôte nftables (ports d'ingestion limités par CIDR/source) | ✅ |
+| Console et API en HTTPS uniquement (TLS, CA interne) | [OK] |
+| Pare-feu hôte nftables (ports d'ingestion limités par CIDR/source) | [OK] |
 | Comptes console : cible LDAPS + groupe « Admins du domaine » (cf. LDAPS.md), `admin` local de secours au coffre | en cours |
-| Aucun accès direct OpenSearch/MongoDB hors localhost | ✅ |
-| Secrets (`00-vars.env`, `.smb-siem.cred`) en chmod 600 | ✅ |
-| Sauvegardes chiffrées AES-256, passphrase au coffre | ✅ |
-| Détection du sabotage des sources (1102/104, arrêt audit, silence agent) | ✅ |
-| Auto-surveillance (collecte muette, backup KO, disque) | ✅ |
+| Aucun accès direct OpenSearch/MongoDB hors localhost | [OK] |
+| Secrets (`00-vars.env`, `.smb-siem.cred`) en chmod 600 | [OK] |
+| Sauvegardes chiffrées AES-256, passphrase au coffre | [OK] |
+| Détection du sabotage des sources (1102/104, arrêt audit, silence agent) | [OK] |
+| Auto-surveillance (collecte muette, backup KO, disque) | [OK] |
 
 ## 9. Intégrité et valeur probante
 

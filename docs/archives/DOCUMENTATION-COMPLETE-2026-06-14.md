@@ -1,4 +1,4 @@
-# 📚 Documentation complète — SIEM OMNITECH
+# Documentation complète — SIEM OMNITECH
 
 > **Compilation de l'ensemble du dossier documentaire en un seul fichier.**
 > Généré le **2026-06-14**. En cas de doute, les fichiers individuels de `docs/` font foi.
@@ -526,14 +526,14 @@ La corrélation d'événements multi-sources exige une horloge commune :
 
 | Mesure | État |
 |---|---|
-| Console et API en HTTPS uniquement (TLS, CA interne) | ✅ |
-| Pare-feu hôte nftables (ports d'ingestion limités par CIDR/source) | ✅ |
+| Console et API en HTTPS uniquement (TLS, CA interne) | [OK] |
+| Pare-feu hôte nftables (ports d'ingestion limités par CIDR/source) | [OK] |
 | Comptes console : cible LDAPS + groupe « Admins du domaine » (cf. LDAPS.md), `admin` local de secours au coffre | en cours |
-| Aucun accès direct OpenSearch/MongoDB hors localhost | ✅ |
-| Secrets (`00-vars.env`, `.smb-siem.cred`) en chmod 600 | ✅ |
-| Sauvegardes chiffrées AES-256, passphrase au coffre | ✅ |
-| Détection du sabotage des sources (1102/104, arrêt audit, silence agent) | ✅ |
-| Auto-surveillance (collecte muette, backup KO, disque) | ✅ |
+| Aucun accès direct OpenSearch/MongoDB hors localhost | [OK] |
+| Secrets (`00-vars.env`, `.smb-siem.cred`) en chmod 600 | [OK] |
+| Sauvegardes chiffrées AES-256, passphrase au coffre | [OK] |
+| Détection du sabotage des sources (1102/104, arrêt audit, silence agent) | [OK] |
+| Auto-surveillance (collecte muette, backup KO, disque) | [OK] |
 
 ## 9. Intégrité et valeur probante
 
@@ -1103,56 +1103,56 @@ Côté parc : politique NinjaOne quotidienne `Install-OmniSiem-NinjaOne.ps1`.
 *Version 1.0 — 12/06/2026 — Périmètre : supervision, journalisation et
 détection assurées par le SIEM Graylog `bx-it-graylog-vm`. Classification : interne.*
 
-Légende statut : ✅ Conforme · 🟡 Partiel (action en cours) · ⬜ À traiter.
+Légende statut : [OK] Conforme · [Partiel] Partiel (action en cours) · [À traiter] À traiter.
 
 ## 1. Mesures organisationnelles (A.5)
 
 | Mesure A.5 | Exigence | Mise en œuvre (preuve) | Statut |
 |---|---|---|---|
-| 5.7 Renseignement sur les menaces | Threat intelligence | Lookups Tor/Spamhaus, GeoIP, règles `threat_intel` | ✅ |
-| 5.15 Contrôle d'accès | Restreindre l'accès | Console restreinte « Admins du domaine » via LDAPS (LDAPS.md), pare-feu hôte | ✅ |
-| 5.16 Gestion des identités | Identités traçables | Auth AD nominative sur la console (backend LDAPS) | ✅ |
-| 5.17 Authentification | Secrets gérés | LDAPS + `admin` local de secours au coffre ; secrets chmod 600 | ✅ |
-| 5.18 Droits d'accès | Moindre privilège | Comptes de service dédiés (svc_siem), pas de collecte sous compte admin | ✅ |
-| 5.23 Sécurité des services cloud | Surveillance du cloud | Collecte M365 (connexions, audit, Exchange/SharePoint) | ✅ |
-| 5.25 Appréciation des événements | Qualifier/classer | Triage PRO §3, classification PRO §7, 88 définitions priorisées | ✅ |
-| 5.26 Réponse aux incidents | Procédure + réponse | Playbooks PRO §6, matrice RACI §8, **SOAR-light** (blocage auto IP attaquantes via feed FortiGate) | ✅ |
-| 8.16 (détection interne) | Détecter l'intrusion | **Compte canari AD** (leurre, faux positifs ~nuls) | ✅ |
-| 5.28 Collecte de preuves | Preuves exploitables | Journaux horodatés UTC, export Graylog, rétention contrôlée (STD §9) | ✅ |
-| 5.33 Protection des enregistrements | Intégrité des logs | Rétention auto, suppression hors-rétention impossible sans droits, purge tracée | ✅ |
-| 5.36 Conformité aux politiques | Revue régulière | Revues PRO §2 + **rapport hebdomadaire automatique** (preuve) | ✅ |
+| 5.7 Renseignement sur les menaces | Threat intelligence | Lookups Tor/Spamhaus, GeoIP, règles `threat_intel` | [OK] |
+| 5.15 Contrôle d'accès | Restreindre l'accès | Console restreinte « Admins du domaine » via LDAPS (LDAPS.md), pare-feu hôte | [OK] |
+| 5.16 Gestion des identités | Identités traçables | Auth AD nominative sur la console (backend LDAPS) | [OK] |
+| 5.17 Authentification | Secrets gérés | LDAPS + `admin` local de secours au coffre ; secrets chmod 600 | [OK] |
+| 5.18 Droits d'accès | Moindre privilège | Comptes de service dédiés (svc_siem), pas de collecte sous compte admin | [OK] |
+| 5.23 Sécurité des services cloud | Surveillance du cloud | Collecte M365 (connexions, audit, Exchange/SharePoint) | [OK] |
+| 5.25 Appréciation des événements | Qualifier/classer | Triage PRO §3, classification PRO §7, 88 définitions priorisées | [OK] |
+| 5.26 Réponse aux incidents | Procédure + réponse | Playbooks PRO §6, matrice RACI §8, **SOAR-light** (blocage auto IP attaquantes via feed FortiGate) | [OK] |
+| 8.16 (détection interne) | Détecter l'intrusion | **Compte canari AD** (leurre, faux positifs ~nuls) | [OK] |
+| 5.28 Collecte de preuves | Preuves exploitables | Journaux horodatés UTC, export Graylog, rétention contrôlée (STD §9) | [OK] |
+| 5.33 Protection des enregistrements | Intégrité des logs | Rétention auto, suppression hors-rétention impossible sans droits, purge tracée | [OK] |
+| 5.36 Conformité aux politiques | Revue régulière | Revues PRO §2 + **rapport hebdomadaire automatique** (preuve) | [OK] |
 
 ## 2. Mesures liées aux personnes (A.6)
 
 | Mesure | Exigence | Mise en œuvre | Statut |
 |---|---|---|---|
-| 6.3 Sensibilisation | Information | Charte informatique (journalisation), POL §11 | 🟡 (charte hors SIEM) |
-| 6.8 Signalement d'événements | Remontée | Notifications mail + Teams SOC vers l'équipe IT | ✅ |
+| 6.3 Sensibilisation | Information | Charte informatique (journalisation), POL §11 | [Partiel] (charte hors SIEM) |
+| 6.8 Signalement d'événements | Remontée | Notifications mail + Teams SOC vers l'équipe IT | [OK] |
 
 ## 3. Mesures physiques (A.7)
 
 | Mesure | Exigence | Mise en œuvre | Statut |
 |---|---|---|---|
-| 7.4 Surveillance physique | — | Hors périmètre SIEM (logs contrôle d'accès/NVR collectés via FortiGate) | 🟡 |
+| 7.4 Surveillance physique | — | Hors périmètre SIEM (logs contrôle d'accès/NVR collectés via FortiGate) | [Partiel] |
 
 ## 4. Mesures technologiques (A.8) — cœur du dispositif
 
 | Mesure A.8 | Exigence | Mise en œuvre (preuve) | Statut |
 |---|---|---|---|
-| 8.5 Authentification sécurisée | Auth robuste console | LDAPS/TLS, cert vérifié par Root CA, accès limité aux admins | ✅ |
-| 8.6 Gestion des capacités | Dimensionner/surveiller | Plan de capacité (STD §5), garde-fou disque `32`, KPI hebdo | ✅ |
-| 8.7 Protection contre les codes malveillants | Détecter | FortiGate UTM (AV/IPS), Defender, règles ransomware/PowerShell/LSASS | ✅ |
-| 8.8 Gestion des vulnérabilités techniques | — | OpenVAS (logs collectés) ; patching hors SIEM | 🟡 |
-| 8.9 Gestion de configuration | Config maîtrisée | **IaC** : scripts 10→34 idempotents, sauvegarde de config quotidienne | ✅ |
-| 8.10 Suppression d'informations | Effacement à terme | Rétention automatique par index (POL §4, `31`) | ✅ |
-| 8.12 Prévention fuite de données | Détecter exfiltration | M365 (partage externe, transfert mail), FortiGate (threat intel sortant) | ✅ |
-| 8.13 Sauvegarde | Sauvegarder/tester | Sauvegarde config chiffrée externalisée (`30`), PRA, **test à réaliser** | 🟡 |
-| 8.15 Journalisation | Produire/protéger les logs | 7 inputs, 13 streams, 144 règles de pipeline, rétention POL §4, STD complet | ✅ |
-| 8.16 Activités de surveillance | Surveiller/alerter | **88 définitions** (87 détections + 1 système), dashboard 24 pages, notifications, auto-surveillance | ✅ |
-| 8.17 Synchronisation des horloges | Horloge commune | NTP sur toutes les sources, UTC dans le SIEM (STD §7) | ✅ |
-| 8.20 Sécurité des réseaux | Cloisonner | VLAN 220 dédié, règles FortiGate par flux, pare-feu hôte | ✅ |
-| 8.23 Filtrage web | — | FortiGate webfilter/DNS filter (logs collectés) | ✅ |
-| 8.28 Codage sécurisé | — | Hors périmètre (logs CI/CD non couverts) | ⬜ |
+| 8.5 Authentification sécurisée | Auth robuste console | LDAPS/TLS, cert vérifié par Root CA, accès limité aux admins | [OK] |
+| 8.6 Gestion des capacités | Dimensionner/surveiller | Plan de capacité (STD §5), garde-fou disque `32`, KPI hebdo | [OK] |
+| 8.7 Protection contre les codes malveillants | Détecter | FortiGate UTM (AV/IPS), Defender, règles ransomware/PowerShell/LSASS | [OK] |
+| 8.8 Gestion des vulnérabilités techniques | — | OpenVAS (logs collectés) ; patching hors SIEM | [Partiel] |
+| 8.9 Gestion de configuration | Config maîtrisée | **IaC** : scripts 10→34 idempotents, sauvegarde de config quotidienne | [OK] |
+| 8.10 Suppression d'informations | Effacement à terme | Rétention automatique par index (POL §4, `31`) | [OK] |
+| 8.12 Prévention fuite de données | Détecter exfiltration | M365 (partage externe, transfert mail), FortiGate (threat intel sortant) | [OK] |
+| 8.13 Sauvegarde | Sauvegarder/tester | Sauvegarde config chiffrée externalisée (`30`), PRA, **test à réaliser** | [Partiel] |
+| 8.15 Journalisation | Produire/protéger les logs | 7 inputs, 13 streams, 144 règles de pipeline, rétention POL §4, STD complet | [OK] |
+| 8.16 Activités de surveillance | Surveiller/alerter | **88 définitions** (87 détections + 1 système), dashboard 24 pages, notifications, auto-surveillance | [OK] |
+| 8.17 Synchronisation des horloges | Horloge commune | NTP sur toutes les sources, UTC dans le SIEM (STD §7) | [OK] |
+| 8.20 Sécurité des réseaux | Cloisonner | VLAN 220 dédié, règles FortiGate par flux, pare-feu hôte | [OK] |
+| 8.23 Filtrage web | — | FortiGate webfilter/DNS filter (logs collectés) | [OK] |
+| 8.28 Codage sécurisé | — | Hors périmètre (logs CI/CD non couverts) | [À traiter] |
 
 ## 5. Synthèse des actions ouvertes
 
@@ -1162,7 +1162,7 @@ Légende statut : ✅ Conforme · 🟡 Partiel (action en cours) · ⬜ À trait
 | 2 | Réaliser le test de restauration (PRA) | PRA, A.8.13 | Admin SIEM | Trimestre en cours |
 | 3 | Décaler le job Veeam *Backup Copy* (contention de verrou de point de restauration ; la sauvegarde **aboutit au retry**, pas un trou de PRA) | Détection Veeam | Admin Sys | — |
 | 4 | Étendre la collecte aux serveurs Windows restants + activer les SACL d'audit fichier sur les dossiers sensibles | STD §1 / `59` | Admin Sys | — |
-| 5 | Chiffrement au repos `/data` (LUKS2/TPM2) | A.8.24, PROCEDURE-CHIFFREMENT | Admin SIEM | ✅ **Fait le 2026-06-14** |
+| 5 | Chiffrement au repos `/data` (LUKS2/TPM2) | A.8.24, PROCEDURE-CHIFFREMENT | Admin SIEM | [OK] **Fait le 2026-06-14** |
 | 6 | Affecter les comptes analystes au rôle Graylog « lecture seule » (créé) | A.8.2 | Admin SIEM | — |
 | 7 | Activer l'API NinjaOne → SOAR avancé (isolation hôte / désactivation compte) | SOAR-PLAYBOOKS | Admin SIEM | — |
 | 8 | Lier la charte informatique (sensibilisation 6.3) | A.6.3 | DSI | — |
@@ -1233,13 +1233,13 @@ logs antérieurs est perdu mais la collecte temps réel redémarre immédiatemen
 | Élément | Emplacement | Vérifié |
 |---|---|---|
 | Archives de config chiffrées (14 j) | `\\10.33.50.5\Public\SIEM\omni-siem-config_*.tar.gz.enc` | rotation OK |
-| **Passphrase de déchiffrement** | Coffre-fort (`BACKUP_PASSPHRASE`) | ⚠️ À DÉPOSER AU COFFRE |
-| Mot de passe `admin` local de secours | Coffre-fort | ✅ |
-| Identifiants `svc_siem` (SMB) | Coffre-fort | ✅ |
-| Procédure technique | `docs/exploitation/RESTORE.md` (inclus dans l'archive) | ✅ |
-| Réservation IP/DNS `10.33.220.10` / FQDN | DNS interne + /etc/hosts | ✅ |
-| **Clé HMAC d'intégrité** `/etc/graylog/omni-integrity.key` | Coffre-fort + hors-bande | ⚠️ sans elle, la chaîne d'intégrité passée n'est plus **vérifiable** (perte de valeur probante) |
-| **Passphrase de secours LUKS `/data`** + **sauvegarde chiffrée du header** (header **inline** ; `omni-luks-header-*.img.enc`) | Passphrase → Coffre-fort ; header → SMB `/SIEM/luks/` (+ inclus dans le backup config chiffré quotidien) | ⚠️ sans la **passphrase**, `/data` est irrécupérable si le TPM/carte mère change ; le header inline est **sauvegardé/restaurable** (`luksHeaderRestore`) |
+| **Passphrase de déchiffrement** | Coffre-fort (`BACKUP_PASSPHRASE`) | Attention : À DÉPOSER AU COFFRE |
+| Mot de passe `admin` local de secours | Coffre-fort | [OK] |
+| Identifiants `svc_siem` (SMB) | Coffre-fort | [OK] |
+| Procédure technique | `docs/exploitation/RESTORE.md` (inclus dans l'archive) | [OK] |
+| Réservation IP/DNS `10.33.220.10` / FQDN | DNS interne + /etc/hosts | [OK] |
+| **Clé HMAC d'intégrité** `/etc/graylog/omni-integrity.key` | Coffre-fort + hors-bande | Attention : sans elle, la chaîne d'intégrité passée n'est plus **vérifiable** (perte de valeur probante) |
+| **Passphrase de secours LUKS `/data`** + **sauvegarde chiffrée du header** (header **inline** ; `omni-luks-header-*.img.enc`) | Passphrase → Coffre-fort ; header → SMB `/SIEM/luks/` (+ inclus dans le backup config chiffré quotidien) | Attention : sans la **passphrase**, `/data` est irrécupérable si le TPM/carte mère change ; le header inline est **sauvegardé/restaurable** (`luksHeaderRestore`) |
 
 > Sans la passphrase de sauvegarde, les archives sont **irrécupérables**.
 > Idem pour la **clé HMAC d'intégrité** (vérification de l'audit-trail) et la
@@ -1651,7 +1651,7 @@ Méthode : exécuter le test [Atomic Red Team](https://github.com/redcanaryco/at
 | T1087.002 LDAP recon | T1087.002 | `ldap_recon` | 4662/Sysmon |
 | T1562.002 Clear logs | T1070.001 (`wevtutil cl`) | `winsec_critique` | 1102 |
 
-> ⚠️ Ne PAS jouer les tests destructifs (T1486 ransomware, T1485 destruction) en production.
+> Attention : Ne PAS jouer les tests destructifs (T1486 ransomware, T1485 destruction) en production.
 > Tenir un journal des campagnes de validation (date, technique, détecté oui/non, MTTD) — utile aussi pour ISO A.8.16.
 
 ## Maintenance
@@ -1778,9 +1778,9 @@ d'intégration) et `POLITIQUE-RETENTION.md` (durées). Revue : 2026-06-14.*
 
 | Source | Côté SIEM | Côté source | Données reçues |
 |--------|-----------|-------------|----------------|
-| **ESET PROTECT** (10.33.50.20) | ✅ input Syslog TCP 1515, stream `OMNI - ESET`, pipeline `eset_*` | ✅ syslog configuré | ✅ **arrive** (volume faible — détections ponctuelles, champs `eset_*` parsés) |
-| **BunkerWeb** (10.33.70.1, hôte `bx-waf-it-vm`) | ✅ stream `OMNI - BunkerWeb`, pipeline `http_*`/`waf_*` | ✅ **Filebeat déployé** (logs Docker) | ✅ **arrive** (~15,5 k docs, flux nominal) |
-| **NPS / RADIUS** (10.33.50.247, `bx-nps-it-vm`) | ✅ lookup `win-events.csv` + widgets/alerte prêts | ⚠️ Winlogbeat actif mais **canal Security absent** | ❌ **0× 6272/6273/6274** (voir diagnostic §2) |
+| **ESET PROTECT** (10.33.50.20) | [OK] input Syslog TCP 1515, stream `OMNI - ESET`, pipeline `eset_*` | [OK] syslog configuré | [OK] **arrive** (volume faible — détections ponctuelles, champs `eset_*` parsés) |
+| **BunkerWeb** (10.33.70.1, hôte `bx-waf-it-vm`) | [OK] stream `OMNI - BunkerWeb`, pipeline `http_*`/`waf_*` | [OK] **Filebeat déployé** (logs Docker) | [OK] **arrive** (~15,5 k docs, flux nominal) |
+| **NPS / RADIUS** (10.33.50.247, `bx-nps-it-vm`) | [OK] lookup `win-events.csv` + widgets/alerte prêts | Attention : Winlogbeat actif mais **canal Security absent** | [KO] **0× 6272/6273/6274** (voir diagnostic §2) |
 
 > ESET et BunkerWeb sont donc **opérationnels** ; la section qui les concerne sert
 > désormais de référence (rappel de conf) plus que de tâche à faire. NPS reste la
@@ -1795,7 +1795,7 @@ d'intégration) et `POLITIQUE-RETENTION.md` (durées). Revue : 2026-06-14.*
 
 ---
 
-## 1. ESET PROTECT (10.33.50.20) — ✅ opérationnel
+## 1. ESET PROTECT (10.33.50.20) — [OK] opérationnel
 
 **Côté SIEM (fait) :** input *Syslog TCP* sur **1515** (TLS désactivé sur cet
 input), et le pare-feu **redirige 514 → 1515** (ton ESET reste donc sur 514).
@@ -1815,7 +1815,7 @@ pose le tag **`eset_detection`** (`alert_tag`) sur les menaces (`Threat_Event` /
 > champs `eset_*` sont correctement extraits. Volume faible (détections
 > ponctuelles) — c'est attendu, pas un problème de collecte.
 
-⚠️ **Un seul point à vérifier — le cadrage (framing)** : Graylog attend par
+Attention : **Un seul point à vérifier — le cadrage (framing)** : Graylog attend par
 défaut un cadrage **LF (non-transparent framing)**. Si tu as choisi
 « octets comptabilisés » (octet-counting RFC 6587) et que les messages
 arrivent **collés/tronqués**, bascule ESET sur **non-transparent / nouvelle
@@ -1825,7 +1825,7 @@ ligne (LF)**. Vérifie l'arrivée :
 
 ---
 
-## 2. NPS / RADIUS (10.33.50.247, `bx-nps-it-vm`) — ⚠️ en attente côté serveur
+## 2. NPS / RADIUS (10.33.50.247, `bx-nps-it-vm`) — Attention : en attente côté serveur
 
 **Côté SIEM (déjà géré) :** les events NPS **6272** (accès accordé), **6273**
 (refusé), **6274** (rejeté) sont **automatiquement enrichis** (lookup
@@ -1877,9 +1877,9 @@ Tant que ce flux n'arrive pas, les widgets **[NPS en attente]** de la page
 
 ---
 
-## 3. BunkerWeb (10.33.70.1, hôte `bx-waf-it-vm`) — Filebeat → Beats 5044 — ✅ opérationnel
+## 3. BunkerWeb (10.33.70.1, hôte `bx-waf-it-vm`) — Filebeat → Beats 5044 — [OK] opérationnel
 
-**Côté SIEM (fait) :** stream `OMNI - BunkerWeb`. ⚠️ **Le stream est routé sur le
+**Côté SIEM (fait) :** stream `OMNI - BunkerWeb`. Attention : **Le stream est routé sur le
 champ `filebeat_event_source=bunkerweb`** (et **non** `event_source`) : Filebeat
 envoie un champ `fields.event_source` que l'input Beats de Graylog **préfixe en
 `filebeat_`**. C'est seulement *ensuite*, dans le pipeline, que la règle
@@ -1896,7 +1896,7 @@ Réutilise l'input **Beats TLS 5044** existant (10.33.70.1 déjà autorisé via 
 > (`/var/lib/docker/containers/*/*-json.log`) — le déploiement réel est l'**option
 > Docker** ci-dessous, pas le paquet systemd.
 
-> ⚠️ **Point clé si tu redéploies Filebeat :** **ne mets PAS `fields_under_root:
+> Attention : **Point clé si tu redéploies Filebeat :** **ne mets PAS `fields_under_root:
 > true`**. Si tu le mets, `event_source` arrive à la racine et n'est **pas**
 > préfixé `filebeat_` → le stream `OMNI - BunkerWeb` (qui filtre sur
 > `filebeat_event_source`) **ne matchera plus**. Laisse Filebeat poser le champ
@@ -2339,8 +2339,8 @@ Pour produire des logs à valeur probante (incident, réquisition) :
 > Dispositif en production : **LUKS2 (header inline) + déverrouillage automatique TPM2**.
 
 ## Ce qui protège quoi
-- ✅ Vol de disque, mise au rebut / SAV, vol du **serveur éteint** : `/data` illisible sans la clé (le TPM ne la libère jamais hors de cette plateforme ; passphrase de secours au coffre).
-- ❌ Root compromis **machine allumée** (FS monté en clair) → couvert par ailleurs : RBAC (rôle lecture seule), intégrité signée des journaux, TLS console/Beats.
+- [OK] Vol de disque, mise au rebut / SAV, vol du **serveur éteint** : `/data` illisible sans la clé (le TPM ne la libère jamais hors de cette plateforme ; passphrase de secours au coffre).
+- [KO] Root compromis **machine allumée** (FS monté en clair) → couvert par ailleurs : RBAC (rôle lecture seule), intégrité signée des journaux, TLS console/Beats.
 - Périmètre : seul `/data` (les **logs** OpenSearch) est chiffré. Le rootfs (OS + config) ne l'est pas — la config sensible y vit (`00-vars.env` chmod 600). Durcissement futur possible : chiffrer le rootfs.
 
 ## Configuration en place (référence)
@@ -2357,7 +2357,7 @@ Pour produire des logs à valeur probante (incident, réquisition) :
 | `/etc/fstab` | `/dev/mapper/cryptdata /data xfs defaults,noatime,nofail 0 2` |
 | Sauvegarde header | chiffrée AES-256 → `//10.33.50.5/Public/SIEM/luks/omni-luks-header-AAAA-MM-JJ.img.enc` + copie locale `/root/` |
 
-> ⚠️ **TPM en banque PCR SHA-1** (ce TPM n'expose pas SHA-256) → scellement un peu moins robuste, sans impact sur la protection au repos. Durcissement : activer la banque PCR SHA-256 au BIOS Dell, puis ré-enrôler (cf. *Recovery*).
+> Attention : **TPM en banque PCR SHA-1** (ce TPM n'expose pas SHA-256) → scellement un peu moins robuste, sans impact sur la protection au repos. Durcissement : activer la banque PCR SHA-256 au BIOS Dell, puis ré-enrôler (cf. *Recovery*).
 
 ## Sécurité des clés (ordre d'importance)
 1. **Passphrase de secours** (keyslot 0) → **Vaultwarden uniquement**, jamais en clair sur le serveur. Seul moyen de rouvrir `/data` si le TPM / la carte mère change. Le fichier temporaire `/etc/luks/.data-pass` est **détruit (`shred`) après enrôlement TPM + mise au coffre**.
@@ -2372,13 +2372,13 @@ mount /data
 systemctl start opensearch graylog-server
 
 # Le TPM ne déverrouille plus au boot (MAJ firmware / Secure Boot / banque PCR) :
-#   au boot, saisir la passphrase à l'invite, puis ré-enrôler le TPM :
+# au boot, saisir la passphrase à l'invite, puis ré-enrôler le TPM :
 systemd-cryptenroll /dev/sda1 --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=7
 
 # Restaurer le header depuis la sauvegarde hors-bande (header corrompu) :
-#   1) récupérer le .enc sur le partage SMB, le déchiffrer (BACKUP_PASSPHRASE : 00-vars.env / coffre)
+# 1) récupérer le .enc sur le partage SMB, le déchiffrer (BACKUP_PASSPHRASE : 00-vars.env / coffre)
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in omni-luks-header-AAAA-MM-JJ.img.enc -out hdr.img
-#   2) restaurer :
+# 2) restaurer :
 cryptsetup luksHeaderRestore /dev/sda1 --header-backup-file hdr.img
 
 # Ajouter / changer la passphrase de secours :
@@ -2413,7 +2413,7 @@ Si un jour il faut chiffrer **sans perdre** les données d'un volume, en accepta
   `cryptsetup reencrypt --encrypt --header /etc/luks/hdr.img --type luks2 --resilience checksum /dev/sdX`
   (reprenable via `--resume-only --header …`), puis `open --header` / `mount` / `systemd-cryptenroll --header`.
 - Le **chiffrement online** (`cryptsetup open` d'abord, puis `reencrypt --resume-only --active-name cryptdata`) permet de garder le volume **monté et en service** pendant l'opération.
-- ⚠️ On **ne peut pas annuler nativement** un `--encrypt` partiel (`--decrypt` le refuse : *« option --decrypt conflictuelle »*) : il faut soit le mener à terme, soit recopier la zone de tête en clair via le mapper ouvert. *(Validé sur loopback le 2026-06-14.)*
+- Attention : On **ne peut pas annuler nativement** un `--encrypt` partiel (`--decrypt` le refuse : *« option --decrypt conflictuelle »*) : il faut soit le mener à terme, soit recopier la zone de tête en clair via le mapper ouvert. *(Validé sur loopback le 2026-06-14.)*
 
 ## Complémentaire (transit — priorité moindre, VLAN SIEM isolé = palliatif)
 ESET (1515) / vSphere (1516) / FortiGate-FAZ (1514) en syslog **clair** → migrer en **syslog-over-TLS** (supporté par ESET PROTECT, vSphere, FortiGate) quand possible. Beats (5044) et console (9000) sont déjà en TLS.
@@ -2441,11 +2441,11 @@ Une notification Graylog HTTP POST → action → garde-fous → état → effet
 
 | # | Playbook | Déclencheur (alert_tag) | Action | Dépendance | Statut |
 |---|---|---|---|---|---|
-| **PB-01** | Bloquer IP attaquante | Force brute VPN, password spraying | Ajout au threat feed FortiGate (TTL) | FortiGate (fait) | ✅ **PROD** |
-| **PB-02** | Isoler un hôte compromis | `ransomware_indicator`, `lsass_access`, `lateral_movement` (confirmé) | NinjaOne : isolation réseau du device | **API NinjaOne** | 🟡 conçu |
-| **PB-03** | Désactiver un compte | `canary`, `impossible_travel`, `dcsync` (confirmé) | Désactivation compte AD (script NinjaOne sur DC, ou LDAP) | **API NinjaOne** (ou LDAPS) | 🟡 conçu |
-| **PB-04** | Ouvrir un ticket | Toute alerte P3 (mail tier) | Création d'un incident avec contexte (identité, hôte, MITRE) | **API ticketing NinjaOne** | 🟡 conçu |
-| **PB-05** | Enrichir IOC | `threat_intel`, IP/domaine externes | Enrichissement TI + retro-hunt | MISP/feed (optionnel) | 🟡 conçu |
+| **PB-01** | Bloquer IP attaquante | Force brute VPN, password spraying | Ajout au threat feed FortiGate (TTL) | FortiGate (fait) | [OK] **PROD** |
+| **PB-02** | Isoler un hôte compromis | `ransomware_indicator`, `lsass_access`, `lateral_movement` (confirmé) | NinjaOne : isolation réseau du device | **API NinjaOne** | [Partiel] conçu |
+| **PB-03** | Désactiver un compte | `canary`, `impossible_travel`, `dcsync` (confirmé) | Désactivation compte AD (script NinjaOne sur DC, ou LDAP) | **API NinjaOne** (ou LDAPS) | [Partiel] conçu |
+| **PB-04** | Ouvrir un ticket | Toute alerte P3 (mail tier) | Création d'un incident avec contexte (identité, hôte, MITRE) | **API ticketing NinjaOne** | [Partiel] conçu |
+| **PB-05** | Enrichir IOC | `threat_intel`, IP/domaine externes | Enrichissement TI + retro-hunt | MISP/feed (optionnel) | [Partiel] conçu |
 
 ## Conception détaillée (PB-02 → PB-04)
 Chaque playbook = un nouvel endpoint du service `omni-soar` (`/isolate`, `/disable`, `/ticket`), appelé par une notification Graylog dédiée, avec les **mêmes garde-fous renforcés** :
@@ -2459,7 +2459,7 @@ Chaque playbook = un nouvel endpoint du service `omni-soar` (`/isolate`, `/disab
 - **PB-04 Ticket** — `POST /ticket {event}` → ticket pré-rempli (titre = alerte, corps = identité + hôte + technique MITRE + lien Graylog). Sert de file d'incidents (pallie l'absence de case-management en OSS).
 
 ## Prérequis côté client (à fournir avant intégration)
-1. 🔑 **API NinjaOne** : `client_id` + `client_secret` (OAuth2), scopes *management* (PB-02/03) et *ticketing* (PB-04). Région EU (`eu.ninjarmm.com`). → stocker dans `00-vars.env` (chmod 600) façon `FORTI_DHCP_TOKEN`.
+1.  **API NinjaOne** : `client_id` + `client_secret` (OAuth2), scopes *management* (PB-02/03) et *ticketing* (PB-04). Région EU (`eu.ninjarmm.com`). → stocker dans `00-vars.env` (chmod 600) façon `FORTI_DHCP_TOKEN`.
 2. **Whitelist de rôles d'hôte** à ne JAMAIS isoler (DC, SIEM, hyperviseurs, NAS, cœur réseau).
 3. **Whitelist de comptes** à ne JAMAIS désactiver (break-glass, comptes de service critiques).
 
@@ -2572,7 +2572,7 @@ seul** au bout du TTL.
 - **Test de bout en bout** : injecter une IP de test dans le feed et vérifier
   qu'elle est lue côté FortiGate (poll ≤ 2 min, visible dans les logs nginx).
 
-> ⚠️ Le SOAR agit **automatiquement** sur le pare-feu. Maintenir la whitelist
+> Attention : Le SOAR agit **automatiquement** sur le pare-feu. Maintenir la whitelist
 > à jour est une responsabilité d'exploitation (revue mensuelle, PRO §2).
 
 ## Évolution — SOAR avancé (cadrage)
@@ -2794,7 +2794,7 @@ systemctl list-timers 'omni-*'
 curl -s '127.0.0.1:9200/_cat/indices/omni-*?h=index,docs.count,store.size&s=index'
 
 # débit d'un flux (5 min) — préfixes : omni-winsec omni-sysmon omni-winother
-#   omni-fortigate omni-m365 omni-vsphere omni-eset omni-bunkerweb
+# omni-fortigate omni-m365 omni-vsphere omni-eset omni-bunkerweb
 curl -s "127.0.0.1:9200/omni-<flux>_*/_count" -H 'Content-Type: application/json' \
   -d '{"query":{"range":{"timestamp":{"gte":"now-5m"}}}}'
 

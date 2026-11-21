@@ -3,7 +3,7 @@
 Everything that happens on the **DC (BX-AD-01-IT-VM / 10.33.50.250)** side and on the
 **workstations/servers** side. Suggested order: 1 → 5, in pilot first.
 
-> **⭐ Recommended path (12/06): `Install-OmniSiem-NinjaOne.ps1`** — the
+> ** Recommended path (12/06): `Install-OmniSiem-NinjaOne.ps1`** — the
 > SINGLE and definitive script for NinjaOne (SYSTEM, 64-bit, daily
 > scheduling). It REPLACES `Deploy-SiemAgents-NinjaOne.ps1` +
 > `Set-OmniAudit-NinjaOne.ps1`: Root CA (TOFU), audit policy, Sysmon,
@@ -21,15 +21,15 @@ Everything that happens on the **DC (BX-AD-01-IT-VM / 10.33.50.250)** side and o
 $d = "C:\Windows\SYSVOL\sysvol\omnitech.security\scripts\SIEM"   # = NETLOGON\SIEM
 New-Item -ItemType Directory -Path $d -Force
 # Place there:
-#  - Sysmon64.exe                  <- https://live.sysinternals.com/Sysmon64.exe
-#  - sysmonconfig-omnitech.xml     <- this kit
-#  - winlogbeat-oss-8.17.4-windows-x86_64.zip
-#       <- https://artifacts.elastic.co/downloads/beats/winlogbeat/
-#          !! OSS version mandatory (the standard one refuses a non-Elastic output)
-#  - winlogbeat.yml                <- this kit (check the SIEM FQDN inside it)
-#  - omnitech-rootca.pem           <- Base64 export of the Root CA:
-#       On BX-PKI2022: certutil -ca.cert C:\temp\rootca.cer
-#       then rename .cer (already Base64? otherwise: certutil -encode rootca.cer omnitech-rootca.pem)
+# - Sysmon64.exe                  <- https://live.sysinternals.com/Sysmon64.exe
+# - sysmonconfig-omnitech.xml     <- this kit
+# - winlogbeat-oss-8.17.4-windows-x86_64.zip
+# <- https://artifacts.elastic.co/downloads/beats/winlogbeat/
+# !! OSS version mandatory (the standard one refuses a non-Elastic output)
+# - winlogbeat.yml                <- this kit (check the SIEM FQDN inside it)
+# - omnitech-rootca.pem           <- Base64 export of the Root CA:
+# On BX-PKI2022: certutil -ca.cert C:\temp\rootca.cer
+# then rename .cer (already Base64? otherwise: certutil -encode rootca.cer omnitech-rootca.pem)
 ```
 NETLOGON is replicated on both DCs and readable by the computer accounts:
 perfect for a deployment without Internet.

@@ -9,9 +9,9 @@
 
 | Source | SIEM side | Source side | Data received |
 |--------|-----------|-------------|----------------|
-| **ESET PROTECT** (10.33.50.20) | ✅ Syslog TCP input 1515, stream `OMNI - ESET`, pipeline `eset_*` | ✅ syslog configured | ✅ **arriving** (low volume — occasional detections, `eset_*` fields parsed) |
-| **BunkerWeb** (10.33.70.1, host `bx-waf-it-vm`) | ✅ stream `OMNI - BunkerWeb`, pipeline `http_*`/`waf_*` | ✅ **Filebeat deployed** (Docker logs) | ✅ **arriving** (~15.5k docs, nominal flow) |
-| **NPS / RADIUS** (10.33.50.247, `bx-nps-it-vm`) | ✅ `win-events.csv` lookup + widgets/alert ready | ⚠️ Winlogbeat active but **Security channel missing** | ❌ **0× 6272/6273/6274** (see diagnostic §2) |
+| **ESET PROTECT** (10.33.50.20) | [OK] Syslog TCP input 1515, stream `OMNI - ESET`, pipeline `eset_*` | [OK] syslog configured | [OK] **arriving** (low volume — occasional detections, `eset_*` fields parsed) |
+| **BunkerWeb** (10.33.70.1, host `bx-waf-it-vm`) | [OK] stream `OMNI - BunkerWeb`, pipeline `http_*`/`waf_*` | [OK] **Filebeat deployed** (Docker logs) | [OK] **arriving** (~15.5k docs, nominal flow) |
+| **NPS / RADIUS** (10.33.50.247, `bx-nps-it-vm`) | [OK] `win-events.csv` lookup + widgets/alert ready | Warning: Winlogbeat active but **Security channel missing** | [KO] **0× 6272/6273/6274** (see diagnostic §2) |
 
 > ESET and BunkerWeb are therefore **operational**; the section covering them now
 > serves as reference (config reminder) rather than a task to do. NPS remains the
@@ -26,7 +26,7 @@
 
 ---
 
-## 1. ESET PROTECT (10.33.50.20) — ✅ operational
+## 1. ESET PROTECT (10.33.50.20) — [OK] operational
 
 **SIEM side (done):** *Syslog TCP* input on **1515** (TLS disabled on this
 input), and the firewall **redirects 514 → 1515** (your ESET therefore stays on 514).
@@ -46,7 +46,7 @@ sets the **`eset_detection`** tag (`alert_tag`) on threats (`Threat_Event` /
 > `eset_*` fields are correctly extracted. Low volume (occasional
 > detections) — this is expected, not a collection problem.
 
-⚠️ **One point to check — the framing**: Graylog expects by
+Warning: **One point to check — the framing**: Graylog expects by
 default **LF (non-transparent) framing**. If you chose
 "octet-counting" (RFC 6587) and messages
 arrive **stuck together/truncated**, switch ESET to **non-transparent / newline
@@ -56,7 +56,7 @@ arrive **stuck together/truncated**, switch ESET to **non-transparent / newline
 
 ---
 
-## 2. NPS / RADIUS (10.33.50.247, `bx-nps-it-vm`) — ⚠️ pending on the server side
+## 2. NPS / RADIUS (10.33.50.247, `bx-nps-it-vm`) — Warning: pending on the server side
 
 **SIEM side (already handled):** NPS events **6272** (access granted), **6273**
 (denied), **6274** (rejected) are **automatically enriched** (lookup
@@ -108,9 +108,9 @@ As long as this flow does not arrive, the **[NPS pending]** widgets of the
 
 ---
 
-## 3. BunkerWeb (10.33.70.1, host `bx-waf-it-vm`) — Filebeat → Beats 5044 — ✅ operational
+## 3. BunkerWeb (10.33.70.1, host `bx-waf-it-vm`) — Filebeat → Beats 5044 — [OK] operational
 
-**SIEM side (done):** stream `OMNI - BunkerWeb`. ⚠️ **The stream is routed on the
+**SIEM side (done):** stream `OMNI - BunkerWeb`. Warning: **The stream is routed on the
 `filebeat_event_source=bunkerweb` field** (and **not** `event_source`): Filebeat
 sends a `fields.event_source` field that Graylog's Beats input **prefixes as
 `filebeat_`**. It is only *afterwards*, in the pipeline, that the rule
@@ -127,7 +127,7 @@ Reuses the existing **Beats TLS 5044** input (10.33.70.1 already allowed via the
 > (`/var/lib/docker/containers/*/*-json.log`) — the actual deployment is the **Docker
 > option** below, not the systemd package.
 
-> ⚠️ **Key point if you redeploy Filebeat:** **do NOT set `fields_under_root:
+> Warning: **Key point if you redeploy Filebeat:** **do NOT set `fields_under_root:
 > true`**. If you set it, `event_source` arrives at the root and is **not**
 > prefixed `filebeat_` → the `OMNI - BunkerWeb` stream (which filters on
 > `filebeat_event_source`) **will no longer match**. Let Filebeat put the field

@@ -140,10 +140,10 @@ timedatectl show -p NTPSynchronized -p Timezone
 # observed 07/02: Timezone=Europe/Paris, NTPSynchronized=yes
 chronyc tracking
 # observed 07/02: Reference ID = BX-AD-01-IT-VM.omnitech.security (internal DC),
-#                  Stratum 3, RMS offset 0.00122 s (~1.2 ms), Leap status Normal
+# Stratum 3, RMS offset 0.00122 s (~1.2 ms), Leap status Normal
 chronyc sources
 # observed 07/02: 2 internal sources — BX-AD-01-IT-VM (stratum 2, selected "^*")
-#                  and BX-AD02-IT-VM (stratum 3, candidate "^-"), Reach 377 for both
+# and BX-AD02-IT-VM (stratum 3, candidate "^-"), Reach 377 for both
 ```
 
 Provisioning traced: `01-base.sh` configures chrony toward the internal DC with an explicit mention of control A.8.17 (lines 46-48). Consistency on the emitter side is observed indirectly through the homogeneous freshness of the sources (freshness query in A.8.15): divergent clocks would produce aberrant timestamps visible in that aggregation.
@@ -278,7 +278,7 @@ curl -s 'http://127.0.0.1:9200/omni-*/_count' -H 'Content-Type: application/json
 ls -lh /var/backups/siem/omni-siem-config_$(date +%F).tar.gz.enc   # expected: today's archive (~296 MB)
 journalctl -u omni-backup-config.service --since today --no-pager | grep -E 'restaurabilite|OK :'
 # expected: "restaurabilite verifiee : N entrees" then
-#           "OK : ... -> //10.33.50.5/Public/SIEM (14 copies, retention 14 j)"
+# "OK : ... -> //10.33.50.5/Public/SIEM (14 copies, retention 14 j)"
 ```
 
 Archive scope (`30-backup-config.sh`): full working tree of the repository (uncommitted files included), `/usr/local/sbin`, Mongo dump — hence a restorable Graylog configuration. Built-in GELF alert on failure or absence > 26 h.

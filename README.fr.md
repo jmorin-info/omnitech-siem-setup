@@ -372,7 +372,7 @@ optionnels ; leur absence sur un nouveau socle ne signifie pas un échec du socl
 cd /root/omnitech-siem-setup
 
 # 1. Contrôle global lecture seule : noyau, /data déchiffré, services coeur,
-#    API Graylog, robots, collecte vivante -> PASS/FAIL par contrôle
+# API Graylog, robots, collecte vivante -> PASS/FAIL par contrôle
 ./verif-post-reboot.sh
 
 # 2. Santé du cluster d'indexation (attendu : "green")

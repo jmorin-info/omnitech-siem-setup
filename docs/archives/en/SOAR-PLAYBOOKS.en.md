@@ -14,11 +14,11 @@ A Graylog HTTP POST notification → action → safeguards → state → effect.
 
 | # | Playbook | Trigger (alert_tag) | Action | Dependency | Status |
 |---|---|---|---|---|---|
-| **PB-01** | Block attacking IP | VPN brute force, password spraying | Add to FortiGate threat feed (TTL) | FortiGate (done) | ✅ **PROD** |
-| **PB-02** | Isolate a compromised host | `ransomware_indicator`, `lsass_access`, `lateral_movement` (confirmed) | NinjaOne: network isolation of the device | **NinjaOne API** | 🟡 designed |
-| **PB-03** | Disable an account | `canary`, `impossible_travel`, `dcsync` (confirmed) | AD account disable (NinjaOne script on DC, or LDAP) | **NinjaOne API** (or LDAPS) | 🟡 designed |
-| **PB-04** | Open a ticket | Any P3 alert (email tier) | Create an incident with context (identity, host, MITRE) | **NinjaOne ticketing API** | 🟡 designed |
-| **PB-05** | Enrich IOC | `threat_intel`, external IP/domain | TI enrichment + retro-hunt | MISP/feed (optional) | 🟡 designed |
+| **PB-01** | Block attacking IP | VPN brute force, password spraying | Add to FortiGate threat feed (TTL) | FortiGate (done) | [OK] **PROD** |
+| **PB-02** | Isolate a compromised host | `ransomware_indicator`, `lsass_access`, `lateral_movement` (confirmed) | NinjaOne: network isolation of the device | **NinjaOne API** | [Partial] designed |
+| **PB-03** | Disable an account | `canary`, `impossible_travel`, `dcsync` (confirmed) | AD account disable (NinjaOne script on DC, or LDAP) | **NinjaOne API** (or LDAPS) | [Partial] designed |
+| **PB-04** | Open a ticket | Any P3 alert (email tier) | Create an incident with context (identity, host, MITRE) | **NinjaOne ticketing API** | [Partial] designed |
+| **PB-05** | Enrich IOC | `threat_intel`, external IP/domain | TI enrichment + retro-hunt | MISP/feed (optional) | [Partial] designed |
 
 ## Detailed design (PB-02 → PB-04)
 Each playbook = a new endpoint of the `omni-soar` service (`/isolate`, `/disable`, `/ticket`), called by a dedicated Graylog notification, with the **same reinforced safeguards**:
@@ -32,7 +32,7 @@ Each playbook = a new endpoint of the `omni-soar` service (`/isolate`, `/disable
 - **PB-04 Ticket** — `POST /ticket {event}` → pre-filled ticket (title = alert, body = identity + host + MITRE technique + Graylog link). Serves as an incident queue (compensates for the absence of case management in OSS).
 
 ## Client-side prerequisites (to provide before integration)
-1. 🔑 **NinjaOne API**: `client_id` + `client_secret` (OAuth2), scopes *management* (PB-02/03) and *ticketing* (PB-04). EU region (`eu.ninjarmm.com`). → store in `00-vars.env` (chmod 600) in the manner of `FORTI_DHCP_TOKEN`.
+1.  **NinjaOne API**: `client_id` + `client_secret` (OAuth2), scopes *management* (PB-02/03) and *ticketing* (PB-04). EU region (`eu.ninjarmm.com`). → store in `00-vars.env` (chmod 600) in the manner of `FORTI_DHCP_TOKEN`.
 2. **Whitelist of host roles** to NEVER isolate (DC, SIEM, hypervisors, NAS, network core).
 3. **Whitelist of accounts** to NEVER disable (break-glass, critical service accounts).
 

@@ -190,23 +190,23 @@ and **nominative auth** (LDAPS exists, but a shared `admin` account is still use
 
 ## 6. Risks, reordered (verified on the real system)
 
-1. **🔴 Key-person / absence of version control — CRITICAL, IMMEDIATE.**
+1. **[Critical] Key-person / absence of version control — CRITICAL, IMMEDIATE.**
    `git` is **not installed**; **no repository** under `/root`. **10,238 lines** of production bash (59 scripts)
    + **26 Python microservices** are **under no versioning**. No test, no CI, no shellcheck.
    The only net: the daily AES-256 tar to SMB. The operational knowledge lives in `docs/reference/CONTEXT.md` (a
    changelog) **and in your head**. If you leave tomorrow, it is a black box. *ISO note: it is also a hole
    in change management (A.8.32) and in clause 10.* **→ P0 action, before any AI (cf. §7).**
-2. **🟠 Indirect prompt injection** (as soon as an LLM reads logs). Handled by the architecture (deterministic
+2. **[Partial] Indirect prompt injection** (as soon as an LLM reads logs). Handled by the architecture (deterministic
    policy + human-in-loop). **Never** give the LLM a destructive action in auto mode.
-3. **🟠 Cleartext secrets.** The service secrets live in `00-vars.env` (chmod 600, **plaintext**).
+3. **[Partial] Cleartext secrets.** The service secrets live in `00-vars.env` (chmod 600, **plaintext**).
    Vaultwarden is today an *audited log source*, **not** a secret-retrieval backend.
    Yet the response service will hold the most powerful creds (ESET isolate, AD disable): **those above all**
    must not end up in clear in `00-vars.env`. *The docs' "secret retrieval via Vaultwarden"
    is therefore both net-new AND a real hardening to do.*
-4. **🟠 Active scan on prod + partner tunnels** — a real risk but **avoidable by pushing the brick back**.
-5. **🟡 Alert / approval fatigue** — already encountered (the "Brute force" storm of 12/06). The LLM can
+4. **[Partial] Active scan on prod + partner tunnels** — a real risk but **avoidable by pushing the brick back**.
+5. **[Partial] Alert / approval fatigue** — already encountered (the "Brute force" storm of 12/06). The LLM can
    *help* (group, narrate) or *worsen* (one more approval). To watch.
-6. **🟡 Engine divergence** if a 2nd correlation is built alongside `omni-incident-correlate`.
+6. **[Partial] Engine divergence** if a 2nd correlation is built alongside `omni-incident-correlate`.
 
 ---
 

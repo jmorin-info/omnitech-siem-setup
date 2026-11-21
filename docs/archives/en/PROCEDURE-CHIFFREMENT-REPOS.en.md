@@ -4,8 +4,8 @@
 > Production mechanism: **LUKS2 (inline header) + automatic TPM2 unlock**.
 
 ## What protects what
-- ✅ Disk theft, decommissioning / RMA, theft of the **powered-off server**: `/data` unreadable without the key (the TPM never releases it outside this platform; recovery passphrase in the vault).
-- ❌ Root compromised on a **powered-on machine** (FS mounted in clear) → covered elsewhere: RBAC (read-only role), signed log integrity, console/Beats TLS.
+- [OK] Disk theft, decommissioning / RMA, theft of the **powered-off server**: `/data` unreadable without the key (the TPM never releases it outside this platform; recovery passphrase in the vault).
+- [KO] Root compromised on a **powered-on machine** (FS mounted in clear) → covered elsewhere: RBAC (read-only role), signed log integrity, console/Beats TLS.
 - Scope: only `/data` (the OpenSearch **logs**) is encrypted. The rootfs (OS + config) is not — sensitive config lives there (`00-vars.env` chmod 600). Possible future hardening: encrypt the rootfs.
 
 ## Configuration in place (reference)
@@ -22,7 +22,7 @@
 | `/etc/fstab` | `/dev/mapper/cryptdata /data xfs defaults,noatime,nofail 0 2` |
 | Header backup | AES-256 encrypted → `//10.33.50.5/Public/SIEM/luks/omni-luks-header-YYYY-MM-DD.img.enc` + local copy `/root/` |
 
-> ⚠️ **TPM on SHA-1 PCR bank** (this TPM does not expose SHA-256) → slightly less robust sealing, with no impact on protection at rest. Hardening: enable the SHA-256 PCR bank in the Dell BIOS, then re-enroll (see *Recovery*).
+> Warning: **TPM on SHA-1 PCR bank** (this TPM does not expose SHA-256) → slightly less robust sealing, with no impact on protection at rest. Hardening: enable the SHA-256 PCR bank in the Dell BIOS, then re-enroll (see *Recovery*).
 
 ## Key security (in order of importance)
 1. **Recovery passphrase** (keyslot 0) → **Vaultwarden only**, never in clear on the server. The only way to reopen `/data` if the TPM / motherboard changes. The temporary file `/etc/luks/.data-pass` is **destroyed (`shred`) after TPM enrollment + vaulting**.
@@ -37,13 +37,13 @@ mount /data
 systemctl start opensearch graylog-server
 
 # The TPM no longer unlocks at boot (firmware update / Secure Boot / PCR bank):
-#   at boot, enter the passphrase at the prompt, then re-enroll the TPM:
+# at boot, enter the passphrase at the prompt, then re-enroll the TPM:
 systemd-cryptenroll /dev/sda1 --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=7
 
 # Restore the header from the out-of-band backup (corrupted header):
-#   1) retrieve the .enc from the SMB share, decrypt it (BACKUP_PASSPHRASE: 00-vars.env / vault)
+# 1) retrieve the .enc from the SMB share, decrypt it (BACKUP_PASSPHRASE: 00-vars.env / vault)
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in omni-luks-header-YYYY-MM-DD.img.enc -out hdr.img
-#   2) restore:
+# 2) restore:
 cryptsetup luksHeaderRestore /dev/sda1 --header-backup-file hdr.img
 
 # Add / change the recovery passphrase:
@@ -78,7 +78,7 @@ If one day it becomes necessary to encrypt a volume **without losing** its data,
   `cryptsetup reencrypt --encrypt --header /etc/luks/hdr.img --type luks2 --resilience checksum /dev/sdX`
   (resumable via `--resume-only --header …`), then `open --header` / `mount` / `systemd-cryptenroll --header`.
 - **Online encryption** (`cryptsetup open` first, then `reencrypt --resume-only --active-name cryptdata`) makes it possible to keep the volume **mounted and in service** during the operation.
-- ⚠️ You **cannot natively cancel** a partial `--encrypt` (`--decrypt` refuses it: *"conflicting --decrypt option"*): you must either see it through, or copy back the head zone in clear via the open mapper. *(Validated on loopback on 2026-06-14.)*
+- Warning: You **cannot natively cancel** a partial `--encrypt` (`--decrypt` refuses it: *"conflicting --decrypt option"*): you must either see it through, or copy back the head zone in clear via the open mapper. *(Validated on loopback on 2026-06-14.)*
 
 ## Complementary (in transit — lower priority, isolated SIEM VLAN = mitigation)
 ESET (1515) / vSphere (1516) / FortiGate-FAZ (1514) in **clear** syslog → migrate to **syslog-over-TLS** (supported by ESET PROTECT, vSphere, FortiGate) where possible. Beats (5044) and the console (9000) are already on TLS.

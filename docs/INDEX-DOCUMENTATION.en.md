@@ -2,7 +2,7 @@
 
 > **Last reviewed: 2026-06-14**
 
-➡️ **The single master index is now [`00-INDEX.md`](00-INDEX.md).**
+→ **The single master index is now [`00-INDEX.md`](00-INDEX.md).**
 
 This file is kept as a simple redirect (a single index to avoid
 divergence). The whole table of documents — purpose, target audience, associated ISO

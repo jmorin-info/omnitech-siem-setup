@@ -86,7 +86,7 @@ systemctl list-timers 'omni-*'
 curl -s '127.0.0.1:9200/_cat/indices/omni-*?h=index,docs.count,store.size&s=index'
 
 # throughput of a flow (5 min) — prefixes: omni-winsec omni-sysmon omni-winother
-#   omni-fortigate omni-m365 omni-vsphere omni-eset omni-bunkerweb
+# omni-fortigate omni-m365 omni-vsphere omni-eset omni-bunkerweb
 curl -s "127.0.0.1:9200/omni-<flux>_*/_count" -H 'Content-Type: application/json' \
   -d '{"query":{"range":{"timestamp":{"gte":"now-5m"}}}}'
 

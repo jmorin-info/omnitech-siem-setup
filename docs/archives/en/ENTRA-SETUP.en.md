@@ -10,7 +10,7 @@ The `omni-m365-fetch` fetcher already collects via Microsoft Graph:
 `m365_partage_externe`, `m365_risque`, + **added by `94-entra.sh`**: `m365_app_credential_add`
 (secret/cert added to an app = cloud backdoor), `m365_ca_change` (Conditional Access change).
 
-## ⚠️ Action 1 — unlock the *risk detections* (Identity Protection)
+## Warning: Action 1 — unlock the *risk detections* (Identity Protection)
 **Measured finding**: `m365_type=risk = 0`, and **100% of sign-ins report `risk_level=hidden /
 risk_state=none`**. The Azure risk engine computes nothing → the `m365_risque` detection stays silent.
 Cause = **no Entra ID P2 license**. To do on the tenant side:
@@ -26,7 +26,7 @@ Cause = **no Entra ID P2 license**. To do on the tenant side:
 **Check**: after these 3 steps, `m365_type=risk` should go > 0 and new sign-ins report
 `risk_level` ∈ {low, medium, high}. `m365_risque` will then start detecting.
 
-## ⚠️ Action 2 — block *legacy auth* (MFA bypass)
+## Warning: Action 2 — block *legacy auth* (MFA bypass)
 **Measured finding**: **1461 "Authenticated SMTP" authentications** (+ 41 "Other clients") over the
 window. Legacy protocols (basic SMTP/IMAP/POP/ActiveSync) **do not support MFA** → an
 attacker uses them to bypass MFA in a password-spray. To do:

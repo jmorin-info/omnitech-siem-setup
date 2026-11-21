@@ -95,7 +95,7 @@ itself** after the TTL.
 - **End-to-end test**: inject a test IP into the feed and check
   that it is read on the FortiGate side (poll ≤ 2 min, visible in the nginx logs).
 
-> ⚠️ The SOAR acts **automatically** on the firewall. Keeping the whitelist
+> Warning: The SOAR acts **automatically** on the firewall. Keeping the whitelist
 > up to date is an operational responsibility (monthly review, PRO §2).
 
 ## Evolution — advanced SOAR (scoping)

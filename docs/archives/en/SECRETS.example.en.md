@@ -1,6 +1,6 @@
 # Secrets summary — OMNITECH SIEM stack (TEMPLATE)
 
-> ⚠️ This file is a **versioned template**. The real `SECRETS.md` file (with the
+> Warning: This file is a **versioned template**. The real `SECRETS.md` file (with the
 > values) is **never** committed (see `.gitignore`). It stays on the VM as a
 > "break-glass" reference. Fill in the values locally only.
 

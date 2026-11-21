@@ -53,7 +53,7 @@ Méthode : exécuter le test [Atomic Red Team](https://github.com/redcanaryco/at
 | T1087.002 LDAP recon | T1087.002 | `ldap_recon` | 4662/Sysmon |
 | T1562.002 Clear logs | T1070.001 (`wevtutil cl`) | `winsec_critique` | 1102 |
 
-> ⚠️ Ne PAS jouer les tests destructifs (T1486 ransomware, T1485 destruction) en production.
+> Attention : Ne PAS jouer les tests destructifs (T1486 ransomware, T1485 destruction) en production.
 > Tenir un journal des campagnes de validation (date, technique, détecté oui/non, MTTD) — utile aussi pour ISO A.8.16.
 
 ## Maintenance

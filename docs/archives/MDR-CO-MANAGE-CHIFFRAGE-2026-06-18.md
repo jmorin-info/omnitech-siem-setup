@@ -6,7 +6,7 @@
 **Portée de ce doc :** cadrer le périmètre, le modèle, comparer le marché 2026, chiffrer, et lister les
 critères de bascule + questions d'appel d'offres.
 
-> ⚠️ **Fiabilité des chiffres.** Les prix MDR sont quasi tous **sur devis** ; les fourchettes ci-dessous
+> Attention : **Fiabilité des chiffres.** Les prix MDR sont quasi tous **sur devis** ; les fourchettes ci-dessous
 > proviennent de benchmarks publics 2026 (sources en fin de doc) et d'**estimations explicitement signalées
 > `[EST]`**. Aucun n'est un devis OMNITECH. Taux retenu : 1 USD ≈ 0,93 €.
 
@@ -92,14 +92,14 @@ préavis raisonnable. C'est précisément l'avantage du co-managé BYO sur le MD
 
 | Fournisseur | Tarification (indicative) | Co-managé réel / BYO-SIEM-EDR | Intégration stack tiers (Graylog/ESET) | Localisation données |
 |---|---|---|---|---|
-| **Bitdefender MDR / MDR PLUS** | Sur devis ; 2 paliers. MTTD 24 min (MITRE 2024), SLA notif ≤30 min. Garantie jusqu'à **1 M$ mais ≥1000 endpoints** (→ **OMNITECH non éligible**) | ❌ « Co-Managed » marketing mais **agent GravityZone obligatoire, pas d'EDR tiers** | ❌ Faible (impose son agent) | ❌ SOC San Antonio / Bucarest / Singapour — **pas de garantie résidence UE** |
-| **Arctic Wolf MDR** | $8–25/endpoint/mois (base) ; SMB effectif $25–40/user/mois ; entrée ~44 k$/an (≤100 users), deal médian ~96 k$/an | ◐ Concierge Security Team, modèle « tes outils + notre SOC » | ◐ Connecteurs SIEM/EDR larges | ❌/◐ US-centric (option UE à vérifier) |
+| **Bitdefender MDR / MDR PLUS** | Sur devis ; 2 paliers. MTTD 24 min (MITRE 2024), SLA notif ≤30 min. Garantie jusqu'à **1 M$ mais ≥1000 endpoints** (→ **OMNITECH non éligible**) | [KO] « Co-Managed » marketing mais **agent GravityZone obligatoire, pas d'EDR tiers** | [KO] Faible (impose son agent) | [KO] SOC San Antonio / Bucarest / Singapour — **pas de garantie résidence UE** |
+| **Arctic Wolf MDR** | $8–25/endpoint/mois (base) ; SMB effectif $25–40/user/mois ; entrée ~44 k$/an (≤100 users), deal médian ~96 k$/an | ◐ Concierge Security Team, modèle « tes outils + notre SOC » | ◐ Connecteurs SIEM/EDR larges | [KO]/◐ US-centric (option UE à vérifier) |
 | **Sophos MDR** | $7–17/endpoint/mois (base) ; effectif $15–25/user/mois avec serveurs + Intercept X + packs | ◐ Supporte télémétrie tierce (« MDR Complete ») mais pousse son EDR | ◐ Intègre EDR/SIEM tiers via packs | ◐ Région UE disponible (à confirmer) |
-| **Orange Cyberdefense** (FR) | Sur devis | ✅ SOC managé / MDR / XDR, modèle co-managé | ✅ Agnostique, fort en intégration | ✅ **SecNumCloud** (Cloud Avenue SecNum qualifié ANSSI, juil. 2025) |
-| **Advens / ITrust** (FR) | Sur devis | ✅ Acteurs revendiquant l'**autonomie stratégique** totale | ✅ Agnostique | ✅ FR souverain |
-| **Intrinsec** (FR) | Sur devis | ✅ **SOC externalisé 24/7**, experts certifiés ANSSI, SIEM/SOAR | ✅ Agnostique (CTI réputée) | ✅ FR |
-| **Sekoia.io** (FR/UE) | Sur devis (plateforme + MDR partenaires) | ✅ Plateforme SOC/XDR ouverte, 900+ règles, 24/7 | ✅ **Conçue pour ingérer des sources tierces** | ✅ UE |
-| **ReliaQuest / Binary Defense / Huntress** (US) | Sur devis | ✅ **BYO-SIEM/EDR** explicite (surcouche au-dessus de l'existant) | ✅ API-first, portabilité des données | ❌ US (sauf option UE) |
+| **Orange Cyberdefense** (FR) | Sur devis | [OK] SOC managé / MDR / XDR, modèle co-managé | [OK] Agnostique, fort en intégration | [OK] **SecNumCloud** (Cloud Avenue SecNum qualifié ANSSI, juil. 2025) |
+| **Advens / ITrust** (FR) | Sur devis | [OK] Acteurs revendiquant l'**autonomie stratégique** totale | [OK] Agnostique | [OK] FR souverain |
+| **Intrinsec** (FR) | Sur devis | [OK] **SOC externalisé 24/7**, experts certifiés ANSSI, SIEM/SOAR | [OK] Agnostique (CTI réputée) | [OK] FR |
+| **Sekoia.io** (FR/UE) | Sur devis (plateforme + MDR partenaires) | [OK] Plateforme SOC/XDR ouverte, 900+ règles, 24/7 | [OK] **Conçue pour ingérer des sources tierces** | [OK] UE |
+| **ReliaQuest / Binary Defense / Huntress** (US) | Sur devis | [OK] **BYO-SIEM/EDR** explicite (surcouche au-dessus de l'existant) | [OK] API-first, portabilité des données | [KO] US (sauf option UE) |
 
 **Lecture :** pour OMNITECH (souveraineté + conserver Graylog/ESET), le **quadrant gagnant = acteurs FR/UE
 agnostiques** (Orange Cyberdefense, Advens, Intrinsec, Sekoia). Les BYO US (ReliaQuest/Binary Defense) sont

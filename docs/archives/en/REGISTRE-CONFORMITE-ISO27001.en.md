@@ -3,56 +3,56 @@
 *Version 1.0 — 12/06/2026 — Scope: monitoring, logging and
 detection provided by the Graylog SIEM `bx-it-graylog-vm`. Classification: internal.*
 
-Status legend: ✅ Compliant · 🟡 Partial (action in progress) · ⬜ To be addressed.
+Status legend: [OK] Compliant · [Partial] Partial (action in progress) · [To do] To be addressed.
 
 ## 1. Organizational controls (A.5)
 
 | A.5 control | Requirement | Implementation (evidence) | Status |
 |---|---|---|---|
-| 5.7 Threat intelligence | Threat intelligence | Tor/Spamhaus, GeoIP lookups, `threat_intel` rules | ✅ |
-| 5.15 Access control | Restrict access | Console restricted to "Domain Admins" via LDAPS (LDAPS.md), host firewall | ✅ |
-| 5.16 Identity management | Traceable identities | Nominative AD auth on the console (LDAPS backend) | ✅ |
-| 5.17 Authentication | Managed secrets | LDAPS + local backup `admin` in the vault; secrets chmod 600 | ✅ |
-| 5.18 Access rights | Least privilege | Dedicated service accounts (svc_siem), no collection under an admin account | ✅ |
-| 5.23 Cloud services security | Cloud monitoring | M365 collection (sign-ins, audit, Exchange/SharePoint) | ✅ |
-| 5.25 Assessment of events | Qualify/classify | Triage PRO §3, classification PRO §7, 88 prioritized definitions | ✅ |
-| 5.26 Incident response | Procedure + response | Playbooks PRO §6, RACI matrix §8, **SOAR-light** (auto blocking of attacking IPs via FortiGate feed) | ✅ |
-| 8.16 (internal detection) | Detect intrusion | **AD canary account** (decoy, ~zero false positives) | ✅ |
-| 5.28 Collection of evidence | Usable evidence | UTC-timestamped logs, Graylog export, controlled retention (STD §9) | ✅ |
-| 5.33 Protection of records | Log integrity | Automatic retention, out-of-retention deletion impossible without rights, traced purge | ✅ |
-| 5.36 Compliance with policies | Regular review | PRO §2 reviews + **automatic weekly report** (evidence) | ✅ |
+| 5.7 Threat intelligence | Threat intelligence | Tor/Spamhaus, GeoIP lookups, `threat_intel` rules | [OK] |
+| 5.15 Access control | Restrict access | Console restricted to "Domain Admins" via LDAPS (LDAPS.md), host firewall | [OK] |
+| 5.16 Identity management | Traceable identities | Nominative AD auth on the console (LDAPS backend) | [OK] |
+| 5.17 Authentication | Managed secrets | LDAPS + local backup `admin` in the vault; secrets chmod 600 | [OK] |
+| 5.18 Access rights | Least privilege | Dedicated service accounts (svc_siem), no collection under an admin account | [OK] |
+| 5.23 Cloud services security | Cloud monitoring | M365 collection (sign-ins, audit, Exchange/SharePoint) | [OK] |
+| 5.25 Assessment of events | Qualify/classify | Triage PRO §3, classification PRO §7, 88 prioritized definitions | [OK] |
+| 5.26 Incident response | Procedure + response | Playbooks PRO §6, RACI matrix §8, **SOAR-light** (auto blocking of attacking IPs via FortiGate feed) | [OK] |
+| 8.16 (internal detection) | Detect intrusion | **AD canary account** (decoy, ~zero false positives) | [OK] |
+| 5.28 Collection of evidence | Usable evidence | UTC-timestamped logs, Graylog export, controlled retention (STD §9) | [OK] |
+| 5.33 Protection of records | Log integrity | Automatic retention, out-of-retention deletion impossible without rights, traced purge | [OK] |
+| 5.36 Compliance with policies | Regular review | PRO §2 reviews + **automatic weekly report** (evidence) | [OK] |
 
 ## 2. People controls (A.6)
 
 | Control | Requirement | Implementation | Status |
 |---|---|---|---|
-| 6.3 Awareness | Information | IT charter (logging), POL §11 | 🟡 (charter outside the SIEM) |
-| 6.8 Event reporting | Escalation | Email + Teams SOC notifications to the IT team | ✅ |
+| 6.3 Awareness | Information | IT charter (logging), POL §11 | [Partial] (charter outside the SIEM) |
+| 6.8 Event reporting | Escalation | Email + Teams SOC notifications to the IT team | [OK] |
 
 ## 3. Physical controls (A.7)
 
 | Control | Requirement | Implementation | Status |
 |---|---|---|---|
-| 7.4 Physical monitoring | — | Outside the SIEM scope (access control/NVR logs collected via FortiGate) | 🟡 |
+| 7.4 Physical monitoring | — | Outside the SIEM scope (access control/NVR logs collected via FortiGate) | [Partial] |
 
 ## 4. Technological controls (A.8) — core of the setup
 
 | A.8 control | Requirement | Implementation (evidence) | Status |
 |---|---|---|---|
-| 8.5 Secure authentication | Robust console auth | LDAPS/TLS, cert verified by Root CA, access limited to admins | ✅ |
-| 8.6 Capacity management | Size/monitor | Capacity plan (STD §5), disk safeguard `32`, weekly KPIs | ✅ |
-| 8.7 Protection against malware | Detect | FortiGate UTM (AV/IPS), Defender, ransomware/PowerShell/LSASS rules | ✅ |
-| 8.8 Management of technical vulnerabilities | — | OpenVAS (logs collected); patching outside the SIEM | 🟡 |
-| 8.9 Configuration management | Controlled config | **IaC**: scripts 10→34 idempotent, daily config backup | ✅ |
-| 8.10 Information deletion | Deletion in due course | Automatic per-index retention (POL §4, `31`) | ✅ |
-| 8.12 Data leakage prevention | Detect exfiltration | M365 (external share, mail forward), FortiGate (outbound threat intel) | ✅ |
-| 8.13 Backup | Back up/test | Externalized encrypted config backup (`30`), DRP, **test to be performed** | 🟡 |
-| 8.15 Logging | Produce/protect logs | 7 inputs, 13 streams, 144 pipeline rules, retention POL §4, complete STD | ✅ |
-| 8.16 Monitoring activities | Monitor/alert | **88 definitions** (87 detections + 1 system), 24-page dashboard, notifications, self-monitoring | ✅ |
-| 8.17 Clock synchronization | Common clock | NTP on all sources, UTC in the SIEM (STD §7) | ✅ |
-| 8.20 Network security | Segment | Dedicated VLAN 220, FortiGate rules per flow, host firewall | ✅ |
-| 8.23 Web filtering | — | FortiGate webfilter/DNS filter (logs collected) | ✅ |
-| 8.28 Secure coding | — | Outside scope (CI/CD logs not covered) | ⬜ |
+| 8.5 Secure authentication | Robust console auth | LDAPS/TLS, cert verified by Root CA, access limited to admins | [OK] |
+| 8.6 Capacity management | Size/monitor | Capacity plan (STD §5), disk safeguard `32`, weekly KPIs | [OK] |
+| 8.7 Protection against malware | Detect | FortiGate UTM (AV/IPS), Defender, ransomware/PowerShell/LSASS rules | [OK] |
+| 8.8 Management of technical vulnerabilities | — | OpenVAS (logs collected); patching outside the SIEM | [Partial] |
+| 8.9 Configuration management | Controlled config | **IaC**: scripts 10→34 idempotent, daily config backup | [OK] |
+| 8.10 Information deletion | Deletion in due course | Automatic per-index retention (POL §4, `31`) | [OK] |
+| 8.12 Data leakage prevention | Detect exfiltration | M365 (external share, mail forward), FortiGate (outbound threat intel) | [OK] |
+| 8.13 Backup | Back up/test | Externalized encrypted config backup (`30`), DRP, **test to be performed** | [Partial] |
+| 8.15 Logging | Produce/protect logs | 7 inputs, 13 streams, 144 pipeline rules, retention POL §4, complete STD | [OK] |
+| 8.16 Monitoring activities | Monitor/alert | **88 definitions** (87 detections + 1 system), 24-page dashboard, notifications, self-monitoring | [OK] |
+| 8.17 Clock synchronization | Common clock | NTP on all sources, UTC in the SIEM (STD §7) | [OK] |
+| 8.20 Network security | Segment | Dedicated VLAN 220, FortiGate rules per flow, host firewall | [OK] |
+| 8.23 Web filtering | — | FortiGate webfilter/DNS filter (logs collected) | [OK] |
+| 8.28 Secure coding | — | Outside scope (CI/CD logs not covered) | [To do] |
 
 ## 5. Summary of open actions
 
@@ -62,7 +62,7 @@ Status legend: ✅ Compliant · 🟡 Partial (action in progress) · ⬜ To be a
 | 2 | Perform the restore test (DRP) | DRP, A.8.13 | SIEM admin | Current quarter |
 | 3 | Shift the Veeam *Backup Copy* job (restore-point lock contention; the backup **succeeds on retry**, not a DRP gap) | Veeam detection | Sys admin | — |
 | 4 | Extend collection to the remaining Windows servers + enable file audit SACLs on the sensitive folders | STD §1 / `59` | Sys admin | — |
-| 5 | Encryption at rest for `/data` (LUKS2/TPM2) | A.8.24, PROCEDURE-CHIFFREMENT | SIEM admin | ✅ **Done on 2026-06-14** |
+| 5 | Encryption at rest for `/data` (LUKS2/TPM2) | A.8.24, PROCEDURE-CHIFFREMENT | SIEM admin | [OK] **Done on 2026-06-14** |
 | 6 | Assign the analyst accounts to the Graylog "read-only" role (created) | A.8.2 | SIEM admin | — |
 | 7 | Enable the NinjaOne API → advanced SOAR (host isolation / account disabling) | SOAR-PLAYBOOKS | SIEM admin | — |
 | 8 | Link the IT charter (awareness 6.3) | A.6.3 | IT management | — |

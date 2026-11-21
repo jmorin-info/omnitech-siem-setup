@@ -9,9 +9,9 @@
 
 | Source | Côté SIEM | Côté source | Données reçues |
 |--------|-----------|-------------|----------------|
-| **ESET PROTECT** (10.33.50.20) | ✅ input Syslog TCP 1515, stream `OMNI - ESET`, pipeline `eset_*` | ✅ syslog configuré | ✅ **arrive** (volume faible — détections ponctuelles, champs `eset_*` parsés) |
-| **BunkerWeb** (10.33.70.1, hôte `bx-waf-it-vm`) | ✅ stream `OMNI - BunkerWeb`, pipeline `http_*`/`waf_*` | ✅ **Filebeat déployé** (logs Docker) | ✅ **arrive** (~15,5 k docs, flux nominal) |
-| **NPS / RADIUS** (10.33.50.247, `bx-nps-it-vm`) | ✅ lookup `win-events.csv` + widgets/alerte prêts | ⚠️ Winlogbeat actif mais **canal Security absent** | ❌ **0× 6272/6273/6274** (voir diagnostic §2) |
+| **ESET PROTECT** (10.33.50.20) | [OK] input Syslog TCP 1515, stream `OMNI - ESET`, pipeline `eset_*` | [OK] syslog configuré | [OK] **arrive** (volume faible — détections ponctuelles, champs `eset_*` parsés) |
+| **BunkerWeb** (10.33.70.1, hôte `bx-waf-it-vm`) | [OK] stream `OMNI - BunkerWeb`, pipeline `http_*`/`waf_*` | [OK] **Filebeat déployé** (logs Docker) | [OK] **arrive** (~15,5 k docs, flux nominal) |
+| **NPS / RADIUS** (10.33.50.247, `bx-nps-it-vm`) | [OK] lookup `win-events.csv` + widgets/alerte prêts | Attention : Winlogbeat actif mais **canal Security absent** | [KO] **0× 6272/6273/6274** (voir diagnostic §2) |
 
 > ESET et BunkerWeb sont donc **opérationnels** ; la section qui les concerne sert
 > désormais de référence (rappel de conf) plus que de tâche à faire. NPS reste la
@@ -26,7 +26,7 @@
 
 ---
 
-## 1. ESET PROTECT (10.33.50.20) — ✅ opérationnel
+## 1. ESET PROTECT (10.33.50.20) — [OK] opérationnel
 
 **Côté SIEM (fait) :** input *Syslog TCP* sur **1515** (TLS désactivé sur cet
 input), et le pare-feu **redirige 514 → 1515** (ton ESET reste donc sur 514).
@@ -46,7 +46,7 @@ pose le tag **`eset_detection`** (`alert_tag`) sur les menaces (`Threat_Event` /
 > champs `eset_*` sont correctement extraits. Volume faible (détections
 > ponctuelles) — c'est attendu, pas un problème de collecte.
 
-⚠️ **Un seul point à vérifier — le cadrage (framing)** : Graylog attend par
+Attention : **Un seul point à vérifier — le cadrage (framing)** : Graylog attend par
 défaut un cadrage **LF (non-transparent framing)**. Si tu as choisi
 « octets comptabilisés » (octet-counting RFC 6587) et que les messages
 arrivent **collés/tronqués**, bascule ESET sur **non-transparent / nouvelle
@@ -56,7 +56,7 @@ ligne (LF)**. Vérifie l'arrivée :
 
 ---
 
-## 2. NPS / RADIUS (10.33.50.247, `bx-nps-it-vm`) — ⚠️ en attente côté serveur
+## 2. NPS / RADIUS (10.33.50.247, `bx-nps-it-vm`) — Attention : en attente côté serveur
 
 **Côté SIEM (déjà géré) :** les events NPS **6272** (accès accordé), **6273**
 (refusé), **6274** (rejeté) sont **automatiquement enrichis** (lookup
@@ -108,9 +108,9 @@ Tant que ce flux n'arrive pas, les widgets **[NPS en attente]** de la page
 
 ---
 
-## 3. BunkerWeb (10.33.70.1, hôte `bx-waf-it-vm`) — Filebeat → Beats 5044 — ✅ opérationnel
+## 3. BunkerWeb (10.33.70.1, hôte `bx-waf-it-vm`) — Filebeat → Beats 5044 — [OK] opérationnel
 
-**Côté SIEM (fait) :** stream `OMNI - BunkerWeb`. ⚠️ **Le stream est routé sur le
+**Côté SIEM (fait) :** stream `OMNI - BunkerWeb`. Attention : **Le stream est routé sur le
 champ `filebeat_event_source=bunkerweb`** (et **non** `event_source`) : Filebeat
 envoie un champ `fields.event_source` que l'input Beats de Graylog **préfixe en
 `filebeat_`**. C'est seulement *ensuite*, dans le pipeline, que la règle
@@ -127,7 +127,7 @@ Réutilise l'input **Beats TLS 5044** existant (10.33.70.1 déjà autorisé via 
 > (`/var/lib/docker/containers/*/*-json.log`) — le déploiement réel est l'**option
 > Docker** ci-dessous, pas le paquet systemd.
 
-> ⚠️ **Point clé si tu redéploies Filebeat :** **ne mets PAS `fields_under_root:
+> Attention : **Point clé si tu redéploies Filebeat :** **ne mets PAS `fields_under_root:
 > true`**. Si tu le mets, `event_source` arrive à la racine et n'est **pas**
 > préfixé `filebeat_` → le stream `OMNI - BunkerWeb` (qui filtre sur
 > `filebeat_event_source`) **ne matchera plus**. Laisse Filebeat poser le champ

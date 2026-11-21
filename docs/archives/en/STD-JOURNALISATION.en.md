@@ -147,14 +147,14 @@ Multi-source event correlation requires a common clock:
 
 | Measure | Status |
 |---|---|
-| Console and API over HTTPS only (TLS, internal CA) | ✅ |
-| nftables host firewall (ingestion ports restricted by CIDR/source) | ✅ |
+| Console and API over HTTPS only (TLS, internal CA) | [OK] |
+| nftables host firewall (ingestion ports restricted by CIDR/source) | [OK] |
 | Console accounts: target LDAPS + "Admins du domaine" group (cf. LDAPS.md), local `admin` fallback in the vault | in progress |
-| No direct OpenSearch/MongoDB access outside localhost | ✅ |
-| Secrets (`00-vars.env`, `.smb-siem.cred`) in chmod 600 | ✅ |
-| AES-256 encrypted backups, passphrase in the vault | ✅ |
-| Source sabotage detection (1102/104, audit stop, agent silence) | ✅ |
-| Self-monitoring (silent collection, backup KO, disk) | ✅ |
+| No direct OpenSearch/MongoDB access outside localhost | [OK] |
+| Secrets (`00-vars.env`, `.smb-siem.cred`) in chmod 600 | [OK] |
+| AES-256 encrypted backups, passphrase in the vault | [OK] |
+| Source sabotage detection (1102/104, audit stop, agent silence) | [OK] |
+| Self-monitoring (silent collection, backup KO, disk) | [OK] |
 
 ## 9. Integrity and evidential value
 

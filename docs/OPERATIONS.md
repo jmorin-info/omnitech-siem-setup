@@ -52,7 +52,7 @@ systemctl list-timers | grep siem-backup
 ls -la /home/siem-backup/            # mongo/ configs/ opensearch-snapshots/
 ```
 
-> ⚠️ **Snapshot-repository sizing.** The OpenSearch snapshot repository must live on a volume
+> Warning: **Snapshot-repository sizing.** The OpenSearch snapshot repository must live on a volume
 > **larger than the primary index size** (≈ 1.45 TB). `/home` (805 GB) is too small to hold a
 > full snapshot: if the repository is placed there it fills to 100 %, which then blocks even
 > snapshot *deletion* (a disk-full deadlock). Place the repository on `/data` (or a dedicated
@@ -87,7 +87,7 @@ Policy: [securite-conformite/POLITIQUE-RETENTION.md](securite-conformite/POLITIQ
 |---|---|
 | Change mail recipients | `MAIL_RECIPIENTS` in `/etc/omni-alert-triage.env` |
 | Enable/adjust the LLM judge | `ANTHROPIC_API_KEY` / `GRAY_SCORE_THRESHOLD` in the same file |
-| Add a legitimate egress (stop an exfil FP) | append the IP/CIDR to `EXFIL_ALLOW_DEST` in `00-vars.env` (⚠ no inline comment on the value line) |
+| Add a legitimate egress (stop an exfil FP) | append the IP/CIDR to `EXFIL_ALLOW_DEST` in `00-vars.env` (Warning: no inline comment on the value line) |
 | Add / tune a detection | the relevant `NN-*.sh` provisioning script, then re-run it |
 | Investigate an entity | `/soc/` console → entity 360° dossier |
 | Troubleshoot | [exploitation/GUIDE-DEPANNAGE.md](exploitation/GUIDE-DEPANNAGE.md) |

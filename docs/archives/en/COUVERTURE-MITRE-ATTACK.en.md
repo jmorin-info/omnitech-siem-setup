@@ -53,7 +53,7 @@ Method: run the corresponding [Atomic Red Team](https://github.com/redcanaryco/a
 | T1087.002 LDAP recon | T1087.002 | `ldap_recon` | 4662/Sysmon |
 | T1562.002 Clear logs | T1070.001 (`wevtutil cl`) | `winsec_critique` | 1102 |
 
-> ⚠️ Do NOT run destructive tests (T1486 ransomware, T1485 destruction) in production.
+> Warning: Do NOT run destructive tests (T1486 ransomware, T1485 destruction) in production.
 > Keep a log of validation campaigns (date, technique, detected yes/no, MTTD) — also useful for ISO A.8.16.
 
 ## Maintenance

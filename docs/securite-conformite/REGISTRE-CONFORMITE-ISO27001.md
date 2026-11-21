@@ -3,56 +3,56 @@
 *Version 1.0 — 12/06/2026 — Périmètre : supervision, journalisation et
 détection assurées par le SIEM Graylog `bx-it-graylog-vm`. Classification : interne.*
 
-Légende statut : ✅ Conforme · 🟡 Partiel (action en cours) · ⬜ À traiter.
+Légende statut : [OK] Conforme · [Partiel] Partiel (action en cours) · [À traiter] À traiter.
 
 ## 1. Mesures organisationnelles (A.5)
 
 | Mesure A.5 | Exigence | Mise en œuvre (preuve) | Statut |
 |---|---|---|---|
-| 5.7 Renseignement sur les menaces | Threat intelligence | Lookups Tor/Spamhaus, GeoIP, règles `threat_intel` | ✅ |
-| 5.15 Contrôle d'accès | Restreindre l'accès | Console restreinte « Admins du domaine » via LDAPS (LDAPS.md), pare-feu hôte | ✅ |
-| 5.16 Gestion des identités | Identités traçables | Auth AD nominative sur la console (backend LDAPS) | ✅ |
-| 5.17 Authentification | Secrets gérés | LDAPS + `admin` local de secours au coffre ; secrets chmod 600 | ✅ |
-| 5.18 Droits d'accès | Moindre privilège | Comptes de service dédiés (svc_siem), pas de collecte sous compte admin | ✅ |
-| 5.23 Sécurité des services cloud | Surveillance du cloud | Collecte M365 (connexions, audit, Exchange/SharePoint) | ✅ |
-| 5.25 Appréciation des événements | Qualifier/classer | Triage PRO §3, classification PRO §7, 88 définitions priorisées | ✅ |
-| 5.26 Réponse aux incidents | Procédure + réponse | Playbooks PRO §6, matrice RACI §8, **SOAR-light** (blocage auto IP attaquantes via feed FortiGate) | ✅ |
-| 8.16 (détection interne) | Détecter l'intrusion | **Compte canari AD** (leurre, faux positifs ~nuls) | ✅ |
-| 5.28 Collecte de preuves | Preuves exploitables | Journaux horodatés UTC, export Graylog, rétention contrôlée (STD §9) | ✅ |
-| 5.33 Protection des enregistrements | Intégrité des logs | Rétention auto, suppression hors-rétention impossible sans droits, purge tracée | ✅ |
-| 5.36 Conformité aux politiques | Revue régulière | Revues PRO §2 + **rapport hebdomadaire automatique** (preuve) | ✅ |
+| 5.7 Renseignement sur les menaces | Threat intelligence | Lookups Tor/Spamhaus, GeoIP, règles `threat_intel` | [OK] |
+| 5.15 Contrôle d'accès | Restreindre l'accès | Console restreinte « Admins du domaine » via LDAPS (LDAPS.md), pare-feu hôte | [OK] |
+| 5.16 Gestion des identités | Identités traçables | Auth AD nominative sur la console (backend LDAPS) | [OK] |
+| 5.17 Authentification | Secrets gérés | LDAPS + `admin` local de secours au coffre ; secrets chmod 600 | [OK] |
+| 5.18 Droits d'accès | Moindre privilège | Comptes de service dédiés (svc_siem), pas de collecte sous compte admin | [OK] |
+| 5.23 Sécurité des services cloud | Surveillance du cloud | Collecte M365 (connexions, audit, Exchange/SharePoint) | [OK] |
+| 5.25 Appréciation des événements | Qualifier/classer | Triage PRO §3, classification PRO §7, 88 définitions priorisées | [OK] |
+| 5.26 Réponse aux incidents | Procédure + réponse | Playbooks PRO §6, matrice RACI §8, **SOAR-light** (blocage auto IP attaquantes via feed FortiGate) | [OK] |
+| 8.16 (détection interne) | Détecter l'intrusion | **Compte canari AD** (leurre, faux positifs ~nuls) | [OK] |
+| 5.28 Collecte de preuves | Preuves exploitables | Journaux horodatés UTC, export Graylog, rétention contrôlée (STD §9) | [OK] |
+| 5.33 Protection des enregistrements | Intégrité des logs | Rétention auto, suppression hors-rétention impossible sans droits, purge tracée | [OK] |
+| 5.36 Conformité aux politiques | Revue régulière | Revues PRO §2 + **rapport hebdomadaire automatique** (preuve) | [OK] |
 
 ## 2. Mesures liées aux personnes (A.6)
 
 | Mesure | Exigence | Mise en œuvre | Statut |
 |---|---|---|---|
-| 6.3 Sensibilisation | Information | Charte informatique (journalisation), POL §11 | 🟡 (charte hors SIEM) |
-| 6.8 Signalement d'événements | Remontée | Notifications mail + Teams SOC vers l'équipe IT | ✅ |
+| 6.3 Sensibilisation | Information | Charte informatique (journalisation), POL §11 | [Partiel] (charte hors SIEM) |
+| 6.8 Signalement d'événements | Remontée | Notifications mail + Teams SOC vers l'équipe IT | [OK] |
 
 ## 3. Mesures physiques (A.7)
 
 | Mesure | Exigence | Mise en œuvre | Statut |
 |---|---|---|---|
-| 7.4 Surveillance physique | — | Hors périmètre SIEM (logs contrôle d'accès/NVR collectés via FortiGate) | 🟡 |
+| 7.4 Surveillance physique | — | Hors périmètre SIEM (logs contrôle d'accès/NVR collectés via FortiGate) | [Partiel] |
 
 ## 4. Mesures technologiques (A.8) — cœur du dispositif
 
 | Mesure A.8 | Exigence | Mise en œuvre (preuve) | Statut |
 |---|---|---|---|
-| 8.5 Authentification sécurisée | Auth robuste console | LDAPS/TLS, cert vérifié par Root CA, accès limité aux admins | ✅ |
-| 8.6 Gestion des capacités | Dimensionner/surveiller | Plan de capacité (STD §5), garde-fou disque `32`, KPI hebdo | ✅ |
-| 8.7 Protection contre les codes malveillants | Détecter | FortiGate UTM (AV/IPS), Defender, règles ransomware/PowerShell/LSASS | ✅ |
-| 8.8 Gestion des vulnérabilités techniques | — | OpenVAS (logs collectés) ; patching hors SIEM | 🟡 |
-| 8.9 Gestion de configuration | Config maîtrisée | **IaC** : scripts 10→34 idempotents, sauvegarde de config quotidienne | ✅ |
-| 8.10 Suppression d'informations | Effacement à terme | Rétention automatique par index (POL §4, `31`) | ✅ |
-| 8.12 Prévention fuite de données | Détecter exfiltration | M365 (partage externe, transfert mail), FortiGate (threat intel sortant) | ✅ |
-| 8.13 Sauvegarde | Sauvegarder/tester | Sauvegarde config chiffrée externalisée (`30`), PRA, **test à réaliser** | 🟡 |
-| 8.15 Journalisation | Produire/protéger les logs | 7 inputs, 13 streams, 144 règles de pipeline, rétention POL §4, STD complet | ✅ |
-| 8.16 Activités de surveillance | Surveiller/alerter | **88 définitions** (87 détections + 1 système), dashboard 24 pages, notifications, auto-surveillance | ✅ |
-| 8.17 Synchronisation des horloges | Horloge commune | NTP sur toutes les sources, UTC dans le SIEM (STD §7) | ✅ |
-| 8.20 Sécurité des réseaux | Cloisonner | VLAN 220 dédié, règles FortiGate par flux, pare-feu hôte | ✅ |
-| 8.23 Filtrage web | — | FortiGate webfilter/DNS filter (logs collectés) | ✅ |
-| 8.28 Codage sécurisé | — | Hors périmètre (logs CI/CD non couverts) | ⬜ |
+| 8.5 Authentification sécurisée | Auth robuste console | LDAPS/TLS, cert vérifié par Root CA, accès limité aux admins | [OK] |
+| 8.6 Gestion des capacités | Dimensionner/surveiller | Plan de capacité (STD §5), garde-fou disque `32`, KPI hebdo | [OK] |
+| 8.7 Protection contre les codes malveillants | Détecter | FortiGate UTM (AV/IPS), Defender, règles ransomware/PowerShell/LSASS | [OK] |
+| 8.8 Gestion des vulnérabilités techniques | — | OpenVAS (logs collectés) ; patching hors SIEM | [Partiel] |
+| 8.9 Gestion de configuration | Config maîtrisée | **IaC** : scripts 10→34 idempotents, sauvegarde de config quotidienne | [OK] |
+| 8.10 Suppression d'informations | Effacement à terme | Rétention automatique par index (POL §4, `31`) | [OK] |
+| 8.12 Prévention fuite de données | Détecter exfiltration | M365 (partage externe, transfert mail), FortiGate (threat intel sortant) | [OK] |
+| 8.13 Sauvegarde | Sauvegarder/tester | Sauvegarde config chiffrée externalisée (`30`), PRA, **test à réaliser** | [Partiel] |
+| 8.15 Journalisation | Produire/protéger les logs | 7 inputs, 13 streams, 144 règles de pipeline, rétention POL §4, STD complet | [OK] |
+| 8.16 Activités de surveillance | Surveiller/alerter | **88 définitions** (87 détections + 1 système), dashboard 24 pages, notifications, auto-surveillance | [OK] |
+| 8.17 Synchronisation des horloges | Horloge commune | NTP sur toutes les sources, UTC dans le SIEM (STD §7) | [OK] |
+| 8.20 Sécurité des réseaux | Cloisonner | VLAN 220 dédié, règles FortiGate par flux, pare-feu hôte | [OK] |
+| 8.23 Filtrage web | — | FortiGate webfilter/DNS filter (logs collectés) | [OK] |
+| 8.28 Codage sécurisé | — | Hors périmètre (logs CI/CD non couverts) | [À traiter] |
 
 ## 5. Synthèse des actions ouvertes
 
@@ -62,7 +62,7 @@ Légende statut : ✅ Conforme · 🟡 Partiel (action en cours) · ⬜ À trait
 | 2 | Réaliser le test de restauration (PRA) | PRA, A.8.13 | Admin SIEM | Trimestre en cours |
 | 3 | Décaler le job Veeam *Backup Copy* (contention de verrou de point de restauration ; la sauvegarde **aboutit au retry**, pas un trou de PRA) | Détection Veeam | Admin Sys | — |
 | 4 | Étendre la collecte aux serveurs Windows restants + activer les SACL d'audit fichier sur les dossiers sensibles | STD §1 / `59` | Admin Sys | — |
-| 5 | Chiffrement au repos `/data` (LUKS2/TPM2) | A.8.24, PROCEDURE-CHIFFREMENT | Admin SIEM | ✅ **Fait le 2026-06-14** |
+| 5 | Chiffrement au repos `/data` (LUKS2/TPM2) | A.8.24, PROCEDURE-CHIFFREMENT | Admin SIEM | [OK] **Fait le 2026-06-14** |
 | 6 | Affecter les comptes analystes au rôle Graylog « lecture seule » (créé) | A.8.2 | Admin SIEM | — |
 | 7 | Activer l'API NinjaOne → SOAR avancé (isolation hôte / désactivation compte) | SOAR-PLAYBOOKS | Admin SIEM | — |
 | 8 | Lier la charte informatique (sensibilisation 6.3) | A.6.3 | DSI | — |

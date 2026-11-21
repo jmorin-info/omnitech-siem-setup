@@ -190,23 +190,23 @@ et **auth nominative** (LDAPS existe, mais compte `admin` partagé encore utilis
 
 ## 6. Risques, réordonnés (vérifiés sur le système réel)
 
-1. **🔴 Key-person / absence de contrôle de version — CRITIQUE, IMMÉDIAT.**
+1. **[Critique] Key-person / absence de contrôle de version — CRITIQUE, IMMÉDIAT.**
    `git` n'est **pas installé** ; **aucun dépôt** sous `/root`. **10 238 lignes** de bash de prod (59 scripts)
    + **26 microservices Python** ne sont **sous aucun versioning**. Aucun test, aucune CI, aucun shellcheck.
    Seul filet : le tar AES-256 quotidien vers SMB. Le savoir d'exploitation vit dans `docs/reference/CONTEXT.md` (un
    changelog) **et dans ta tête**. Si tu pars demain, c'est une boîte noire. *Note ISO : c'est aussi un trou
    de maîtrise du changement (A.8.32) et de la clause 10.* **→ Action P0, avant toute IA (cf. §7).**
-2. **🟠 Injection de prompt indirecte** (dès qu'un LLM lit des logs). Traité par l'architecture (politique
+2. **[Partiel] Injection de prompt indirecte** (dès qu'un LLM lit des logs). Traité par l'architecture (politique
    déterministe + human-in-loop). **Ne jamais** donner au LLM une action destructive en auto.
-3. **🟠 Secrets en clair.** Les secrets de service vivent dans `00-vars.env` (chmod 600, **plaintext**).
+3. **[Partiel] Secrets en clair.** Les secrets de service vivent dans `00-vars.env` (chmod 600, **plaintext**).
    Vaultwarden est aujourd'hui une *source de logs auditée*, **pas** un backend de récupération de secrets.
    Or le service de réponse détiendra les creds les plus puissants (isolate ESET, disable AD) : **ceux-là
    surtout** ne doivent pas finir en clair dans `00-vars.env`. *La « récupération de secrets via Vaultwarden »
    des docs est donc à la fois du net-new ET un vrai durcissement à faire.*
-4. **🟠 Scan actif sur prod + tunnels partenaires** — risque réel mais **évitable en repoussant la brique**.
-5. **🟡 Fatigue d'alerte / d'approbation** — déjà rencontrée (tempête « Force brute » du 12/06). Le LLM peut
+4. **[Partiel] Scan actif sur prod + tunnels partenaires** — risque réel mais **évitable en repoussant la brique**.
+5. **[Partiel] Fatigue d'alerte / d'approbation** — déjà rencontrée (tempête « Force brute » du 12/06). Le LLM peut
    *aider* (regrouper, narrer) ou *aggraver* (une approbation de plus). À surveiller.
-6. **🟡 Divergence de moteurs** si on construit une 2ᵉ corrélation à côté de `omni-incident-correlate`.
+6. **[Partiel] Divergence de moteurs** si on construit une 2ᵉ corrélation à côté de `omni-incident-correlate`.
 
 ---
 

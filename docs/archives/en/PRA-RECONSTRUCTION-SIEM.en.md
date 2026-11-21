@@ -25,13 +25,13 @@ to the same FQDN/IP).
 | Item | Location | Verified |
 |---|---|---|
 | Encrypted config archives (14 d) | `\\10.33.50.5\Public\SIEM\omni-siem-config_*.tar.gz.enc` | rotation OK |
-| **Decryption passphrase** | Vault (`BACKUP_PASSPHRASE`) | ⚠️ TO BE DEPOSITED IN THE VAULT |
-| Local emergency `admin` password | Vault | ✅ |
-| `svc_siem` credentials (SMB) | Vault | ✅ |
-| Technical procedure | `docs/exploitation/RESTORE.md` (included in the archive) | ✅ |
-| IP/DNS reservation `10.33.220.10` / FQDN | Internal DNS + /etc/hosts | ✅ |
-| **Integrity HMAC key** `/etc/graylog/omni-integrity.key` | Vault + out-of-band | ⚠️ without it, the past integrity chain can no longer be **verified** (loss of evidentiary value) |
-| **LUKS emergency passphrase for `/data`** + **encrypted header backup** (header **inline**; `omni-luks-header-*.img.enc`) | Passphrase → Vault; header → SMB `/SIEM/luks/` (+ included in the daily encrypted config backup) | ⚠️ without the **passphrase**, `/data` is unrecoverable if the TPM/motherboard changes; the inline header is **backed up/restorable** (`luksHeaderRestore`) |
+| **Decryption passphrase** | Vault (`BACKUP_PASSPHRASE`) | Warning: TO BE DEPOSITED IN THE VAULT |
+| Local emergency `admin` password | Vault | [OK] |
+| `svc_siem` credentials (SMB) | Vault | [OK] |
+| Technical procedure | `docs/exploitation/RESTORE.md` (included in the archive) | [OK] |
+| IP/DNS reservation `10.33.220.10` / FQDN | Internal DNS + /etc/hosts | [OK] |
+| **Integrity HMAC key** `/etc/graylog/omni-integrity.key` | Vault + out-of-band | Warning: without it, the past integrity chain can no longer be **verified** (loss of evidentiary value) |
+| **LUKS emergency passphrase for `/data`** + **encrypted header backup** (header **inline**; `omni-luks-header-*.img.enc`) | Passphrase → Vault; header → SMB `/SIEM/luks/` (+ included in the daily encrypted config backup) | Warning: without the **passphrase**, `/data` is unrecoverable if the TPM/motherboard changes; the inline header is **backed up/restorable** (`luksHeaderRestore`) |
 
 > Without the backup passphrase, the archives are **unrecoverable**.
 > The same applies to the **integrity HMAC key** (audit-trail verification) and the

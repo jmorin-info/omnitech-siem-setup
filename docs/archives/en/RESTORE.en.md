@@ -59,7 +59,7 @@ systemctl start mongod
 mongorestore --drop --db graylog /restore/mongodump/graylog
 
 # 4b. re-create the application user (user/pass = those of mongodb_uri
-#     in the RESTORED server.conf, visible: grep mongodb_uri /etc/graylog/server/server.conf)
+# in the RESTORED server.conf, visible: grep mongodb_uri /etc/graylog/server/server.conf)
 mongosh admin --eval 'db.createUser({user:"<USER>",pwd:"<PASS>",roles:[{role:"readWrite",db:"graylog"}]})'
 
 # 4c. only AFTER: put our mongod.conf back (auth) and restart

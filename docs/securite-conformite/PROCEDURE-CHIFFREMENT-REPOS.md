@@ -4,8 +4,8 @@
 > Dispositif en production : **LUKS2 (header inline) + déverrouillage automatique TPM2**.
 
 ## Ce qui protège quoi
-- ✅ Vol de disque, mise au rebut / SAV, vol du **serveur éteint** : `/data` illisible sans la clé (le TPM ne la libère jamais hors de cette plateforme ; passphrase de secours au coffre).
-- ❌ Root compromis **machine allumée** (FS monté en clair) → couvert par ailleurs : RBAC (rôle lecture seule), intégrité signée des journaux, TLS console/Beats.
+- [OK] Vol de disque, mise au rebut / SAV, vol du **serveur éteint** : `/data` illisible sans la clé (le TPM ne la libère jamais hors de cette plateforme ; passphrase de secours au coffre).
+- [KO] Root compromis **machine allumée** (FS monté en clair) → couvert par ailleurs : RBAC (rôle lecture seule), intégrité signée des journaux, TLS console/Beats.
 - Périmètre : seul `/data` (les **logs** OpenSearch) est chiffré. Le rootfs (OS + config) ne l'est pas — la config sensible y vit (`00-vars.env` chmod 600). Durcissement futur possible : chiffrer le rootfs.
 
 ## Configuration en place (référence)
@@ -22,7 +22,7 @@
 | `/etc/fstab` | `/dev/mapper/cryptdata /data xfs defaults,noatime,nofail 0 2` |
 | Sauvegarde header | chiffrée AES-256 → `//10.33.50.5/Public/SIEM/luks/omni-luks-header-AAAA-MM-JJ.img.enc` + copie locale `/root/` |
 
-> ⚠️ **TPM en banque PCR SHA-1** (ce TPM n'expose pas SHA-256) → scellement un peu moins robuste, sans impact sur la protection au repos. Durcissement : activer la banque PCR SHA-256 au BIOS Dell, puis ré-enrôler (cf. *Recovery*).
+> Attention : **TPM en banque PCR SHA-1** (ce TPM n'expose pas SHA-256) → scellement un peu moins robuste, sans impact sur la protection au repos. Durcissement : activer la banque PCR SHA-256 au BIOS Dell, puis ré-enrôler (cf. *Recovery*).
 
 ## Sécurité des clés (ordre d'importance)
 1. **Passphrase de secours** (keyslot 0) → **Vaultwarden uniquement**, jamais en clair sur le serveur. Seul moyen de rouvrir `/data` si le TPM / la carte mère change. Le fichier temporaire `/etc/luks/.data-pass` est **détruit (`shred`) après enrôlement TPM + mise au coffre**.
@@ -37,13 +37,13 @@ mount /data
 systemctl start opensearch graylog-server
 
 # Le TPM ne déverrouille plus au boot (MAJ firmware / Secure Boot / banque PCR) :
-#   au boot, saisir la passphrase à l'invite, puis ré-enrôler le TPM :
+# au boot, saisir la passphrase à l'invite, puis ré-enrôler le TPM :
 systemd-cryptenroll /dev/sda1 --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=7
 
 # Restaurer le header depuis la sauvegarde hors-bande (header corrompu) :
-#   1) récupérer le .enc sur le partage SMB, le déchiffrer (BACKUP_PASSPHRASE : 00-vars.env / coffre)
+# 1) récupérer le .enc sur le partage SMB, le déchiffrer (BACKUP_PASSPHRASE : 00-vars.env / coffre)
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in omni-luks-header-AAAA-MM-JJ.img.enc -out hdr.img
-#   2) restaurer :
+# 2) restaurer :
 cryptsetup luksHeaderRestore /dev/sda1 --header-backup-file hdr.img
 
 # Ajouter / changer la passphrase de secours :
@@ -78,7 +78,7 @@ Si un jour il faut chiffrer **sans perdre** les données d'un volume, en accepta
   `cryptsetup reencrypt --encrypt --header /etc/luks/hdr.img --type luks2 --resilience checksum /dev/sdX`
   (reprenable via `--resume-only --header …`), puis `open --header` / `mount` / `systemd-cryptenroll --header`.
 - Le **chiffrement online** (`cryptsetup open` d'abord, puis `reencrypt --resume-only --active-name cryptdata`) permet de garder le volume **monté et en service** pendant l'opération.
-- ⚠️ On **ne peut pas annuler nativement** un `--encrypt` partiel (`--decrypt` le refuse : *« option --decrypt conflictuelle »*) : il faut soit le mener à terme, soit recopier la zone de tête en clair via le mapper ouvert. *(Validé sur loopback le 2026-06-14.)*
+- Attention : On **ne peut pas annuler nativement** un `--encrypt` partiel (`--decrypt` le refuse : *« option --decrypt conflictuelle »*) : il faut soit le mener à terme, soit recopier la zone de tête en clair via le mapper ouvert. *(Validé sur loopback le 2026-06-14.)*
 
 ## Complémentaire (transit — priorité moindre, VLAN SIEM isolé = palliatif)
 ESET (1515) / vSphere (1516) / FortiGate-FAZ (1514) en syslog **clair** → migrer en **syslog-over-TLS** (supporté par ESET PROTECT, vSphere, FortiGate) quand possible. Beats (5044) et console (9000) sont déjà en TLS.

@@ -5,7 +5,7 @@
 
 **Synthèse :** Le theme dominant est l'identite cloud M365/Entra : la majorite des angles morts a haute valeur portent sur la persistance et le credential-access cloud (federation/Golden SAML, methodes MFA, legacy auth bypass-MFA, MFA-fatigue, device registration, desactivation de l'Unified Audit Log), surface critique car OMNITECH depend fortement de M365 sans CASB/DLP/EDR. Le second bloc majeur est comportemental cote endpoint via Sysmon (execution navigateur/PDF/archiveur, decouverte AV/annuaire/systeme, RDP single-hop, PtH/PtT, C2 par RMM/tunneling/SaaS) : telemetrie deja collectee mais jamais exploitee en detection, faute d'EDR/NDR. Les vecteurs physiques (USB) et certains canaux DNS exigent d'abord un prerequis (sous-categories d'audit GPO PnP/Removable Storage, canal Sysmon EID22 plutot que le DNS-DC Audit qui ne porte pas les requetes). Le piege transversal recurrent est l'echec silencieux : presque toutes les requetes proposees utilisent de faux noms de champs (winlogbeat_event_data_* au lieu de winlogbeat_winlog_event_data_*, m365_operation/m365_workload au lieu de event_action, srcintf:wan1 au lieu de srcintfrole:wan, service au lieu de dest_port) ou des filtres trop larges generateurs de flood, imposant correction du schema, allowlists (81-fp-allowlist) et baseline avant tout deploiement.
 
-⚠️ Chaque requête est une PROPOSITION : valider les noms de champs et le risque FP sur données réelles avant mise en prod.
+Attention : Chaque requête est une PROPOSITION : valider les noms de champs et le risque FP sur données réelles avant mise en prod.
 
 ## #1 · T1133 — External Remote Services (login SSL-VPN reussi depuis IP malveillante/Tor)
 - **Tactique** : Initial Access (TA0001)  ·  **Priorité** : haute

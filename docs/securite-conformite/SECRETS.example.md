@@ -1,6 +1,6 @@
 # Récapitulatif des secrets — stack SIEM OMNITECH (GABARIT)
 
-> ⚠️ Ce fichier est un **modèle versionné**. Le fichier réel `SECRETS.md` (avec les
+> Attention : Ce fichier est un **modèle versionné**. Le fichier réel `SECRETS.md` (avec les
 > valeurs) n'est **jamais** committé (cf. `.gitignore`). Il reste sur la VM comme
 > référence « bris de glace ». Renseigner les valeurs uniquement en local.
 
