@@ -33,7 +33,8 @@ access control), normalises them into a common field schema, runs
 detections mapped to MITRE ATT&CK, and adds in-house services:
 
 - **alert triage**: multi-criteria scoring, grouping, and a call to an
-  external LLM API for ambiguous cases only; only critical alerts are e-mailed;
+  external LLM API for ambiguous cases only (layer out of service on
+  2026-11-21, see limitations); only critical alerts are e-mailed;
 - **incident correlation** (`oms-xdr`), **anomaly detection** (`oms-ml`) and
   an **exposure graph** (`oms-graph`);
 - **bounded, reversible automated response**: IP blocking on the FortiGate
@@ -53,7 +54,7 @@ installation only deploys the core platform.
 | Graylog inputs | 14 |
 | Streams | 21 |
 | Pipelines / pipeline rules | 40 / 277 |
-| Event definitions (detections and correlations) | 211, 200 enabled |
+| Detection and correlation definitions | 210, 199 enabled (excluding Graylog's system definition) |
 | Graylog dashboards | 13 |
 | Lookup tables | 34 |
 | systemd timers for the analysis robots (`omni-*`, `oms-*`) | 51 |
@@ -178,8 +179,9 @@ in the [roadmap](docs/ROADMAP.md):
 - **Detection validation still to be demonstrated**: offline tests cover the
   code and rules were replayed against history, but no automated attack
   scenario campaign measures the detection rate yet.
-- **LLM triage**: false negatives and robustness against hostile log content
-  are not measured yet. The LLM layer only decides whether an e-mail is sent;
+- **LLM triage**: the LLM layer is out of service on 2026-11-21 (API calls
+  rejected); ambiguous cases then fall back to rule-based grouping. Its false
+  negatives and robustness against hostile log content are not measured yet. The LLM layer only decides whether an e-mail is sent;
   it never triggers a blocking action.
 - **Recovery not timed**: backup restorability is tested automatically, but a
   full rebuild on a blank machine with a measured RTO has not been carried out.

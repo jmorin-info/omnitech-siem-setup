@@ -63,6 +63,7 @@ simulation et une validation humaine.
 | Fait | Le triage LLM décide de l'acheminement des notifications ; le blocage depuis un courriel passe par un lien signé, à durée limitée, cliqué par un analyste | `triage/omni-alert-triage` |
 | Fait | Actionneurs `oms-xdr` (blocage, désactivation de compte, isolement) en recommandation par défaut, double verrou ; les actions non implémentées le signalent au lieu de simuler un succès | `oms-xdr/oms_xdr/responder.py` ; configuration en production : `dry_run: true` |
 | Fait | Désactivation de compte AD outillée avec garde-fous, en simulation par défaut | `69-ad-response.sh` |
+| En cours | Rétablir la couche LLM du triage, hors service au 21/11/2026 (appels à l'API refusés, repli par règles) | journal du service `omni-alert-triage` |
 | En cours | Détection « balayage IKE » branchée sur le SOAR en observation uniquement | [journal des modifications](../CHANGELOG.md) (12/11/2026) |
 | À faire | Seuils de confiance explicites par action et circuit d'approbation tracé (qui a validé, quand) pour les actions hors blocage d'IP | |
 | À faire | Journal d'audit infalsifiable des actions de réponse, distinct des journaux applicatifs | |

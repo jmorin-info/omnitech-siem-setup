@@ -32,7 +32,8 @@ physique), les normalise dans un schéma de champs commun, applique des
 détections rattachées à MITRE ATT&CK et ajoute des services maison :
 
 - **triage des alertes** : score multi-critères, regroupement, et appel à une
-  API LLM externe pour les seuls cas ambigus ; seul le critique part par courriel ;
+  API LLM externe pour les seuls cas ambigus (couche hors service au
+  21/11/2026, voir les limites) ; seul le critique part par courriel ;
 - **corrélation d'incidents** (`oms-xdr`), **détection d'anomalies** (`oms-ml`)
   et **graphe d'exposition** (`oms-graph`) ;
 - **réponse automatisée** limitée et réversible : blocage d'IP sur les
@@ -52,7 +53,7 @@ une installation neuve n'en déploie que le socle.
 | Inputs Graylog | 14 |
 | Streams | 21 |
 | Pipelines / règles de pipeline | 40 / 277 |
-| Définitions d'événements (détections et corrélations) | 211, dont 200 actives |
+| Définitions de détection et de corrélation | 210, dont 199 actives (hors définition système de Graylog) |
 | Tableaux de bord Graylog | 13 |
 | Tables de correspondance | 34 |
 | Minuteries systemd des robots (`omni-*`, `oms-*`) | 51 |
@@ -193,8 +194,10 @@ sont connues et suivies dans la [feuille de route](docs/ROADMAP.md) :
 - **Validation des détections à démontrer** : des tests hors ligne couvrent le
   code et des règles ont été rejouées sur l'historique, mais aucune campagne
   automatisée de scénarios d'attaque ne mesure encore le taux de détection.
-- **Triage LLM** : les faux négatifs et la robustesse face à des contenus de
-  journaux hostiles ne sont pas encore mesurés. La couche LLM décide seulement
+- **Triage LLM** : la couche LLM est hors service au 21/11/2026 (appels à
+  l'API refusés) ; les cas ambigus sont alors regroupés par règles. Ses faux
+  négatifs et sa robustesse face à des contenus de journaux hostiles ne sont
+  pas encore mesurés. La couche LLM décide seulement
   de l'envoi d'un courriel ; elle ne déclenche aucune action de blocage.
 - **Reprise non chronométrée** : la restaurabilité des sauvegardes est testée
   automatiquement, mais la reconstruction complète sur une machine vierge,
