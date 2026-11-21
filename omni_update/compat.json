@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "comment": "Politique de compatibilité de la pile. Seules les combinaisons réellement constatées en production sont déclarées validées ; toute autre combinaison est signalée « non validée » et exige la lecture des notes de version de l'éditeur avant exécution.",
+  "validated_combinations": [
+    {
+      "graylog-server": "7.2.2-1",
+      "opensearch": "2.19.7",
+      "mongodb-org-server": "8.0.38",
+      "logstash": "1:8.19.25-1",
+      "source": "production bx-it-graylog-vm : journal /var/log/oms-maj-siem.log du 15/11/2026 (contrôle après redémarrage)"
+    }
+  ],
+  "components": {
+    "graylog": {
+      "series_change": "review",
+      "major_change": "refuse",
+      "note": "Changement de série Graylog (ex. 7.2 -> 7.3) : lire les notes de mise à jour Graylog, vérifier les versions OpenSearch et MongoDB supportées par la série cible, puis modifier /etc/apt/preferences.d/oms-siem-series (et son miroir deploye/apt/oms-siem-series)."
+    },
+    "opensearch": {
+      "series_change": "review",
+      "major_change": "refuse",
+      "note": "Changement de version majeure OpenSearch (2.x -> 3.x) refusé par l'outil : vérifier d'abord que la série Graylog installée le supporte dans la documentation Graylog."
+    },
+    "mongodb": {
+      "series_change": "refuse",
+      "major_change": "refuse",
+      "note": "Changement de série MongoDB (ex. 8.0 -> 8.2 ou 9.0) refusé par l'outil : une série à la fois, featureCompatibilityVersion à aligner avant et après ; procédure manuelle avec la documentation MongoDB."
+    },
+    "logstash": {
+      "series_change": "review",
+      "major_change": "refuse",
+      "note": "Logstash collecte SEAL : après mise à jour du paquet, le greffon logstash-output-gelf doit être présent (oms-maj-siem le réinstalle)."
+    }
+  }
+}

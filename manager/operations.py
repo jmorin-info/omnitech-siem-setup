@@ -29,6 +29,11 @@ ACTIONS = {
     "module_uninstall": {"module", "api", "installation_id", "ca", "api_token"},
     "module_uninstall_plan": {"module", "api", "installation_id", "ca", "api_token"},
 }
+# Update layers (omni_update): read-only consultation and planning only. The stack
+# upgrade itself is never launched from the menu: an SSH disconnection would kill
+# apt mid-transaction; the menu prints the exact command to run under tmux/screen.
+UPDATE_LAYER_ACTIONS = {"status_all": set(), "stack_plan": {"component", "target"}, "pydeps_audit": set()}
+ACTIONS.update(UPDATE_LAYER_ACTIONS)
 WRITES = {"install_apply", "install_resume", "install_secrets", "update_apply", "update_rollback", "update_recover", "console_publish", "module_install", "module_uninstall"}
 
 
@@ -95,6 +100,8 @@ class Manager:
                 argv += ["--transaction", transaction]
         elif action == "console_publish":
             argv = ["bash", str(self.source / "71-soc-console.sh")]
+        elif action in UPDATE_LAYER_ACTIONS:
+            argv += self.update_layer_command(action, params)
         elif action.startswith("module_"):
             token = params.get("api_token", "")
             if not isinstance(token, str) or not token or any(ord(c) < 32 for c in token):
@@ -106,6 +113,20 @@ class Manager:
                                         apply=action in WRITES, ca=params.get("ca"))
             env["GRAYLOG_API_TOKEN"] = token
         return argv, env
+
+    def update_layer_command(self, action, params):
+        from omni_update.stack import COMPONENTS, VERSION_SYNTAX
+        if action == "status_all":
+            return [str(self.source / "tools/omni-update-status.py"), "--source", str(self.source),
+                    "--updater-state-dir", str(self.updater_state)]
+        if action == "pydeps_audit":
+            return [str(self.source / "tools/omni-pydeps.py"), "audit"]
+        component, target = params.get("component"), params.get("target")
+        if component not in COMPONENTS:
+            raise ValueError("Composant de la pile inconnu.")
+        if not isinstance(target, str) or not VERSION_SYNTAX.fullmatch(target):
+            raise ValueError("Version cible invalide.")
+        return [str(self.source / "tools/omni-stack-upgrade.py"), "plan", "--component", component, "--to", target]
 
     def _secrets(self, overlay):
         secrets = list(overlay.values())

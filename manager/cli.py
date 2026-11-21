@@ -30,6 +30,9 @@ ACTION_LABELS = {
     "console_publish": "Publier les fichiers de /soc/ et activer le backend géré",
     "module_plan": "Préparer l'installation du module", "module_install": "Installer le Content Pack et reprendre son stream",
     "module_uninstall_plan": "Examiner les entités à désinstaller", "module_uninstall": "Désinstaller le Content Pack sélectionné",
+    # Couches de mise à jour (lecture seule)
+    "status_all": "État des mises à jour de toutes les couches", "stack_plan": "Plan de montée de version de la pile",
+    "pydeps_audit": "Audit des dépendances Python des venvs",
 }
 
 
@@ -146,7 +149,9 @@ class Terminal:
             choice = menu("Mises à jour du code — bases et configuration préservées", [
                 "Télécharger main / un tag dans le cache", "Choisir un SHA complet", "Afficher le plan",
                 "Préparer le candidat", "Appliquer le code préparé", "Publier / réparer la console",
-                "Afficher l'état des mises à jour", "Annuler une transaction de code", "Récupérer une transaction interrompue"])
+                "Afficher l'état des mises à jour", "Annuler une transaction de code", "Récupérer une transaction interrompue",
+                "État de toutes les couches (OS, pile, Python, contenus, sauvegardes)",
+                "Plan de montée de version de la pile (lecture seule)", "Audit des dépendances Python des venvs"])
             if choice == 0:
                 return
             if choice == 1:
@@ -163,6 +168,23 @@ class Terminal:
                 print("Le retour de code ne restaure pas une base ni des fichiers publiés séparément.")
                 transaction = prompt("Identifiant de transaction", self.transaction)
                 self.run("update_rollback" if choice == 8 else "update_recover", {"transaction": transaction})
+            elif choice in (10, 11, 12):
+                self.update_layers(choice)
+
+    def update_layers(self, choice):
+        if choice == 10:
+            self.run("status_all")
+        elif choice == 12:
+            self.run("pydeps_audit")
+        else:
+            component = prompt("Composant (graylog, opensearch, mongodb, logstash)", "graylog")
+            target = prompt("Version de paquet cible exacte (apt-cache policy)")
+            job = self.run("stack_plan", {"component": component, "target": target})
+            if job and job["status"] == "success":
+                print("\nL'exécution ne se lance pas depuis ce menu (une coupure SSH interromprait apt).")
+                print("Après lecture du plan et validation, dans tmux ou screen :")
+                print(f"  sudo python3 {self.manager.source}/tools/omni-stack-upgrade.py apply --component {component} "
+                      f"--to {target} --execute --confirm {component}={target}")
 
     def modules(self):
         modules = catalogue()
