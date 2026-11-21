@@ -116,6 +116,10 @@ def plan_install(client, module, params):
         raise ValueError("Stream Rule Processor must be enabled before Pipeline Processor")
     if names.index("Stream Rule Processor") > names.index("Pipeline Processor"):
         raise ValueError("Stream routing must run before Pipeline Processor; configuration will not be changed automatically")
+    filters = [entry for entry in order.get("processor_order", []) if entry.get("name") == "Message Filter Chain"]
+    if (not filters or filters[0].get("class_name") in disabled or "Message Filter Chain" in disabled
+            or names.index("Message Filter Chain") > names.index("Stream Rule Processor")):
+        raise ValueError("Message Filter Chain must be enabled before stream routing to attach input static fields; configuration will not be changed automatically")
     inputs = client.call("GET", "/system/inputs")["inputs"]
     for source in inputs:
         if source.get("title") == "OMNI integration - " + module["name"] + " UDP":

@@ -263,6 +263,26 @@ def test_stream_routing_must_be_enabled_before_pipeline(configuration):
     assert all(method == "GET" for method, _, _ in client.calls)
 
 
+@pytest.mark.parametrize("scenario", ["absent", "disabled-class", "disabled-name", "late"])
+def test_static_fields_must_be_attached_before_stream_routing(scenario):
+    client, module = FakeGraylog(), load_module("watchguard")
+    original = client.call
+    def configured(method, path, body=None):
+        result = original(method, path, body)
+        if path == "/system/messageprocessors/config":
+            if scenario == "absent":
+                result["processor_order"].pop(0)
+            elif scenario == "late":
+                result["processor_order"].append(result["processor_order"].pop(0))
+            else:
+                result["disabled_processors"] = ["chain" if scenario == "disabled-class" else "Message Filter Chain"]
+        return result
+    client.call = configured
+    with pytest.raises(ValueError, match="static fields"):
+        install(client, module, parameters(module), apply=True)
+    assert all(method == "GET" for method, _, _ in client.calls)
+
+
 def test_uninstall_requires_tracked_exact_installation_and_explicit_apply():
     module = load_module("watchguard")
     client = FakeGraylog(installed=[{"_id": "a" * 24}])
