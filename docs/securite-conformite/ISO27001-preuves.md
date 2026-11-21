@@ -1,6 +1,6 @@
 # Production de preuves ISO/IEC 27001:2022 — SIEM Graylog OMNITECH
 
-Système : bx-it-graylog-vm (Debian 13, Graylog 7.1.3, OpenSearch local 127.0.0.1:9200).
+Système : bx-it-graylog-vm (Debian 13, Graylog 7.1.3 lors de la rédaction, 7.2.2 au 21/11/2026 ; OpenSearch local 127.0.0.1:9200).
 Périmètre : volet journalisation / surveillance / preuves du SMSI (mesures A.8.15, A.8.16, A.8.17, A.5.25, A.5.26, A.5.28, A.8.13, A.5.37).
 
 **Objet.** Ce document est le mode opératoire de production des preuves en séance d'audit : pour chaque mesure, l'exigence en une phrase, la ou les preuves disponibles aujourd'hui avec la commande exacte qui les produit sur CE serveur, puis le manque résiduel et l'action minimale. Il complète `docs/securite-conformite/ISO27001-MAPPING.md`, qui établit la correspondance contrôle ↔ capacité du SIEM ↔ emplacement de la preuve : le mapping dit *quoi*, le présent document dit *comment le démontrer*. Il ne duplique pas le mapping ; s'y référer pour la couverture des autres contrôles (A.5.7, A.8.7, A.8.8, A.8.12, etc.).
