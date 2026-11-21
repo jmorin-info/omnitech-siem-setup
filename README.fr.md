@@ -2,6 +2,8 @@
 
 <img src="docs/captures/01-overview.png" alt="OMNI SOC" width="92%">
 
+<small>Console actuelle avec données synthétiques de démonstration.</small>
+
 # OMNI SIEM — Plateforme de détection et de réponse
 
 **Plateforme SIEM et console SOC auto-hébergées sur Graylog, avec modules de collecte et extensions XDR.**
@@ -86,7 +88,9 @@ A complete, reproducible **SIEM + XDR + SOC console** deployed on a single harde
 
 ## Aperçu visuel
 
-> Captures **pseudonymisées** — comptes, hôtes, IP et SID sont anonymisés de façon cohérente (mode `MOBILE_REDACT`).
+> Vue d’ensemble et incidents : interface actuelle avec **données synthétiques**.
+> Les autres captures présentent l’installation historique, avec comptes, hôtes,
+> IP et SID **pseudonymisés** (mode `MOBILE_REDACT`).
 
 ### Console SOC « OMNI SOC »
 

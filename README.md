@@ -2,6 +2,8 @@
 
 <img src="docs/captures/01-overview.png" alt="OMNI SOC — overview console" width="94%">
 
+<small>Current console with synthetic demonstration data. Other reference screenshots may show the earlier interface.</small>
+
 # OMNI SIEM — Detection &amp; Response Platform
 
 **A self-hosted, on-premise SIEM/SOC platform for OMNITECH Security**
