@@ -7,7 +7,7 @@
 # Les parametres (MONGO_ADMIN_PASS, BACKUP_DIR, RETENTION_DAYS) sont lus a
 # l'EXECUTION dans 00-vars.env (600 root) : pas de secret duplique ici.
 set -uo pipefail
-source /root/omnitech-siem-setup/00-vars.env
+source "${OMNI_SIEM_HOME:-/opt/omni-siem/repository}/00-vars.env"
 TS="$(date +%Y%m%d-%H%M)"
 LOG="/var/log/siem-backup.log"
 exec >>"${LOG}" 2>&1

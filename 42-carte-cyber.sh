@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 OS_URL = "http://127.0.0.1:9200"
 OUT    = "/var/www/siem-kit/flux.json"
 
-def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+def load_env(path="/opt/omni-siem/repository/00-vars.env"):
     env = {}
     try:
         for line in open(path):

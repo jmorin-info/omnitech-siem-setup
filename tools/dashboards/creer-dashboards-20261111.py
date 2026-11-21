@@ -2,7 +2,7 @@
 """Création de 4 dashboards Graylog OMNITECH (11/11/2026) : Vue SOC direction, Identités et AD, Réseau FortiGate VPN, Santé du SIEM.
 Chaque widget porte son propre filtre de stream (requêtes ciblées, pas de balayage global). Idempotent : un dashboard dont le
 titre existe déjà n'est pas recréé (passer --remplacer pour le supprimer puis le recréer).
-Usage (root) : set -a; . /root/omnitech-siem-setup/00-vars.env; set +a; python3 creer-dashboards-20261111.py [--simuler] [--remplacer]
+Usage (root) : set -a; . /opt/omni-siem/repository/00-vars.env; set +a; python3 creer-dashboards-20261111.py [--simuler] [--remplacer]
 Retour : retour-dashboards-20261111.py --supprimer-nouveaux"""
 import sys, json, os, ssl, base64, secrets, uuid, urllib.request
 

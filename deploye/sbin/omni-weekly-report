@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # =============================================================================
 # omni-weekly-report - Rapport hebdomadaire SIEM OMNITECH (mail HTML)
-# Lance par omni-weekly-report.timer (lundi 08:00). Config: /root/omnitech-siem-setup/00-vars.env
+# Lance par omni-weekly-report.timer (lundi 08:00). Config: /opt/omni-siem/repository/00-vars.env
 # Couvre les 7 derniers jours : alertes, AD, VPN, endpoint, M365, sauvegardes,
 # capacite, sante collecte. Sert de preuve de revue reguliere (ISO A.5.36/A.8.16).
 # Tout en ASCII (coherence avec les mails du SIEM). Robuste : une section qui
@@ -18,7 +18,7 @@ GL_CA    = "/etc/graylog/certs/omnitech-rootca.crt"
 GELF_URL = "http://127.0.0.1:12201/gelf"
 DATA_FS  = "/data"
 
-def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+def load_env(path="/opt/omni-siem/repository/00-vars.env"):
     env = {}
     try:
         for line in open(path):

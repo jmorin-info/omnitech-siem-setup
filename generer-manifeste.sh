@@ -21,7 +21,8 @@ emit /usr/local/sbin/omni-alert-digest triage/omni-alert-digest
 emit /usr/local/sbin/omni-fp tools/omni-fp
 emit /usr/local/sbin/omni-version-watch tools/omni-version-watch
 emit /opt/oms-seal-sla/seal_sla_poller.py seal/sla/seal_sla_poller.py
-emit /root/omnitech-siem-setup/mobile/omni-mobile-api.py mobile/omni-mobile-api.py
+# Le backend de la console (mobile/omni-mobile-api.py) s'exécute en place depuis le dépôt canonique
+# (OMNI_SIEM_HOME, /opt/omni-siem/repository par défaut) : il n'a pas de copie en service à suivre.
 # console SOC : coquille et scripts (les bibliothèques et images lourdes restent hors manifeste)
 for p in /var/www/siem-soc/index.html /var/www/siem-soc/sw.js /var/www/siem-soc/manifest.webmanifest /var/www/siem-soc/app*.js; do emit "$p" "mobile/soc/${p#/var/www/siem-soc/}"; done
 for f in $(git ls-files mobile/soc/icons); do emit "/var/www/siem-soc/${f#mobile/soc/}" "$f"; done

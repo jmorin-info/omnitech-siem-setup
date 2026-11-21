@@ -4,7 +4,7 @@
 # (contrairement a provision_detections.py qui fait create-or-update sur tout le catalogue et
 # defairait le tri du 18/07). DRY-RUN par defaut ; "apply" en 1er argument pour creer.
 set -euo pipefail
-cd /root/omnitech-siem-setup
+cd "$(dirname "$0")/.."
 source 00-vars.env
 GL="https://bx-it-graylog-vm.omnitech.security/api"
 APPLY=0; [ "${1:-}" = "apply" ] && APPLY=1

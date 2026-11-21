@@ -17,7 +17,7 @@ source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "root requis"
 require_api
-APP=/root/omnitech-siem-setup/mobile
+APP="${OMNI_SIEM_HOME:-$PWD}/mobile"
 WWW=/var/www/siem-mobile
 
 echo "==> [1/7] venv + pywebpush"

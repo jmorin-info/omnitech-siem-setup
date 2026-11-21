@@ -38,7 +38,7 @@ import ipaddress, json, os, re, time, urllib.request
 from collections import Counter
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-ENVFILE   = "/root/omnitech-siem-setup/00-vars.env"
+ENVFILE   = "/opt/omni-siem/repository/00-vars.env"
 STATE     = "/var/lib/omni-soar/blocklist.json"
 FEED      = "/var/www/siem-kit/soar/blocklist.txt"
 GELF_URL  = "http://127.0.0.1:12201/gelf"

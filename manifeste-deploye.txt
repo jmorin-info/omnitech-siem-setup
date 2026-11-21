@@ -222,7 +222,6 @@
 /usr/local/sbin/omni-fp	tools/omni-fp
 /usr/local/sbin/omni-version-watch	tools/omni-version-watch
 /opt/oms-seal-sla/seal_sla_poller.py	seal/sla/seal_sla_poller.py
-/root/omnitech-siem-setup/mobile/omni-mobile-api.py	mobile/omni-mobile-api.py
 /var/www/siem-soc/index.html	mobile/soc/index.html
 /var/www/siem-soc/sw.js	mobile/soc/sw.js
 /var/www/siem-soc/manifest.webmanifest	mobile/soc/manifest.webmanifest

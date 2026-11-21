@@ -2,7 +2,7 @@
 """Retour arrière des dashboards Graylog modifiés le 11/11/2026 (OMNITECH).
 Remet la recherche et l'état d'origine depuis /var/backups/siem/dashboards-avant-20261111/<view_id>.json,
 et supprime les dashboards créés ce jour (titres listés dans NOUVEAUX) si --supprimer-nouveaux est passé.
-Usage (root) : set -a; . /root/omnitech-siem-setup/00-vars.env; set +a; python3 retour-dashboards-20261111.py [--supprimer-nouveaux]"""
+Usage (root) : set -a; . /opt/omni-siem/repository/00-vars.env; set +a; python3 retour-dashboards-20261111.py [--supprimer-nouveaux]"""
 import sys, json, os, ssl, base64, secrets, urllib.request, re
 CTX = ssl._create_unverified_context()
 AUTH = base64.b64encode(("admin:" + os.environ["GRAYLOG_ADMIN_PASS"]).encode()).decode()

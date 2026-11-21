@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Montee Graylog 7.1.3 -> 7.1.5. A LANCER PAR L'OPERATEUR :
-#   ! bash /root/omnitech-siem-setup/tools/upgrade-graylog-715.sh
+#   ! bash /opt/omni-siem/repository/tools/upgrade-graylog-715.sh
 #
 # L'assistant a DEJA fait le travail de securite (17/07/2026 ~23:57) :
 #   - mongodump FRAIS et verifie restaurable :
@@ -15,7 +15,7 @@
 # set -e : arret au premier echec. Rollback en bas de fichier.
 # =============================================================================
 set -euo pipefail
-cd /root/omnitech-siem-setup
+cd "$(dirname "$0")/.."
 source 00-vars.env
 GL="https://bx-it-graylog-vm.omnitech.security/api"
 BK="/home/siem-backup/mongo/graylog-mongo-20260717-2357-PRE-UPGRADE-715.archive.gz"
@@ -70,7 +70,7 @@ exit 0
 #   apt-mark hold graylog-server
 # Si (et seulement si) les donnees de config sont corrompues apres coup :
 #   systemctl stop graylog-server
-#   source /root/omnitech-siem-setup/00-vars.env
+#   source /opt/omni-siem/repository/00-vars.env
 #   mongorestore --gzip --drop --archive="/home/siem-backup/mongo/graylog-mongo-20260717-2357-PRE-UPGRADE-715.archive.gz" \
 #     --uri "mongodb://admin:${MONGO_ADMIN_PASS}@127.0.0.1:27017/?replicaSet=rs0&authSource=admin"
 #   systemctl start graylog-server

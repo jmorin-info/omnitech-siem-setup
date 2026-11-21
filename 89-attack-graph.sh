@@ -24,7 +24,7 @@ source ./00-vars.env 2>/dev/null || true
 source ./lib-graylog.sh 2>/dev/null || true
 [[ $EUID -eq 0 ]] || { echo "root requis"; exit 1; }
 
-APP=/root/omnitech-siem-setup/oms-graph
+APP="${OMNI_SIEM_HOME:-$PWD}/oms-graph"
 VENV="$APP/.venv"
 ETC=/etc/oms-graph
 STATE=/var/lib/oms-graph

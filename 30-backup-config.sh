@@ -5,7 +5,7 @@
 # Contenu : dump MongoDB (toute la conf Graylog : streams, pipelines, alertes,
 # dashboards, inputs, users...) + /etc/graylog (server.conf, certs, lookups)
 # + opensearch/mongo/nginx conf + collecteurs omni-* + units systemd + kit
-# + ~/omnitech-siem-setup (IaC). PAS les indices OpenSearch (logs).
+# + le depot canonique (repertoire de ce script, /opt/omni-siem/repository par defaut). PAS les indices OpenSearch (logs).
 #
 # Archive CHIFFREE (AES-256, la destination est un partage "Public") puis
 # poussee vers ${SMB_BACKUP_UNC} avec retention ${BACKUP_RETENTION_J} jours
@@ -79,7 +79,7 @@ tar czf "${ARCH}" --ignore-failed-read \
     etc/systemd/system \
     usr/local/sbin \
     var/www/siem-kit \
-    root/omnitech-siem-setup \
+    "${PWD#/}" \
   -C "${TMP}" mongodump $([ -f "${TMP}/luks-data-header.img" ] && echo luks-data-header.img)
 
 # --- 3. Chiffrement ------------------------------------------------------------
