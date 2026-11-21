@@ -1,585 +1,217 @@
 <div align="center">
 
-<img src="docs/captures/01-overview.png" alt="OMNI SOC" width="92%">
+<img src="docs/captures/01-overview.png" alt="Console OMNI SOC" width="92%">
 
-<small>Console actuelle avec données synthétiques de démonstration.</small>
+<small>Console SOC actuelle, avec des données synthétiques de démonstration.</small>
 
-# OMNI SIEM — Plateforme de détection et de réponse
+# OMNI SIEM
 
-**Plateforme SIEM et console SOC auto-hébergées sur Graylog, avec modules de collecte et extensions XDR.**
-*Self-hosted Graylog SIEM and SOC console, with source modules and optional XDR services.*
+**Plateforme SIEM et console SOC auto-hébergées, construites sur Graylog,
+OpenSearch et MongoDB, pour la détection et la réponse aux incidents
+d'OMNITECH SECURITY.**
 
-<br>
+![Graylog](https://img.shields.io/badge/Graylog-7.2-1971c2)
+![OpenSearch](https://img.shields.io/badge/OpenSearch-2.19-005EB8)
+![MongoDB](https://img.shields.io/badge/MongoDB-8.0-13aa52)
+![Licence](https://img.shields.io/badge/licence-GPLv3-555555)
 
-![Graylog](https://img.shields.io/badge/Graylog-7.2-1971c2?logo=graylog&logoColor=white)
-![OpenSearch](https://img.shields.io/badge/OpenSearch-2.19-005EB8?logo=opensearch&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-8.0-13aa52?logo=mongodb&logoColor=white)
-![Debian](https://img.shields.io/badge/Debian-13-A81D33?logo=debian&logoColor=white)
-
-![Triage](https://img.shields.io/badge/alert_triage-scoring%2BLLM-5f3dc4)
-![Playbooks](https://img.shields.io/badge/action_playbooks-115-7048e8)
-![ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-mapped-c2255c)
-![i18n](https://img.shields.io/badge/UI-FR_%2F_EN-0c8599)
-![Status](https://img.shields.io/badge/status-production-2b8a3e)
-![ISO 27001](https://img.shields.io/badge/ISO_27001-evidence_ready-364fc7)
+[English version](README.md) · [Documentation](docs/README.md) · [Feuille de route](docs/ROADMAP.md) · [Journal des modifications](CHANGELOG.md)
 
 </div>
 
-> **Dépôt opérationnel interne.** Ce dépôt provisionne le SIEM de **production** d'OMNITECH SECURITY : il doit être traité comme de l'infrastructure-as-code sensible. Aucun secret réel n'est versionné (voir [Sécurité et secrets](#sécurité-et-secrets)).
+> **Dépôt d'infrastructure interne.** Ce dépôt provisionne et maintient le SIEM
+> de production d'OMNITECH SECURITY. Il se traite comme du code d'infrastructure
+> sensible : aucun secret n'y est versionné (voir [SECURITY.md](SECURITY.md)).
 
----
+## Présentation
 
-## Commencer
+OMNI SIEM centralise les journaux du système d'information (postes et
+serveurs Windows, pare-feu Fortinet de trois sites, Microsoft 365 et Entra ID,
+virtualisation, antivirus, WAF, Linux, commutateurs, contrôle d'accès
+physique), les normalise dans un schéma de champs commun, applique des
+détections rattachées à MITRE ATT&CK et ajoute des services maison :
 
-**[Choisir son parcours](docs/DEMARRER.md)** :
+- **triage des alertes** : score multi-critères, regroupement, et appel à une
+  API LLM externe pour les seuls cas ambigus ; seul le critique part par courriel ;
+- **corrélation d'incidents** (`oms-xdr`), **détection d'anomalies** (`oms-ml`)
+  et **graphe d'exposition** (`oms-graph`) ;
+- **réponse automatisée** limitée et réversible : blocage d'IP sur les
+  FortiGate par flux de menaces, durée limitée, exclusions, mode simulation ;
+- **console SOC** web et application installable (PWA) ;
+- **production de preuves ISO/IEC 27001:2022** : rétentions, chaîne
+  d'intégrité, dossiers de preuves mensuels.
 
-- Nouvelle machine : [installer sur Ubuntu, ligne par ligne](docs/UBUNTU-DEMARRAGE.md).
-- SIEM déjà en service : [mettre à jour le code en conservant le site](docs/UPDATES.md).
-- Nouvel équipement : [ajouter WatchGuard, UniFi ou Palo Alto et son dashboard](docs/INTEGRATIONS-MODULAIRES.md).
+## Capacités en service
 
-Les descriptions et captures ci-dessous présentent l'installation de référence
-avec ses extensions. Le [périmètre du socle](docs/INSTALLATION.md) et les
-[rapports de qualification](docs/QUALIFICATION-UBUNTU2604.md) précisent ce qui est
-installé et testé pour une nouvelle machine.
+Relevé effectué le 21/11/2026 en lecture seule sur l'installation de
+référence (API Graylog, systemd). Ces chiffres décrivent cette installation ;
+une installation neuve n'en déploie que le socle.
 
-## Sommaire
-
-- [Présentation et objectifs](#présentation-et-objectifs)
-- [Overview (English)](#overview-english)
-- [Aperçu visuel](#aperçu-visuel)
-- [Le cycle d'une alerte](#le-cycle-dune-alerte)
-- [Capacités clés](#capacités-clés)
-- [Architecture](#architecture)
-- [Prérequis](#prérequis)
-- [Ordre d'installation](#ordre-dinstallation)
-- [Configuration : 00-vars.env](#configuration--00-varsenv)
-- [Enrôlement des hôtes (agents Windows, Linux, Aruba)](#enrôlement-des-hôtes-agents-windows-linux-aruba)
-- [Intégration FortiGate / FortiAnalyzer multi-site](#intégration-fortigate--fortianalyzer-multi-site)
-- [Gestion TLS et CA interne](#gestion-tls-et-ca-interne)
-- [Organisation du dépôt](#organisation-du-dépôt)
-- [Validation post-installation](#validation-post-installation)
-- [Sauvegarde et restauration](#sauvegarde-et-restauration)
-- [Dépannage](#dépannage)
-- [Supervision du SIEM](#supervision-du-siem)
-- [Exploitation courante](#exploitation-courante)
-- [Limites connues](#limites-connues)
-- [Sécurité et secrets](#sécurité-et-secrets)
-- [Conformité ISO 27001:2022](#conformité-iso-270012022)
-- [État et feuille de route](#état-et-feuille-de-route)
-- [Stack et versions épinglées](#stack-et-versions-épinglées)
-- [Documentation associée](#documentation-associée)
-- [Licence](#licence)
-
----
-
-## Présentation et objectifs
-
-Plateforme **SIEM + XDR + console SOC** complète et reproductible, déployée sur un serveur physique Debian 13 durci (`bx-it-graylog-vm`, le nom est historique), avec un kit d'enrôlement Windows/AD et Linux. Elle collecte Windows Security/Sysmon, FortiGate/FortiAnalyzer (3 sites), Microsoft 365, vSphere, ESET, Vaultwarden, Veeam, DNS, Linux, Aruba et Entra ID ; normalise tout dans un **schéma commun** ; exécute des **règles de pipeline** et des **définitions d'alerte** mappées **MITRE ATT&CK** ; ajoute une **analyse comportementale (UEBA/NDR)**, un **scoring ML (`oms-ml`)**, une **corrélation d'incidents kill-chain (`oms-xdr`)**, un **triage d'alertes intelligent** (scoring multi-signaux + LLM local — mail réservé au critique, boucle de faux positifs), un **SOAR léger** (blocage FortiGate multi-site BDX/IV/LC), une **console SOC web + PWA mobile** bilingue et **115 playbooks d'action** — avec des scripts de provisioning et de maintenance distincts et documenté pour l'**audit ISO 27001:2022**.
-
-Objectifs de conception :
-
-- **Déploiement explicite** : l'installateur sélectionne les phases du socle ; la maintenance, les purges et les migrations ont des procédures séparées.
-- **Précision avant volume** : tuning des faux positifs mesuré, triage systématique, le mail n'est envoyé que pour le critique.
-- **Auditable** : rétentions par paliers, chaîne d'intégrité HMAC (`omni-integrity`), générateur de preuves daté, mapping ISO 27001:2022.
-
-## Overview (English)
-
-A complete, reproducible **SIEM + XDR + SOC console** deployed on a single hardened Debian 13 server, with a Windows/AD enrolment kit. It ingests Windows Security/Sysmon, FortiGate/FortiAnalyzer, Microsoft 365, vSphere, ESET, Vaultwarden and Veeam; normalises everything into a common schema; runs **pipeline rules** and **alert definitions** mapped to **MITRE ATT&CK**; adds behavioural analytics (UEBA/NDR), an ML scoring layer (`oms-ml`), kill-chain incident correlation (`oms-xdr`), an intelligent alert-triage layer (multi-signal scoring + local LLM — mail reserved for the critical few, false-positive feedback loop), light SOAR (multi-site FortiGate auto-block), a bilingual SOC web console + mobile PWA, and 115 action playbooks — with separate provisioning and maintenance procedures and documented for ISO 27001:2022 evidence. The rest of this document is in French; the SOC console itself is fully bilingual FR/EN.
-
-## Aperçu visuel
-
-> Vue d’ensemble et incidents : interface actuelle avec **données synthétiques**.
-> Les autres captures présentent l’installation historique, avec comptes, hôtes,
-> IP et SID **pseudonymisés** (mode `MOBILE_REDACT`).
-
-### Console SOC « OMNI SOC »
-
-<div align="center">
-
-| | |
-|:---:|:---:|
-| [![Recherche d'entités](docs/captures/02-entites.png)](docs/captures/02-entites.png)<br>**Entités** — classées par risque fusionné + watchlist | [![Dossier 360](docs/captures/10-dossier360.png)](docs/captures/10-dossier360.png)<br>**Dossier 360** — jauge de risque fusionné, identité unifiée, provenance |
-| [![Chronologie unifiée](docs/captures/10b-timeline.png)](docs/captures/10b-timeline.png)<br>**Chronologie unifiée** — détections + authentifications, par date | [![Détections](docs/captures/04-detections.png)](docs/captures/04-detections.png)<br>**Détections** — liste 24 h + guide d'action intégré |
-| [![Playbooks](docs/captures/05-playbooks.png)](docs/captures/05-playbooks.png)<br>**Playbooks** — ce que c'est / vérifier / remédier / corriger | [![Matrice ATT&CK](docs/captures/06-attack.png)](docs/captures/06-attack.png)<br>**Matrice MITRE ATT&CK** — couverture et activité |
-| [![Graphe d'attaque](docs/captures/07-graphe.png)](docs/captures/07-graphe.png)<br>**Graphe d'attaque** — entités et techniques | [![Incidents](docs/captures/03-incidents.png)](docs/captures/03-incidents.png)<br>**Incidents** — cas corrélés (oms-xdr) |
-| [![Santé et collecte](docs/captures/08-sante.png)](docs/captures/08-sante.png)<br>**Santé et collecte** — cluster, SLA, santé des robots | [![Fuites et Dark Web](docs/captures/09-fuites.png)](docs/captures/09-fuites.png)<br>**Fuites et Dark Web** — RansomLook / HIBP / Dehashed / GitHub |
-
-[![Interface bilingue](docs/captures/11-overview-en.png)](docs/captures/11-overview-en.png)
-
-**Interface bilingue FR/EN** — bascule instantanée et persistée.
-
-</div>
-
-### PWA mobile — application installable, notifications web-push
-
-<div align="center">
-
-| | |
-|:---:|:---:|
-| [![PWA Menace](docs/captures/12-pwa-mobile.png)](docs/captures/12-pwa-mobile.png)<br>**Menace** — parité console (ML / UEBA) | [![PWA Guides](docs/captures/13-pwa-guides.png)](docs/captures/13-pwa-guides.png)<br>**Guides** — playbooks par tactique |
-
-</div>
-
-## Le cycle d'une alerte
-
-```mermaid
-flowchart LR
-  A["Windows · Sysmon · M365<br/>FortiGate x3 sites · vSphere · ESET<br/>WAF · Vaultwarden · Linux · Aruba"]
-  A -->|"Beats TLS · Syslog · GELF"| ING["Ingestion Graylog"]
-  ING --> ENR["Normalisation + enrichissement<br/>net_segment · MITRE · fortigate_site · threat-intel"]
-  ENR --> DET["règles pipeline<br/>détections · alert_tag · risque 0-10 · MITRE"]
-  DET --> XDR["Corrélation<br/>oms-xdr · oms-ml · UEBA / NDR"]
-  DET --> TRI{{"omni-alert-triage<br/>score multi-signaux + LLM"}}
-  XDR --> TRI
-  TRI -->|"critique / kill-chain"| MAIL["Mail — critique uniquement"]
-  TRI -->|"firehose"| TEAMS["Teams + console SOC / PWA"]
-  TRI -->|"bruit / faux positif"| DROP["écarté · tracé"]
-  DET -->|"IP attaquante"| SOAR["omni-soar : blocklist FortiGate"]
-  FP[("omni-fp<br/>FP appris")] -.->|"suppression scopée · TTL"| TRI
-```
-
-> **De la source au verdict.** Chaque log est normalisé, enrichi (MITRE, segment réseau, site FortiGate, threat-intel), confronté aux **règles et détections**, corrélé (XDR / ML / UEBA), puis **trié** : le **mail est réservé au critique**, tout le reste reste visible dans Teams et la console SOC. Un faux positif marqué (`omni-fp`) éteint le bruit futur — sans jamais masquer un critique.
-
-## Capacités clés
-
-| Capacité | Rôle |
+| Élément | Valeur |
 |---|---|
-| **Detection engineering** | **règles** de pipeline sur les streams sources (AD/Sysmon, FortiGate x3 sites, FortiManager, M365, vSphere...) : événements tagués (`alert_tag`) + **définitions d'alerte**, fenêtres glissantes |
-| **Triage d'alertes intelligent** | `omni-alert-triage` : score multi-signaux (tier, priorité, actif critique, threat-intel, hors-heures, kill-chain) + jugement LLM de la zone grise ; mail réservé au critique, Teams en firehose, bruit écarté ; boucle de faux positifs (`omni-fp`, scopée + TTL, jamais sur un critique). Tout passe par le triage : zéro mail direct |
-| **MITRE ATT&CK** | `alert_tag` vers techniques/tactiques, score de risque 0-10, couche ATT&CK Navigator + matrice de couverture interactive + backlog de couverture (analyse de lacunes, `docs/detection/DETECTION-BACKLOG.md`) |
-| **Recherche d'entités et dossier 360** | Tout compte ou machine : identité unifiée, authentifications, logons, détections, chronologie, guides ; score de risque fusionné (ML + UEBA + sévérité), entités classées par risque, watchlist |
-| **Console SOC visuelle** | Tableaux de bord natifs par domaine (identité, M365, réseau, Aruba/Linux/EMS, endpoint...) + carte mondiale 3D des flux temps réel + recherche plein-texte (palette Ctrl+K, pivot alerte vers logs bruts) |
-| **Corrélation d'identité** | `SECURITY\rdupont`, `adm-rdupont`, `rdupont@dom` reconnus comme une seule personne (comptes liés agrégés) ; machines jamais fusionnées |
-| **Chronologie unifiée** | Le récit d'une entité : détections + échecs d'authentification Windows + sign-ins M365 fusionnés et triés par date, sur tous les comptes liés |
-| **XDR et LLM local** | `oms-xdr` : corrélation kill-chain multi-sources, scoring d'incident, triage/narration par LLM local (Ollama, CPU), réponse en dry-run (double verrou) |
-| **UEBA / NDR** | Z-score de volume, voyage impossible (Haversine), beaconing C2 (CV des intervalles), tunnel DNS (entropie), scan interne, score de risque d'entité 0-100 |
-| **ML (`oms-ml`)** | Anomalie non supervisée (IsolationForest) en direct + réduction de faux positifs supervisée (features contextuelles par entité) |
-| **Playbooks et alertes auto-explicatives** | 115 playbooks (ce que c'est / vérifier / remédier / corriger) ; chaque alerte porte cause décodée, EventID, ATT&CK et risque ; guide d'action intégré à chaque détection |
-| **Threat intel et fuites** | abuse.ch (C2 Feodo, domaines URLhaus, filtre qualité : infrastructure partagée écartée), CISA KEV + ancienneté de patch ; RansomLook, HIBP, Dehashed, GitHub |
-| **SOAR et réponse** | Blocage automatique des IP attaquantes sur FortiGate multi-site (feeders WAF / spray / brute VPN ; sans identifiant, TTL, liste blanche, audit) ; désactivation de compte AD via LDAPS (dry-run + denylist + audit + validation humaine) |
-| **Précision (environ 0 % FP visé)** | Tuning FP mesuré et vérifié adversarialement (allowlists ancrées sur les chemins, garde-fous anti-faux-négatif) ; auto-supervision des **37 robots** ; chaîne d'intégrité HMAC |
-| **Conformité et intégrité** | Rétention par paliers, chaîne anti-altération (`omni-integrity`), registre d'amélioration continue (clause 10) + générateur de preuves daté, mapping ISO 27001:2022 |
+| Inputs Graylog | 14 |
+| Streams | 21 |
+| Pipelines / règles de pipeline | 40 / 277 |
+| Définitions d'événements (détections et corrélations) | 211, dont 200 actives |
+| Tableaux de bord Graylog | 13 |
+| Tables de correspondance | 34 |
+| Minuteries systemd des robots (`omni-*`, `oms-*`) | 51 |
+| Techniques ATT&CK distinctes dans la table de correspondance | 77, sur 12 tactiques |
+| Fiches d'aide à la décision par type d'alerte | 150 (`lookups/alert-guidance.json`) |
+
+Sources disposant d'un input ou d'un stream dédié : Windows Security,
+Sysmon et autres journaux Windows (Winlogbeat TLS), FortiGate des trois sites
+via FortiAnalyzer, FortiManager, FortiClient EMS, DHCP FortiGate,
+Microsoft 365 et Entra ID, vSphere, ESET PROTECT, BunkerWeb, Vaultwarden,
+Linux, commutateurs Aruba, contrôle d'accès SEAL (accès, alarmes, audit).
+
+Le nombre de définitions mesure l'étendue du catalogue, pas l'efficacité de
+détection : la validation par scénarios reste à outiller (voir
+[Statut et limites](#statut-et-limites)).
 
 ## Architecture
 
-Tout tient sur un seul serveur physique Debian 13 durci (le nom `bx-it-graylog-vm` date d'une première version virtualisée), données au repos chiffrées (`/data` en LUKS2/TPM2, déverrouillé au démarrage par le TPM) :
-
-```
- Postes / Serveurs ───Winlogbeat TLS 5044──┐      GPO OMNI-AUDIT-Baseline (DC)
- (Sysmon + audit GPO)                       │      + distribution NETLOGON\SIEM (NinjaOne)
-                                            ▼
- FortiGate x3 ─► FortiAnalyzer ──syslog/CEF 1514/5555──► ┌─────────────────────────────────┐
-                                                         │  bx-it-graylog-vm (Debian 13)   │
- Microsoft 365 ──Graph API (pull)────────────────────────│  Nginx TLS :443                 │
- vSphere ──────syslog 1516───────────────────────────────│   ├─ Graylog 7.2 :9000 (TLS)    │
- ESET PROTECT ─syslog 1515───────────────────────────────│   ├─ OpenSearch 2.19 :9200      │
- Linux ────────syslog 1519 · Aruba syslog 1520───────────│   │    (données sur /data LUKS2)│
- Vaultwarden / Veeam ──Filebeat / canal──────────────────│   ├─ MongoDB 8.0 rs0            │
- Cert Orchestrator ──GELF UDP 12201──────────────────────│   └─ Console SOC + PWA (:8090,  │
- Admins / SOC ─────HTTPS 443─────────────────────────────│      loopback, derrière nginx)  │
-                                                         └─────────────────────────────────┘
-        │                                                          │ GELF :12201
-        │   37 microservices Python (/usr/local/sbin/omni-*)       │ (event_source=siem_*)
-        └──  UEBA · NDR · oms-ml · oms-xdr · SOAR · triage · rapports ─┘
-```
-
-Vue simplifiée du traitement :
+Tout fonctionne sur **un seul serveur physique** Debian 13 (le nom
+`bx-it-graylog-vm` est historique), avec les données OpenSearch chiffrées au
+repos (LUKS2, déverrouillage TPM2). Les services internes écoutent sur
+l'interface locale ; seuls nginx (HTTPS) et les inputs de collecte sont
+exposés, filtrés par nftables.
 
 ```mermaid
 flowchart LR
   subgraph Sources
-    WIN[Windows / Sysmon<br/>Winlogbeat TLS]
-    FGT[FortiGate<br/>via FortiAnalyzer]
+    WIN[Windows / Sysmon]
+    FGT[FortiGate x3<br/>via FortiAnalyzer]
     M365[Microsoft 365 / Entra ID]
     OTH[vSphere · ESET · EMS · Aruba<br/>Linux · WAF · Vaultwarden]
-    SEAL[Contrôle d'accès SEAL<br/>SQL via Logstash]
+    SEAL[Contrôle d'accès SEAL]
   end
-  subgraph SIEM[Serveur SIEM]
-    IN[Entrées Graylog] --> PIPE[Pipelines<br/>normalisation · enrichissement]
-    PIPE --> V3[Corrélation v3<br/>actifs critiques]
-    PIPE --> OS[(OpenSearch<br/>/data chiffré)]
-    PIPE --> DEF[Définitions d'alertes<br/>MITRE]
-    V3 --> DEF
-    ROB[Robots UEBA · NDR · santé] -->|GELF| IN
-    DEF --> TRI[Tri des alertes<br/>score · corrélation · dédoublonnage]
+  subgraph Serveur[Serveur SIEM]
+    IN[Inputs Graylog] --> PIPE[Pipelines<br/>normalisation · enrichissement · détection]
+    PIPE --> OS[(OpenSearch)]
+    PIPE --> DEF[Définitions d'événements<br/>MITRE ATT&CK]
+    ROB[Robots UEBA · NDR · ML · XDR] -->|GELF| IN
+    DEF --> TRI[Triage des alertes]
     DEF --> SOAR[SOAR<br/>liste de blocage]
-    OS -.->|snapshots sélectifs la nuit| SNAP[(Dépôt de snapshots<br/>disque séparé)]
   end
   WIN --> IN
   FGT --> IN
   M365 --> IN
   OTH --> IN
   SEAL --> IN
-  TRI --> MAIL[Mail · Teams]
-  TRI --> DIG[Récapitulatif quotidien<br/>08:00 en semaine]
+  TRI --> NOTIF[Courriel critique · Teams]
   TRI --> CON[Console SOC · PWA]
-  CON -->|demande de déblocage<br/>journalisée| SOAR
-  SOAR -->|flux de menaces externe<br/>lu toutes les 2 min| FW[FortiGate<br/>refus en entrée WAN]
+  SOAR -->|flux de menaces| FW[FortiGate]
 ```
 
-Composants sur le serveur :
-
-- **Graylog 7.1** (ingestion, streams, pipelines, alertes) — API en TLS sur `:9000`, derrière nginx.
-- **OpenSearch 2.19** (indexation) et **MongoDB 8.0** (configuration Graylog), liés à `127.0.0.1` uniquement ; données OpenSearch sur `/data` chiffré LUKS2.
-- **Nginx** : terminaison TLS `:443` (console Graylog, console SOC `/soc/`, PWA `/m/`, kit d'enrôlement `/kit/`).
-- **37 microservices Python** (`/usr/local/sbin/omni-*`) + moteurs `oms-xdr`, `oms-ml`, `oms-graph` : UEBA, NDR, SOAR, triage, threat-intel, rapports, supervision — pilotés par des timers systemd.
-- **Console SOC + PWA** : backend `mobile/omni-mobile-api.py` (stdlib), écoute loopback `:8090`, proxifié par nginx.
+Détails : [architecture](docs/architecture/ARCHITECTURE.md),
+[dossier d'architecture](docs/architecture/DOSSIER-ARCHITECTURE-SIEM.md),
+[sources](docs/DATA-SOURCES.md), [détections](docs/detection/DETECTIONS.md),
+[alerting et triage](docs/ALERTING-AND-TRIAGE.md).
 
 ## Prérequis
 
-Pour une nouvelle installation : Ubuntu Server 24.04/22.04 ou Debian 12/13 amd64,
-systemd, CPU avec AVX, accès root, DNS/FQDN corrects et stockage dimensionné.
-La [procédure d'installation](docs/INSTALLATION.md) précise les versions, les
-contrôles et les limites de qualification. Le chiffrement LUKS/TPM de l'installation
-de référence est une opération distincte ; l'installateur ne le crée pas implicitement.
+- Ubuntu Server 24.04 ou 22.04, ou Debian 12 ou 13, amd64, avec systemd ;
+  Ubuntu 26.04 est expérimental (voir la [qualification](docs/QUALIFICATION-UBUNTU2604.md)).
+- Processeur avec AVX, au moins 16 Go de mémoire, stockage dimensionné pour le
+  volume de journaux.
+- Accès root, nom DNS et FQDN corrects, accès aux dépôts des éditeurs.
 
-## Ordre d'installation
+Le chiffrement LUKS/TPM de l'installation de référence est une opération
+distincte : l'installateur ne le crée pas. Le détail figure dans
+[INSTALLATION.md](docs/INSTALLATION.md).
 
-Une interface guidée est disponible directement dans le terminal SSH, sans
-installer de serveur web :
+## Démarrage rapide
 
-```bash
-sudo python3 tools/omni-manager.py
-```
-
-Elle rassemble les paramètres et secrets du site, l'installation/reprise, les
-mises à jour, la publication de `/soc/`, les trois modules et les journaux.
-Le catalogue recense également les autres composants et leurs limites
-d'automatisation. Voir [le guide du gestionnaire SSH](docs/INTERFACE-ADMINISTRATION.md).
-
-Un seul point d'entrée sélectionne les phases autorisées et installe aussi la
-console SOC et tous ses assets :
+Installation d'une machine neuve (plan en lecture seule, puis application) :
 
 ```bash
 git clone https://github.com/jmorin-info/omnitech-siem-setup.git
 cd omnitech-siem-setup
-cp 00-vars.env.example 00-vars.env
-chmod 600 00-vars.env
-$EDITOR 00-vars.env
+cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env
+$EDITOR 00-vars.env                      # renseigner le site
 sudo bash install.sh --generate-secrets
 sudo bash install.sh --plan
 sudo bash install.sh --apply
 ```
 
-Le profil `core-soc` installe le socle et ses dashboards initiaux. Il refuse un
-SIEM déjà installé ; `--resume` reprend uniquement sa propre installation enregistrée.
-Les robots, XDR/ML/graphe, connecteurs nécessitant des identifiants externes, SOAR,
-scan actif et autres capacités spécifiques restent à configurer selon leur procédure.
-Une installation neuve ne reproduit pas automatiquement tous les outils actifs sur
-l'environnement OMNITECH. Voir le périmètre exact dans [INSTALLATION.md](docs/INSTALLATION.md).
+Le profil installé comprend MongoDB, OpenSearch, Graylog, les inputs et
+pipelines de base, les détections initiales, le tableau de bord SOC, nginx, la
+console `/soc/` et une sauvegarde quotidienne. Les extensions (robots,
+XDR/ML, SOAR, connecteurs nécessitant des identifiants) s'activent ensuite,
+chacune selon sa procédure.
 
-**Ne jamais exécuter tous les scripts numérotés par une boucle ou un joker.**
-Certains effacent les journaux, changent les rétentions ou recréent les dashboards.
-Les préfixes 38, 39, 40, 48, 49, 84, 85, 86 et 97 sont partagés : seul le nom complet
-identifie une opération.
+Une interface d'administration en terminal regroupe ces opérations :
+`sudo python3 tools/omni-manager.py`
+([guide](docs/INTERFACE-ADMINISTRATION.md)). Pour une instance existante,
+suivre la procédure de [mise à jour du code](docs/UPDATES.md).
 
-Pour une installation existante, suivre [les mises à jour](docs/UPDATES.md) :
-révision figée, plan, préparation séparée, sauvegarde et retour arrière du code.
-L'outil préserve les secrets, les personnalisations et les bases ; les migrations
-de paquets/bases ne sont pas automatiques.
+**Ne jamais exécuter les scripts numérotés en boucle** : certains purgent des
+journaux ou modifient des rétentions. Leur rôle et leur statut sont recensés
+dans [SCRIPTS-PROVISIONING.md](docs/reference/SCRIPTS-PROVISIONING.md).
 
-Les modules **WatchGuard, Ubiquiti UniFi et Palo Alto** sont documentés dans
-[INTEGRATIONS-MODULAIRES.md](docs/INTEGRATIONS-MODULAIRES.md), avec Content Packs,
-dashboards, paramètres et limites de formats. Une recette sur les journaux réels
-de vos équipements reste nécessaire. Les packs Illuminate officiels ne sont pas
-redistribués et ont leurs propres conditions de licence.
+## Documentation
 
-Un **Not Found sur `/soc/`** se diagnostique sur le frontal HTTPS port 443.
-`sudo bash 71-soc-console.sh` installe les composants manquants et publie tous les
-assets, en préservant la configuration existante. Voir
-[CONSOLE-DEPLOIEMENT.md](docs/CONSOLE-DEPLOIEMENT.md).
+L'[index de la documentation](docs/README.md) présente les documents par
+parcours : découvrir, installer, exploiter au quotidien, réagir à un
+incident, mettre à jour, conformité ISO 27001, référence. Points d'entrée
+fréquents :
 
-## Configuration : 00-vars.env
-
-Toute la configuration passe par un fichier unique, jamais versionné :
-
-```bash
-cp 00-vars.env.example 00-vars.env
-chmod 600 00-vars.env
-$EDITOR 00-vars.env    # remplacer chaque CHANGEME
-```
-
-- `00-vars.env.example` est le **gabarit commenté** : identité machine, réseau, disques, heaps, ports, intégrations. Les valeurs `CHANGEME` sont des secrets à définir localement.
-- Les lignes marquées `A VERIFIER` doivent être contrôlées avant tout lancement.
-- Placer les commentaires **sur des lignes séparées** : certains collecteurs Python relisent ce fichier (`load_env`) et ne strippent pas les commentaires en fin de ligne.
-- Les secrets annexes (comptes de service, webhooks, clés API) sont recensés dans `docs/securite-conformite/SECRETS.example.md` (gabarit ; le fichier réel `SECRETS.md` est ignoré par git).
-
-Tous les scripts sourcent ce fichier en premier, puis `lib-graylog.sh` (voir [Dépannage](#dépannage) : l'ordre est impératif).
-
-## Enrôlement des hôtes (agents Windows, Linux, Aruba)
-
-Tout hôte s'enrôle en **une commande**, depuis la page **Déploiement** de la console SOC (one-liner à copier, téléchargements, état « déjà vu »). Les installeurs vérifient les prérequis et convergent (idempotents, relançables). Artefacts servis sous `/kit/` (TLS), publiés par `95-kit-deploy.sh` (génère `SHA256SUMS`).
-
-| OS | One-liner | Téléchargement | Transport |
-|---|---|---|---|
-| **Windows** | `irm https://<siem>/kit/install.ps1 \| iex` | `install.ps1` + conf | Winlogbeat **TLS 5044** |
-| **Linux** Debian/Ubuntu | `curl -fsSL https://<siem>/kit/install.sh \| sudo bash -s -- <SIEM_IP>` | `install.sh` | Syslog **TCP 1519** |
-| **Linux** RHEL/Rocky/SUSE | idem (détection `dnf`/`yum`/`zypper`) | `install.sh` | Syslog **TCP 1519** |
-| **Switch Aruba** AOS-S | `logging 10.33.220.10` (sur le switch) | — | Syslog **UDP/TCP 1520** |
-
-- **Windows** (`install.ps1`) : prérequis (admin, PowerShell 5.1+, 64 bits, TCP 5044 + 443), auto-élévation UAC, puis délégation au coeur idempotent `Install-OmniSiem-NinjaOne.ps1` (CA TOFU, audit, Sysmon, Winlogbeat, santé, inventaire). Détail complet : `windows/README-WINDOWS.md` (GPO `OMNI-AUDIT-Baseline`, distribution NETLOGON/NinjaOne).
-- **Linux** (`install.sh`) : prérequis + paquets (`rsyslog`/`auditd`/`logger`) multi-distribution, forward auth/sudo/sshd/auditd vers SIEM:1519, règles auditd `omni_*`, test d'émission, résumé `[OK]/[KO]`.
-- **Intégrité (TOFU)** : le premier appel HTTPS récupère `omnitech-rootca.pem` (le CA n'est pas encore épinglé), qui est ensuite installé (`LocalMachine\Root` sous Windows) et utilisé par Beats — après quoi toute la chaîne est validée. Fenêtre MITM au premier contact uniquement, sur réseau interne. Vérification : `curl https://<siem>/kit/SHA256SUMS` (comparé automatiquement par `install.ps1`).
-
-## Intégration FortiGate / FortiAnalyzer multi-site
-
-- Les **3 FortiGate** (sites BDX / IV / LC) journalisent vers le **FortiAnalyzer**, qui forwarde en syslog/CEF vers les inputs 1514/5555 du SIEM. Configuration côté Fortinet : dossier `fortigate/` (logging UTM, forwarding FAZ, durcissement VPN, policies UTM par site) et guide `docs/sources/FORTIANALYZER.md`.
-- Le pipeline enrichit chaque événement d'un champ **`fortigate_site`** (lookup `lookups/fortigate-sites.csv`) : dashboards, détections et triage sont déclinés par site.
-- Le **SOAR** (`36-soar.sh`, `97-multisite-soar.sh`) publie une **blocklist threat-feed** consommée par les FortiGate des trois sites (feeders WAF / password spray / brute-force VPN ; sans identifiant sur les firewalls, TTL, liste blanche, audit).
-- Sources Fortinet complémentaires : FortiManager (`63`), FortiClient EMS en syslog TLS (`90`), FortiGate DHCP (`56`).
-
-## Gestion TLS et CA interne
-
-- **Nouvelle installation** : nginx termine HTTPS avec un certificat provisoire à remplacer par un certificat approuvé. L'API Graylog utilise HTTP sur loopback au bootstrap. **Installation de référence** : l'API est aussi en TLS, avec la CA locale contrôlée par les helpers. Voir [installation et TLS](docs/INSTALLATION.md#réseau-tls-et-stockage).
-- **Distribution du CA aux hôtes** : mécanisme TOFU du kit d'enrôlement (section précédente) — le CA est récupéré au premier contact puis épinglé (magasin Windows, configuration Beats).
-- **Transports chiffrés** : Winlogbeat en Beats TLS 5044, FortiClient EMS en syslog-TLS, console et kit en HTTPS 443.
-- **Surveillance des expirations** : le parc Windows remonte l'état de ses certificats via le canal `OMNI-Certificats` (tag `cert_parc`, règle pipeline dédiée du script 12) et l'orchestrateur de certificats (BX-IT-CERT-VM) émet en GELF UDP 12201 (`99-cert-orchestrator.sh` : input, règle pare-feu, stream, pipeline, alerte d'erreur).
+- [Guide d'exploitation de l'installation de référence](docs/exploitation/GUIDE-EXPLOITATION.md)
+  (configuration, enrôlement des hôtes, sauvegardes, dépannage, supervision) ;
+- [Utiliser la console SOC](docs/CONSOLE-SOC.md) ;
+- [Procédure de gestion des incidents](docs/exploitation/PROCEDURE-INCIDENT.md) ;
+- [Restauration](docs/exploitation/RESTORE.md) et [plan de reconstruction](docs/exploitation/PRA-RECONSTRUCTION-SIEM.md).
 
 ## Organisation du dépôt
 
 | Chemin | Contenu |
 |---|---|
-| `00`-`09*.sh` | OS de base, MongoDB, OpenSearch, Graylog, nginx/TLS, pare-feu, inputs, sauvegarde, SNMP |
-| `10`-`14*.sh` | Modèle de données, enrichissement, **pipelines**, alertes, tableaux de bord |
-| `15`-`22*.sh` | Rapports, M365, vSphere, hygiène et routage des alertes |
-| `30`-`99*.sh` | Résilience, rétention/ISO, LDAPS, **SOAR**, **MITRE**, **UEBA/NDR**, scan vuln, corrélation, intégrité, **triage d'alertes (38)**, dashboards (84), **backlog de détections (85)**, **multi-site FortiGate (97)**, orchestrateur de certificats (99), allowlists FP |
-| `oms-ml/` · `oms-xdr/` · `oms-graph/` | Couche ML (anomalie + réduction FP) · moteur de corrélation XDR · graphe |
-| `triage/` · `tools/` | Service de **triage d'alertes** (`omni-alert-triage` : scoring multi-signaux + LLM + boucle FP `/fp`) · outils CLI (`omni-fp`...) |
-| `mobile/` | Backend console SOC + **PWA** (`omni-mobile-api.py`, stdlib), fronts `soc/` et `www/` |
-| `deploye/` · `synchro-manifeste.sh` | État exporté des robots et services de référence ; synchronisation limitée au manifeste après comparaison (voir [Exploitation courante](#exploitation-courante)) |
-| `docker/` | **Déploiement conteneurisé** (DR/staging) : stack 6 services + secrets durcis + restore (`docker/README-DOCKER.md`) |
-| `kit/` | Installeurs d'enrôlement (`install.ps1`, `install.sh`) publiés sous `/kit/` par `95-kit-deploy.sh` |
-| `lib-graylog.sh` | Helpers API Graylog (TLS, `api_get`/`api_post`, `ensure_rule`/`ensure_pipeline`/`ensure_lookup`, `wrap_entity`...) |
-| `windows/` · `fortigate/` | GPO d'audit AD + kit agent · durcissement UTM/VPN FortiGate |
-| `lookups/` | Tables CSV (EventID, MITRE, segments réseau, sites FortiGate, `alert-guidance.json`...) |
-| `tests/` · `run-tests.sh` | Suite de tests hors ligne (py_compile + pytest : backend mobile, oms-ml, oms-xdr) |
-| `docs/` | Corpus ISO 27001 (politique, standards, procédures, PRA, registres), architecture, guide de dépannage, captures — index : `docs/00-INDEX.md` |
-| `00-vars.env.example` · `docs/securite-conformite/SECRETS.example.md` | **Gabarits** de configuration et de secrets (valeurs réelles jamais versionnées) |
+| `NN-*.sh` | Scripts de provisioning numérotés ([inventaire](docs/reference/SCRIPTS-PROVISIONING.md)) |
+| `install.sh`, `tools/` | Installateur, gestionnaire SSH, mise à jour, outils ; `tools/ponctuel/` : scripts datés à usage unique |
+| `lib-graylog.sh`, `lib-platform.sh` | Fonctions communes (API Graylog, plateforme) |
+| `triage/`, `soar-v2/` | Triage des alertes, SOAR |
+| `oms-xdr/`, `oms-ml/`, `oms-graph/` | Corrélation, ML, graphe d'exposition (projets Python testés) |
+| `mobile/` | Console SOC, PWA et leur backend |
+| `seal/` | Intégration du contrôle d'accès physique SEAL |
+| `integrations/`, `omni_integrations/` | Modules WatchGuard, UniFi, Palo Alto |
+| `windows/`, `kit/`, `fortigate/` | Agents et GPO Windows, kit d'enrôlement, configuration Fortinet |
+| `lookups/` | Tables de correspondance et fiches d'aide à la décision |
+| `deploye/` | Miroir du code en service, synchronisé par manifeste |
+| `docker/` | Pile conteneurisée de préproduction ou de secours |
+| `docs/` | Documentation ([index](docs/README.md)) |
+| `tests/`, `run-tests.sh` | Tests hors ligne et contrôle des liens de la documentation |
 
-## Validation post-installation
+## Statut et limites
 
-Pour une installation neuve, commencer par :
+La plateforme est en production chez OMNITECH SECURITY. Les limites suivantes
+sont connues et suivies dans la [feuille de route](docs/ROADMAP.md) :
 
-```bash
-sudo python3 tools/verify-installation.py --output /var/lib/omni-siem/acceptance.json
-```
+- **Architecture mono-serveur** : Graylog, OpenSearch, MongoDB et les services
+  maison partagent un serveur, sans haute disponibilité. La reprise repose sur
+  les sauvegardes et le plan de reconstruction, pas sur un basculement.
+- **Validation des détections à démontrer** : des tests hors ligne couvrent le
+  code et des règles ont été rejouées sur l'historique, mais aucune campagne
+  automatisée de scénarios d'attaque ne mesure encore le taux de détection.
+- **Triage LLM** : les faux négatifs et la robustesse face à des contenus de
+  journaux hostiles ne sont pas encore mesurés. La couche LLM décide seulement
+  de l'envoi d'un courriel ; elle ne déclenche aucune action de blocage.
+- **Reprise non chronométrée** : la restaurabilité des sauvegardes est testée
+  automatiquement, mais la reconstruction complète sur une machine vierge,
+  avec mesure du RTO, reste à réaliser.
+- **Historique partiel en sauvegarde** : l'archive quotidienne couvre la
+  configuration ; les journaux ne sont couverts que par des snapshots
+  sélectifs (fenêtres récentes des gros index).
+- **Réponse sur les comptes et les postes non armée** : désactivation de
+  compte AD et isolement de poste restent en recommandation (simulation).
+- **Dette d'organisation** : 105 scripts numérotés, dont neuf préfixes en
+  double, quelques scripts obsolètes, et plusieurs services qui s'exécutent
+  encore depuis une ancienne copie du dépôt sur le serveur.
 
-Puis suivre les [contrôles de réception](docs/INSTALLATION.md#contrôles-de-réception).
-Les contrôles ci-dessous concernent l'installation de référence et ses robots
-optionnels ; leur absence sur un nouveau socle ne signifie pas un échec du socle.
+## Contribuer, sécurité, licence
 
-```bash
-cd /root/omnitech-siem-setup
-
-# 1. Contrôle global lecture seule : noyau, /data déchiffré, services coeur,
-# API Graylog, robots, collecte vivante -> PASS/FAIL par contrôle
-./verif-post-reboot.sh
-
-# 2. Santé du cluster d'indexation (attendu : "green")
-curl -s http://127.0.0.1:9200/_cluster/health | jq -r .status
-
-# 3. API Graylog joignable et inputs en RUNNING
-source ./00-vars.env && source ./lib-graylog.sh    # ordre impératif
-api_get '/system/cluster/nodes' | jq '.nodes[].is_leader'
-api_get '/system/inputstates'   | jq -r '.states[] | "\(.state)\t\(.message_input.title)"'
-
-# 4. Robots et timers actifs (triage, XDR, UEBA, sauvegardes, supervision)
-systemctl list-timers 'omni-*' 'oms-*' --all
-journalctl -u omni-self-health -n 20 --no-pager   # attendu : "N/N robots OK"
-
-# 5. Dépôt de snapshots OpenSearch enregistré (attendu : un objet, pas une 404)
-curl -s http://127.0.0.1:9200/_snapshot/graylog_fs | jq .
-
-# 6. Suite de tests hors ligne (aucun service requis)
-./run-tests.sh
-```
-
-Compléments : la page **Santé et collecte** de la console `/soc/` (cluster, SLA de collecte par hôte, santé des robots) et le tableau de bord Graylog correspondant donnent la même information en continu.
-
-## Sauvegarde et restauration
-
-**Nouvelle installation** : le profil installe `siem-backup.timer`. Son job contrôle
-le dump MongoDB, le snapshot OpenSearch et les configurations privées, notamment
-le fichier du site. Suivre les [contrôles de sauvegarde](docs/INSTALLATION.md#contrôles-de-réception)
-et tester une restauration en environnement isolé.
-
-**Installation de référence** : elle utilise une stratégie adaptée à son volume,
-distincte du socle générique :
-
-- **`08-backup.sh`** — historique : sauvegarde applicative complète (timer `siem-backup`) avec un snapshot de **tous** les index. Le volume indexé ne tient plus sur `/home`, ce timer est donc désactivé depuis août 2026. Ne pas le réactiver tel quel.
-- **`oms-snap-siem`** — snapshots OpenSearch **sélectifs** et incrémentaux, chaque nuit à 01:30, dans le dépôt `graylog_fs` (sur `/home`, un disque distinct de `/data`). La sélection est réglée dans `/etc/oms-snap-siem.conf` : fenêtres glissantes pour les gros index (Windows Security, FortiGate, vSphere), petits index conservés en entier, trois snapshots gardés. Un test de restauration tourne chaque semaine dans un index temporaire. À la restauration, toujours passer `include_aliases=false`, pour ne jamais déplacer l'alias d'écriture (deflector) de Graylog.
-- **`30-backup-config.sh`** — sauvegarde **config** complète (timer `omni-backup-config`, 03:15) : dump MongoDB + configurations + collecteurs `omni-*` + unités systemd + kit + le dépôt IaC lui-même (arbre de travail complet, fichiers non commités inclus), dans une **archive chiffrée AES-256**, vérifiée (test de restaurabilité à chaque run) puis exportée vers le partage SMB `${SMB_BACKUP_UNC}` avec rétention `${BACKUP_RETENTION_J}` jours et **alerte GELF en cas d'échec ou d'absence** (alertes provisionnées par le script 21). Cette archive n'inclut **pas** les indices OpenSearch (logs).
-
-Points d'attention sur les snapshots OpenSearch :
-
-- L'enregistrement du dépôt `graylog_fs` vit dans le **cluster state** OpenSearch : toute recréation de celui-ci (migration de `path.data`, wipe) **perd l'enregistrement** alors que `path.repo` et les fichiers du dépôt restent en place. C'est arrivé en production lors de la migration vers `/data` : les snapshots ont cessé sans alerte. Remède : rejouer l'étape d'enregistrement de `08-backup.sh` (le `PUT _snapshot/graylog_fs`).
-- Le job natif actuel vérifie les erreurs HTTP et la réussite du snapshot. Les anciennes copies déployées ne sont pas mises à jour par un push GitHub ; contrôler leur version et leur résultat avant de compter sur ces vérifications.
-
-Procédures de restauration :
-
-- **`docs/exploitation/RESTORE.md`** — restauration complète pas à pas depuis l'archive chiffrée (VM de remplacement, même IP/FQDN, redémarrage de la collecte).
-- **`docs/exploitation/PRA-RECONSTRUCTION-SIEM.md`** — plan de reconstruction (objectifs de continuité, scénarios, rôles, validation), référence ISO A.8.13 / A.5.30.
-- **`docker/README-DOCKER.md`** — restauration de la configuration dans la stack conteneurisée (DR/staging).
-
-Le serveur est physique : il n'est **pas** sauvegardé en image par Veeam. La reprise repose donc sur l'archive chiffrée (configuration), les snapshots sélectifs (historique récent) et le PRA. Une restauration MongoDB seule (corruption de la configuration) a déjà été validée en production.
-
-## Dépannage
-
-Guide complet symptôme / cause / solution : **`docs/exploitation/GUIDE-DEPANNAGE.md`**. Référence exhaustive des incidents résolus : `docs/archives/CONTEXT.md` (sections « PIEGE A RETENIR »). Pièges récurrents à connaître avant d'intervenir :
-
-| Piège | Règle |
-|---|---|
-| **Ordre de sourcing** | Toujours `source ./00-vars.env` **puis** `source ./lib-graylog.sh` (dans le dépôt, en root). `lib-graylog.sh` construit la variable `API` à partir de `SIEM_FQDN` : dans l'autre ordre, `API` est vide et tous les appels échouent silencieusement |
-| **Enveloppe `wrap_entity` (API 7.x)** | Les POST de création d'entités partageables (streams, event definitions, notifications, dashboards) exigent l'enveloppe `CreateEntityRequest` (`{entity: ..., share_request: ...}`). Passer par les helpers de `lib-graylog.sh` (`wrap_entity`, `ensure_*`), jamais par un POST brut au schéma 6.x |
-| **Codes retour trompeurs de l'API** | `api_put`/`api_post` peuvent renvoyer exit 0 alors que l'API a rejeté l'objet : toujours vérifier la présence de `.id` dans la réponse |
-| **Commentaires de règles pipeline** | Le langage des règles pipeline n'accepte que les commentaires `//` ; ne jamais utiliser `#` dans le source d'une règle (rejet au parsing, parfois silencieux selon le chemin d'appel) |
-| **Pas de ternaire en règle pipeline** | L'opérateur ternaire `cond ? a : b` n'existe pas dans le langage des pipelines Graylog : utiliser des règles ou des blocs conditionnels séparés (voir `99-cert-orchestrator.sh`) |
-| **Renommage par titre = doublons** | Les helpers `ensure_*` retrouvent les entités **par titre** : changer un titre dans un script ne renomme pas l'objet existant, il en **crée un second**. Pour renommer, mettre à jour l'objet par son id (PUT) ou supprimer l'ancien titre explicitement |
-| **Cache des lookups** | Après modification d'un CSV de `lookups/`, purger le cache : `POST /system/lookup/tables/<table>/purge` (voir les exemples dans `93-aruba.sh` et `97-multisite-soar.sh`), sinon les anciennes valeurs sont servies |
-| **`ensure_lookup` canonique** | Utiliser la version unique de `lib-graylog.sh` (adapter + cache + table) ; les copies locales historiques provoquaient des lookups jamais créés, en échec silencieux |
-| **Stages de pipeline** | Un stage `match either` avec une règle conditionnelle peut bloquer la suite : garder la normalisation dans le stage 0 (convention du dépôt : stage 0 = normalisation, 5 = lookups, 10 = détections) |
-| **Re-run des alertes** | Relancer `21-alert-hygiene.sh` après chaque re-run de `13-graylog-alerts.sh` (qui recrée grace/clés par défaut) |
-| **Commentaires dans `00-vars.env`** | Sur des lignes séparées uniquement : les collecteurs Python (`load_env`) ne strippent pas les commentaires en ligne |
-| **Dépôt de snapshots perdu** | Après migration de `path.data` ou wipe : ré-enregistrer `graylog_fs` (voir [Sauvegarde et restauration](#sauvegarde-et-restauration)) |
-| **Logstash en boucle après une mise à jour** | La mise à jour du paquet `logstash` supprime le plugin `logstash-output-gelf`, ajouté à la main, et le pipeline SEAL refuse alors de démarrer. Réinstaller avec `JRUBY_OPTS="-J-Xmx2g" /usr/share/logstash/bin/logstash-plugin install logstash-output-gelf` (sans l'option mémoire, l'installeur plante sur un manque de mémoire). `oms-maj-siem` le fait tout seul |
-| **Logstash : TLS refusé vers SQL Server** | Le Java embarqué de Logstash ne connaît pas la CA interne. Le magasin de confiance est donc hors paquet (`/etc/logstash/cacerts-omni.jks`, déclaré dans `jvm.options`) et survit aux mises à jour. Côté SQL Server, vérifier que l'instance est liée au certificat machine **en cours** : après un renouvellement automatique, SQL reste lié à l'ancienne empreinte |
-| **Connexion à la console en 503 « Authentication service unavailable »** | Le backend AD de Graylog (LDAPS, vérification du certificat) ne reconnaît pas la CA qui signe le certificat des DC. Typiquement après un renouvellement de CA : ajouter la nouvelle racine au magasin de confiance de Graylog (`keytool -importcert` dans le JKS déclaré par `GRAYLOG_SERVER_JAVA_OPTS`), puis redémarrer `graylog-server`. Tant que le backend est en échec, **toutes** les connexions sont refusées, comptes locaux compris |
-| **OpenSearch rouge après un redémarrage** | Normal pendant quelques minutes : il faut environ 4 min pour réallouer plus de 1 200 shards. Les migrations Graylog lancées pendant ce temps peuvent journaliser des erreurs de rotation, sans conséquence si `index_failures` reste vide. Attendre le vert avant tout diagnostic |
-| **`git log` bloqué dans une session distante** | Dans un shell sans terminal complet, git ouvre son pager et attend une touche : exporter `GIT_PAGER=cat` |
-
-## Supervision du SIEM
-
-Le SIEM se surveille lui-même ; tout remonte en GELF (`event_source=siem_*`) dans le stream interne, avec alertes dédiées :
-
-- **`46-self-health.sh` / `61-supervision-robots.sh`** — `omni-self-health` (timer 30 min) : le filet « qui surveille les surveillants », contrôle l'exécution de chaque robot (`event_source=siem_health`).
-- **`39-collect-health.sh`** — `omni-collect-health` (timer horaire) : couverture SLA du parc (baseline 30 jours, silence par hôte, go-dark).
-- **`74-source-watchdog.sh`** — détection de **source silencieuse** (agent mort, flux coupé, journal désactivé par un attaquant) : fraîcheur par `event_source` avec seuils par source. Limite à connaître : deux flux distincts partageant le même `event_source` se masquent mutuellement (le canal encore vivant maintient la source « verte »).
-- **Sauvegardes surveillées** — alertes « Backup config SIEM en échec » / « absent > 26 h » (scripts 30 + 21) ; les snapshots OpenSearch ne sont en revanche pas couverts par cette alerte (voir [Sauvegarde et restauration](#sauvegarde-et-restauration)).
-- **`09-snmpd.sh`** — exposition SNMP pour la supervision d'infrastructure existante.
-- **Console** — page Santé et collecte de `/soc/` (cluster, SLA, robots) et tableaux de bord Graylog associés.
-
-## Exploitation courante
-
-### Mises à jour automatiques
-
-- **Système** : les correctifs de sécurité Debian passent par `unattended-upgrades`.
-- **Socle SIEM** : il est mis à jour par `oms-maj-siem`, chaque dimanche à 04:30 (timer `oms-maj-siem.timer`). Le script :
-  1. vérifie l'état du serveur : `/data` monté, OpenSearch vert, API Graylog, place libre ;
-  2. sauvegarde : archive chiffrée et `mongodump` ;
-  3. installe ce qui est en attente ;
-  4. répare les points connus : plugin GELF de Logstash, magasins de confiance ;
-  5. redémarre si le noyau l'exige, puis refait le contrôle complet au démarrage (`oms-maj-siem-postboot`) ;
-  6. envoie un compte rendu par mail, seulement s'il y a eu quelque chose à faire.
-- **Pas de saut de version majeure** : les séries sont verrouillées dans `/etc/apt/preferences.d/oms-siem-series` (Graylog 7.1, OpenSearch 2.19, MongoDB 8.0, Logstash 8.19). Changer de série reste une décision humaine : lire les notes de version, puis modifier ce fichier.
-- **Simuler** sans rien toucher : `oms-maj-siem --simuler`.
-
-### SOAR : blocage et déblocage
-
-- **Fonctionnement** : le SIEM publie une liste d'IP malveillantes. Les FortiGate des sites la lisent toutes les 2 minutes et la refusent en entrée WAN. Chaque blocage dure 24 h, puis il est levé automatiquement.
-- **Ne sont jamais bloquées** :
-  - une IP qui s'est authentifiée avec succès dans les 90 derniers jours (VPN, Microsoft 365) ;
-  - les plages des sites et des partenaires ;
-  - un échec isolé, qui ne suffit jamais à déclencher un blocage.
-
-  C'est ce qui évite de bloquer l'IP fixe du domicile d'un collaborateur qui s'est trompé de mot de passe.
-- **Débloquer une IP** (effet en 2 minutes), sur le serveur SIEM : `sudo omni-soar-debloquer <ip>`. Ajouter `--exclure "motif"` pour qu'elle ne soit plus jamais bloquée.
-- **Récapitulatif** des blocages et des IP épargnées : un mail chaque matin, seulement les jours où il y a eu de l'activité.
-
-### Détection et corrélation (couche v3)
-Une seconde couche de détection s'ajoute aux règles historiques sans les modifier. Elle a son propre étage de pipeline et une table des actifs critiques (contrôleurs de domaine, PKI, sauvegarde, SIEM, serveurs de sécurité physique). Elle couvre :
-- la lecture du mot de passe d'un gMSA par un compte utilisateur ;
-- le retour de tickets Kerberos RC4/DES ;
-- l'administration du pare-feu depuis une IP publique, l'usage du compte local de secours, les rafales d'échecs de connexion admin ;
-- une menace EDR non traitée, plus grave sur un actif critique ;
-- la suppression de jobs ou de points de sauvegarde, et les restaurations faites par un compte inattendu ;
-- une corrélation : menace EDR puis connexion admin sur la même machine dans l'heure.
-
-Chaque règle a été rejouée sur 30 jours avant la mise en production, et le coût à l'ingestion reste de 3 à 4 ms par message. Sources et retour arrière : `tools/omni-v3/`.
-
-### Tri des alertes et récapitulatifs
-- Les faux positifs structurels sont écartés par des signatures précises (compte + machine + processus), jamais par une exclusion large. Les événements restent indexés : recherche `_exists_:fp_signature`.
-- Les alertes ÉLEVÉ sont regroupées, un mail par heure au plus, avec l'historique de l'entité sur 7 jours. Les CRITIQUES partent tout de suite.
-- Un récapitulatif part chaque jour ouvré à 08:00, avec une section « activité légitime écartée ».
-- Si le juge LLM ne répond pas, il est mis en pause une heure au lieu d'être rappelé à chaque alerte.
-
-Sources : `tools/alertes-v2/`.
-
-### Console SOC et tableaux de bord
-- La console `/soc/` affiche en tête une bande « À traiter » : incidents ouverts, incidents jamais qualifiés, hôtes silencieux, robots en panne, IP bloquées.
-- Une page SOAR liste les IP bloquées et permet de demander un déblocage, journalisé et traité par un service dédié. Une page Exploitation montre les mises à jour, les snapshots, la sauvegarde, les disques et les certificats.
-- Quatre dashboards Graylog complètent l'existant : vue SOC direction, identités et AD, réseau FortiGate et VPN, santé du SIEM. Scripts de création et de réparation : `tools/dashboards/`.
-
-### Garder le dépôt à jour
-
-Une partie des robots est corrigée directement en production, dans `/usr/local/sbin`, les unités systemd et `/opt`. `sync-deploye.sh` recopie cet état dans `deploye/` et neutralise toute URL contenant des identifiants. Il lance ensuite un scan de secrets et refuse de committer si quelque chose ressort. À lancer en simulation d'abord (`--simuler`). Le mode `--sans-commit` recopie et scanne sans committer, pour regrouper les changements dans un seul commit fait à la main. Le script reprend aussi la console `/soc`, `soar-v2/`, la couche v3, les alertes v2 et les scripts des dashboards.
-
-## Limites connues
-
-- **Mono-nœud = SPOF** : Graylog, OpenSearch et MongoDB tournent sur un seul serveur, sans haute disponibilité. La reprise repose sur les sauvegardes (archive chiffrée, snapshots sélectifs) et sur le PRA (`docs/exploitation/PRA-RECONSTRUCTION-SIEM.md`), pas sur un basculement automatique.
-- **Réponse AD non armée** : la désactivation de compte via LDAPS reste en dry-run (double verrou), en attente d'accès API / délégation AD.
-- **OpenSearch 3.x incompatible** avec Graylog 7.1 : rester en 2.19.x (paquets tenus en hold, voir [Stack et versions épinglées](#stack-et-versions-épinglées)).
-- **Fenêtre TOFU** : le CA interne n'est épinglé qu'après le premier contact HTTPS du kit d'enrôlement (fenêtre MITM au premier appel uniquement, réseau interne).
-- **Les logs ne sont pas dans la sauvegarde config** : l'archive chiffrée quotidienne couvre la configuration complète, pas les indices OpenSearch ; la profondeur d'historique repose sur les snapshots sélectifs (`oms-snap-siem`), qui ne couvrent pas tout : Sysmon et les autres journaux Windows en sont exclus, et seules les fenêtres récentes des gros index sont gardées. Après une restauration config seule, l'historique repart de zéro (voir `docs/exploitation/RESTORE.md`).
-- **Numérotation des scripts** : plusieurs numéros sont partagés (38, 40, 48, 49, 84, 85, 97) — se référer au [tableau des doublons](#numéros-dupliqués--ordre-correct-dexécution) et à l'en-tête de chaque script.
-
-## Sécurité et secrets
-
-- **Aucun secret n'est versionné.** `.gitignore` exclut `00-vars.env`, `SECRETS.md`, tous les `*.key`/`*.pem`/`*.cred`/certificats. Utiliser les gabarits `*.example`.
-- Secrets de service dans `00-vars.env` (`chmod 600`) ; clés TLS, keyfile Mongo, `password_secret` Graylog sous `/etc` et `/root` avec permissions strictes.
-- Services internes liés à `127.0.0.1` uniquement (OpenSearch, MongoDB, API Graylog, backend console) ; seuls nginx (443) et les inputs sont exposés, derrière nftables + FortiGate.
-- **`/data` chiffré au repos** (LUKS2/TPM2) ; captures de démonstration **pseudonymisées** (`MOBILE_REDACT`).
-- Login de la console mobile protégé par un rate-limit applicatif (verrouillage par IP après échecs répétés) ; fail2ban sur SSH.
-
-## Conformité ISO 27001:2022
-
-Preuves Annexe A produites par la plateforme : **A.8.15/8.16** (journalisation et surveillance), **A.8.8** (vulnérabilités), **A.5.7** (renseignement sur les menaces), **A.8.11** (masquage), **A.5.25/5.26** (réponse à incident), **A.8.13** (sauvegarde), **A.5.37 / A.8.32** (procédures et gestion du changement — ce dépôt), **Clause 10** (amélioration continue).
-
-- **Rétentions différenciées par paliers (90 / 180 / 365 jours)** provisionnées en code (`41-retention-iso.sh`, `83-retention-consolidee.sh`) et adaptées à la valeur probante de chaque source ; politique de référence : `docs/securite-conformite/POLITIQUE-RETENTION.md`.
-- **Mapping et preuves** : mapping complet des mesures dans `docs/securite-conformite/ISO27001-MAPPING.md` (synthèse à la racine : `docs/securite-conformite/ISO27001.md`), générateur de preuves daté (`68-iso-evidence.sh`) et corpus de preuves dans `docs/securite-conformite/ISO27001-preuves.md` ; registres, procédures et audits indexés par `docs/00-INDEX.md`.
-- **Intégrité** : chaîne anti-altération HMAC (`omni-integrity`), sauvegardes chiffrées exportées hors de l'hôte.
-
-## État et feuille de route
-
-**Production.**
-
-**Livré** : corrélation XDR + triage LLM local (`oms-xdr`), triage de mail intelligent (`omni-alert-triage` — scoring multi-signaux + LLM de la zone grise + boucle de faux positifs `omni-fp`, avec bouton « FP » par alerte dans la console `/soc/`), scoring ML (`oms-ml`), FortiGate multi-site (BDX/IV/LC, enrichissement par site + feeder SOAR WAF), console SOC + PWA bilingues (recherche d'entités, dossier 360, chronologie unifiée, corrélation d'identité, 115 playbooks intégrés, scores ML/UEBA, graphe d'attaque, SLA collecte et santé des robots), threat-intel filtrée en qualité + surveillance des fuites, matrice ATT&CK + backlog de couverture (`docs/detection/DETECTION-BACKLOG.md`), actionneur AD (dry-run), registre clause 10.
-
-**À venir** : isolation d'endpoint ESET + armement de la réponse AD (en attente d'accès API / délégation), couche LLM cloud optionnelle (conseil) avec tokenisation déterministe.
-
-## Stack et versions épinglées
-
-Les versions des nouvelles installations natives sont centralisées dans
-[`stack-versions.env`](stack-versions.env) : Graylog 7.2.2, OpenSearch 2.19.7,
-MongoDB 8.0.38. Le profil Docker possède ses images épinglées. Ce sont des références
-d'installation, pas une instruction de rétrograder une base existante. Toute montée
-de série exige une revue de la matrice de compatibilité et une sauvegarde restaurable.
-Les mécanismes historiques `oms-maj-siem` de l'installation OMNITECH sont distincts
-de l'outil de mise à jour du code du dépôt.
-
-## Documentation associée
-
-| Document | Contenu |
-|---|---|
-| `docs/demarrage/GUIDE.md` | Présentation vulgarisée de la plateforme (lecteur non technique) |
-| `docs/archives/CONTEXT.md` | Référence technique exhaustive : historique, décisions, pièges rencontrés |
-| `docs/00-INDEX.md` | Index du corpus documentaire ISO (politique, standards, procédures, registres, audits) |
-| `docs/architecture/DOSSIER-ARCHITECTURE-SIEM.md` | Dossier d'architecture |
-| `docs/exploitation/GUIDE-DEPANNAGE.md` | Dépannage symptôme / cause / solution |
-| `docs/exploitation/RESTORE.md` · `docs/exploitation/PRA-RECONSTRUCTION-SIEM.md` | Restauration pas à pas · plan de reconstruction (PRA) |
-| `docs/sources/FORTIANALYZER.md` · `docs/sources/M365.md` · `docs/sources/VSPHERE.md` · `docs/sources/VEEAM.md` | Guides d'intégration par source |
-| `docs/securite-conformite/ISO27001.md` · `docs/securite-conformite/ISO27001-MAPPING.md` · `docs/securite-conformite/ISO27001-preuves.md` | Synthèse, mapping et preuves ISO 27001:2022 |
-| `docs/securite-conformite/POLITIQUE-RETENTION.md` | Politique de rétention des journaux |
-| `docs/detection/DETECTION-BACKLOG.md` | Backlog de couverture MITRE ATT&CK (analyse de lacunes) |
-| `windows/README-WINDOWS.md` · `docker/README-DOCKER.md` | Volet Windows/AD · déploiement conteneurisé |
-
-## Licence
-
-Le dépôt est publié sous licence **GNU GPLv3** (fichier `LICENSE`). Il reste un **dépôt opérationnel interne** OMNITECH SECURITY : la licence couvre le code de provisioning ; les configurations, adresses et conventions propres à l'environnement OMNITECH ne sont pas destinées à être réutilisées telles quelles.
-
----
-
-<div align="center">
-<sub>OMNITECH SECURITY — plateforme SIEM / XDR interne · provisioning et maintenance versionnés · secrets exclus par conception.</sub>
-</div>
-
-> English version: [README.md](README.md). Documents are kept in French (`*.md`) with English translations (`*.en.md`).
+- Conventions de développement : [CONTRIBUTING.md](CONTRIBUTING.md).
+- Signalement de vulnérabilité et gestion des secrets : [SECURITY.md](SECURITY.md).
+- Licence : **GNU GPLv3** ([LICENSE](LICENSE)). Le dépôt reste propre à
+  l'environnement OMNITECH : adresses, noms et conventions ne sont pas
+  destinés à être réutilisés tels quels.
