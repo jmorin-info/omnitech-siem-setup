@@ -10,7 +10,7 @@ revenir en arrière.
 Ils ne font **pas** partie de l'installation ni des mises à jour. Ne pas les
 relancer sans relecture : la plupart agissent sur des entités Graylog qui ont
 évolué depuis. Les scripts de provisioning numérotés restent à la racine du
-dépôt (voir l'inventaire des scripts de provisioning dans la documentation de référence).
+dépôt (voir [SCRIPTS-PROVISIONING.md](../../docs/reference/SCRIPTS-PROVISIONING.md)).
 
 Chaque script se replace à la racine du dépôt au démarrage (`cd "$(dirname "$0")/../.."`)
 et lit `00-vars.env` comme les scripts numérotés. Ceux qui l'indiquent sont en
