@@ -396,7 +396,7 @@ signals:
   # PRE-REQUIS : identity_upn peuple par la lookup omni-seal-identity (matricule->UPN,
   # regen-seal-identity.sh) + regle 14-seal-identity-upn.rule. Tant que le pont n'est
   # pas cable, ces signaux renvoient un ensemble VIDE (identity_upn absent) et les
-  # regles XCO ne se declenchent pas (cf docs/CORRELATION-SEAL-AD.md).
+  # regles XCO ne se declenchent pas (cf seal/docs/CORRELATION-SEAL-AD.md).
   S_SEAL_BADGE_IN:
     description: "SEAL : badge-in accorde (presence physique averee sur un site), keye par UPN resolu"
     stream: seal_access
@@ -739,7 +739,7 @@ rules:
   # peuple (~35 events) et identity_upn=0 -> les signaux XCO renvoient un ensemble
   # vide et AUCUN incident XCO ne sort tant que le pont n'est pas alimente. Le join
   # se fait sur la valeur d'entite (UPN canonique minuscule), commune a identity_upn
-  # (SEAL) et identity (Windows/M365). Cf docs/CORRELATION-SEAL-AD.md.
+  # (SEAL) et identity (Windows/M365). Cf seal/docs/CORRELATION-SEAL-AD.md.
 
   CR_XCO_IMPOSSIBLE_PRESENCE:
     title: "XCO : presence impossible — badge-in physique SEAL + sign-in M365 etranger (meme identite)"

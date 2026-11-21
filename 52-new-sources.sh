@@ -412,4 +412,4 @@ install -m 644 "$CSV" /etc/graylog/lookup/mitre-attack.csv; chown root:graylog /
 ok "MITRE eset_detection/waf_block"
 echo
 echo "=== 52 termine. Cote sources : ESET=deja configure (514) ; NPS=Winlogbeat sur ${IP_NPS} ;"
-echo "    BunkerWeb=Filebeat (voir docs/INTEGRATION-BUNKERWEB.md). Relancer 13 + 14. ==="
+echo "    BunkerWeb=Filebeat (voir docs/INTEGRATION-SOURCES.md). Relancer 13 + 14. ==="
