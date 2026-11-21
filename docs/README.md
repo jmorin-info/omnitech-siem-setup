@@ -70,6 +70,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 | [Mises à jour du code](UPDATES.md) | Révision figée, préparation, sauvegarde, retour arrière |
 | [Journal des modifications](../CHANGELOG.md) | Évolutions datées du dépôt et de la plateforme |
 | [Scripts ponctuels](../tools/ponctuel/README.md) | Correctifs et migrations datés, conservés pour traçabilité |
+| [Contribuer](../CONTRIBUTING.md) | Conventions de développement, tests, commits |
 
 ## Conformité ISO 27001
 
