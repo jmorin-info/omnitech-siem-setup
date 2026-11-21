@@ -43,6 +43,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 
 | Document | Objet |
 |---|---|
+| [Guide d'exploitation de l'installation de référence](exploitation/GUIDE-EXPLOITATION.md) | Configuration, enrôlement des hôtes, Fortinet, TLS, validation, sauvegardes, dépannage, supervision |
 | [Utiliser la console SOC](CONSOLE-SOC.md) | Vues, file « À traiter », SOAR et déblocage |
 | [Procédure d'exploitation](exploitation/PROCEDURE-EXPLOITATION-SIEM.md) | Contrôles quotidiens et périodiques, maintenance, capacité |
 | [Exploitation et résilience](OPERATIONS.md) | Robots, supervision, sauvegardes (en anglais) |
