@@ -33,7 +33,7 @@ console, and full physical-access-control (SEAL) correlation.
 5. [Detection engine](#5-detection-engine)
 6. [Alert triage &amp; notifications](#6-alert-triage--notifications)
 7. [Automated response (SOAR)](#7-automated-response-soar)
-8. [The SOC console](#8-the-soc-console)
+8. [The SOC console](#8-visualisation--graylog-dashboards--soc-console)
 9. [Physical security correlation (SEAL)](#9-physical-security-correlation-seal)
 10. [Deployment](#10-deployment)
 11. [Operations &amp; resilience](#11-operations--resilience)

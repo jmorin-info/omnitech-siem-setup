@@ -520,7 +520,7 @@ Une partie des robots est corrigée directement en production, dans `/usr/local/
 - **OpenSearch 3.x incompatible** avec Graylog 7.1 : rester en 2.19.x (paquets tenus en hold, voir [Stack et versions épinglées](#stack-et-versions-épinglées)).
 - **Fenêtre TOFU** : le CA interne n'est épinglé qu'après le premier contact HTTPS du kit d'enrôlement (fenêtre MITM au premier appel uniquement, réseau interne).
 - **Les logs ne sont pas dans la sauvegarde config** : l'archive chiffrée quotidienne couvre la configuration complète, pas les indices OpenSearch ; la profondeur d'historique repose sur les snapshots sélectifs (`oms-snap-siem`), qui ne couvrent pas tout : Sysmon et les autres journaux Windows en sont exclus, et seules les fenêtres récentes des gros index sont gardées. Après une restauration config seule, l'historique repart de zéro (voir `RESTORE.md`).
-- **Numérotation des scripts** : plusieurs numéros sont partagés (38, 40, 48, 49, 84, 85, 97) — se référer au [tableau des doublons](#numéros-dupliqués--ordre-correct-dexécution) et à l'en-tête de chaque script.
+- **Numérotation des scripts** : plusieurs numéros sont partagés (38, 39, 40, 48, 49 trois fois, 84, 85, 86, 97) — se référer à l'en-tête de chaque script pour l'ordre d'exécution et le périmètre (inventaire dans [`docs/AUDIT-COHERENCE-2026-11-21.md`](docs/AUDIT-COHERENCE-2026-11-21.md)).
 
 ## Sécurité et secrets
 
