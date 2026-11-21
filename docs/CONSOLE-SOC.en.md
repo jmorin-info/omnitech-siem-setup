@@ -69,3 +69,43 @@ omni-mobile-api: Graylog auth (LDAPS) → HMAC cookie; OpenSearch read; SSE; web
 - An "SIEM operations" page: automatic updates, snapshots and restore test, backup, disks, failed units, certificate, versions.
 - A Graylog link on every incident, an optional light theme, preloaded Deployment and Report pages.
 - Access is still restricted to AD accounts verified by Graylog; state-changing actions check their origin.
+
+## Administration area (November 2026)
+
+The **Administration** entry is shown to SOC administrators only; the server checks the
+role on every `/m/api/admin/*` request. Labels are in French.
+
+**Roles.** *Lecteur* (reader: read-only), *Analyste* (reader + incidents, notes, false
+positives from Detections, entity watchlist), *Administrateur* (analyst + Administration,
+SOAR requests, push notifications). Accounts in `SOC_ADMINS` are administrators and cannot
+be changed from the console; other explicit roles live in `roles.json` under
+`SOC_ADMIN_DIR`. Authenticated accounts without an explicit role get `SOC_DEFAULT_ROLE`
+(`analyste` by default for compatibility; never administrator).
+
+**Workflow.** Every action is first simulated (before/after, effects, refusal), then
+confirmed with a mandatory reason. High-impact actions become requests that **another
+administrator** must approve within `SOC_ADMIN_APPROVAL_TTL` (24 h); they are revalidated
+before execution. `SOC_ADMIN_DRY_RUN=1` simulates everything.
+
+**Actions.** Roles (granting/removing administrator is high impact); false positives via
+the triage API (entity `key=value`, duration 1-90 days and justification required);
+SOAR unblock (existing `omni-soc-actions` queue), manual block of a public IPv4 (high
+impact, `omni-soar` `/block`), static exclusions and SOAR parameters (high impact, through
+the privileged executor `omni-soc-admin-exec`); Graylog detections enable (normal) /
+disable (high impact) through `schedule`/`unschedule` with a dedicated token; bounded
+triage parameters (high impact, executor); restart of whitelisted services only (empty
+whitelist by default). Read-only: users, active false positives, blocked IPs, settings
+(only whitelisted keys, never secrets), detections, `omni-*`/`oms-*` units, versions.
+The console does not display or control the triage LLM layer.
+
+**Audit.** Append-only `audit.jsonl`, SHA-256 chained and verified by the Journal tab;
+GELF copy (`event_source: soc_admin`). Reversible executions offer a prepared rollback,
+and the executor keeps the last ten `*.bak-soc-*` backups of each modified file.
+
+**Safeguards.** POST + JSON content type + mandatory matching `Origin` + session-bound
+`X-SOC-CSRF` token, 16 KiB body limit, 30 writes per 5 minutes, writes restricted to
+`SOC_ADMIN_NETS` when `SOC_ADMIN_INTERNAL_ONLY=1` (default). Note: nginx currently logs
+console clients as `10.33.70.1`; if Internet access is source-NATed to that address it
+would look internal, so exclude it from `SOC_ADMIN_NETS`. Deployment details are in
+`CONSOLE-DEPLOIEMENT.md` (French).
+

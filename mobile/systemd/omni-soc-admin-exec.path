@@ -1,0 +1,7 @@
+[Unit]
+Description=OMNI - surveille les actions d'administration approuvées dans la console /soc
+[Path]
+DirectoryNotEmpty=/var/lib/omni-mobile/admin/exec/pending
+MakeDirectory=yes
+[Install]
+WantedBy=paths.target

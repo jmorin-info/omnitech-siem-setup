@@ -90,8 +90,8 @@ function start(){$("#login").style.display="none";$("#app").style.display="grid"
 
 // nav
 const titles={
-  fr:{soar:"SOAR — Blocages pare-feu",ops:"Exploitation du SIEM",overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",entities:"Recherche d'entités",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",twin:"Jumeau d'attaque — Exposition",ems:"Endpoint — FortiClient EMS",network:"Réseau & Infra — Aruba / Linux / DNS",deploy:"Déploiement / Agents",globe:"Carte mondiale — Flux temps réel",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
-  en:{soar:"SOAR — Firewall blocks",ops:"SIEM operations",overview:"Overview",incidents:"Incidents",detections:"Detections",entities:"Entity search",attack:"MITRE ATT&CK",graph:"Attack graph",twin:"Attack twin — Exposure",ems:"Endpoint — FortiClient EMS",network:"Network & Infra — Aruba / Linux / DNS",deploy:"Deployment / Agents",globe:"World map — Live flows",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
+  fr:{admin:"Administration SOC",soar:"SOAR — Blocages pare-feu",ops:"Exploitation du SIEM",overview:"Vue d'ensemble",incidents:"Incidents",detections:"Détections",entities:"Recherche d'entités",attack:"MITRE ATT&CK",graph:"Graphe d'attaque",twin:"Jumeau d'attaque — Exposition",ems:"Endpoint — FortiClient EMS",network:"Réseau & Infra — Aruba / Linux / DNS",deploy:"Déploiement / Agents",globe:"Carte mondiale — Flux temps réel",leaks:"Fuites & Dark Web",health:"Santé & Collecte",report:"Rapport",playbooks:"Playbooks de réponse"},
+  en:{admin:"SOC administration",soar:"SOAR — Firewall blocks",ops:"SIEM operations",overview:"Overview",incidents:"Incidents",detections:"Detections",entities:"Entity search",attack:"MITRE ATT&CK",graph:"Attack graph",twin:"Attack twin — Exposure",ems:"Endpoint — FortiClient EMS",network:"Network & Infra — Aruba / Linux / DNS",deploy:"Deployment / Agents",globe:"World map — Live flows",leaks:"Leaks & Dark Web",health:"Health & Collection",report:"Report",playbooks:"Response playbooks"}};
 const PDESC={
  fr:{
   overview:"<b>Posture en un coup d'œil</b> — indicateurs clés, activité des dernières 24 h, tactiques ATT&CK et flux d'événements en temps réel. Chaque indicateur est cliquable.",
@@ -745,8 +745,8 @@ function addLive(ev){const el=$("#liveFeed");if(!el)return;if(liveN===0)el.inner
   const b=$("#liveCount");if(b)b.textContent=liveN+" évén.";}
 
 // --- Command palette (Cmd/Ctrl+K) ---
-const CMDPAGES=["overview","soar","ops","incidents","detections","entities","attack","graph","twin","ems","network","deploy","globe","leaks","health","report","playbooks"];
-function CMDLIST(){return CMDPAGES.map(p=>({k:(titles[LANG]||titles.fr)[p],p:p}));}
+const CMDPAGES=["overview","soar","ops","admin","incidents","detections","entities","attack","graph","twin","ems","network","deploy","globe","leaks","health","report","playbooks"];
+function CMDLIST(){return CMDPAGES.filter(p=>document.querySelector('#nav a[data-p="'+p+'"]')).map(p=>({k:(titles[LANG]||titles.fr)[p],p:p}));}
 function goNav(p){const a=document.querySelector('#nav a[data-p="'+p+'"]');if(a)a.click();}
 function openPal(){$("#pal").classList.add("on");const i=$("#palIn");i.value="";renderPal("");setTimeout(()=>i.focus(),30);}
 function closePal(){$("#pal").classList.remove("on");}
