@@ -69,7 +69,7 @@ traceability. It is authoritative for audit purposes.
 **Governance &amp; misc**
 - [demarrage/SYNTHESE-EXECUTIVE.md](demarrage/SYNTHESE-EXECUTIVE.md) — executive summary
 - [reference/GLOSSAIRE.md](reference/GLOSSAIRE.md) — glossary
-- [CHANGELOG.md](CHANGELOG.md) — change log
+- [../CHANGELOG.md](../CHANGELOG.md) — change log
 - [archives/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md](archives/MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md) — co-managed MDR costing
 
 ## Recently updated (November 2026)

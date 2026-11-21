@@ -128,7 +128,7 @@ hebdomadaires et mensuelles documentées. Aucun coût de licence.
 | — | [../exploitation/GUIDE-DEPANNAGE.md](../exploitation/GUIDE-DEPANNAGE.md) | Exploitation | Dépannage : symptôme → cause → solution |
 | — | [../demarrage/SYNTHESE-EXECUTIVE.md](../demarrage/SYNTHESE-EXECUTIVE.md) | Direction | Synthèse 1 page pour la DSI / comité |
 | — | [../reference/GLOSSAIRE.md](../reference/GLOSSAIRE.md) | Référence | Termes techniques pour lecteurs non spécialistes |
-| — | [../CHANGELOG.md](../CHANGELOG.md) | Référence | Journal des évolutions daté |
+| — | [../../CHANGELOG.md](../../CHANGELOG.md) | Référence | Journal des évolutions daté |
 
 ## Documents support SMSI / opérationnels (mêmes dossier `docs/`)
 

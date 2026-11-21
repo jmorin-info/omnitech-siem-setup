@@ -28,7 +28,7 @@ les références de l'installation historique figurent plus bas.
 | — | [exploitation/GUIDE-DEPANNAGE.md](exploitation/GUIDE-DEPANNAGE.md) | Exploitation | Dépannage : symptôme → cause → solution |
 | — | [demarrage/SYNTHESE-EXECUTIVE.md](demarrage/SYNTHESE-EXECUTIVE.md) | Direction | Synthèse 1 page pour la DSI / comité |
 | — | [reference/GLOSSAIRE.md](reference/GLOSSAIRE.md) | Référence | Termes techniques pour lecteurs non spécialistes |
-| — | [CHANGELOG.md](CHANGELOG.md) | Référence | Journal des évolutions daté |
+| — | [../CHANGELOG.md](../CHANGELOG.md) | Référence | Journal des évolutions daté |
 | — | [CONSOLE-SOC.md](CONSOLE-SOC.md) | Exploitation | Console SOC : vues, bande « À traiter », SOAR et déblocage, page Exploitation |
 | — | [exploitation/SOAR-PLAYBOOKS.md](exploitation/SOAR-PLAYBOOKS.md) | Procédure | Réponse automatisée, garde-fous et déblocage |
 

@@ -1,9 +1,34 @@
-# Journal des modifications — SIEM OMNITECH
+# Journal des modifications
 
-Toutes les évolutions notables du dispositif. Format : date — changement.
-*Dernière revue : 2026-11-21.*
+Toutes les évolutions notables du dépôt et de la plateforme SIEM OMNITECH sont
+consignées ici. Le format suit les principes de
+[Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) : entrées les plus
+récentes en premier, regroupées par date de livraison, sections « Ajouté »,
+« Modifié », « Corrigé », « Supprimé » pour les nouvelles entrées. Le dépôt ne
+publie pas de versions numérotées : chaque livraison est identifiée par sa date.
 
-## 2026-11-21 - Recette native des trois modules
+Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
+tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
+
+## [Non publié]
+
+### Ajouté
+
+- Contrôle automatique des liens internes de la documentation
+  (`tools/check-doc-links.py`), exécuté par `run-tests.sh`.
+
+### Modifié
+
+- Documentation rangée par usage sous `docs/` (démarrage, architecture,
+  exploitation, sécurité et conformité, sources, détection, référence, archives).
+- Scripts ponctuels datés regroupés dans `tools/ponctuel/` avec leur statut.
+- Politique linguistique : le français est la langue de référence ; les
+  traductions anglaises non maintenues sont archivées dans `docs/archives/en/`.
+- `68-iso-evidence.sh` écrit les dossiers de preuves dans
+  `docs/archives/preuves-iso/` ; `57-mitre-coverage.sh` écrit le calque
+  ATT&CK Navigator dans `docs/detection/`.
+
+## [2026-11-21] — Recette native des trois modules
 
 - Révision 2 des packs : schéma natif Graylog 7.2 corrigé sans écraser les anciennes révisions.
 - Démarrage du seul input nouvellement créé après arrêt complet et nettoyage du transport ; entrées existantes conservées.
@@ -11,7 +36,7 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
 - Filtres de dates du banc de test explicites en epoch millisecondes ; les recherches partielles en échec ne sont plus assimilées à zéro message.
 - Préservation des processeurs désactivés dans les étapes pipelines et enrichissement ; sources attendues configurables par site.
 
-## 2026-11-20 - Console et documentation opérateur
+## [2026-11-20] — Console et documentation opérateur
 
 - Présentation revue pour `/soc/` : navigation regroupée, recherche visible, titres de page, thèmes clair/sombre et affichage mobile.
 - Erreurs et réponses OpenSearch incomplètes distinguées d’un résultat vide ; affichage explicite des indisponibilités, du cache et du dernier rafraîchissement réussi.
@@ -19,7 +44,7 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
 - Cache PWA versionné avec les nouveaux assets ; publication des dépendances avant la page et le service worker.
 - Parcours documentaire unique, guide utilisateur de la console actualisé et procédure de comparaison du code avec les fichiers réellement servis.
 
-## Qualification de l'installation Ubuntu 26.04
+## [2026-11-20] — Qualification de l'installation Ubuntu 26.04
 
 - Correction du faux refus des noyaux Ubuntu corrigés, des droits hérités d'un umask privé et de l'attente du PRIMARY MongoDB.
 - Notifications natives sans triage optionnel, ordre des phases corrigé, enveloppes API Graylog 7 réessayées correctement et refus explicite des dashboards absents.
@@ -27,20 +52,20 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
 - Recette finale obligatoire des services et entités, contrôle des assets HTTPS, workflow VM Ubuntu 26.04 et tests des trois packs sur dix messages synthétiques réellement indexés.
 - Première connexion des pipelines et sources facultatives absentes traitées explicitement ; sauvegarde réelle contrôlée, secrets du site inclus et rétention limitée aux sauvegardes natives réussies.
 
-## Installation Ubuntu et correctifs locaux
+## [2026-11-19] — Installation Ubuntu et correctifs locaux
 
 - Parcours Ubuntu ligne par ligne ; Ubuntu 24.04 conseillé, Ubuntu 26.04 explicitement expérimental avec dépôt MongoDB noble et limites éditeur documentées.
 - Génération locale des secrets techniques manquants, valeurs existantes conservées ; aucun contournement CPU, RAM ou noyau incompatible MongoDB.
 - Option pour des sources locales examinées sans commit imposé, archive privée du diff, empreinte des fichiers et contrôle à la reprise et entre phases.
 - Mêmes options dans le menu SSH, avec tests des choix de plateforme, du noyau, des secrets et d'une installation simulée sans mutation système.
 
-## Administration dans le terminal SSH
+## [2026-11-19] — Administration dans le terminal SSH
 
 - Nouveau lanceur `tools/omni-manager.py`, sans dépendance Python supplémentaire ni serveur web : configuration du site et saisie masquée des secrets, installation/reprise, mises à jour préparées et retour arrière, publication de la console, modules et historique.
 - Réutilisation des outils existants avec des arguments contrôlés, confirmation des mutations, verrou partagé, configuration sauvegardée et journaux privés expurgés des secrets connus. Aucun script de purge lancé depuis le catalogue.
 - Inventaire de tous les fichiers suivis par composant, avec distinction entre opérations automatisées et extensions nécessitant des accès ou une recette du site ; guide `INTERFACE-ADMINISTRATION.md` et tests de régression.
 
-## 2026-11-19 — Déploiement portable, console et modules d'intégration
+## [2026-11-19] — Déploiement portable, console et modules d'intégration
 
 - Installation neuve Debian/Ubuntu par phases explicites, versions centralisées et paramètres réseau/stockage conservés sans activation explicite.
 - Publication de tous les assets SOC et des routes nginx manquantes, activation du backend géré avec contrôle de santé et retour arrière ; droits et chargement des secrets corrigés pour Docker.
@@ -48,12 +73,12 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
 - Modules Content Pack natifs WatchGuard, UniFi et Palo Alto, dashboards et tests d'exemples ; limites de format et de qualification documentées.
 - README, procédures d'installation/mise à jour/intégration et audit de portabilité daté actualisés ; suites hors ligne et CI. Installation de production non modifiée pendant ce travail.
 
-## 2026-11-12 (soir : console SOC, SOAR, synchronisation du dépôt)
+## [2026-11-12] — Soir : console SOC, SOAR, synchronisation du dépôt
 - Console SOC : politique de sécurité du contenu stricte (`script-src 'self'`, plus aucun script en ligne). Les scripts sont dans `app*.js` et les anciens gestionnaires `onclick`/`oninput`/`onchange`/`onkeydown`/`onsubmit` sont exécutés par délégation (`app-csp.js`, analyseur restreint, sans `eval`). Le service worker met ces fichiers en cache, versionnés.
 - Console SOC : `SOC_ADMINS` renseigné ; notifications push réservées aux administrateurs SOC (abonnement, test et envoi), compte enregistré avec chaque abonnement.
 - SOAR : nouvelle détection « balayage IKE » (négociations de phase 1 sans tunnel correspondant, ≥ 10 par IP en 6 h, BX, IV et Lançon). Elle alimente le SOAR en simulation uniquement (`SOAR_DETECTIONS_SIMULATION`) : aucun blocage avant validation.
 - Dépôt : `sync-deploye.sh` est retiré. `synchro-manifeste.sh` ne recopie que les fichiers listés dans `manifeste-deploye.txt` après comparaison SHA-256, `scan-depot.sh` bloque les commits contenant un secret ou une mention d'outillage (crochets pre-commit et commit-msg). Aucun commit automatique.
-## 2026-11-12 (SOAR, sauvegardes)
+## [2026-11-12] — SOAR, sauvegardes
 - Cohérence du SIEM : nouvelle sentinelle `omni-siem-coherence` (toutes les 5 min) qui signale cache fielddata `_id` ou breaker saturés, définitions en échec répété, notifications abandonnées, blocklist SOAR figée ou non lue par les pare-feu, journal Sécurité muet alors que Sysmon arrive ; `indices.id_field_data.enabled=false` côté OpenSearch.
 - Tri des alertes : réception asynchrone des notifications Graylog (acquittement immédiat, classement inchangé et en série).
 - Performances : base de référence complète et mise en cache pour la détection « nouveau pays », lecture des seuls index FortiGate utiles pour la détection de beaconing (module commun `omni_cible`).
@@ -63,7 +88,7 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
 - SOAR : récapitulatif quotidien en HTML (indicateurs, tableaux par section, liens vers l'historique de chaque IP dans Graylog, commandes de déblocage), avec une version texte de secours.
 - Sauvegardes de configuration, certificats et chaîne d'intégrité déplacées vers le partage Informatique (`SIEM-Sauvegardes`, compte de service dédié) ; le repli en accès invité est supprimé.
 
-## 2026-11-11 (socle, détection v3, tri des alertes, SOAR, console)
+## [2026-11-11] — Socle, détection v3, tri des alertes, SOAR, console
 - Socle mis à jour (Graylog 7.1.12, OpenSearch 2.19.7, MongoDB 8.0.38, Logstash 8.19.25) et mises à jour automatiques hebdomadaires dans des séries épinglées (`oms-maj-siem`).
 - Snapshots OpenSearch sélectifs et incrémentaux chaque nuit, avec test de restauration hebdomadaire (`oms-snap-siem`).
 - Couche de corrélation v3 : 14 règles, 11 définitions, table des actifs critiques.
@@ -72,7 +97,7 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
 - Console SOC : bande « À traiter », page SOAR avec déblocage, page Exploitation. Quatre nouveaux dashboards.
 - Correctifs : plugin GELF de Logstash, magasin de confiance hors paquet, robot DHCP (encodage), contrôle de dérive (lecture nftables).
 
-## 2026-06-22 (couche ML, console enrichie, qualité)
+## [2026-06-22] — Couche ML, console enrichie, qualité
 
 ### Couche d'apprentissage `oms-ml`
 - **Détection d'anomalie non-supervisée** (IsolationForest, log1p + StandardScaler)
@@ -143,7 +168,7 @@ après revue (relancer ensuite `57` puis `14`).
   (source canonique = `73`), garde-fou anti-perte de couverture. Posture AES
   confirmée (zéro RC4/0x17 en 90 j → bruit latent). `APPLY=1` pour consolider.
 
-## 2026-06-14 (audit de cohérence & nouvelles sources)
+## [2026-06-14] — Audit de cohérence & nouvelles sources
 
 ### Nouvelles sources intégrées (`52-new-sources.sh`)
 - **ESET PROTECT** (10.33.50.20) : input Syslog TCP 1515 (514 redirigé par le
@@ -258,7 +283,7 @@ après revue (relancer ensuite `57` puis `14`).
   **et** ~23 M de l'index Windows `omni-winother_*` (double routage corrigé). Les
   événements internes/Windows réels sont préservés.
 
-## 2026-06-12 (après-midi — corrections, audit & optimisations)
+## [2026-06-12] — Après-midi — corrections, audit & optimisations
 
 ### Bugs corrigés (audit de cohérence)
 - **vSphere ne parsait rien** : le stage 0 du pipeline ne contenait que la
@@ -282,7 +307,7 @@ après revue (relancer ensuite `57` puis `14`).
 - Veeam confirmé fonctionnel (canal « Veeam Backup » + alerte d'échec active).
 - Purge des logs (base saine) : collecte temps réel vérifiée sur tous les flux.
 
-## 2026-06-12 (consolidation)
+## [2026-06-12] — Consolidation
 
 ### Sécurité / détection
 - **SOAR-light** : blocage automatique d'IP attaquantes (alertes VPN/spraying)
@@ -309,7 +334,7 @@ après revue (relancer ensuite `57` puis `14`).
 - Correctif tempête d'alertes (grâces/clés, détection des comptes de service).
 - **Purge des logs** (base saine) après la phase de build/tests.
 
-## 2026-06-13 (UEBA/NDR, MITRE ATT&CK & corrélation d'incidents)
+## [2026-06-13] — UEBA/NDR, MITRE ATT&CK & corrélation d'incidents
 
 ### Détection avancée (au-delà de Graylog)
 - **Couche UEBA / NDR** (`40-ueba-ndr.sh`) : collecteurs `omni-ueba-volume`
@@ -342,7 +367,7 @@ après revue (relancer ensuite `57` puis `14`).
   envoi le 1er du mois à 06:00, archivé sous `/var/www/siem-kit/rapports/`.
 - **Ventilation des échecs M365 par code Azure AD** (`48-m365-fail-codes.sh`).
 
-## 2026-06-11 (mise en production initiale)
+## [2026-06-11] — Mise en production initiale
 - Build du SIEM : modèle (index/streams/inputs), 55 règles pipeline,
   détections, dashboard 24 pages, TLS bout-en-bout, collecte M365, FortiAnalyzer,
   vSphere, déploiement des agents Windows (NinjaOne + GPO).
