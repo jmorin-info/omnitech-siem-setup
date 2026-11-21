@@ -157,7 +157,7 @@ flowchart LR
 | **Playbooks et alertes auto-explicatives** | 115 playbooks (ce que c'est / vérifier / remédier / corriger) ; chaque alerte porte cause décodée, EventID, ATT&CK et risque ; guide d'action intégré à chaque détection |
 | **Threat intel et fuites** | abuse.ch (C2 Feodo, domaines URLhaus, filtre qualité : infrastructure partagée écartée), CISA KEV + ancienneté de patch ; RansomLook, HIBP, Dehashed, GitHub |
 | **SOAR et réponse** | Blocage automatique des IP attaquantes sur FortiGate multi-site (feeders WAF / spray / brute VPN ; sans identifiant, TTL, liste blanche, audit) ; désactivation de compte AD via LDAPS (dry-run + denylist + audit + validation humaine) |
-| **Précision (environ 0 % FP visé)** | Tuning FP mesuré et vérifié adversarialement (allowlists ancrées sur les chemins, garde-fous anti-faux-négatif) ; auto-supervision des **37 robots** ; chaîne d'intégrité HMAC |
+| **Précision (environ 0 % FP visé)** | Tuning FP mesuré et vérifié adversarialement (allowlists ancrées sur les chemins, garde-fous anti-faux-négatif) ; auto-supervision des robots (`omni-self-health` en contrôle 18 au 21/11/2026) ; chaîne d'intégrité HMAC |
 | **Conformité et intégrité** | Rétention par paliers, chaîne anti-altération (`omni-integrity`), registre d'amélioration continue (clause 10) + générateur de preuves daté, mapping ISO 27001:2022 |
 
 ## Architecture
@@ -168,18 +168,18 @@ Tout tient sur un seul serveur physique Debian 13 durci (le nom `bx-it-graylog-v
  Postes / Serveurs ───Winlogbeat TLS 5044──┐      GPO OMNI-AUDIT-Baseline (DC)
  (Sysmon + audit GPO)                       │      + distribution NETLOGON\SIEM (NinjaOne)
                                             ▼
- FortiGate x3 ─► FortiAnalyzer ──syslog/CEF 1514/5555──► ┌─────────────────────────────────┐
+ FortiGate x3 ─► FortiAnalyzer ──syslog TCP/UDP 1514────► ┌─────────────────────────────────┐
                                                          │  bx-it-graylog-vm (Debian 13)   │
  Microsoft 365 ──Graph API (pull)────────────────────────│  Nginx TLS :443                 │
  vSphere ──────syslog 1516───────────────────────────────│   ├─ Graylog 7.2 :9000 (TLS)    │
  ESET PROTECT ─syslog 1515───────────────────────────────│   ├─ OpenSearch 2.19 :9200      │
  Linux ────────syslog 1519 · Aruba syslog 1520───────────│   │    (données sur /data LUKS2)│
  Vaultwarden / Veeam ──Filebeat / canal──────────────────│   ├─ MongoDB 8.0 rs0            │
- Cert Orchestrator ──GELF UDP 12201──────────────────────│   └─ Console SOC + PWA (:8090,  │
+ Cert Orchestrator (script 99, non appliqué) ────────────│   └─ Console SOC + PWA (:8090,  │
  Admins / SOC ─────HTTPS 443─────────────────────────────│      loopback, derrière nginx)  │
                                                          └─────────────────────────────────┘
         │                                                          │ GELF :12201
-        │   37 microservices Python (/usr/local/sbin/omni-*)       │ (event_source=siem_*)
+        │   47 scripts omni-* (/usr/local/sbin, dont 42 en Python) │ (event_source=siem_*)
         └──  UEBA · NDR · oms-ml · oms-xdr · SOAR · triage · rapports ─┘
 ```
 
@@ -219,10 +219,10 @@ flowchart LR
 
 Composants sur le serveur :
 
-- **Graylog 7.1** (ingestion, streams, pipelines, alertes) — API en TLS sur `:9000`, derrière nginx.
+- **Graylog 7.2** (ingestion, streams, pipelines, alertes) — API en TLS sur `:9000`, derrière nginx.
 - **OpenSearch 2.19** (indexation) et **MongoDB 8.0** (configuration Graylog), liés à `127.0.0.1` uniquement ; données OpenSearch sur `/data` chiffré LUKS2.
-- **Nginx** : terminaison TLS `:443` (console Graylog, console SOC `/soc/`, PWA `/m/`, kit d'enrôlement `/kit/`).
-- **37 microservices Python** (`/usr/local/sbin/omni-*`) + moteurs `oms-xdr`, `oms-ml`, `oms-graph` : UEBA, NDR, SOAR, triage, threat-intel, rapports, supervision — pilotés par des timers systemd.
+- **Nginx** : terminaison TLS `:443` (console Graylog, console SOC `/soc/` installable en PWA, ancienne PWA `/m/` redirigée vers `/soc/` depuis le 12/11/2026, kit d'enrôlement `/kit/`).
+- **47 scripts `omni-*`** (`/usr/local/sbin`, dont 42 en Python) + moteurs `oms-xdr`, `oms-ml`, `oms-graph` : UEBA, NDR, SOAR, triage, threat-intel, rapports, supervision — pilotés par des timers systemd.
 - **Console SOC + PWA** : backend `mobile/omni-mobile-api.py` (stdlib), écoute loopback `:8090`, proxifié par nginx.
 
 ## Prérequis
@@ -333,7 +333,7 @@ Tout hôte s'enrôle en **une commande**, depuis la page **Déploiement** de la 
 - **Nouvelle installation** : nginx termine HTTPS avec un certificat provisoire à remplacer par un certificat approuvé. L'API Graylog utilise HTTP sur loopback au bootstrap. **Installation de référence** : l'API est aussi en TLS, avec la CA locale contrôlée par les helpers. Voir [installation et TLS](docs/INSTALLATION.md#réseau-tls-et-stockage).
 - **Distribution du CA aux hôtes** : mécanisme TOFU du kit d'enrôlement (section précédente) — le CA est récupéré au premier contact puis épinglé (magasin Windows, configuration Beats).
 - **Transports chiffrés** : Winlogbeat en Beats TLS 5044, FortiClient EMS en syslog-TLS, console et kit en HTTPS 443.
-- **Surveillance des expirations** : le parc Windows remonte l'état de ses certificats via le canal `OMNI-Certificats` (tag `cert_parc`, règle pipeline dédiée du script 12) et l'orchestrateur de certificats (BX-IT-CERT-VM) émet en GELF UDP 12201 (`99-cert-orchestrator.sh` : input, règle pare-feu, stream, pipeline, alerte d'erreur).
+- **Surveillance des expirations** : le parc Windows remonte l'état de ses certificats via le canal `OMNI-Certificats` (tag `cert_parc`, règle pipeline dédiée du script 12) ; l'intégration de l'orchestrateur de certificats (BX-IT-CERT-VM, GELF UDP 12201) est prête dans `99-cert-orchestrator.sh` (input, règle pare-feu, stream, pipeline, alerte d'erreur) mais n'est pas appliquée en production au 21/11/2026 : ni input, ni stream, ni règles `omni-cert-*` en service.
 
 ## Organisation du dépôt
 
@@ -470,7 +470,7 @@ Le SIEM se surveille lui-même ; tout remonte en GELF (`event_source=siem_*`) da
   4. répare les points connus : plugin GELF de Logstash, magasins de confiance ;
   5. redémarre si le noyau l'exige, puis refait le contrôle complet au démarrage (`oms-maj-siem-postboot`) ;
   6. envoie un compte rendu par mail, seulement s'il y a eu quelque chose à faire.
-- **Pas de saut de version majeure** : les séries sont verrouillées dans `/etc/apt/preferences.d/oms-siem-series` (Graylog 7.1, OpenSearch 2.19, MongoDB 8.0, Logstash 8.19). Changer de série reste une décision humaine : lire les notes de version, puis modifier ce fichier.
+- **Pas de saut de version majeure** : les séries sont verrouillées dans `/etc/apt/preferences.d/oms-siem-series` (Graylog 7.2, OpenSearch 2.19, MongoDB 8.0, Logstash 8.19). Changer de série reste une décision humaine : lire les notes de version, puis modifier ce fichier.
 - **Simuler** sans rien toucher : `oms-maj-siem --simuler`.
 
 ### SOAR : blocage et déblocage
@@ -517,7 +517,7 @@ Une partie des robots est corrigée directement en production, dans `/usr/local/
 
 - **Mono-nœud = SPOF** : Graylog, OpenSearch et MongoDB tournent sur un seul serveur, sans haute disponibilité. La reprise repose sur les sauvegardes (archive chiffrée, snapshots sélectifs) et sur le PRA (`docs/PRA-RECONSTRUCTION-SIEM.md`), pas sur un basculement automatique.
 - **Réponse AD non armée** : la désactivation de compte via LDAPS reste en dry-run (double verrou), en attente d'accès API / délégation AD.
-- **OpenSearch 3.x incompatible** avec Graylog 7.1 : rester en 2.19.x (paquets tenus en hold, voir [Stack et versions épinglées](#stack-et-versions-épinglées)).
+- **OpenSearch 3.x incompatible** avec Graylog 7.2 : rester en 2.19.x (paquets tenus en hold, voir [Stack et versions épinglées](#stack-et-versions-épinglées)).
 - **Fenêtre TOFU** : le CA interne n'est épinglé qu'après le premier contact HTTPS du kit d'enrôlement (fenêtre MITM au premier appel uniquement, réseau interne).
 - **Les logs ne sont pas dans la sauvegarde config** : l'archive chiffrée quotidienne couvre la configuration complète, pas les indices OpenSearch ; la profondeur d'historique repose sur les snapshots sélectifs (`oms-snap-siem`), qui ne couvrent pas tout : Sysmon et les autres journaux Windows en sont exclus, et seules les fenêtres récentes des gros index sont gardées. Après une restauration config seule, l'historique repart de zéro (voir `RESTORE.md`).
 - **Numérotation des scripts** : plusieurs numéros sont partagés (38, 39, 40, 48, 49 trois fois, 84, 85, 86, 97) — se référer à l'en-tête de chaque script pour l'ordre d'exécution et le périmètre (inventaire dans [`docs/AUDIT-COHERENCE-2026-11-21.md`](docs/AUDIT-COHERENCE-2026-11-21.md)).
