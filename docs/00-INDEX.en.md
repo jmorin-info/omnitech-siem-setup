@@ -77,5 +77,5 @@ traceability. It is authoritative for audit purposes.
 - [ALERTING-AND-TRIAGE.md](ALERTING-AND-TRIAGE.md) — noise control, hourly grouping, daily digest
 - [detection/DETECTIONS.md](detection/DETECTIONS.md) — correlation layer v3
 - [CONSOLE-SOC.en.md](CONSOLE-SOC.en.md) — "Action needed" band, SOAR unblock, operations page
-- [SOAR-PLAYBOOKS.en.md](SOAR-PLAYBOOKS.en.md) — external threat feed and guardrails
-- [CHANGELOG.en.md](CHANGELOG.en.md) — dated changes
+- [archives/en/SOAR-PLAYBOOKS.en.md](archives/en/SOAR-PLAYBOOKS.en.md) — external threat feed and guardrails
+- [archives/en/CHANGELOG.en.md](archives/en/CHANGELOG.en.md) — dated changes
