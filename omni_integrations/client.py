@@ -144,29 +144,48 @@ def plan_install(client, module, params):
 
 
 def _start_new_input(client, input_id):
-    """Let native creation settle, then start only this newly owned input once."""
-    previous, stable, requested = None, 0, False
-    for _ in range(60):
+    """Serialize native creation/reload cleanup before starting the new input once.
+
+    Graylog starts inputs asynchronously and static fields emit InputUpdated.
+    Stopping an input removes it from InputRegistry after transport/metric cleanup;
+    require that absence to settle before a single explicit start. This helper is
+    called only for a newly created, owned input, never for an existing install.
+    """
+    path = "/system/inputstates/" + input_id
+    def state():
         try:
-            response = client.call("GET", "/system/inputstates/" + input_id)
+            response = client.call("GET", path)
             if not isinstance(response, dict) or response.get("id") != input_id:
                 raise ValueError("Unexpected native input state response")
-            state = response.get("state")
+            return response.get("state")
         except ApiError as exc:
             if exc.status != 404:
                 raise
-            state = "NOT_FOUND"
-        stable = stable + 1 if state == previous else 1
-        previous = state
-        if state == "RUNNING" and stable >= 2:
+            return "NOT_FOUND"
+
+    # DELETE here stops the runtime; it does not delete the persisted input.
+    # Even an early RUNNING state can belong to a native launch still racing
+    # with static-field reloads. Do not start over a live or half-stopped input.
+    client.call("DELETE", path)
+    absent = 0
+    for _ in range(60):
+        absent = absent + 1 if state() == "NOT_FOUND" else 0
+        if absent >= 6:
+            break
+        time.sleep(1)
+    else:
+        raise RuntimeError("New module input did not stop cleanly; inspect System > Inputs before retrying")
+
+    client.call("PUT", path)
+    previous, stable = None, 0
+    for _ in range(60):
+        current = state()
+        stable = stable + 1 if current == previous else 1
+        previous = current
+        if current == "RUNNING" and stable >= 6:
             return
-        if state in ("FAILED", "STOPPED", "TERMINATED", "NOT_FOUND") and stable >= 3:
-            if requested:
-                raise RuntimeError("New module input failed to start; inspect System > Inputs before retrying")
-            # Content-pack creation and static-field events can race. Never
-            # restart a running input or an input from an existing installation.
-            client.call("PUT", "/system/inputstates/" + input_id)
-            requested, previous, stable = True, None, 0
+        if current in ("FAILED", "STOPPED", "TERMINATED", "NOT_FOUND") and stable >= 3:
+            raise RuntimeError("New module input failed to start; inspect System > Inputs before retrying")
         time.sleep(1)
     raise RuntimeError("New module input did not become RUNNING; inspect System > Inputs before retrying")
 

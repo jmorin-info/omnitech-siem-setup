@@ -64,6 +64,29 @@ def test_unknown_fixture_must_be_retained_unparsed():
     assert result[0]["received"] and result[0]["normalized"] and result[0]["routed_to_module_stream"]
 
 
+@pytest.mark.parametrize("change", ["failed-shard", "timeout", "error", "missing-shards", "invalid-document"])
+def test_indexed_sources_never_treats_a_partial_search_as_no_messages(change):
+    result = {"_shards": {"failed": 0}, "hits": {"hits": []}}
+    if change == "failed-shard":
+        result["_shards"]["failed"] = 1
+    elif change == "timeout":
+        result["timed_out"] = True
+    elif change == "error":
+        result["error"] = "dummy-private-query-value"
+    elif change == "missing-shards":
+        result.pop("_shards")
+    else:
+        result["hits"]["hits"] = [{"_source": None}]
+    with pytest.raises(RuntimeError) as error:
+        vm.indexed_sources(result)
+    assert "dummy-private" not in str(error.value)
+
+
+def test_successful_empty_and_nonempty_index_searches_remain_distinct():
+    assert vm.indexed_sources({"_shards": {"failed": 0}, "hits": {"hits": []}}) == []
+    assert vm.indexed_sources({"_shards": {"failed": 0}, "hits": {"hits": [{"_source": {"message": "fixture"}}]}}) == [{"message": "fixture"}]
+
+
 @pytest.fixture
 def dashboard_job():
     module = load_module("watchguard")

@@ -119,7 +119,12 @@ class FakeGraylog:
                 {"content_pack_entity_id": stable_id("watchguard", "input"), "id": "c" * 24,
                  "type": {"name": "input", "version": "1"}, "found_on_system": False}]}
         if method == "GET" and path == "/system/inputstates/" + "c" * 24:
+            if self.input_state is None:
+                raise ApiError(404, "GET")
             return {"id": "c" * 24, "state": self.input_state}
+        if method == "DELETE" and path == "/system/inputstates/" + "c" * 24:
+            self.input_state = None
+            return {"id": "c" * 24}
         if method == "PUT" and path == "/system/inputstates/" + "c" * 24:
             self.input_state = "RUNNING"
             return {"id": "c" * 24}
@@ -149,8 +154,9 @@ def test_apply_uploads_then_installs_then_only_activates_owned_stream_and_input(
     writes = [(method, path) for method, path, _ in client.calls if method != "GET"]
     pack = build_pack(module)
     assert writes == [("POST", "/system/content_packs"),
-                      ("POST", f"/system/content_packs/{pack['id']}/1/installations"),
+                      ("POST", f"/system/content_packs/{pack['id']}/{pack['rev']}/installations"),
                       ("POST", "/streams/" + "b" * 24 + "/resume"),
+                      ("DELETE", "/system/inputstates/" + "c" * 24),
                       ("PUT", "/system/inputstates/" + "c" * 24)]
     request = [body for method, path, body in client.calls if method == "POST" and path.endswith("/installations")][0]
     assert request["entity"]["parameters"] == parameters(module)
@@ -159,19 +165,19 @@ def test_apply_uploads_then_installs_then_only_activates_owned_stream_and_input(
 
 def test_identical_installed_module_is_idempotent_even_with_apply():
     module = load_module("watchguard")
-    client = FakeGraylog(remote=build_pack(module), installed=[{"_id": "a" * 24, "content_pack_revision": 1, "parameters": parameters(module)}])
+    client = FakeGraylog(remote=build_pack(module), installed=[{"_id": "a" * 24, "content_pack_revision": module["revision"], "parameters": parameters(module)}])
     assert install(client, module, parameters(module), apply=True)["action"] == "already-installed"
     assert {method for method, _, _ in client.calls} == {"GET"}
 
 
 @pytest.mark.parametrize("initial", ["RUNNING", "FAILED", "STOPPED"])
-def test_only_new_input_is_started_and_running_input_is_preserved(monkeypatch, initial):
+def test_only_new_input_is_stopped_then_started_even_if_native_creation_already_started_it(monkeypatch, initial):
     monkeypatch.setattr("omni_integrations.client.time.sleep", lambda _: None)
     client, module = FakeGraylog(), load_module("watchguard")
     client.input_state = initial
     assert install(client, module, parameters(module), apply=True)["action"] == "installed"
-    starts = [path for method, path, _ in client.calls if method == "PUT"]
-    assert starts == ([] if initial == "RUNNING" else ["/system/inputstates/" + "c" * 24])
+    states = [(method, path) for method, path, _ in client.calls if method in ("DELETE", "PUT")]
+    assert states == [("DELETE", "/system/inputstates/" + "c" * 24), ("PUT", "/system/inputstates/" + "c" * 24)]
 
 
 @pytest.mark.parametrize("ownership", [True, None, "missing", "duplicate"])
@@ -193,7 +199,7 @@ def test_reused_or_ambiguous_input_is_never_activated(monkeypatch, ownership):
     client.call = call
     with pytest.raises(RuntimeError, match="owned input"):
         install(client, module, parameters(module), apply=True)
-    assert not any(method == "PUT" or path.endswith("/resume") for method, path, _ in client.calls)
+    assert not any(method in ("PUT", "DELETE") or path.endswith("/resume") for method, path, _ in client.calls)
 
 
 def test_failed_new_input_is_not_reported_installed_or_restarted_repeatedly(monkeypatch):
@@ -202,13 +208,28 @@ def test_failed_new_input_is_not_reported_installed_or_restarted_repeatedly(monk
     original = client.call
     def call(method, path, body=None):
         result = original(method, path, body)
-        if method == "GET" and path.startswith("/system/inputstates/"):
+        if method == "GET" and path.startswith("/system/inputstates/") and client.input_state is not None:
             result["state"] = "FAILED"
         return result
     client.call = call
     with pytest.raises(RuntimeError, match="failed to start"):
         install(client, module, parameters(module), apply=True)
     assert len([1 for method, _, _ in client.calls if method == "PUT"]) == 1
+
+
+def test_cleanup_that_never_finishes_cannot_start_a_second_transport(monkeypatch):
+    monkeypatch.setattr("omni_integrations.client.time.sleep", lambda _: None)
+    client, module = FakeGraylog(), load_module("watchguard")
+    original = client.call
+    def not_removed(method, path, body=None):
+        result = original(method, path, body)
+        if method == "GET" and path.startswith("/system/inputstates/"):
+            return {"id": "c" * 24, "state": "STOPPING"}
+        return result
+    client.call = not_removed
+    with pytest.raises(RuntimeError, match="stop cleanly"):
+        install(client, module, parameters(module), apply=True)
+    assert not any(method == "PUT" for method, _, _ in client.calls)
 
 
 @pytest.mark.parametrize("scenario", ["changed-pack", "port-conflict", "other-revision", "other-parameters"])
@@ -220,7 +241,7 @@ def test_conflicts_abort_before_any_write(scenario):
         client.remote["summary"] += " altered"
     elif scenario in ("other-revision", "other-parameters"):
         client.remote = build_pack(module)
-        client.installed = [{"content_pack_revision": 2 if scenario == "other-revision" else 1,
+        client.installed = [{"content_pack_revision": module["revision"] + 1 if scenario == "other-revision" else module["revision"],
                              "parameters": parameters(module, port=1524 if scenario == "other-parameters" else 1521)}]
     with pytest.raises(ValueError):
         install(client, module, parameters(module), apply=True)
@@ -296,7 +317,7 @@ def test_export_does_not_require_credentials_or_network(tmp_path):
     output = tmp_path / "watchguard.json"
     command = [sys.executable, str(ROOT / "tools/omni-integrations.py"), "export", "watchguard", "--output", str(output)]
     assert subprocess.run(command, capture_output=True).returncode == 0
-    assert json.loads(output.read_text())["rev"] == 1
+    assert json.loads(output.read_text())["rev"] == 2
     assert subprocess.run(command, capture_output=True).returncode != 0  # preserves local export
 
 

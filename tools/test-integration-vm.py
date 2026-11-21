@@ -58,13 +58,24 @@ def isolated_configuration():
 
 def indexed_messages(module_id, since):
     query = {"size": 100, "query": {"bool": {"filter": [
-        {"term": {"omni_integration_id": module_id}}, {"range": {"timestamp": {"gte": since}}}]}}}
-    request = urllib.request.Request("http://127.0.0.1:9200/_search", method="POST",
+        {"term": {"omni_integration_id": module_id}},
+        {"range": {"timestamp": {"gte": since, "format": "epoch_millis"}}}]}}}
+    request = urllib.request.Request("http://127.0.0.1:9200/_search?allow_partial_search_results=false", method="POST",
         data=json.dumps(query).encode(), headers={"Content-Type": "application/json"})
     # Loopback is fixed: neither caller configuration nor environment can select another server.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     with opener.open(request, timeout=15) as response:
-        return [item["_source"] for item in json.load(response).get("hits", {}).get("hits", [])]
+        return indexed_sources(json.load(response))
+
+
+def indexed_sources(result):
+    if (not isinstance(result, dict) or result.get("error") or result.get("timed_out")
+            or not isinstance(result.get("_shards"), dict) or result["_shards"].get("failed") != 0
+            or not isinstance(result.get("hits"), dict) or not isinstance(result["hits"].get("hits"), list)):
+        raise RuntimeError("Lab search returned an invalid or incomplete response")
+    if any(not isinstance(item, dict) or not isinstance(item.get("_source"), dict) for item in result["hits"]["hits"]):
+        raise RuntimeError("Lab search returned invalid source documents")
+    return [item["_source"] for item in result["hits"]["hits"]]
 
 
 def input_running(client, input_id):
@@ -82,7 +93,7 @@ def input_evidence(client, input_id, module_id, port, fixtures):
         headers={"Content-Type": "application/json"})
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     with opener.open(request, timeout=15) as response:
-        messages = [item["_source"] for item in json.load(response).get("hits", {}).get("hits", [])]
+        messages = indexed_sources(json.load(response))
     listening = subprocess.run(["ss", "-H", "-lun", "sport", "=", ":" + str(port)],
                                capture_output=True, text=True, timeout=10)
     allowed = {"RUNNING", "STARTING", "STOPPING", "STOPPED", "TERMINATED", "FAILED"}
@@ -269,7 +280,10 @@ def test_module(client, module, report):
     fixtures = json.loads((CATALOG / module["id"] / "fixtures.json").read_text())
     # Graylog timestamps have millisecond precision; do not exclude a datagram
     # received in the same millisecond as this Python microsecond timestamp.
-    since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=2)).isoformat()
+    # Graylog's native mapping uses a space-separated millisecond date format.
+    # An explicit epoch format also works across index sets and cannot produce
+    # a silent shard parse failure from a Python ISO timestamp.
+    since = int((dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=2)).timestamp() * 1000)
     report["stage"] = "udp_fixtures"
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
         for fixture in fixtures:

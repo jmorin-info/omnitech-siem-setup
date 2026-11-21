@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "paloalto",
   "name": "Palo Alto PAN-OS",
-  "revision": 1,
+  "revision": 2,
   "status": "preview",
   "default_port": 1523,
   "supported_format": "PAN-OS default TRAFFIC CSV field order through action (31 columns minimum); custom CSV, THREAT, SYSTEM and CONFIG are retained as unparsed",

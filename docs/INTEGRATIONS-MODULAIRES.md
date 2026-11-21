@@ -4,6 +4,13 @@ Ces modules ajoutent chacun un input, un stream, un pipeline de normalisation et
 un dashboard Graylog. Ils s'installent séparément du socle et de la console `/soc/`.
 Ils ne nécessitent pas de JAR additionnel ni de redémarrage de Graylog.
 
+La révision 2 corrige le schéma natif des widgets et des champs statiques pour
+Graylog 7.2. La révision 1 publiée reste distincte : aucun pack déjà enregistré
+n'est écrasé. Si vous avez tenté une préversion, examiner d'abord ses installations
+et ses éventuelles entités restantes dans **System > Content Packs** et **Inputs**.
+Une installation existante en révision 1 demande une migration préparée ; ne pas
+supprimer ses entrées ou ses journaux pour forcer l'installation de la révision 2.
+
 **État : préversion.** Les exports et contrats de parsing sont testés hors ligne.
 Le 19 novembre 2026, les 41 règles générées et les trois pipelines ont également
 été acceptés par les endpoints de validation syntaxique `/parse` de Graylog 7.2.2,
@@ -18,7 +25,7 @@ constituent pas une preuve de compatibilité avec toutes les versions constructe
 
 ## Catalogue livré
 
-| Module | Format couvert par la révision 1 | Port UDP proposé | Dashboard |
+| Module | Format couvert par la révision 2 | Port UDP proposé | Dashboard |
 |---|---|---|---|
 | `watchguard` | Trafic Fireware IPv4 TCP/UDP, variante syslog `firewall: msg_id=...` ou Traffic Monitor | 1521 | OMNI - WatchGuard Firebox |
 | `unifi` | Export SIEM CEF, vendor `Ubiquiti`, product `UniFi Network` | 1522 | OMNI - Ubiquiti UniFi Network |
@@ -30,7 +37,7 @@ Il filtre explicitement sur le stream du module. Les UUID d'entités du pack son
 reproductibles et résolus par Graylog à l'installation ; aucun identifiant d'une
 installation OMNITECH n'est embarqué.
 
-Cette première révision ne couvre pas les anciens syslogs texte UniFi, les logs
+Cette version ne couvre pas les anciens syslogs texte UniFi, les logs
 PAN-OS `THREAT`/`SYSTEM`/`CONFIG`, ni les événements WatchGuard VPN/authentification
 et les nombreuses variantes IPv6. Ils restent consultables avec
 `omni_parse_status:unparsed`. Les messages bruts sont conservés ; aucun `drop_message`
@@ -56,9 +63,9 @@ Depuis la racine du dépôt :
 ```bash
 python3 tools/omni-integrations.py list
 python3 tools/omni-integrations.py validate
-python3 tools/omni-integrations.py export watchguard --output /tmp/watchguard-r1.json
-python3 tools/omni-integrations.py export unifi --output /tmp/unifi-r1.json
-python3 tools/omni-integrations.py export paloalto --output /tmp/paloalto-r1.json
+python3 tools/omni-integrations.py export watchguard --output /tmp/watchguard-r2.json
+python3 tools/omni-integrations.py export unifi --output /tmp/unifi-r2.json
+python3 tools/omni-integrations.py export paloalto --output /tmp/paloalto-r2.json
 ```
 
 L'export refuse d'écraser un fichier existant. Le JSON est un Content Pack natif,
@@ -72,6 +79,10 @@ Après une installation manuelle par l'interface, vérifier le stream et le repr
 avec **Start Stream** si nécessaire : Graylog 7.2 crée les streams de Content Packs
 en pause. Le gestionnaire ci-dessous reprend seulement le stream neuf qu'il vient
 d'installer et dont l'appartenance est confirmée par Graylog.
+Contrôler également l'état de l'input dans **System > Inputs**. Par l'API, le
+gestionnaire attend l'arrêt complet puis le démarrage stable du seul input qu'il
+vient de créer, pour éviter les relances concurrentes de Graylog pendant l'ajout
+des champs statiques. Il ne redémarre pas les inputs d'une installation existante.
 
 ## Préparer et installer via l'API
 
