@@ -1,0 +1,9 @@
+# Verrouillage du venv oms-seal-sla - versions exactes relevées le 2026-11-21
+# Origine : /opt/oms-seal-sla/.venv
+# Régénérer : python3 tools/omni-pydeps.py lock --venv oms-seal-sla --write
+# Réinstaller à l'identique : <venv>/bin/pip install --no-deps -r python-locks/oms-seal-sla.txt
+certifi==2026.6.17
+charset-normalizer==3.4.9
+idna==3.18
+requests==2.34.2
+urllib3==2.7.0

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# HISTORIQUE (montée 7.1.3 -> 7.1.5 du 17/07/2026, déjà réalisée ; production en 7.2.2 depuis le 14/11/2026).
+# Ne plus lancer : utiliser tools/omni-stack-upgrade.py (plan par défaut), voir docs/UPDATES.md.
 # =============================================================================
 # Montee Graylog 7.1.3 -> 7.1.5. A LANCER PAR L'OPERATEUR :
 #   ! bash /root/omnitech-siem-setup/tools/upgrade-graylog-715.sh
