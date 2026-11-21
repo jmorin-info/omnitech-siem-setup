@@ -2,7 +2,7 @@
 
 Ce fichier est destiné au mainteneur du projet. Lis-le en premier avant toute modification.
 
-> ⚠️ **État intégré au SIEM (18/06/2026) : source de vérité = `docs/INTEGRATION-OMNITECH.md`.**
+> Attention : **État intégré au SIEM (18/06/2026) : source de vérité = `docs/INTEGRATION-OMNITECH.md`.**
 > Différences vs le brief d'origine ci-dessous : **lecture OpenSearch local** (pas l'API
 > `/api/search/messages`, qui renvoie 400 en **Graylog 7.1**) ; **GELF HTTP 12201** (input
 > existant) ; **Ollama LOCAL `127.0.0.1:11434` modèle `qwen2.5:3b`** (plus 10.33.120.55) ;

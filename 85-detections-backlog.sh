@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # 85-detections-backlog.sh - Detections issues du backlog MITRE (workflow
-#   couverture, cf DETECTION-BACKLOG.md). Chaque requete VALIDEE sur donnees
+#   couverture, cf docs/detection/DETECTION-BACKLOG.md). Chaque requete VALIDEE sur donnees
 #   reelles (champs existants + allowlist) avant ajout. Notifs : Teams (firehose)
 #   + Triage (mail si critique/pertinent). Idempotent (garde event_def_id paginee).
 #
@@ -116,4 +116,4 @@ add_m(){ grep -q "^$1," "$CSV" 2>/dev/null || echo "$1,$2,\"$3\",\"$4\",$5,$6" >
                      add_m autorun_persist T1547.001 "Persistance autorun malveillant" "Persistence" eleve 8; }
 
 echo
-echo "=== 85 termine. 7 detections (T1219/T1572/T1621/T1203/T1078.004/T1555.004/T1518.001) + HA ops. Cf DETECTION-BACKLOG.md (42). ==="
+echo "=== 85 termine. 7 detections (T1219/T1572/T1621/T1203/T1078.004/T1555.004/T1518.001) + HA ops. Cf docs/detection/DETECTION-BACKLOG.md (42). ==="

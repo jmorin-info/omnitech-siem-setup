@@ -1,5 +1,4 @@
 # =============================================================================
-# Configs locales outils (editeurs, CLI)
 # SECRETS — NE JAMAIS VERSIONNER (valeurs réelles restent uniquement sur la VM)
 # =============================================================================
 00-vars.env
@@ -63,7 +62,23 @@ seal/docs/preflight.json
 *.bak2-*
 *.deployed-bak-*
 
-# Outillage local (dépôt neutre)
+# Copies datées faites avant modification (ex. 00-vars.env.avant-<lot>-<date>) :
+# elles peuvent contenir des secrets.
+*.avant-*
+
+# Environnements virtuels et caches Python (tous sous-projets)
+.venv/
+venv/
+.mypy_cache/
+
+# Rapports produits par l'intégration continue et la recette VM
+audit-portability.json
+ubuntu-vm-report.json
+
+# Configurations locales des éditeurs
+.idea/
+.vscode/
+*~
 
 # Residus de patch
 *.orig

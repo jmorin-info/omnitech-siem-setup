@@ -13,7 +13,7 @@
 # "Backup config SIEM en echec" / "absent >26h" provisionnees par 21).
 #
 # Planification : omni-backup-config.timer (03:15, Persistent).
-# Restauration : cf. RESTORE.md.
+# Restauration : cf. docs/exploitation/RESTORE.md.
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")"

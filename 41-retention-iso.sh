@@ -7,7 +7,7 @@
 #        volume / faible valeur (Sysmon EID12 registre add/del, winsec 4673/4627).
 #        -> ne casse AUCUNE detection (DCSync=4662, persistance=Sysmon13 conserves).
 #     2. RETENTION tiered via API : sources securite -> 365j ; FortiGate -> 90j.
-#     3. POLITIQUE documentee (preuve d'audit) -> docs/POLITIQUE-RETENTION.md.
+#     3. POLITIQUE documentee (preuve d'audit) -> docs/securite-conformite/POLITIQUE-RETENTION.md.
 #   Idempotent. Reversible (retirer les regles/pipeline restaure la collecte).
 #   Prerequis : 12 (normalisation event_id). Le disk-guard (80%) reste le backstop.
 # =============================================================================
@@ -76,7 +76,7 @@ set_retention "omni-fortigate"  90
 # --- 3. Politique de retention documentee (preuve ISO 27001 A.8.15) ----------
 echo "==> [3/3] Generation de la politique de retention (preuve d'audit)"
 mkdir -p docs
-cat > docs/POLITIQUE-RETENTION.md <<'EOF'
+cat > docs/securite-conformite/POLITIQUE-RETENTION.md <<'EOF'
 # Politique de rétention des journaux - OMNITECH Security (SIEM Graylog)
 
 Référence ISO/IEC 27001:2022 — A.8.15 (Journalisation), A.8.16 (Surveillance),
@@ -119,7 +119,7 @@ DCSync) et **4688** (traçabilité de création de processus).
 
 _Document généré par 41-retention-iso.sh — à valider et dater par le RSSI._
 EOF
-ok "politique ecrite -> docs/POLITIQUE-RETENTION.md"
+ok "politique ecrite -> docs/securite-conformite/POLITIQUE-RETENTION.md"
 
 echo
 echo "=== 41-retention-iso.sh termine. Projection ~5,1 To (dossier securite 12 mois). ==="

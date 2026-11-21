@@ -1,8 +1,8 @@
 # Operations &amp; resilience
 
 Day-to-day runbook for the OMNI SIEM platform. The authoritative French procedures are
-[PROCEDURE-EXPLOITATION-SIEM.md](PROCEDURE-EXPLOITATION-SIEM.md) and
-[GUIDE-DEPANNAGE.md](GUIDE-DEPANNAGE.md).
+[exploitation/PROCEDURE-EXPLOITATION-SIEM.md](exploitation/PROCEDURE-EXPLOITATION-SIEM.md) and
+[exploitation/GUIDE-DEPANNAGE.md](exploitation/GUIDE-DEPANNAGE.md).
 
 ## Service health
 
@@ -43,8 +43,8 @@ sensible silence threshold, otherwise a future outage of that source goes unnoti
 
 The nightly `siem-backup` unit produces three artefacts: a MongoDB dump (Graylog config), an
 OpenSearch snapshot (message data), and a config tarball. Restore is documented and validated
-in [../RESTORE.md](../RESTORE.md); a full rebuild-from-source procedure is
-[PRA-RECONSTRUCTION-SIEM.md](PRA-RECONSTRUCTION-SIEM.md).
+in [exploitation/RESTORE.md](exploitation/RESTORE.md); a full rebuild-from-source procedure is
+[exploitation/PRA-RECONSTRUCTION-SIEM.md](exploitation/PRA-RECONSTRUCTION-SIEM.md).
 
 ```bash
 systemctl status siem-backup.service
@@ -52,7 +52,7 @@ systemctl list-timers | grep siem-backup
 ls -la /home/siem-backup/            # mongo/ configs/ opensearch-snapshots/
 ```
 
-> ⚠️ **Snapshot-repository sizing.** The OpenSearch snapshot repository must live on a volume
+> Warning: **Snapshot-repository sizing.** The OpenSearch snapshot repository must live on a volume
 > **larger than the primary index size** (≈ 1.45 TB). `/home` (805 GB) is too small to hold a
 > full snapshot: if the repository is placed there it fills to 100 %, which then blocks even
 > snapshot *deletion* (a disk-full deadlock). Place the repository on `/data` (or a dedicated
@@ -71,7 +71,7 @@ ISO-aligned per-source retention tiers (illustrative):
 | Security-relevant | Windows Security, vSphere, ESET | 180 days |
 | Cloud audit | Microsoft 365 | 365 days |
 
-Policy: [POLITIQUE-RETENTION.md](POLITIQUE-RETENTION.md).
+Policy: [securite-conformite/POLITIQUE-RETENTION.md](securite-conformite/POLITIQUE-RETENTION.md).
 
 ## Alerting hygiene
 
@@ -87,13 +87,13 @@ Policy: [POLITIQUE-RETENTION.md](POLITIQUE-RETENTION.md).
 |---|---|
 | Change mail recipients | `MAIL_RECIPIENTS` in `/etc/omni-alert-triage.env` |
 | Enable/adjust the LLM judge | `ANTHROPIC_API_KEY` / `GRAY_SCORE_THRESHOLD` in the same file |
-| Add a legitimate egress (stop an exfil FP) | append the IP/CIDR to `EXFIL_ALLOW_DEST` in `00-vars.env` (⚠ no inline comment on the value line) |
+| Add a legitimate egress (stop an exfil FP) | append the IP/CIDR to `EXFIL_ALLOW_DEST` in `00-vars.env` (Warning: no inline comment on the value line) |
 | Add / tune a detection | the relevant `NN-*.sh` provisioning script, then re-run it |
 | Investigate an entity | `/soc/` console → entity 360° dossier |
-| Troubleshoot | [GUIDE-DEPANNAGE.md](GUIDE-DEPANNAGE.md) |
+| Troubleshoot | [exploitation/GUIDE-DEPANNAGE.md](exploitation/GUIDE-DEPANNAGE.md) |
 
 ## Encryption &amp; access
 
 - Data volume: LUKS-encrypted (`/data`); the LUKS header is backed up off-box.
 - TLS everywhere; SSH locked down; console exposure per RSSI policy.
-- Volume-encryption procedure: [PROCEDURE-CHIFFREMENT-REPOS.md](PROCEDURE-CHIFFREMENT-REPOS.md).
+- Volume-encryption procedure: [securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md](securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md).

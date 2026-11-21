@@ -16,13 +16,13 @@ Date de contrôle : 2026-07-15.
 
 | Prérequis | Attendu | Observé (2026-07-15) | Verdict |
 |---|---|---|---|
-| Événements réels `event_domain:access` /24 h | > 0 | **0** | ❌ |
-| Événements réels `event_domain:alarm` /24 h | > 0 | **0** | ❌ |
-| Événements réels `event_domain:hypervisor_audit` /24 h | > 0 | **0** | ❌ |
+| Événements réels `event_domain:access` /24 h | > 0 | **0** | [KO] |
+| Événements réels `event_domain:alarm` /24 h | > 0 | **0** | [KO] |
+| Événements réels `event_domain:hypervisor_audit` /24 h | > 0 | **0** | [KO] |
 | Injections de synthèse `TEST_SIEM` (à ignorer) | — | 6 (mes tests E2E Phase 3) | ℹ️ |
-| Logstash installé + actif (VM SIEM) | actif | **inactif / non installé** | ❌ |
-| `seal.conf` déployé | présent | **absent** | ❌ |
-| Vues `vw_Seal*_SIEM` créées (DDL Phase 1) | 4 vues | **aucune** | ❌ |
+| Logstash installé + actif (VM SIEM) | actif | **inactif / non installé** | [KO] |
+| `seal.conf` déployé | présent | **absent** | [KO] |
+| Vues `vw_Seal*_SIEM` créées (DDL Phase 1) | 4 vues | **aucune** | [KO] |
 
 **Conclusion : la chaîne de collecte n'est pas encore établie.** Les widgets se
 mesureraient tous à zéro → non vérifiables. On s'arrête ici (conforme au
@@ -54,25 +54,25 @@ panneau trompeusement vide.
 
 | Champ (contrat D4) | access | alarm | hypervisor_audit | Remarque |
 |---|---|---|---|---|
-| `event_source`,`event_domain`,`timestamp` | ✅ | ✅ | ✅ | posés par vue/collecteur |
-| `event_action` | ✅ (via alarme corrélée) | ✅ REEV_LIBELLE | ✅ Operation | access : dépend de l'alarme liée |
-| `event_outcome` (grant/deny/na) | ✅ | ✅ | ✅ (success/failure) | dérivé REEV (144 deny/255 grant mesurés en base) |
-| `severity_num` | — | ✅ EVEN_SEVERITE | ✅ mapping | — |
-| `actor_usercode` | — | ✅ | ✅ | — |
-| `actor_login` | — | — | ✅ (`seal_Login`) | console : UserConnections |
-| `src_ip` | — | — | ✅ (`seal_IpAddress`) | — |
-| `operation_channel` | — | — | ✅ | SealAdmin/Exploitation… |
-| `badge_number` | ✅ | (si déclencheur) | ✅ (`seal_Number`) | — |
-| `identity_matricule` | ⚠️ ~76,5 % | — | — | badge→milf.BADGES ; ~23,5 % non résolus |
-| **`identity_upn`** | ❌ **vide** | ❌ **vide** | ❌ **vide** | non résolu en QA (SIEM-side, non câblé) |
-| `target_object_label/id/type` | ⚠️ ~62 % | ✅ | ✅ (`seal_Object*`) | access : `RAW_ORIGIN_OBFI_ID` NULL ~38 % |
-| **`site`** | ❌ **NULL** | ❌ **NULL** | ❌ **NULL** | topologie non mappée (NodeObjectId≠OBJ_ID) |
-| **`door_id`** | ❌ absent | ❌ absent | ⚠️ audit only (`seal_DoorId`) | access : porte = `target_object_label` |
-| `off_hours` | ✅ | — | ✅ | heure locale 07–19 |
-| `IS_INHIBITED`,`IS_INTEMPESTIVE`,`INTEMPESTIVE_COUNT` | — | ✅ | — | colonnes directes |
-| `seal_source_table`,`seal_payload`,`seal_*` | — | — | ✅ | JSON éclaté |
+| `event_source`,`event_domain`,`timestamp` | [OK] | [OK] | [OK] | posés par vue/collecteur |
+| `event_action` | [OK] (via alarme corrélée) | [OK] REEV_LIBELLE | [OK] Operation | access : dépend de l'alarme liée |
+| `event_outcome` (grant/deny/na) | [OK] | [OK] | [OK] (success/failure) | dérivé REEV (144 deny/255 grant mesurés en base) |
+| `severity_num` | — | [OK] EVEN_SEVERITE | [OK] mapping | — |
+| `actor_usercode` | — | [OK] | [OK] | — |
+| `actor_login` | — | — | [OK] (`seal_Login`) | console : UserConnections |
+| `src_ip` | — | — | [OK] (`seal_IpAddress`) | — |
+| `operation_channel` | — | — | [OK] | SealAdmin/Exploitation… |
+| `badge_number` | [OK] | (si déclencheur) | [OK] (`seal_Number`) | — |
+| `identity_matricule` | Attention : ~76,5 % | — | — | badge→milf.BADGES ; ~23,5 % non résolus |
+| **`identity_upn`** | [KO] **vide** | [KO] **vide** | [KO] **vide** | non résolu en QA (SIEM-side, non câblé) |
+| `target_object_label/id/type` | Attention : ~62 % | [OK] | [OK] (`seal_Object*`) | access : `RAW_ORIGIN_OBFI_ID` NULL ~38 % |
+| **`site`** | [KO] **NULL** | [KO] **NULL** | [KO] **NULL** | topologie non mappée (NodeObjectId≠OBJ_ID) |
+| **`door_id`** | [KO] absent | [KO] absent | Attention : audit only (`seal_DoorId`) | access : porte = `target_object_label` |
+| `off_hours` | [OK] | — | [OK] | heure locale 07–19 |
+| `IS_INHIBITED`,`IS_INTEMPESTIVE`,`INTEMPESTIVE_COUNT` | — | [OK] | — | colonnes directes |
+| `seal_source_table`,`seal_payload`,`seal_*` | — | — | [OK] | JSON éclaté |
 
-Légende : ✅ peuplé · ⚠️ partiel · ❌ vide/bloqué · — non applicable au domaine.
+Légende : [OK] peuplé · Attention : partiel · [KO] vide/bloqué · — non applicable au domaine.
 
 ### 2.2 Widgets par vue — faisable vs bloqué
 
@@ -86,7 +86,7 @@ Légende : ✅ peuplé · ⚠️ partiel · ❌ vide/bloqué · — non applicab
 | Flux dernières alarmes (table) | `event_domain:alarm` → time, `severity_num`, `target_object_label`, `event_outcome` | FAISABLE |
 | Top 10 badges en refus /24 h | `event_domain:access AND event_outcome:deny` group by `badge_number` | FAISABLE (fallback badge) ; **`identity_upn` [BLOQUÉ: identity_upn]** |
 | Console : échecs récents | `hypervisor_audit AND event_action:ConnectionFailure` → `actor_login`,`src_ip`,`operation_channel` | FAISABLE |
-| Refus par **porte** | group by `target_object_label` (PAS `door_id` sur access) | FAISABLE ⚠️ ~62 % objets résolus |
+| Refus par **porte** | group by `target_object_label` (PAS `door_id` sur access) | FAISABLE Attention : ~62 % objets résolus |
 | Refus **par site** | group by `site` | **[BLOQUÉ: site]** |
 
 **Vue B — Pilotage & preuve d'audit** (public : RSSI/Bureau Veritas ; 7/30/90 j)

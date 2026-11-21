@@ -279,7 +279,7 @@ RULES: list[dict] = [
     # dette RC-7 de re-introduire le flood mail p3 a chaque re-run. L'etat LIVE du
     # tri (globaux DMS-001/002/003 = desactives ; QA acces/alarmes = desactives ;
     # QA audit + PROD audit/acces/alarmes = console/Teams sans mail) est applique
-    # par tools/seal-alert-tri.sh, pas par ce provisionneur (qui les cree disabled).
+    # par tools/ponctuel/seal-alert-tri.sh, pas par ce provisionneur (qui les cree disabled).
     dict(id="DMS-001", title="Flux Audit interrompu (>15 min)",
          stream="audit", sev="Medium", tech="A.8.16", statut="désactivé (tri 21/07 : redondant DMS-004/005)",
          query="event_source:seal AND event_domain:hypervisor_audit",
@@ -302,7 +302,7 @@ RULES: list[dict] = [
 # count() < 1 (une aggregation a vide sans group_by evalue bien count = 0).
 # Crees DESACTIVES comme les DMS globaux (activation post-recette, flux stable).
 # SEVERITE = Medium (cf. note des DMS globaux) : sante de flux, jamais de mail.
-# Tri 21/07/2026 (etat LIVE applique par tools/seal-alert-tri.sh) :
+# Tri 21/07/2026 (etat LIVE applique par tools/ponctuel/seal-alert-tri.sh) :
 #   QA (bx-qa-seal-vm) acces/alarmes (DMS-006/008) -> DESACTIVES (banc de test) ;
 #   QA audit (DMS-004) + PROD (bx-seal-omega) audit/acces/alarmes (DMS-005/007/009)
 #   -> CONSOLE (Teams + /soc, sans mail : go-dark PROD a valeur securite conservee).

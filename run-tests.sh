@@ -18,6 +18,7 @@ echo "Python: $PY"
 rc=0
 "$PY" -m compileall -q manager omni_deploy omni_integrations omni_update mobile/omni-mobile-api.py oms-ml/oms_ml oms-xdr/oms_xdr oms-graph/oms_graph tools || rc=1
 "$PY" tools/check-manifest.py || rc=1
+"$PY" tools/check-doc-links.py || rc=1
 "$PY" -m pytest tests -q || rc=1
 for project in oms-ml oms-xdr oms-graph; do
   ( cd "$ROOT/$project" && "$PY" -m pytest tests -q ) || rc=1

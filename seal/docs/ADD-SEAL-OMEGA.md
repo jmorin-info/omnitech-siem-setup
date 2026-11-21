@@ -62,9 +62,9 @@ printf '%s' '<mdp svc omega (Vault)>' | LOGSTASH_KEYSTORE_PASS="$KP" $KS --path.
 ```bash
 sudo install -m0640 -o root -g logstash seal/logstash/seal-omega.conf /etc/logstash/conf.d/seal-omega.conf
 # amorcer les watermarks (choisir) :
-#   - pas de backfill (recommande en prod au demarrage) : valeur courante
-#     @@DBTS de BX-SEAL-OMEGA (SELECT CONVERT(BIGINT,@@DBTS) sur ce serveur)
-#   - backfill complet : '--- 0'
+# - pas de backfill (recommande en prod au demarrage) : valeur courante
+# @@DBTS de BX-SEAL-OMEGA (SELECT CONVERT(BIGINT,@@DBTS) sur ce serveur)
+# - backfill complet : '--- 0'
 for f in events alarms audit; do printf -- '--- <SEED>\n' > /var/lib/logstash/seal/.omega_${f}_last_run; \
   chown logstash:logstash /var/lib/logstash/seal/.omega_${f}_last_run; chmod 0640 /var/lib/logstash/seal/.omega_${f}_last_run; done
 sudo -u logstash env LOGSTASH_KEYSTORE_PASS="$KP" /usr/share/logstash/bin/logstash --path.settings /etc/logstash -t
@@ -77,7 +77,7 @@ de `seal.conf` s'appliquent (pipeline fusionné). Ne pas y redéfinir filter/out
 
 ```
 # Les evenements OMEGA doivent arriver, taggues seal_site=bx-seal-omega :
-#   event_source:seal AND seal_site:bx-seal-omega
+# event_source:seal AND seal_site:bx-seal-omega
 # Repartition par site (a ajouter aux dashboards si besoin) : pivot seal_site.
 # Les detections/correlation couvrent OMEGA automatiquement (routage par domaine).
 ```

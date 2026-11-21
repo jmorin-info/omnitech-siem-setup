@@ -16,13 +16,13 @@ Control date: 2026-07-15.
 
 | Prerequisite | Expected | Observed (2026-07-15) | Verdict |
 |---|---|---|---|
-| Real events `event_domain:access` /24 h | > 0 | **0** | ❌ |
-| Real events `event_domain:alarm` /24 h | > 0 | **0** | ❌ |
-| Real events `event_domain:hypervisor_audit` /24 h | > 0 | **0** | ❌ |
+| Real events `event_domain:access` /24 h | > 0 | **0** | [KO] |
+| Real events `event_domain:alarm` /24 h | > 0 | **0** | [KO] |
+| Real events `event_domain:hypervisor_audit` /24 h | > 0 | **0** | [KO] |
 | Synthetic `TEST_SIEM` injections (to ignore) | — | 6 (my Phase 3 E2E tests) | ℹ️ |
-| Logstash installed + active (SIEM VM) | active | **inactive / not installed** | ❌ |
-| `seal.conf` deployed | present | **absent** | ❌ |
-| `vw_Seal*_SIEM` views created (Phase 1 DDL) | 4 views | **none** | ❌ |
+| Logstash installed + active (SIEM VM) | active | **inactive / not installed** | [KO] |
+| `seal.conf` deployed | present | **absent** | [KO] |
+| `vw_Seal*_SIEM` views created (Phase 1 DDL) | 4 views | **none** | [KO] |
 
 **Conclusion: the collection chain is not yet established.** The widgets would
 all measure zero → not verifiable. We stop here (consistent with the mission's
@@ -54,25 +54,25 @@ misleadingly empty panel.
 
 | Field (contract D4) | access | alarm | hypervisor_audit | Remark |
 |---|---|---|---|---|
-| `event_source`,`event_domain`,`timestamp` | ✅ | ✅ | ✅ | set by view/collector |
-| `event_action` | ✅ (via correlated alarm) | ✅ REEV_LIBELLE | ✅ Operation | access: depends on the linked alarm |
-| `event_outcome` (grant/deny/na) | ✅ | ✅ | ✅ (success/failure) | derived from REEV (144 deny/255 grant measured in database) |
-| `severity_num` | — | ✅ EVEN_SEVERITE | ✅ mapping | — |
-| `actor_usercode` | — | ✅ | ✅ | — |
-| `actor_login` | — | — | ✅ (`seal_Login`) | console: UserConnections |
-| `src_ip` | — | — | ✅ (`seal_IpAddress`) | — |
-| `operation_channel` | — | — | ✅ | SealAdmin/Exploitation… |
-| `badge_number` | ✅ | (if trigger) | ✅ (`seal_Number`) | — |
-| `identity_matricule` | ⚠️ ~76.5% | — | — | badge→milf.BADGES ; ~23.5% unresolved |
-| **`identity_upn`** | ❌ **empty** | ❌ **empty** | ❌ **empty** | unresolved in QA (SIEM-side, not wired) |
-| `target_object_label/id/type` | ⚠️ ~62% | ✅ | ✅ (`seal_Object*`) | access: `RAW_ORIGIN_OBFI_ID` NULL ~38% |
-| **`site`** | ❌ **NULL** | ❌ **NULL** | ❌ **NULL** | topology not mapped (NodeObjectId≠OBJ_ID) |
-| **`door_id`** | ❌ absent | ❌ absent | ⚠️ audit only (`seal_DoorId`) | access: door = `target_object_label` |
-| `off_hours` | ✅ | — | ✅ | local time 07–19 |
-| `IS_INHIBITED`,`IS_INTEMPESTIVE`,`INTEMPESTIVE_COUNT` | — | ✅ | — | direct columns |
-| `seal_source_table`,`seal_payload`,`seal_*` | — | — | ✅ | exploded JSON |
+| `event_source`,`event_domain`,`timestamp` | [OK] | [OK] | [OK] | set by view/collector |
+| `event_action` | [OK] (via correlated alarm) | [OK] REEV_LIBELLE | [OK] Operation | access: depends on the linked alarm |
+| `event_outcome` (grant/deny/na) | [OK] | [OK] | [OK] (success/failure) | derived from REEV (144 deny/255 grant measured in database) |
+| `severity_num` | — | [OK] EVEN_SEVERITE | [OK] mapping | — |
+| `actor_usercode` | — | [OK] | [OK] | — |
+| `actor_login` | — | — | [OK] (`seal_Login`) | console: UserConnections |
+| `src_ip` | — | — | [OK] (`seal_IpAddress`) | — |
+| `operation_channel` | — | — | [OK] | SealAdmin/Exploitation… |
+| `badge_number` | [OK] | (if trigger) | [OK] (`seal_Number`) | — |
+| `identity_matricule` | Warning: ~76.5% | — | — | badge→milf.BADGES ; ~23.5% unresolved |
+| **`identity_upn`** | [KO] **empty** | [KO] **empty** | [KO] **empty** | unresolved in QA (SIEM-side, not wired) |
+| `target_object_label/id/type` | Warning: ~62% | [OK] | [OK] (`seal_Object*`) | access: `RAW_ORIGIN_OBFI_ID` NULL ~38% |
+| **`site`** | [KO] **NULL** | [KO] **NULL** | [KO] **NULL** | topology not mapped (NodeObjectId≠OBJ_ID) |
+| **`door_id`** | [KO] absent | [KO] absent | Warning: audit only (`seal_DoorId`) | access: door = `target_object_label` |
+| `off_hours` | [OK] | — | [OK] | local time 07–19 |
+| `IS_INHIBITED`,`IS_INTEMPESTIVE`,`INTEMPESTIVE_COUNT` | — | [OK] | — | direct columns |
+| `seal_source_table`,`seal_payload`,`seal_*` | — | — | [OK] | exploded JSON |
 
-Legend: ✅ populated · ⚠️ partial · ❌ empty/blocked · — not applicable to the domain.
+Legend: [OK] populated · Warning: partial · [KO] empty/blocked · — not applicable to the domain.
 
 ### 2.2 Widgets by view — feasible vs blocked
 
@@ -86,7 +86,7 @@ Legend: ✅ populated · ⚠️ partial · ❌ empty/blocked · — not applicab
 | Latest alarms feed (table) | `event_domain:alarm` → time, `severity_num`, `target_object_label`, `event_outcome` | FEASIBLE |
 | Top 10 badges in denial /24 h | `event_domain:access AND event_outcome:deny` group by `badge_number` | FEASIBLE (badge fallback); **`identity_upn` [BLOCKED: identity_upn]** |
 | Console: recent failures | `hypervisor_audit AND event_action:ConnectionFailure` → `actor_login`,`src_ip`,`operation_channel` | FEASIBLE |
-| Denials by **door** | group by `target_object_label` (NOT `door_id` on access) | FEASIBLE ⚠️ ~62% objects resolved |
+| Denials by **door** | group by `target_object_label` (NOT `door_id` on access) | FEASIBLE Warning: ~62% objects resolved |
 | Denials **by site** | group by `site` | **[BLOCKED: site]** |
 
 **View B — Steering & audit evidence** (audience: CISO/Bureau Veritas; 7/30/90 d)

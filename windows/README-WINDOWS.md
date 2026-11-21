@@ -3,7 +3,7 @@
 Tout ce qui se passe côté **DC (BX-AD-01-IT-VM / 10.33.50.250)** et côté
 **postes/serveurs**. Ordre conseillé : 1 → 5, en pilote d'abord.
 
-> **⭐ Voie recommandée (12/06) : `Install-OmniSiem-NinjaOne.ps1`** — script
+> ** Voie recommandée (12/06) : `Install-OmniSiem-NinjaOne.ps1`** — script
 > UNIQUE et definitif pour NinjaOne (SYSTEM, 64 bits, planification
 > quotidienne). Il REMPLACE `Deploy-SiemAgents-NinjaOne.ps1` +
 > `Set-OmniAudit-NinjaOne.ps1` : Root CA (TOFU), politique d'audit, Sysmon,
@@ -21,15 +21,15 @@ Tout ce qui se passe côté **DC (BX-AD-01-IT-VM / 10.33.50.250)** et côté
 $d = "C:\Windows\SYSVOL\sysvol\omnitech.security\scripts\SIEM"   # = NETLOGON\SIEM
 New-Item -ItemType Directory -Path $d -Force
 # Y déposer :
-#  - Sysmon64.exe                  <- https://live.sysinternals.com/Sysmon64.exe
-#  - sysmonconfig-omnitech.xml     <- ce kit
-#  - winlogbeat-oss-8.17.4-windows-x86_64.zip
-#       <- https://artifacts.elastic.co/downloads/beats/winlogbeat/
-#          !! version OSS obligatoire (la standard refuse une sortie non-Elastic)
-#  - winlogbeat.yml                <- ce kit (vérifier le FQDN du SIEM dedans)
-#  - omnitech-rootca.pem           <- export Base64 de la Root CA :
-#       Sur BX-PKI2022 : certutil -ca.cert C:\temp\rootca.cer
-#       puis renommer .cer (déjà en Base64 ? sinon : certutil -encode rootca.cer omnitech-rootca.pem)
+# - Sysmon64.exe                  <- https://live.sysinternals.com/Sysmon64.exe
+# - sysmonconfig-omnitech.xml     <- ce kit
+# - winlogbeat-oss-8.17.4-windows-x86_64.zip
+# <- https://artifacts.elastic.co/downloads/beats/winlogbeat/
+# !! version OSS obligatoire (la standard refuse une sortie non-Elastic)
+# - winlogbeat.yml                <- ce kit (vérifier le FQDN du SIEM dedans)
+# - omnitech-rootca.pem           <- export Base64 de la Root CA :
+# Sur BX-PKI2022 : certutil -ca.cert C:\temp\rootca.cer
+# puis renommer .cer (déjà en Base64 ? sinon : certutil -encode rootca.cer omnitech-rootca.pem)
 ```
 NETLOGON est répliqué sur les deux DC et lisible par les comptes ordinateurs :
 parfait pour un déploiement sans Internet.

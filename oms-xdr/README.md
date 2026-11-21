@@ -4,7 +4,7 @@ Surcouche qui transforme le Graylog d'OMNITECH (10.33.220.10) en plateforme
 de **détection corrélée + remédiation guidée + réponse**, sur le modèle
 fonctionnel d'un MXDR du marché, sans dépendance à un SOC externe.
 
-> ⚠️ **État intégré (18/06/2026) — voir [`docs/INTEGRATION-OMNITECH.md`](docs/INTEGRATION-OMNITECH.md).**
+> Attention : **État intégré (18/06/2026) — voir [`docs/INTEGRATION-OMNITECH.md`](docs/INTEGRATION-OMNITECH.md).**
 > Le déploiement réel sur la VM SIEM diffère du design d'origine décrit plus bas :
 > **lecture via OpenSearch local** (pas l'API REST), **réinjection GELF HTTP 12201**
 > (input existant, pas un 12222 dédié), **LLM `qwen2.5:3b` local**, **blocage FortiGate

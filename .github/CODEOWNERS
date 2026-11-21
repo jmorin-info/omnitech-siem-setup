@@ -1,0 +1,14 @@
+# Propriétaires du code : relecture requise sur les demandes de fusion.
+# Syntaxe : https://docs.github.com/fr/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Par défaut, tout le dépôt.
+*                       @jmorin-info
+
+# Zones sensibles : provisioning de production, réponse automatisée, secrets.
+/[0-9][0-9]-*.sh        @jmorin-info
+/lib-*.sh               @jmorin-info
+/soar-v2/               @jmorin-info
+/triage/                @jmorin-info
+/oms-xdr/               @jmorin-info
+/.github/               @jmorin-info
+/SECURITY.md            @jmorin-info
