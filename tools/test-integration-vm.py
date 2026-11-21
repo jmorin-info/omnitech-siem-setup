@@ -72,6 +72,29 @@ def input_running(client, input_id):
     return any(item.get("id") == input_id and item.get("state") == "RUNNING" for item in states)
 
 
+def input_evidence(client, input_id, module_id, port, fixtures):
+    """Diagnose lab delivery without publishing a log or arbitrary field value."""
+    state = client.call("GET", "/system/inputstates/" + input_id)
+    saved = client.call("GET", "/system/inputs/" + input_id)
+    fields = saved.get("static_fields", {})
+    request = urllib.request.Request("http://127.0.0.1:9200/_search", method="POST",
+        data=json.dumps({"size": 100, "query": {"term": {"gl2_source_input": input_id}}}).encode(),
+        headers={"Content-Type": "application/json"})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open(request, timeout=15) as response:
+        messages = [item["_source"] for item in json.load(response).get("hits", {}).get("hits", [])]
+    listening = subprocess.run(["ss", "-H", "-lun", "sport", "=", ":" + str(port)],
+                               capture_output=True, text=True, timeout=10)
+    allowed = {"RUNNING", "STARTING", "STOPPING", "STOPPED", "TERMINATED", "FAILED"}
+    return {"input_state": state.get("state") if state.get("state") in allowed else "unknown",
+            "udp_socket_present": listening.returncode == 0 and bool(listening.stdout.strip()),
+            "static_tag_saved": fields.get("omni_integration_id") == module_id,
+            "indexed_by_input": len(messages),
+            "tag_present": sum(item.get("omni_integration_id") == module_id for item in messages),
+            "exact_fixture_matches": sum(any(item.get("message") == fixture["message"] for item in messages) for fixture in fixtures),
+            "processing_errors": sum(bool(item.get("gl2_processing_error")) for item in messages)}
+
+
 def fixture_results(fixtures, messages, module_id, stream_id):
     results = []
     for index, fixture in enumerate(fixtures, 1):
@@ -93,7 +116,8 @@ def dashboard_result_evidence(job, view, module_id, fixtures):
                 "fixtures_visible": False, "messages_scoped": False, "passed": False}
     execution = job.get("execution", {})
     evidence["completed"] = execution.get("done") is True
-    if not evidence["completed"] or execution.get("cancelled") or execution.get("completed_exceptionally") or job.get("errors"):
+    if (not evidence["completed"] or execution.get("cancelled") is not False
+            or execution.get("completed_exceptionally") is not False or job.get("errors")):
         return evidence
     results = job.get("results", {})
     states = view.get("state", {})
@@ -151,6 +175,7 @@ def execute_dashboard(client, view, module_id, fixtures):
         raise ValueError("the installed dashboard must reference its saved search")
     job = client.call("POST", "/views/search/" + search_id + "/execute", {})
     job_id = job.get("id", "")
+    # InMemorySearchJobService.create() uses new ObjectId().toHexString().
     if not isinstance(job_id, str) or not re.fullmatch(r"[a-f0-9]{24}", job_id):
         raise ValueError("the dashboard search returned an invalid job identifier")
     for attempt in range(60):
@@ -257,6 +282,7 @@ def test_module(client, module, report):
             break
         time.sleep(2)
     report["fixtures_received"] = sum(item["received"] for item in report["fixtures"])
+    report["delivery_evidence"] = input_evidence(client, input_id, module["id"], module["default_port"], fixtures)
     report["stage"] = "dashboard_search"
     report["dashboard_search"] = execute_dashboard(client, view, module["id"], fixtures)
     report["passed"] = all(report.get(key) is True for key in (

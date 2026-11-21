@@ -123,7 +123,7 @@ def test_dashboard_executes_the_saved_search_and_polls_real_http_without_rewriti
                      ("GET", "/api/views/search/status/" + "b" * 24, None)]
 
 
-@pytest.mark.parametrize("failure", ["cancelled", "exceptional", "job-error", "query-error", "query-failed",
+@pytest.mark.parametrize("failure", ["cancelled", "exceptional", "missing-execution-flag", "job-error", "query-error", "query-failed",
     "missing-query", "missing-type", "extra-type", "wrong-type", "type-error", "zero-count", "boolean-count",
     "missing-fixture", "foreign-message"])
 def test_dashboard_evidence_rejects_partial_failed_or_unscoped_results_without_values(dashboard_job, failure):
@@ -136,6 +136,8 @@ def test_dashboard_evidence_rejects_partial_failed_or_unscoped_results_without_v
         job["execution"]["cancelled"] = True
     elif failure == "exceptional":
         job["execution"]["completed_exceptionally"] = True
+    elif failure == "missing-execution-flag":
+        job["execution"].pop("completed_exceptionally")
     elif failure == "job-error":
         job["errors"] = [{"description": "dummy-private-value"}]
     elif failure == "query-error":
