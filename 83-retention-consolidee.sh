@@ -3,7 +3,7 @@
 # 81-retention-consolidee.sh - SOURCE UNIQUE DE VERITE de la retention omni-*
 #   Remplace 31-retention-iso.sh ET 41-retention-iso.sh (volet 2), qui se
 #   CONTREDISAIENT (sysmon/vsphere 180 vs 365, fortigate 180 vs 90 -> derniere
-#   execution gagne). Valeurs alignees sur docs/POLITIQUE-RETENTION.md (la
+#   execution gagne). Valeurs alignees sur docs/securite-conformite/POLITIQUE-RETENTION.md (la
 #   reference d'audit ISO 27001 A.8.15), couvrant TOUS les index sets omni-*,
 #   y compris omni-fortimanager (cree par 63) et omni-interne (cree par 79) qui
 #   n'etaient dans AUCUN script de retention.
@@ -45,7 +45,7 @@ APPLY="${APPLY:-0}"          # 0 = dry-run (defaut), 1 = ecrit la retention
 FORCE="${FORCE:-0}"          # 1 = autorise une suppression > MAX_DELETE
 MAX_DELETE="${MAX_DELETE:-5}"  # garde-fou : refus si un seuil supprime plus que ca
 
-# --- SOURCE UNIQUE DE VERITE (alignee docs/POLITIQUE-RETENTION.md) ------------
+# --- SOURCE UNIQUE DE VERITE (alignee docs/securite-conformite/POLITIQUE-RETENTION.md) ------------
 # prefixe -> retention en NOMBRE D'INDEX (rotation P1D => 1 index = 1 jour)
 # RECALIBRE 14/08/2026 (arbitrage risque x CAPACITE) : 365j partout = ~9 To >
 # disque 7,3 To -> irrealiste. Paliers : 180j sources securite volume moyen
@@ -215,4 +215,4 @@ done
 echo
 echo "=== 81-retention-consolidee.sh termine (mode $([[ $APPLY == 1 ]] && echo APPLY || echo DRY-RUN)). ==="
 echo "    Source de verite : ce script. Penser a deprecier 31 et 41 (volet 2) et a"
-echo "    aligner docs/POLITIQUE-RETENTION.md (ajouter omni-fortimanager=365, omni-interne=90)."
+echo "    aligner docs/securite-conformite/POLITIQUE-RETENTION.md (ajouter omni-fortimanager=365, omni-interne=90)."

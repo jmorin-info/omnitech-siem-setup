@@ -1,7 +1,7 @@
 # MITRE ATT&CK Coverage — SIEM OMNITECH
 
 > Generated/maintained with `57-mitre-coverage.sh` · Last review: 2026-06-14
-> Visual layer: **`docs/mitre-navigator-layer.json`** → to load into
+> Visual layer: **`docs/detection/mitre-navigator-layer.json`** → to load into
 > [MITRE ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/) (*Open Existing Layer*).
 
 ## Executive summary

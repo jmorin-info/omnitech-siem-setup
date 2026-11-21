@@ -159,7 +159,7 @@ of origin**. Updated every 30 seconds. *Ideal for a SOC wall screen.*
 - **Security folder retained 12 months** (Windows, Sysmon, M365, vSphere, etc.);
   **firewall traffic 90 days** (high volume, shorter forensic value).
 - Low-value noise is filtered to fit within disk space.
-- Detailed policy: `docs/POLITIQUE-RETENTION.md` (audit evidence, mapped to
+- Detailed policy: `docs/securite-conformite/POLITIQUE-RETENTION.md` (audit evidence, mapped to
   ISO 27001 controls A.8.15 / A.8.16 / A.8.17).
 
 ---
@@ -200,4 +200,4 @@ of origin**. Updated every 30 seconds. *Ideal for a SOC wall screen.*
 
 *Reference document — SIEM OMNITECH Security. For the technical implementation
 detail, see `docs/reference/CONTEXT.md`. For the retention policy,
-`docs/POLITIQUE-RETENTION.md`.*
+`docs/securite-conformite/POLITIQUE-RETENTION.md`.*

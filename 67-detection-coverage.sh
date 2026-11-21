@@ -110,5 +110,5 @@ bash ./57-mitre-coverage.sh 2>&1 | grep -iE 'couvert|technique|tactique|trou|lay
 
 echo
 echo "=== 67 termine. 3 techniques ajoutees (T1087.002 / T1505.003 / T1003.003)."
-echo "    Carte : docs/mitre-navigator-layer.json (charger dans ATT&CK Navigator)."
+echo "    Carte : docs/detection/mitre-navigator-layer.json (charger dans ATT&CK Navigator)."
 echo "    Relancer 14-graylog-dashboards.sh (page ATT&CK). ==="

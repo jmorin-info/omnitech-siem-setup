@@ -182,7 +182,7 @@ after review (then re-run `57` followed by `14`).
 
 ### Detection — MITRE coverage & new rules
 - **MITRE ATT&CK coverage map** (`57-mitre-coverage.sh`): layer
-  `docs/mitre-navigator-layer.json` (to load into ATT&CK Navigator) + report.
+  `docs/detection/mitre-navigator-layer.json` (to load into ATT&CK Navigator) + report.
   **58 detections / 44 techniques / 12-14 tactics** (cf. COUVERTURE-MITRE-ATTACK.md).
 - **Privilege Escalation filled** (`47-detections-extra.sh`): `uac_bypass`
   (T1548.002), `scheduled_task` (T1053.005), `service_install` (T1543.003). +

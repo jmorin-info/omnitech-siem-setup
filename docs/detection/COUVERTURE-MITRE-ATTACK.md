@@ -1,7 +1,7 @@
 # Couverture MITRE ATT&CK — SIEM OMNITECH
 
 > Généré/maintenu avec `57-mitre-coverage.sh` · Dernière revue : 2026-06-14
-> Calque visuel : **`docs/mitre-navigator-layer.json`** → à charger dans
+> Calque visuel : **`docs/detection/mitre-navigator-layer.json`** → à charger dans
 > [MITRE ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/) (*Open Existing Layer*).
 
 ## Résumé exécutif

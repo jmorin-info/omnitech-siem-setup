@@ -213,7 +213,7 @@ après revue (relancer ensuite `57` puis `14`).
 
 ### Détection — couverture MITRE & nouvelles règles
 - **Carte de couverture MITRE ATT&CK** (`57-mitre-coverage.sh`) : calque
-  `docs/mitre-navigator-layer.json` (à charger dans ATT&CK Navigator) + bilan.
+  `docs/detection/mitre-navigator-layer.json` (à charger dans ATT&CK Navigator) + bilan.
   **58 détections / 44 techniques / 12-14 tactiques** (cf. COUVERTURE-MITRE-ATTACK.md).
 - **Privilege Escalation comblée** (`47-detections-extra.sh`) : `uac_bypass`
   (T1548.002), `scheduled_task` (T1053.005), `service_install` (T1543.003). +

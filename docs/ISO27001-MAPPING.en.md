@@ -14,15 +14,15 @@
 
 | Annex A control (2022) | Title | SIEM contribution | Evidence / location |
 |--------------------------|----------|----------------|----------------------|
-| **A.8.15** | Logging | Centralized and tamper-proof collection of the logs of all the sources (AD/Sysmon, FortiGate, Microsoft 365/Entra, vSphere, Veeam, **ESET PROTECT**, **BunkerWeb WAF**, internal SIEM telemetry); timestamping; write-only protection | Graylog streams (13 streams); `docs/POLITIQUE-RETENTION.md`; `docs/INVENTAIRE-SOURCES.md` |
-| **A.8.16** | Monitoring activities | 88 definitions (87 detections + 1 system) active, real-time dashboards ("OMNI - SOC", 24 pages), behavioral anomalies (UEBA), network monitoring (NDR) | "OMNI - SOC" dashboard; `docs/REGISTRE-DETECTIONS.md`; Graylog alerts |
+| **A.8.15** | Logging | Centralized and tamper-proof collection of the logs of all the sources (AD/Sysmon, FortiGate, Microsoft 365/Entra, vSphere, Veeam, **ESET PROTECT**, **BunkerWeb WAF**, internal SIEM telemetry); timestamping; write-only protection | Graylog streams (13 streams); `docs/securite-conformite/POLITIQUE-RETENTION.md`; `docs/sources/INVENTAIRE-SOURCES.md` |
+| **A.8.16** | Monitoring activities | 88 definitions (87 detections + 1 system) active, real-time dashboards ("OMNI - SOC", 24 pages), behavioral anomalies (UEBA), network monitoring (NDR) | "OMNI - SOC" dashboard; `docs/detection/REGISTRE-DETECTIONS.md`; Graylog alerts |
 | **A.8.17** | Clock synchronization | All hosts and the SIEM NTP-synchronized on the PDC; consistent event timestamping | NTP conf (`00-vars.env` NTP1/NTP2); `timestamp` field |
 | **A.5.7** | Threat intelligence | Threat intel (Tor/Spamhaus), CISA KEV (exploited vulnerabilities), ESET PROTECT detections (endpoint threats/IoC), MITRE ATT&CK mapping | "ATT&CK", "Vulnerabilities", "External sources" pages; threat-intel lookup; `lookups/mitre-attack.csv` |
-| **A.5.24** | Incident management planning | Automatic correlation of detections into timestamped **incidents** (kill-chain), P2/P3 prioritization, notifications | "Incidents" page; `docs/PROCEDURE-INCIDENT.md`; `omni-incident-correlate` |
+| **A.5.24** | Incident management planning | Automatic correlation of detections into timestamped **incidents** (kill-chain), P2/P3 prioritization, notifications | "Incidents" page; `docs/exploitation/PROCEDURE-INCIDENT.md`; `omni-incident-correlate` |
 | **A.5.25** | Assessment and decision on events | Risk scoring (MITRE + UEBA 0-100), severity, triage queue | "Critical incidents", "At-risk entities" KPIs; UEBA score |
-| **A.5.26** | Incident response | Routing of notifications in **2 tiers**: Teams = firehose (all alerts), email = 26 critical "wake me up" alerts (confirmed compromise + SIEM health); SOAR-light (auto blocking of attacking IPs via FortiGate threat-feed) | Graylog notifications; `22-alert-routing.sh`; `omni-soar`; `docs/PROCEDURE-INCIDENT.md`; `docs/REPONSE-AUTOMATISEE.md` |
+| **A.5.26** | Incident response | Routing of notifications in **2 tiers**: Teams = firehose (all alerts), email = 26 critical "wake me up" alerts (confirmed compromise + SIEM health); SOAR-light (auto blocking of attacking IPs via FortiGate threat-feed) | Graylog notifications; `22-alert-routing.sh`; `omni-soar`; `docs/exploitation/PROCEDURE-INCIDENT.md`; `docs/exploitation/REPONSE-AUTOMATISEE.md` |
 | **A.5.27** | Learning from incidents | Weekly report + monthly executive report (trends, top risks); queryable history | `omni-weekly-report`, `omni-monthly-report`; archive `/kit/rapports/` |
-| **A.5.28** | Collection of evidence | Logs retained (security dossier **365 d**; FortiGate **180 d**; BunkerWeb **90 d**), timestamped, tamper-proof; raw message retained for forensics | OpenSearch index; `docs/POLITIQUE-RETENTION.md` |
+| **A.5.28** | Collection of evidence | Logs retained (security dossier **365 d**; FortiGate **180 d**; BunkerWeb **90 d**), timestamped, tamper-proof; raw message retained for forensics | OpenSearch index; `docs/securite-conformite/POLITIQUE-RETENTION.md` |
 | **A.8.7** | Protection against malware | Microsoft Defender detection (detection/disabling), **ESET PROTECT EDR/antivirus** (threats, HIPS events), FortiGate UTM (virus/IPS), ransomware indicators | "Defender", "ESET: detection", "FortiGate virus/IPS", "Ransomware indicator" alerts; "External sources" page |
 | **A.8.8** | Management of technical vulnerabilities | Cross-referencing software inventory × CISA KEV (exploited CVEs) + patch age | "Vulnerabilities" page; `omni-vuln-scan` |
 | **A.8.12** | Data leakage prevention | Exfiltration detection: DNS tunneling (entropy), M365 external shares, external mail forwards, outbound volume spikes | "DNS tunneling", "M365 external share / mail forward" alerts; UEBA/NDR page |
@@ -41,13 +41,13 @@
   `omni-integrity`): daily fingerprint of the corpus state, **out-of-band copy
   (SMB share)**, weekly verification (`--verify`) and **alert if the chain
   is broken** → any retroactive deletion/alteration becomes **provable**
-  (tamper-evidence). Cf. `docs/PROCEDURE-INTEGRITE-PREUVE.md` (A.8.15 / A.5.28).
+  (tamper-evidence). Cf. `docs/securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md` (A.8.15 / A.5.28).
 - **Least privilege (A.8.2 / A.8.3)**: Graylog role "OMNI - Analyst (read-only)"
   for the analysts; admin account (the only one authorized to delete) reserved
   for **break-glass** (password in the vault).
 - **Encryption at rest (A.8.24 / A.5.33)**: `/data` volume encrypted **LUKS2 +
   TPM2 unlock** (inline header, `aes-xts` 512 bits) — **done on 2026-06-14**,
-  cf. `docs/PROCEDURE-CHIFFREMENT-REPOS.md`.
+  cf. `docs/securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md`.
 - **Alteration detection**: "Audit sabotage" rule (Event ID
   1102/4719/4794/104) in P3 + **"Log integrity COMPROMISED" alert** → immediate
   alert (email) if someone clears/disables logging or breaks the chain.

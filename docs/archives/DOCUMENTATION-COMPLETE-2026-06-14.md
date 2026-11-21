@@ -117,37 +117,37 @@ hebdomadaires et mensuelles documentées. Aucun coût de licence.
 
 | Réf | Document | Type ISO | Objet |
 |---|---|---|---|
-| POL | [POL-SUPERVISION-JOURNALISATION.md](POL-SUPERVISION-JOURNALISATION.md) | **Politique** | Engagements, périmètre, responsabilités, rétention — validée DSI |
-| STD | [STD-JOURNALISATION.md](STD-JOURNALISATION.md) | **Standard** | Règles techniques : sources, transport, champs, seuils, conventions |
-| PRO | [PRO-EXPLOITATION-SIEM.md](PRO-EXPLOITATION-SIEM.md) | **Procédure** | Exploitation au quotidien : revues, triage, enrôlement, relances |
-| DOS | [DOSSIER-ARCHITECTURE-SIEM.md](DOSSIER-ARCHITECTURE-SIEM.md) | **Dossier d'exploitation** | Architecture, composants, flux, MEP, secrets, sauvegarde |
-| REG | [REGISTRE-CONFORMITE-ISO27001.md](REGISTRE-CONFORMITE-ISO27001.md) | **Registre de conformité** | Mapping Annexe A ↔ preuves, actions ouvertes, méthode auditeur |
-| PRA | [PRA-RECONSTRUCTION-SIEM.md](PRA-RECONSTRUCTION-SIEM.md) | **Plan de continuité** | Reconstruction sur nouveau serveur : RTO/RPO, scénarios, validation |
-| — | [LDAPS.md](LDAPS.md) | Procédure | Authentification AD (LDAPS) sur la console Graylog |
-| — | [REPONSE-AUTOMATISEE.md](REPONSE-AUTOMATISEE.md) | Procédure | Compte canari AD + SOAR (détection avancée & réponse auto) |
-| — | [GUIDE-DEPANNAGE.md](GUIDE-DEPANNAGE.md) | Exploitation | Dépannage : symptôme → cause → solution |
-| — | [SYNTHESE-EXECUTIVE.md](SYNTHESE-EXECUTIVE.md) | Direction | Synthèse 1 page pour la DSI / comité |
-| — | [GLOSSAIRE.md](GLOSSAIRE.md) | Référence | Termes techniques pour lecteurs non spécialistes |
-| — | [CHANGELOG.md](CHANGELOG.md) | Référence | Journal des évolutions daté |
+| POL | [../securite-conformite/POL-SUPERVISION-JOURNALISATION.md](../securite-conformite/POL-SUPERVISION-JOURNALISATION.md) | **Politique** | Engagements, périmètre, responsabilités, rétention — validée DSI |
+| STD | [../securite-conformite/STD-JOURNALISATION.md](../securite-conformite/STD-JOURNALISATION.md) | **Standard** | Règles techniques : sources, transport, champs, seuils, conventions |
+| PRO | [../securite-conformite/PRO-EXPLOITATION-SIEM.md](../securite-conformite/PRO-EXPLOITATION-SIEM.md) | **Procédure** | Exploitation au quotidien : revues, triage, enrôlement, relances |
+| DOS | [../architecture/DOSSIER-ARCHITECTURE-SIEM.md](../architecture/DOSSIER-ARCHITECTURE-SIEM.md) | **Dossier d'exploitation** | Architecture, composants, flux, MEP, secrets, sauvegarde |
+| REG | [../securite-conformite/REGISTRE-CONFORMITE-ISO27001.md](../securite-conformite/REGISTRE-CONFORMITE-ISO27001.md) | **Registre de conformité** | Mapping Annexe A ↔ preuves, actions ouvertes, méthode auditeur |
+| PRA | [../exploitation/PRA-RECONSTRUCTION-SIEM.md](../exploitation/PRA-RECONSTRUCTION-SIEM.md) | **Plan de continuité** | Reconstruction sur nouveau serveur : RTO/RPO, scénarios, validation |
+| — | [../sources/LDAPS.md](../sources/LDAPS.md) | Procédure | Authentification AD (LDAPS) sur la console Graylog |
+| — | [../exploitation/REPONSE-AUTOMATISEE.md](../exploitation/REPONSE-AUTOMATISEE.md) | Procédure | Compte canari AD + SOAR (détection avancée & réponse auto) |
+| — | [../exploitation/GUIDE-DEPANNAGE.md](../exploitation/GUIDE-DEPANNAGE.md) | Exploitation | Dépannage : symptôme → cause → solution |
+| — | [../demarrage/SYNTHESE-EXECUTIVE.md](../demarrage/SYNTHESE-EXECUTIVE.md) | Direction | Synthèse 1 page pour la DSI / comité |
+| — | [../reference/GLOSSAIRE.md](../reference/GLOSSAIRE.md) | Référence | Termes techniques pour lecteurs non spécialistes |
+| — | [../CHANGELOG.md](../CHANGELOG.md) | Référence | Journal des évolutions daté |
 
 ## Documents support SMSI / opérationnels (mêmes dossier `docs/`)
 
 > Documents factuels complémentaires, support à l'audit ISO et à l'exploitation.
-> L'index alternatif [INDEX-DOCUMENTATION.md](INDEX-DOCUMENTATION.md) en donne une lecture par niveau (fonctionnel vs SMSI).
+> L'index alternatif [../INDEX-DOCUMENTATION.md](../INDEX-DOCUMENTATION.md) en donne une lecture par niveau (fonctionnel vs SMSI).
 
 | Document | Objet |
 |---|---|
-| [ISO27001-MAPPING.md](ISO27001-MAPPING.md) | Document-pont : capacités SIEM ↔ contrôles Annexe A + preuves |
-| [REGISTRE-DETECTIONS.md](REGISTRE-DETECTIONS.md) | Catalogue des règles de détection actives (alertes Graylog) |
-| [INVENTAIRE-SOURCES.md](INVENTAIRE-SOURCES.md) | Inventaire des sources/actifs supervisés (AD/Sysmon, FortiGate, M365, vSphere, Veeam, ESET, BunkerWeb, NPS) |
-| [INTEGRATION-SOURCES.md](INTEGRATION-SOURCES.md) | Procédure d'intégration des nouvelles sources (ESET PROTECT, NPS, BunkerWeb WAF) |
-| [POLITIQUE-RETENTION.md](POLITIQUE-RETENTION.md) | Politique de rétention différenciée par source (preuve A.8.15) |
-| [PROCEDURE-INCIDENT.md](PROCEDURE-INCIDENT.md) | Détection → évaluation → réponse → clôture des incidents |
-| [PROCEDURE-EXPLOITATION-SIEM.md](PROCEDURE-EXPLOITATION-SIEM.md) | Exploitation courante, maintenance, contrôle du bon fonctionnement |
-| [COUVERTURE-MITRE-ATTACK.md](COUVERTURE-MITRE-ATTACK.md) | Carte de couverture MITRE ATT&CK (+ calque `mitre-navigator-layer.json`) + plan de validation purple-team |
-| [SOAR-PLAYBOOKS.md](SOAR-PLAYBOOKS.md) | Réponse automatisée (SOAR) : catalogue de playbooks PB-01→05, garde-fous |
-| [PROCEDURE-INTEGRITE-PREUVE.md](PROCEDURE-INTEGRITE-PREUVE.md) | Intégrité & valeur probante des journaux (registre haché-signé) + forensique (A.8.15/5.28) |
-| [PROCEDURE-CHIFFREMENT-REPOS.md](PROCEDURE-CHIFFREMENT-REPOS.md) | Chiffrement des données au repos `/data` (LUKS2 + TPM2) (A.8.24/5.33) |
+| [../securite-conformite/ISO27001-MAPPING.md](../securite-conformite/ISO27001-MAPPING.md) | Document-pont : capacités SIEM ↔ contrôles Annexe A + preuves |
+| [../detection/REGISTRE-DETECTIONS.md](../detection/REGISTRE-DETECTIONS.md) | Catalogue des règles de détection actives (alertes Graylog) |
+| [../sources/INVENTAIRE-SOURCES.md](../sources/INVENTAIRE-SOURCES.md) | Inventaire des sources/actifs supervisés (AD/Sysmon, FortiGate, M365, vSphere, Veeam, ESET, BunkerWeb, NPS) |
+| [../sources/INTEGRATION-SOURCES.md](../sources/INTEGRATION-SOURCES.md) | Procédure d'intégration des nouvelles sources (ESET PROTECT, NPS, BunkerWeb WAF) |
+| [../securite-conformite/POLITIQUE-RETENTION.md](../securite-conformite/POLITIQUE-RETENTION.md) | Politique de rétention différenciée par source (preuve A.8.15) |
+| [../exploitation/PROCEDURE-INCIDENT.md](../exploitation/PROCEDURE-INCIDENT.md) | Détection → évaluation → réponse → clôture des incidents |
+| [../exploitation/PROCEDURE-EXPLOITATION-SIEM.md](../exploitation/PROCEDURE-EXPLOITATION-SIEM.md) | Exploitation courante, maintenance, contrôle du bon fonctionnement |
+| [../detection/COUVERTURE-MITRE-ATTACK.md](../detection/COUVERTURE-MITRE-ATTACK.md) | Carte de couverture MITRE ATT&CK (+ calque `mitre-navigator-layer.json`) + plan de validation purple-team |
+| [../exploitation/SOAR-PLAYBOOKS.md](../exploitation/SOAR-PLAYBOOKS.md) | Réponse automatisée (SOAR) : catalogue de playbooks PB-01→05, garde-fous |
+| [../securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md](../securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md) | Intégrité & valeur probante des journaux (registre haché-signé) + forensique (A.8.15/5.28) |
+| [../securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md](../securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md) | Chiffrement des données au repos `/data` (LUKS2 + TPM2) (A.8.24/5.33) |
 | [AUDIT-DASHBOARD-2026-06-14.md](AUDIT-DASHBOARD-2026-06-14.md) | Audit senior-SoC des dashboards + plan d'amélioration (suivi des lots) |
 
 ## Documents techniques associés (racine `~/omnitech-siem-setup/`)
@@ -954,7 +954,7 @@ définitions, canal SOC) ; **MAIL = 26 alertes critiques « réveille-moi »**
 > La liste complète des 88 définitions et de leur routage exact se génère/contrôle
 > via `13-graylog-alerts.sh`, `21-alert-hygiene.sh`, les scripts de détections
 > additionnelles (47/48/50/51) et `22-alert-routing.sh`. Voir aussi
-> `docs/REGISTRE-DETECTIONS.md`.
+> `docs/detection/REGISTRE-DETECTIONS.md`.
 
 ## 7. Dashboard « OMNI - SOC » (24 pages)
 
@@ -1037,7 +1037,7 @@ Dashboard unique `requires={}` → 100 % OSS (pas d'Enterprise requis).
 | `54-post-purge-repopulate.sh` | repopulation post-purge (index ranges, re-fetch M365, relance des robots) |
 | `55-vaultwarden.sh` | source Vaultwarden (stream + **index set dédié `omni-vaultwarden`** + pipeline `omni-vw-*` + détections coffre) ; kit `/kit/vw-filebeat.sh` |
 | `56-fortidhcp.sh` | attribution DHCP FortiGate (`omni-fortidhcp-fetch`, timer 15 min, lookup `omni-dhcp-attribution` → `src_hostname`/`dest_hostname`) |
-| `57-mitre-coverage.sh` | carte de couverture MITRE ATT&CK → `docs/mitre-navigator-layer.json` (calque Navigator) + bilan |
+| `57-mitre-coverage.sh` | carte de couverture MITRE ATT&CK → `docs/detection/mitre-navigator-layer.json` (calque Navigator) + bilan |
 | `58-identity-correlation.sh` | identité unifiée (`identity`/`identity_human`) + page dashboard « Identité » |
 | `59-file-audit.sh` | audit d'accès fichiers sensibles (4663/5145 → `file_sensitive_access`/`file_delete_sensible`) |
 | `60-integrity.sh` | intégrité des logs (registre haché-signé `omni-integrity` + `--verify` + copie hors-SIEM) + rôle Graylog lecture seule |
@@ -1331,15 +1331,15 @@ compte-rendu est conservé comme preuve d'audit.
 
 | Contrôle Annexe A (2022) | Intitulé | Apport du SIEM | Preuve / emplacement |
 |--------------------------|----------|----------------|----------------------|
-| **A.8.15** | Journalisation | Collecte centralisée et inviolable des journaux de l'ensemble des sources (AD/Sysmon, FortiGate, Microsoft 365/Entra, vSphere, Veeam, **ESET PROTECT**, **WAF BunkerWeb**, télémétrie interne SIEM) ; horodatage ; protection en écriture seule | Streams Graylog (13 streams) ; `docs/POLITIQUE-RETENTION.md` ; `docs/INVENTAIRE-SOURCES.md` |
-| **A.8.16** | Surveillance des activités | 88 définitions (87 détections + 1 système) actives, tableaux de bord temps réel (« OMNI - SOC », 24 pages), anomalies comportementales (UEBA), surveillance réseau (NDR) | Dashboard « OMNI - SOC » ; `docs/REGISTRE-DETECTIONS.md` ; alertes Graylog |
+| **A.8.15** | Journalisation | Collecte centralisée et inviolable des journaux de l'ensemble des sources (AD/Sysmon, FortiGate, Microsoft 365/Entra, vSphere, Veeam, **ESET PROTECT**, **WAF BunkerWeb**, télémétrie interne SIEM) ; horodatage ; protection en écriture seule | Streams Graylog (13 streams) ; `docs/securite-conformite/POLITIQUE-RETENTION.md` ; `docs/sources/INVENTAIRE-SOURCES.md` |
+| **A.8.16** | Surveillance des activités | 88 définitions (87 détections + 1 système) actives, tableaux de bord temps réel (« OMNI - SOC », 24 pages), anomalies comportementales (UEBA), surveillance réseau (NDR) | Dashboard « OMNI - SOC » ; `docs/detection/REGISTRE-DETECTIONS.md` ; alertes Graylog |
 | **A.8.17** | Synchronisation des horloges | Tous les hôtes et le SIEM synchronisés NTP sur le PDC ; horodatage cohérent des événements | Conf NTP (`00-vars.env` NTP1/NTP2) ; champ `timestamp` |
 | **A.5.7** | Renseignement sur les menaces | Threat intel (Tor/Spamhaus), CISA KEV (vulnérabilités exploitées), détections ESET PROTECT (menaces/IoC endpoint), mapping MITRE ATT&CK | Pages « ATT&CK », « Vulnérabilités », « Sources externes » ; lookup threat-intel ; `lookups/mitre-attack.csv` |
-| **A.5.24** | Préparation à la gestion des incidents | Corrélation automatique des détections en **incidents** horodatés (kill-chain), priorisation P2/P3, notifications | Page « Incidents » ; `docs/PROCEDURE-INCIDENT.md` ; `omni-incident-correlate` |
+| **A.5.24** | Préparation à la gestion des incidents | Corrélation automatique des détections en **incidents** horodatés (kill-chain), priorisation P2/P3, notifications | Page « Incidents » ; `docs/exploitation/PROCEDURE-INCIDENT.md` ; `omni-incident-correlate` |
 | **A.5.25** | Évaluation et décision sur les événements | Scoring de risque (MITRE + UEBA 0-100), sévérité, file de triage | KPIs « Incidents critiques », « Entités à risque » ; score UEBA |
-| **A.5.26** | Réponse aux incidents | Routage des notifications en **2 tiers** : Teams = firehose (toutes les alertes), e-mail = 26 alertes critiques « réveille-moi » (compromission confirmée + santé SIEM) ; SOAR-light (blocage auto d'IP attaquantes via threat-feed FortiGate) | Notifications Graylog ; `22-alert-routing.sh` ; `omni-soar` ; `docs/PROCEDURE-INCIDENT.md` ; `docs/REPONSE-AUTOMATISEE.md` |
+| **A.5.26** | Réponse aux incidents | Routage des notifications en **2 tiers** : Teams = firehose (toutes les alertes), e-mail = 26 alertes critiques « réveille-moi » (compromission confirmée + santé SIEM) ; SOAR-light (blocage auto d'IP attaquantes via threat-feed FortiGate) | Notifications Graylog ; `22-alert-routing.sh` ; `omni-soar` ; `docs/exploitation/PROCEDURE-INCIDENT.md` ; `docs/exploitation/REPONSE-AUTOMATISEE.md` |
 | **A.5.27** | Tirer des enseignements des incidents | Rapport hebdo + rapport exécutif mensuel (tendances, top risques) ; historique requêtable | `omni-weekly-report`, `omni-monthly-report` ; archive `/kit/rapports/` |
-| **A.5.28** | Collecte de preuves | Journaux conservés (dossier sécurité **365 j** ; FortiGate **180 j** ; BunkerWeb **90 j**), horodatés, inviolables ; message brut conservé pour le forensic | Index OpenSearch ; `docs/POLITIQUE-RETENTION.md` |
+| **A.5.28** | Collecte de preuves | Journaux conservés (dossier sécurité **365 j** ; FortiGate **180 j** ; BunkerWeb **90 j**), horodatés, inviolables ; message brut conservé pour le forensic | Index OpenSearch ; `docs/securite-conformite/POLITIQUE-RETENTION.md` |
 | **A.8.7** | Protection contre les logiciels malveillants | Détection Microsoft Defender (détection/désactivation), **EDR/antivirus ESET PROTECT** (menaces, événements HIPS), UTM FortiGate (virus/IPS), indicateurs ransomware | Alertes « Defender », « ESET : détection », « FortiGate virus/IPS », « Indicateur de ransomware » ; page « Sources externes » |
 | **A.8.8** | Gestion des vulnérabilités techniques | Croisement inventaire logiciel × CISA KEV (CVE exploitées) + ancienneté des correctifs | Page « Vulnérabilités » ; `omni-vuln-scan` |
 | **A.8.12** | Prévention de la fuite de données | Détection d'exfiltration : tunneling DNS (entropie), partages externes M365, transferts mail externes, pics de volume sortant | Alertes « Tunneling DNS », « M365 partage externe / transfert mail » ; page UEBA/NDR |
@@ -1358,13 +1358,13 @@ compte-rendu est conservé comme preuve d'audit.
   `omni-integrity`) : empreinte quotidienne de l'état du corpus, **copie hors-bande
   (partage SMB)**, vérification hebdomadaire (`--verify`) et **alerte si la chaîne
   est rompue** → toute suppression/altération rétroactive devient **prouvable**
-  (tamper-evidence). Cf. `docs/PROCEDURE-INTEGRITE-PREUVE.md` (A.8.15 / A.5.28).
+  (tamper-evidence). Cf. `docs/securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md` (A.8.15 / A.5.28).
 - **Moindre privilège (A.8.2 / A.8.3)** : rôle Graylog « OMNI - Analyste (lecture
   seule) » pour les analystes ; compte admin (seul habilité à supprimer) réservé
   en **break-glass** (MDP au coffre).
 - **Chiffrement au repos (A.8.24 / A.5.33)** : volume `/data` chiffré **LUKS2 +
   déverrouillage TPM2** (header inline, `aes-xts` 512 bits) — **réalisé le 2026-06-14**,
-  cf. `docs/PROCEDURE-CHIFFREMENT-REPOS.md`.
+  cf. `docs/securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md`.
 - **Détection de l'altération** : règle « Sabotage de l'audit » (Event ID
   1102/4719/4794/104) en P3 + **alerte « Intégrité des logs COMPROMISE »** → alerte
   immédiate (mail) si quelqu'un efface/désactive la journalisation ou rompt la chaîne.
@@ -1599,7 +1599,7 @@ le calque `mitre-navigator-layer.json`.
 # Couverture MITRE ATT&CK — SIEM OMNITECH
 
 > Généré/maintenu avec `57-mitre-coverage.sh` · Dernière revue : 2026-06-14
-> Calque visuel : **`docs/mitre-navigator-layer.json`** → à charger dans
+> Calque visuel : **`docs/detection/mitre-navigator-layer.json`** → à charger dans
 > [MITRE ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/) (*Open Existing Layer*).
 
 ## Résumé exécutif
@@ -3001,7 +3001,7 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
 
 ### Détection — couverture MITRE & nouvelles règles
 - **Carte de couverture MITRE ATT&CK** (`57-mitre-coverage.sh`) : calque
-  `docs/mitre-navigator-layer.json` (à charger dans ATT&CK Navigator) + bilan.
+  `docs/detection/mitre-navigator-layer.json` (à charger dans ATT&CK Navigator) + bilan.
   **58 détections / 44 techniques / 12-14 tactiques** (cf. COUVERTURE-MITRE-ATTACK.md).
 - **Privilege Escalation comblée** (`47-detections-extra.sh`) : `uac_bypass`
   (T1548.002), `scheduled_task` (T1053.005), `service_install` (T1543.003). +

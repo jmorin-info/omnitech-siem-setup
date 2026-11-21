@@ -418,14 +418,14 @@ Points d'attention sur les snapshots OpenSearch :
 Procédures de restauration :
 
 - **`docs/exploitation/RESTORE.md`** — restauration complète pas à pas depuis l'archive chiffrée (VM de remplacement, même IP/FQDN, redémarrage de la collecte).
-- **`docs/PRA-RECONSTRUCTION-SIEM.md`** — plan de reconstruction (objectifs de continuité, scénarios, rôles, validation), référence ISO A.8.13 / A.5.30.
+- **`docs/exploitation/PRA-RECONSTRUCTION-SIEM.md`** — plan de reconstruction (objectifs de continuité, scénarios, rôles, validation), référence ISO A.8.13 / A.5.30.
 - **`docker/README-DOCKER.md`** — restauration de la configuration dans la stack conteneurisée (DR/staging).
 
 Le serveur est physique : il n'est **pas** sauvegardé en image par Veeam. La reprise repose donc sur l'archive chiffrée (configuration), les snapshots sélectifs (historique récent) et le PRA. Une restauration MongoDB seule (corruption de la configuration) a déjà été validée en production.
 
 ## Dépannage
 
-Guide complet symptôme / cause / solution : **`docs/GUIDE-DEPANNAGE.md`**. Référence exhaustive des incidents résolus : `docs/reference/CONTEXT.md` (sections « PIEGE A RETENIR »). Pièges récurrents à connaître avant d'intervenir :
+Guide complet symptôme / cause / solution : **`docs/exploitation/GUIDE-DEPANNAGE.md`**. Référence exhaustive des incidents résolus : `docs/reference/CONTEXT.md` (sections « PIEGE A RETENIR »). Pièges récurrents à connaître avant d'intervenir :
 
 | Piège | Règle |
 |---|---|
@@ -515,7 +515,7 @@ Une partie des robots est corrigée directement en production, dans `/usr/local/
 
 ## Limites connues
 
-- **Mono-nœud = SPOF** : Graylog, OpenSearch et MongoDB tournent sur un seul serveur, sans haute disponibilité. La reprise repose sur les sauvegardes (archive chiffrée, snapshots sélectifs) et sur le PRA (`docs/PRA-RECONSTRUCTION-SIEM.md`), pas sur un basculement automatique.
+- **Mono-nœud = SPOF** : Graylog, OpenSearch et MongoDB tournent sur un seul serveur, sans haute disponibilité. La reprise repose sur les sauvegardes (archive chiffrée, snapshots sélectifs) et sur le PRA (`docs/exploitation/PRA-RECONSTRUCTION-SIEM.md`), pas sur un basculement automatique.
 - **Réponse AD non armée** : la désactivation de compte via LDAPS reste en dry-run (double verrou), en attente d'accès API / délégation AD.
 - **OpenSearch 3.x incompatible** avec Graylog 7.1 : rester en 2.19.x (paquets tenus en hold, voir [Stack et versions épinglées](#stack-et-versions-épinglées)).
 - **Fenêtre TOFU** : le CA interne n'est épinglé qu'après le premier contact HTTPS du kit d'enrôlement (fenêtre MITM au premier appel uniquement, réseau interne).
@@ -534,8 +534,8 @@ Une partie des robots est corrigée directement en production, dans `/usr/local/
 
 Preuves Annexe A produites par la plateforme : **A.8.15/8.16** (journalisation et surveillance), **A.8.8** (vulnérabilités), **A.5.7** (renseignement sur les menaces), **A.8.11** (masquage), **A.5.25/5.26** (réponse à incident), **A.8.13** (sauvegarde), **A.5.37 / A.8.32** (procédures et gestion du changement — ce dépôt), **Clause 10** (amélioration continue).
 
-- **Rétentions différenciées par paliers (90 / 180 / 365 jours)** provisionnées en code (`41-retention-iso.sh`, `83-retention-consolidee.sh`) et adaptées à la valeur probante de chaque source ; politique de référence : `docs/POLITIQUE-RETENTION.md`.
-- **Mapping et preuves** : mapping complet des mesures dans `docs/ISO27001-MAPPING.md` (synthèse à la racine : `docs/securite-conformite/ISO27001.md`), générateur de preuves daté (`68-iso-evidence.sh`) et corpus de preuves dans `docs/ISO27001-preuves.md` ; registres, procédures et audits indexés par `docs/00-INDEX.md`.
+- **Rétentions différenciées par paliers (90 / 180 / 365 jours)** provisionnées en code (`41-retention-iso.sh`, `83-retention-consolidee.sh`) et adaptées à la valeur probante de chaque source ; politique de référence : `docs/securite-conformite/POLITIQUE-RETENTION.md`.
+- **Mapping et preuves** : mapping complet des mesures dans `docs/securite-conformite/ISO27001-MAPPING.md` (synthèse à la racine : `docs/securite-conformite/ISO27001.md`), générateur de preuves daté (`68-iso-evidence.sh`) et corpus de preuves dans `docs/securite-conformite/ISO27001-preuves.md` ; registres, procédures et audits indexés par `docs/00-INDEX.md`.
 - **Intégrité** : chaîne anti-altération HMAC (`omni-integrity`), sauvegardes chiffrées exportées hors de l'hôte.
 
 ## État et feuille de route
@@ -563,12 +563,12 @@ de l'outil de mise à jour du code du dépôt.
 | `docs/demarrage/GUIDE.md` | Présentation vulgarisée de la plateforme (lecteur non technique) |
 | `docs/reference/CONTEXT.md` | Référence technique exhaustive : historique, décisions, pièges rencontrés |
 | `docs/00-INDEX.md` | Index du corpus documentaire ISO (politique, standards, procédures, registres, audits) |
-| `docs/DOSSIER-ARCHITECTURE-SIEM.md` | Dossier d'architecture |
-| `docs/GUIDE-DEPANNAGE.md` | Dépannage symptôme / cause / solution |
-| `docs/exploitation/RESTORE.md` · `docs/PRA-RECONSTRUCTION-SIEM.md` | Restauration pas à pas · plan de reconstruction (PRA) |
+| `docs/architecture/DOSSIER-ARCHITECTURE-SIEM.md` | Dossier d'architecture |
+| `docs/exploitation/GUIDE-DEPANNAGE.md` | Dépannage symptôme / cause / solution |
+| `docs/exploitation/RESTORE.md` · `docs/exploitation/PRA-RECONSTRUCTION-SIEM.md` | Restauration pas à pas · plan de reconstruction (PRA) |
 | `docs/sources/FORTIANALYZER.md` · `docs/sources/M365.md` · `docs/sources/VSPHERE.md` · `docs/sources/VEEAM.md` | Guides d'intégration par source |
-| `docs/securite-conformite/ISO27001.md` · `docs/ISO27001-MAPPING.md` · `docs/ISO27001-preuves.md` | Synthèse, mapping et preuves ISO 27001:2022 |
-| `docs/POLITIQUE-RETENTION.md` | Politique de rétention des journaux |
+| `docs/securite-conformite/ISO27001.md` · `docs/securite-conformite/ISO27001-MAPPING.md` · `docs/securite-conformite/ISO27001-preuves.md` | Synthèse, mapping et preuves ISO 27001:2022 |
+| `docs/securite-conformite/POLITIQUE-RETENTION.md` | Politique de rétention des journaux |
 | `docs/detection/DETECTION-BACKLOG.md` | Backlog de couverture MITRE ATT&CK (analyse de lacunes) |
 | `windows/README-WINDOWS.md` · `docker/README-DOCKER.md` | Volet Windows/AD · déploiement conteneurisé |
 

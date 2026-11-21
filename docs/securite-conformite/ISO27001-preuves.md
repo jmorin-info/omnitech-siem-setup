@@ -3,7 +3,7 @@
 Système : bx-it-graylog-vm (Debian 13, Graylog 7.1.3, OpenSearch local 127.0.0.1:9200).
 Périmètre : volet journalisation / surveillance / preuves du SMSI (mesures A.8.15, A.8.16, A.8.17, A.5.25, A.5.26, A.5.28, A.8.13, A.5.37).
 
-**Objet.** Ce document est le mode opératoire de production des preuves en séance d'audit : pour chaque mesure, l'exigence en une phrase, la ou les preuves disponibles aujourd'hui avec la commande exacte qui les produit sur CE serveur, puis le manque résiduel et l'action minimale. Il complète `docs/ISO27001-MAPPING.md`, qui établit la correspondance contrôle ↔ capacité du SIEM ↔ emplacement de la preuve : le mapping dit *quoi*, le présent document dit *comment le démontrer*. Il ne duplique pas le mapping ; s'y référer pour la couverture des autres contrôles (A.5.7, A.8.7, A.8.8, A.8.12, etc.).
+**Objet.** Ce document est le mode opératoire de production des preuves en séance d'audit : pour chaque mesure, l'exigence en une phrase, la ou les preuves disponibles aujourd'hui avec la commande exacte qui les produit sur CE serveur, puis le manque résiduel et l'action minimale. Il complète `docs/securite-conformite/ISO27001-MAPPING.md`, qui établit la correspondance contrôle ↔ capacité du SIEM ↔ emplacement de la preuve : le mapping dit *quoi*, le présent document dit *comment le démontrer*. Il ne duplique pas le mapping ; s'y référer pour la couverture des autres contrôles (A.5.7, A.8.7, A.8.8, A.8.12, etc.).
 
 Dernière vérification de l'ensemble des commandes sur ce serveur : 02/07/2026.
 
@@ -13,7 +13,7 @@ Préalable pour toutes les commandes `api_get` (ordre impératif, sinon la varia
 cd /root/omnitech-siem-setup && source ./00-vars.env && source ./lib-graylog.sh
 ```
 
-Documents de référence associés : `docs/ISO27001-MAPPING.md`, `docs/REGISTRE-CONFORMITE-ISO27001.md`, dossier de preuves mensuel généré par `68-iso-evidence.sh` (dernier : `docs/EVIDENCE-AUDIT-2026-07-01.md`).
+Documents de référence associés : `docs/securite-conformite/ISO27001-MAPPING.md`, `docs/securite-conformite/REGISTRE-CONFORMITE-ISO27001.md`, dossier de preuves mensuel généré par `68-iso-evidence.sh` (dernier : `docs/archives/preuves-iso/EVIDENCE-AUDIT-2026-07-01.md`).
 
 ---
 
@@ -41,7 +41,7 @@ curl -s 'http://127.0.0.1:9200/omni-*,graylog_*/_search' -H 'Content-Type: appli
 
 Attendu : ~40 valeurs `event_source`, les familles principales avec un dernier événement de moins de 35 minutes (constaté le 02/07 : fortigate 56,4 M, windows_security 21,8 M, sysmon 21,7 M, windows 6,4 M, vsphere 3,9 M, bunkerweb, m365, vaultwarden..., toutes fraîches à moins de 30 min).
 
-3. Rétentions calibrées par index set (politique : `docs/POLITIQUE-RETENTION.md`) :
+3. Rétentions calibrées par index set (politique : `docs/securite-conformite/POLITIQUE-RETENTION.md`) :
 
 ```bash
 api_get '/system/indices/index_sets?skip=0&limit=0' | jq -r \
@@ -57,13 +57,13 @@ nft list ruleset | grep -c saddr        # attendu : 25 règles filtrées par IP 
 nft list ruleset | grep 5044            # exemple : Winlogbeat restreint à 10.33.0.0/16
 ```
 
-5. Référentiels : `docs/STD-JOURNALISATION.md`, `docs/POLITIQUE-RETENTION.md`, `docs/INVENTAIRE-SOURCES.md`.
+5. Référentiels : `docs/securite-conformite/STD-JOURNALISATION.md`, `docs/securite-conformite/POLITIQUE-RETENTION.md`, `docs/sources/INVENTAIRE-SOURCES.md`.
 
 ### Manques et action minimale
 
 - Canal Cert Orchestrator mort : la règle nftables `udp dport 12201` déclarée à `06-firewall.sh:67` est absente du ruleset live (`nft list ruleset | grep 12201` vide) et `curl -s http://127.0.0.1:9200/omni-cert*/_count` = 0. Action : rejouer `06-firewall.sh` puis vérifier l'arrivée de documents dans `omni-cert_0`. Attention : les événements `event_source=cert_parc` présents viennent d'une autre source (BX-PKI2022 via Winlogbeat, règle `omni-winother-10-cert-parc` de `12-graylog-pipelines.sh`), ce qui maintient le watchdog au vert et masque le silence de l'orchestrateur.
-- Rétentions incohérentes : Cert Orchestrator 12 j (à porter à 90 j minimum) ; ~70 000 événements `forti_dhcp` stockés dans les index `omni-m365_*` (365 j) faute de stream dédié ; authentification Linux/Aruba à 90 j contre 180 j pour Windows Security. Action : arbitrage RSSI documenté dans `docs/POLITIQUE-RETENTION.md`.
-- Sources déclarées mais à zéro événement (NPS, Entra, NinjaOne) : activer ou documenter l'exclusion temporaire dans `docs/INVENTAIRE-SOURCES.md`.
+- Rétentions incohérentes : Cert Orchestrator 12 j (à porter à 90 j minimum) ; ~70 000 événements `forti_dhcp` stockés dans les index `omni-m365_*` (365 j) faute de stream dédié ; authentification Linux/Aruba à 90 j contre 180 j pour Windows Security. Action : arbitrage RSSI documenté dans `docs/securite-conformite/POLITIQUE-RETENTION.md`.
+- Sources déclarées mais à zéro événement (NPS, Entra, NinjaOne) : activer ou documenter l'exclusion temporaire dans `docs/sources/INVENTAIRE-SOURCES.md`.
 
 ---
 
@@ -82,7 +82,7 @@ api_get '/system/pipelines/rule' | jq 'length'             # attendu : 234 règl
 api_get '/streams' | jq '.total'                           # attendu : 18 streams
 ```
 
-2. Couverture MITRE ATT&CK : `docs/COUVERTURE-MITRE-ATTACK.md` et `docs/mitre-navigator-layer.json` (backlog priorisé : `docs/detection/DETECTION-BACKLOG.md`, registre : `docs/REGISTRE-DETECTIONS.md`).
+2. Couverture MITRE ATT&CK : `docs/detection/COUVERTURE-MITRE-ATTACK.md` et `docs/detection/mitre-navigator-layer.json` (backlog priorisé : `docs/detection/DETECTION-BACKLOG.md`, registre : `docs/detection/REGISTRE-DETECTIONS.md`).
 
 3. Canaux de notification (5) :
 
@@ -116,7 +116,7 @@ journalctl -u omni-collect-health.service --since "2 hours ago" --no-pager | tai
 
 ```bash
 systemctl list-timers --all --no-pager | grep iso   # omni-iso-evidence.timer, mensuel
-ls -la /root/omnitech-siem-setup/docs/EVIDENCE-AUDIT-2026-07-01.md
+ls -la /root/omnitech-siem-setup/docs/archives/preuves-iso/EVIDENCE-AUDIT-2026-07-01.md
 ```
 
 7. Dashboards à capturer avant audit (console web) : « OMNI - SOC », « Santé collecte », « Incidents », « ATT&CK » — exports PNG à joindre au dossier de preuves du mois.
@@ -160,7 +160,7 @@ Provisionnement tracé : `01-base.sh` configure chrony vers le DC interne avec m
 
 ### Preuves disponibles
 
-1. Procédure : `docs/PROCEDURE-INCIDENT.md` (rôles RSSI/analyste, couvre A.5.24 à A.5.28).
+1. Procédure : `docs/exploitation/PROCEDURE-INCIDENT.md` (rôles RSSI/analyste, couvre A.5.24 à A.5.28).
 
 2. Triage automatisé à trois niveaux (CRITICAL/GRAY/NOISE) en production, service `omni-alert-triage` (127.0.0.1:8089) :
 
@@ -190,7 +190,7 @@ curl -s 'http://127.0.0.1:8089/fp?entity=<entite>'   # attendu : liste JSON (vid
 
 ### Manques et action minimale
 
-- `docs/PROCEDURE-INCIDENT.md` porte le statut « à valider/approuver par le RSSI » : apposer approbateur, date et version (idem sur `POL-SUPERVISION-JOURNALISATION.md`, `STD-JOURNALISATION.md`, `PRO-EXPLOITATION-SIEM.md` et `docs/ISO27001-MAPPING.md`).
+- `docs/exploitation/PROCEDURE-INCIDENT.md` porte le statut « à valider/approuver par le RSSI » : apposer approbateur, date et version (idem sur `POL-SUPERVISION-JOURNALISATION.md`, `STD-JOURNALISATION.md`, `PRO-EXPLOITATION-SIEM.md` et `docs/securite-conformite/ISO27001-MAPPING.md`).
 - Preuve de revue périodique cassée : `/var/www/siem-kit/rapports/` ne contient que `rapport-2026-05.{html,pdf}` ; le rapport de juin a échoué le 01/07 (voir A.8.16). Action : corriger puis régénérer.
 
 ---
@@ -220,11 +220,11 @@ curl -s 'http://127.0.0.1:9200/omni-*/_count' -H 'Content-Type: application/json
 # attendu : > 0 (constaté le 02/07 : 53 incidents corrélés depuis le 28/06)
 ```
 
-3. Playbooks documentés : `docs/SOAR-PLAYBOOKS.md`, `docs/REPONSE-AUTOMATISEE.md`, `docs/PROCEDURE-INCIDENT.md`.
+3. Playbooks documentés : `docs/exploitation/SOAR-PLAYBOOKS.md`, `docs/exploitation/REPONSE-AUTOMATISEE.md`, `docs/exploitation/PROCEDURE-INCIDENT.md`.
 
 ### Manques et action minimale
 
-- `oms-xdr` fonctionne en dry-run (libellé de l'unité systemd : « cycle de correlation/reponse (dry-run) ») et la réponse AD n'est pas armée (`README` l.210). Acceptable en PME, mais l'écart doc/réalité doit devenir une décision RSSI datée, versionnée dans `docs/REPONSE-AUTOMATISEE.md`.
+- `oms-xdr` fonctionne en dry-run (libellé de l'unité systemd : « cycle de correlation/reponse (dry-run) ») et la réponse AD n'est pas armée (`README` l.210). Acceptable en PME, mais l'écart doc/réalité doit devenir une décision RSSI datée, versionnée dans `docs/exploitation/REPONSE-AUTOMATISEE.md`.
 
 ---
 
@@ -257,7 +257,7 @@ curl -s 'http://127.0.0.1:9200/omni-*/_count' -H 'Content-Type: application/json
 
 4. Copie hors-SIEM du registre sur partage SMB (protection contre réécriture par un insider) : provisionnée par `60-integrity.sh` (étape « Timer quotidien + copie hors-SIEM (SMB) »).
 
-5. Procédure de chaîne de possession : `docs/PROCEDURE-INTEGRITE-PREUVE.md`. Dossier de preuves mensuel daté : `docs/EVIDENCE-AUDIT-2026-07-01.md`.
+5. Procédure de chaîne de possession : `docs/securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md`. Dossier de preuves mensuel daté : `docs/archives/preuves-iso/EVIDENCE-AUDIT-2026-07-01.md`.
 
 ### Manques et action minimale
 
@@ -291,7 +291,7 @@ ls -lh /home/siem-backup/mongo/graylog-mongo-$(date +%Y%m%d)-*.archive.gz   # at
 
 Constaté le 02/07 : `graylog-mongo-20260702-0230.archive.gz` daté du jour même (02:30). Restauration Mongo éprouvée en réel le 26/06 (incident WiredTiger, voir `docs/exploitation/RESTORE.md`). Trou connu : aucun dump le 26/06 (jour du crash), échec resté silencieux.
 
-3. Filets complémentaires : sauvegarde VM Veeam, header LUKS sauvegardé, procédures `docs/exploitation/RESTORE.md` et `docs/PRA-RECONSTRUCTION-SIEM.md`.
+3. Filets complémentaires : sauvegarde VM Veeam, header LUKS sauvegardé, procédures `docs/exploitation/RESTORE.md` et `docs/exploitation/PRA-RECONSTRUCTION-SIEM.md`.
 
 ### Manques et action minimale (point critique)
 
@@ -314,7 +314,7 @@ Constaté le 02/07 : `graylog-mongo-20260702-0230.archive.gz` daté du jour mêm
 ls /root/omnitech-siem-setup/docs/ | wc -l    # attendu : ~40 documents (index : docs/00-INDEX.md)
 ```
 
-Pièces maîtresses : `docs/DOSSIER-ARCHITECTURE-SIEM.md`, `docs/PRA-RECONSTRUCTION-SIEM.md`, `docs/exploitation/RESTORE.md`, `docs/GUIDE-DEPANNAGE.md`, `docs/PRO-EXPLOITATION-SIEM.md`, `docs/POL-SUPERVISION-JOURNALISATION.md`.
+Pièces maîtresses : `docs/architecture/DOSSIER-ARCHITECTURE-SIEM.md`, `docs/exploitation/PRA-RECONSTRUCTION-SIEM.md`, `docs/exploitation/RESTORE.md`, `docs/exploitation/GUIDE-DEPANNAGE.md`, `docs/securite-conformite/PRO-EXPLOITATION-SIEM.md`, `docs/securite-conformite/POL-SUPERVISION-JOURNALISATION.md`.
 
 2. Provisionnement reproductible : une centaine de scripts bash idempotents numérotés à la racine du dépôt, source de vérité de la configuration (aucun binaire ni unité systemd orphelin).
 
@@ -361,9 +361,9 @@ Toute dérive sur les points 1 à 6 et 13 doit être traitée dans la journée ;
 |---|---|---|
 | Quotidien (5 min, matin) | Checklist 1-4, 10-12 | Services et unités en échec, collecte 14 RUNNING, fraîcheur des sources, sauvegarde config du jour, dump Mongo du jour, état des snapshots. Traiter dans la journée toute unité en échec ou source silencieuse. |
 | Hebdomadaire (lundi, après le passage de `omni-integrity-verify.timer` à 04:00) | Checklist 5-9, 13-16 | Vérification d'intégrité complète (`omni-integrity --verify`), revue des verdicts de triage et des règles FP de la semaine, lookups threat-intel, horloge, disque, échéance certificat. Contrôle de dérive du dépôt : `git -C /root/omnitech-siem-setup status --porcelain` (attendu : vide). |
-| Mensuel (le 1er, automatique) | — | Dossier de preuves généré par `omni-iso-evidence.timer` (`docs/EVIDENCE-AUDIT-AAAA-MM-JJ.md`) : vérifier sa production, le commiter, vérifier la génération du rapport exécutif mensuel dans `/var/www/siem-kit/rapports/`. |
-| Avant audit (J-7) | Checklist complète 1-16 | Rejouer les 16 points et archiver les sorties datées ; générer un dossier de preuves frais (`68-iso-evidence.sh`) ; capturer les dashboards « OMNI - SOC », « Santé collecte », « Incidents », « ATT&CK » ; vérifier que les manques listés par mesure ci-dessus sont soit corrigés, soit couverts par une décision RSSI datée ; s'assurer que rapports mensuels et registre de conformité (`docs/REGISTRE-CONFORMITE-ISO27001.md`) sont à jour. |
+| Mensuel (le 1er, automatique) | — | Dossier de preuves généré par `omni-iso-evidence.timer` (`docs/archives/preuves-iso/EVIDENCE-AUDIT-AAAA-MM-JJ.md`) : vérifier sa production, le commiter, vérifier la génération du rapport exécutif mensuel dans `/var/www/siem-kit/rapports/`. |
+| Avant audit (J-7) | Checklist complète 1-16 | Rejouer les 16 points et archiver les sorties datées ; générer un dossier de preuves frais (`68-iso-evidence.sh`) ; capturer les dashboards « OMNI - SOC », « Santé collecte », « Incidents », « ATT&CK » ; vérifier que les manques listés par mesure ci-dessus sont soit corrigés, soit couverts par une décision RSSI datée ; s'assurer que rapports mensuels et registre de conformité (`docs/securite-conformite/REGISTRE-CONFORMITE-ISO27001.md`) sont à jour. |
 
 ---
 
-*Complément opérationnel de `docs/ISO27001-MAPPING.md` — à valider et dater par le RSSI. Dernière vérification des commandes : 02/07/2026.*
+*Complément opérationnel de `docs/securite-conformite/ISO27001-MAPPING.md` — à valider et dater par le RSSI. Dernière vérification des commandes : 02/07/2026.*

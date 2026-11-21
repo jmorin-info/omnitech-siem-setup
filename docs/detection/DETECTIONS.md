@@ -24,7 +24,7 @@ ATT&CK matrix: [COUVERTURE-MITRE-ATTACK.md](COUVERTURE-MITRE-ATTACK.md).
 
 ## Anatomy of a detection
 
-Each event definition is provisioned idempotently (see [DEPLOYMENT.md](DEPLOYMENT.md)) with:
+Each event definition is provisioned idempotently (see [../DEPLOYMENT.md](../DEPLOYMENT.md)) with:
 
 - a **query** on the normalised fields (e.g. `event_source:ueba_geo AND alert_tag:(impossible_travel OR new_country)`);
 - a **`group_by`** key (e.g. `user`, `host`, `src_ip`) so alerts and de-duplication are
@@ -80,4 +80,4 @@ RC4/DES coming back, firewall administration from a public IP or with the local 
 account, unremediated EDR detection (critical on a tier-0 asset), backup job or restore-point
 deletion, and EDR detection followed by an admin logon on the same host within the hour.
 Each rule was replayed over 30 days before activation. Build, test and rollback scripts:
-[`../tools/omni-v3/`](../tools/omni-v3/).
+[`../../tools/omni-v3/`](../../tools/omni-v3/).

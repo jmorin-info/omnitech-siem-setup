@@ -7,7 +7,7 @@ Chaque section référence le ou les contrôles de l'Annexe A qu'elle atteste.
 ## A.8.15 — Journalisation (collecte centralisée et inviolable)
 - Streams OMNI actifs : **19**. Cluster OpenSearch : **green**. Échecs d'indexation : **25**.
 - Sources émettant sur 24 h : fortigate(7557890), windows_security(6797453), vsphere(5800375), sysmon(3066856), windows(662522), bunkerweb(392991), m365(55320), inventory(27115), vaultwarden(19440), forti_dhcp(17981), ueba_score(11926), collecte_sla(1282), vuln(1236), ml_anomaly(720), fortimanager(552), alert_triage(382), veeam(343), fortiems(197), aruba(137), ndr_scan(99)
-- Rétention par paliers documentée (`docs/POLITIQUE-RETENTION.md`) ; intégrité par chaîne HMAC (`omni-integrity`, `docs/PROCEDURE-INTEGRITE-PREUVE.md`).
+- Rétention par paliers documentée (`docs/securite-conformite/POLITIQUE-RETENTION.md`) ; intégrité par chaîne HMAC (`omni-integrity`, `docs/securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md`).
 
 ## A.8.16 — Surveillance des activités
 - Définitions d'événements (détections) actives : **198**.
@@ -17,20 +17,20 @@ Chaque section référence le ou les contrôles de l'Annexe A qu'elle atteste.
 - Tableau de bord temps réel « OMNI - SOC » + page « OMS-XDR » ; UEBA/NDR comportemental.
 
 ## A.5.7 — Renseignement sur les menaces
-- Couverture MITRE ATT&CK : **77 techniques** sur **19 tactiques** (calque `docs/mitre-navigator-layer.json`).
+- Couverture MITRE ATT&CK : **77 techniques** sur **19 tactiques** (calque `docs/detection/mitre-navigator-layer.json`).
 - Threat intel IOC (abuse.ch, refresh quotidien) : **5 IP de C2** (Feodo), **553 domaines malveillants** (URLhaus) ; + Tor/Spamhaus, CISA KEV.
 
 ## A.5.24 / A.5.25 / A.5.26 — Gestion, appréciation et réponse aux incidents
 - Corrélation kill-chain (oms-xdr) + scoring de risque (MITRE + UEBA 0-100).
 - Réponse : SOAR-light (blocage IP via feed FortiGate, sans creds) ; actionneurs ESET/AD en dry-run (human-in-the-loop) ; notification 2-tiers + **app mobile PWA** (alertes/push, VPN-only).
-- Procédures : `docs/PROCEDURE-INCIDENT.md`, `docs/REPONSE-AUTOMATISEE.md`.
+- Procédures : `docs/exploitation/PROCEDURE-INCIDENT.md`, `docs/exploitation/REPONSE-AUTOMATISEE.md`.
 
 ## A.8.32 — Gestion du changement / A.5.37 — Procédures d'exploitation
-- Tout le provisioning sous Git (dépôt privé) ; scripts idempotents ; procédures `docs/PRO-EXPLOITATION-SIEM.md`.
-- **Clause 10** : registre d'amélioration continue daté & vérifié — `docs/REGISTRE-AMELIORATION-CONTINUE.md`.
+- Tout le provisioning sous Git (dépôt privé) ; scripts idempotents ; procédures `docs/securite-conformite/PRO-EXPLOITATION-SIEM.md`.
+- **Clause 10** : registre d'amélioration continue daté & vérifié — `docs/securite-conformite/REGISTRE-AMELIORATION-CONTINUE.md`.
 
 ## A.8.13 — Sauvegarde / A.8.8 — Vulnérabilités
-- Sauvegarde config quotidienne chiffrée + export NAS (`30-backup-config.sh`), PRA `docs/PRA-RECONSTRUCTION-SIEM.md`.
+- Sauvegarde config quotidienne chiffrée + export NAS (`30-backup-config.sh`), PRA `docs/exploitation/PRA-RECONSTRUCTION-SIEM.md`.
 - Vulnérabilités : corrélation CISA KEV + ancienneté de patch (`38-vuln-scan.sh`).
 
 ---

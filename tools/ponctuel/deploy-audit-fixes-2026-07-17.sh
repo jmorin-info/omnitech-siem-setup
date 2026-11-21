@@ -9,7 +9,7 @@
 # set -e : arret au premier echec. Chaque etape est idempotente (rejouable).
 # Rien ici ne touche : le routage event_source (LOT E), les signaux XDR morts
 # (F.1/F.2), ni la def morte live "kill-chain correlee" -> decisions RSSI, voir
-# docs/AUDIT-2026-07-17-RESTE-A-TRAITER.md.
+# docs/archives/AUDIT-2026-07-17-RESTE-A-TRAITER.md.
 #
 # ROLLBACK triage :
 #   cp /root/omni-alert-triage.deployed-bak-<horodatage> /usr/local/sbin/omni-alert-triage
@@ -78,7 +78,7 @@ if run 5; then
 fi
 
 log "DEPLOIEMENT TERMINE."
-echo "Non deploye (decisions RSSI, voir docs/AUDIT-2026-07-17-RESTE-A-TRAITER.md) :"
+echo "Non deploye (decisions RSSI, voir docs/archives/AUDIT-2026-07-17-RESTE-A-TRAITER.md) :"
 echo "  - LOT E routage event_source (fuite omni-m365/365j) : atomique, risque ingestion."
 echo "  - Signaux XDR morts + F.1/F.2 (rules.yaml) : ressuscitent de la detection."
 echo "  - Def live 'kill-chain correlee' : a desactiver via l'API/console (create-only ne l'atteint pas)."

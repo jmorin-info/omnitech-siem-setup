@@ -68,7 +68,7 @@ the attack surface and the maintenance burden low.
 6. **Route.** Every mailing detection notifies a single HTTP endpoint — the triage service.
    Teams and SOAR are wired in parallel where relevant.
 7. **Triage.** `omni-alert-triage` decides whether a human is e-mailed and renders a clean
-   notification (see [ALERTING-AND-TRIAGE.md](ALERTING-AND-TRIAGE.md)).
+   notification (see [../ALERTING-AND-TRIAGE.md](../ALERTING-AND-TRIAGE.md)).
 8. **Visualise / respond.** Analysts work in the Graylog dashboards and the `/soc/` console;
    attacking public IPs are auto-blocked back into the FortiGate.
 

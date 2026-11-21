@@ -1,8 +1,8 @@
 # Operations &amp; resilience
 
 Day-to-day runbook for the OMNI SIEM platform. The authoritative French procedures are
-[PROCEDURE-EXPLOITATION-SIEM.md](PROCEDURE-EXPLOITATION-SIEM.md) and
-[GUIDE-DEPANNAGE.md](GUIDE-DEPANNAGE.md).
+[exploitation/PROCEDURE-EXPLOITATION-SIEM.md](exploitation/PROCEDURE-EXPLOITATION-SIEM.md) and
+[exploitation/GUIDE-DEPANNAGE.md](exploitation/GUIDE-DEPANNAGE.md).
 
 ## Service health
 
@@ -44,7 +44,7 @@ sensible silence threshold, otherwise a future outage of that source goes unnoti
 The nightly `siem-backup` unit produces three artefacts: a MongoDB dump (Graylog config), an
 OpenSearch snapshot (message data), and a config tarball. Restore is documented and validated
 in [exploitation/RESTORE.md](exploitation/RESTORE.md); a full rebuild-from-source procedure is
-[PRA-RECONSTRUCTION-SIEM.md](PRA-RECONSTRUCTION-SIEM.md).
+[exploitation/PRA-RECONSTRUCTION-SIEM.md](exploitation/PRA-RECONSTRUCTION-SIEM.md).
 
 ```bash
 systemctl status siem-backup.service
@@ -71,7 +71,7 @@ ISO-aligned per-source retention tiers (illustrative):
 | Security-relevant | Windows Security, vSphere, ESET | 180 days |
 | Cloud audit | Microsoft 365 | 365 days |
 
-Policy: [POLITIQUE-RETENTION.md](POLITIQUE-RETENTION.md).
+Policy: [securite-conformite/POLITIQUE-RETENTION.md](securite-conformite/POLITIQUE-RETENTION.md).
 
 ## Alerting hygiene
 
@@ -90,10 +90,10 @@ Policy: [POLITIQUE-RETENTION.md](POLITIQUE-RETENTION.md).
 | Add a legitimate egress (stop an exfil FP) | append the IP/CIDR to `EXFIL_ALLOW_DEST` in `00-vars.env` (⚠ no inline comment on the value line) |
 | Add / tune a detection | the relevant `NN-*.sh` provisioning script, then re-run it |
 | Investigate an entity | `/soc/` console → entity 360° dossier |
-| Troubleshoot | [GUIDE-DEPANNAGE.md](GUIDE-DEPANNAGE.md) |
+| Troubleshoot | [exploitation/GUIDE-DEPANNAGE.md](exploitation/GUIDE-DEPANNAGE.md) |
 
 ## Encryption &amp; access
 
 - Data volume: LUKS-encrypted (`/data`); the LUKS header is backed up off-box.
 - TLS everywhere; SSH locked down; console exposure per RSSI policy.
-- Volume-encryption procedure: [PROCEDURE-CHIFFREMENT-REPOS.md](PROCEDURE-CHIFFREMENT-REPOS.md).
+- Volume-encryption procedure: [securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md](securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md).

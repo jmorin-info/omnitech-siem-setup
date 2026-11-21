@@ -214,7 +214,7 @@ definitions, SOC channel); **MAIL = 26 critical "wake-me-up" alerts**
 > The complete list of the 88 definitions and their exact routing is generated/controlled
 > via `13-graylog-alerts.sh`, `21-alert-hygiene.sh`, the additional detection
 > scripts (47/48/50/51) and `22-alert-routing.sh`. See also
-> `docs/REGISTRE-DETECTIONS.md`.
+> `docs/detection/REGISTRE-DETECTIONS.md`.
 
 ## 7. "OMNI - SOC" dashboard (24 pages)
 
@@ -297,7 +297,7 @@ Single dashboard `requires={}` → 100% OSS (no Enterprise required).
 | `54-post-purge-repopulate.sh` | post-purge repopulation (index ranges, M365 re-fetch, robot restart) |
 | `55-vaultwarden.sh` | Vaultwarden source (stream + **dedicated index set `omni-vaultwarden`** + pipeline `omni-vw-*` + vault detections); kit `/kit/vw-filebeat.sh` |
 | `56-fortidhcp.sh` | FortiGate DHCP attribution (`omni-fortidhcp-fetch`, 15 min timer, lookup `omni-dhcp-attribution` → `src_hostname`/`dest_hostname`) |
-| `57-mitre-coverage.sh` | MITRE ATT&CK coverage map → `docs/mitre-navigator-layer.json` (Navigator layer) + summary |
+| `57-mitre-coverage.sh` | MITRE ATT&CK coverage map → `docs/detection/mitre-navigator-layer.json` (Navigator layer) + summary |
 | `58-identity-correlation.sh` | unified identity (`identity`/`identity_human`) + "Identité" dashboard page |
 | `59-file-audit.sh` | sensitive file access audit (4663/5145 → `file_sensitive_access`/`file_delete_sensible`) |
 | `60-integrity.sh` | log integrity (hashed-signed register `omni-integrity` + `--verify` + off-SIEM copy) + read-only Graylog role |

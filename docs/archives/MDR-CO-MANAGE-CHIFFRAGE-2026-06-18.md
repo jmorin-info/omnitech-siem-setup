@@ -2,7 +2,7 @@
 
 **OMNITECH SECURITY — 2026-06-18 — destiné à : Julien Morin (RSSI/dev)**
 **Décision amont :** retenir un **MDR co-managé** pour combler les 3 gaps *irréductibles* du build interne
-(SOC humain 24/7, threat-intel/dark-web, garantie cyber). Voir `docs/REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md`.
+(SOC humain 24/7, threat-intel/dark-web, garantie cyber). Voir `docs/archives/REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md`.
 **Portée de ce doc :** cadrer le périmètre, le modèle, comparer le marché 2026, chiffrer, et lister les
 critères de bascule + questions d'appel d'offres.
 

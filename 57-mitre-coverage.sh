@@ -2,7 +2,7 @@
 # =============================================================================
 # 57-mitre-coverage.sh - Carte de couverture MITRE ATT&CK du SIEM OMNITECH.
 #   Lit lookups/mitre-attack.csv (tag -> technique/tactique/score) et genere :
-#     - docs/mitre-navigator-layer.json : calque a charger dans MITRE ATT&CK
+#     - docs/detection/mitre-navigator-layer.json : calque a charger dans MITRE ATT&CK
 #       Navigator (https://mitre-attack.github.io/attack-navigator/) pour
 #       VISUALISER la couverture (techniques colorees par score max).
 #     - un resume console (tactiques couvertes, nb techniques, trous).
@@ -12,7 +12,7 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 CSV="lookups/mitre-attack.csv"
-OUT="docs/mitre-navigator-layer.json"
+OUT="docs/detection/mitre-navigator-layer.json"
 [[ -f "$CSV" ]] || { echo "CSV introuvable: $CSV" >&2; exit 1; }
 mkdir -p docs
 
@@ -77,5 +77,5 @@ for t in TACTICS:
 print("Calque Navigator ecrit  :", out_path)
 PY
 echo
-echo "=== 57 termine. Charger docs/mitre-navigator-layer.json dans"
+echo "=== 57 termine. Charger docs/detection/mitre-navigator-layer.json dans"
 echo "    https://mitre-attack.github.io/attack-navigator/ (Open Existing Layer). ==="

@@ -17,7 +17,7 @@
 #
 #   DISCIPLINE DE PROVISIONNING (sinon FP) : un compte leurre doit rester DORMANT --
 #   jamais cable a un sync (MSOL/ADSync), un RMM (ninjaone), un outil de sauvegarde,
-#   un scanner authentifie. Aucun usage = aucun evenement = aucun FP. Cf docs/DECEPTION-PLAN.md.
+#   un scanner authentifie. Aucun usage = aucun evenement = aucun FP. Cf docs/detection/DECEPTION-PLAN.md.
 # =============================================================================
 key,type
 svc_veeam,identity

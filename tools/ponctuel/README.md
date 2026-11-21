@@ -24,7 +24,7 @@ constaté sans action en écriture ou sans analyse plus poussée.
 
 | Script | Date | Objet | Statut constaté |
 |---|---|---|---|
-| `deploy-audit-fixes-2026-07-17.sh` | 17/07/2026 | Déploiement des correctifs de l'audit alerting/corrélation (voir [archive de l'audit](../../docs/AUDIT-2026-07-17-RESTE-A-TRAITER.md)) | Non vérifié |
+| `deploy-audit-fixes-2026-07-17.sh` | 17/07/2026 | Déploiement des correctifs de l'audit alerting/corrélation (voir [archive de l'audit](../../docs/archives/AUDIT-2026-07-17-RESTE-A-TRAITER.md)) | Non vérifié |
 | `upgrade-graylog-715.sh` | 17/07/2026 | Montée Graylog 7.1.3 vers 7.1.5 | Dépassé : Graylog 7.2.2 installé |
 | `seal-alert-tri.sh` | 21/07/2026 | Matrice de tri des détections SEAL (désactivation, retrait du mail) | Non vérifié |
 | `seal-add-acc008.sh` | 07/2026 | Création de la détection SEAL ACC-008 | Appliqué : définition ACC-008 présente |

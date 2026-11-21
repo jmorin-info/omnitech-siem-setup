@@ -14,15 +14,15 @@
 
 | Contrôle Annexe A (2022) | Intitulé | Apport du SIEM | Preuve / emplacement |
 |--------------------------|----------|----------------|----------------------|
-| **A.8.15** | Journalisation | Collecte centralisée et inviolable des journaux de l'ensemble des sources (AD/Sysmon, FortiGate, Microsoft 365/Entra, vSphere, Veeam, **ESET PROTECT**, **WAF BunkerWeb**, télémétrie interne SIEM) ; horodatage ; protection en écriture seule | Streams Graylog (13 streams) ; `docs/POLITIQUE-RETENTION.md` ; `docs/INVENTAIRE-SOURCES.md` |
-| **A.8.16** | Surveillance des activités | 88 définitions (87 détections + 1 système) actives, tableaux de bord temps réel (« OMNI - SOC », 24 pages), anomalies comportementales (UEBA), surveillance réseau (NDR) | Dashboard « OMNI - SOC » ; `docs/REGISTRE-DETECTIONS.md` ; alertes Graylog |
+| **A.8.15** | Journalisation | Collecte centralisée et inviolable des journaux de l'ensemble des sources (AD/Sysmon, FortiGate, Microsoft 365/Entra, vSphere, Veeam, **ESET PROTECT**, **WAF BunkerWeb**, télémétrie interne SIEM) ; horodatage ; protection en écriture seule | Streams Graylog (13 streams) ; `docs/securite-conformite/POLITIQUE-RETENTION.md` ; `docs/sources/INVENTAIRE-SOURCES.md` |
+| **A.8.16** | Surveillance des activités | 88 définitions (87 détections + 1 système) actives, tableaux de bord temps réel (« OMNI - SOC », 24 pages), anomalies comportementales (UEBA), surveillance réseau (NDR) | Dashboard « OMNI - SOC » ; `docs/detection/REGISTRE-DETECTIONS.md` ; alertes Graylog |
 | **A.8.17** | Synchronisation des horloges | Tous les hôtes et le SIEM synchronisés NTP sur le PDC ; horodatage cohérent des événements | Conf NTP (`00-vars.env` NTP1/NTP2) ; champ `timestamp` |
 | **A.5.7** | Renseignement sur les menaces | Threat intel (Tor/Spamhaus), CISA KEV (vulnérabilités exploitées), détections ESET PROTECT (menaces/IoC endpoint), mapping MITRE ATT&CK | Pages « ATT&CK », « Vulnérabilités », « Sources externes » ; lookup threat-intel ; `lookups/mitre-attack.csv` |
-| **A.5.24** | Préparation à la gestion des incidents | Corrélation automatique des détections en **incidents** horodatés (kill-chain), priorisation P2/P3, notifications | Page « Incidents » ; `docs/PROCEDURE-INCIDENT.md` ; `omni-incident-correlate` |
+| **A.5.24** | Préparation à la gestion des incidents | Corrélation automatique des détections en **incidents** horodatés (kill-chain), priorisation P2/P3, notifications | Page « Incidents » ; `docs/exploitation/PROCEDURE-INCIDENT.md` ; `omni-incident-correlate` |
 | **A.5.25** | Évaluation et décision sur les événements | Scoring de risque (MITRE + UEBA 0-100), sévérité, file de triage | KPIs « Incidents critiques », « Entités à risque » ; score UEBA |
-| **A.5.26** | Réponse aux incidents | Routage des notifications en **2 tiers** : Teams = firehose (toutes les alertes), e-mail = 26 alertes critiques « réveille-moi » (compromission confirmée + santé SIEM) ; SOAR-light (blocage auto d'IP attaquantes via threat-feed FortiGate) | Notifications Graylog ; `22-alert-routing.sh` ; `omni-soar` ; `docs/PROCEDURE-INCIDENT.md` ; `docs/REPONSE-AUTOMATISEE.md` |
+| **A.5.26** | Réponse aux incidents | Routage des notifications en **2 tiers** : Teams = firehose (toutes les alertes), e-mail = 26 alertes critiques « réveille-moi » (compromission confirmée + santé SIEM) ; SOAR-light (blocage auto d'IP attaquantes via threat-feed FortiGate) | Notifications Graylog ; `22-alert-routing.sh` ; `omni-soar` ; `docs/exploitation/PROCEDURE-INCIDENT.md` ; `docs/exploitation/REPONSE-AUTOMATISEE.md` |
 | **A.5.27** | Tirer des enseignements des incidents | Rapport hebdo + rapport exécutif mensuel (tendances, top risques) ; historique requêtable | `omni-weekly-report`, `omni-monthly-report` ; archive `/kit/rapports/` |
-| **A.5.28** | Collecte de preuves | Journaux conservés (dossier sécurité **365 j** ; FortiGate **180 j** ; BunkerWeb **90 j**), horodatés, inviolables ; message brut conservé pour le forensic | Index OpenSearch ; `docs/POLITIQUE-RETENTION.md` |
+| **A.5.28** | Collecte de preuves | Journaux conservés (dossier sécurité **365 j** ; FortiGate **180 j** ; BunkerWeb **90 j**), horodatés, inviolables ; message brut conservé pour le forensic | Index OpenSearch ; `docs/securite-conformite/POLITIQUE-RETENTION.md` |
 | **A.8.7** | Protection contre les logiciels malveillants | Détection Microsoft Defender (détection/désactivation), **EDR/antivirus ESET PROTECT** (menaces, événements HIPS), UTM FortiGate (virus/IPS), indicateurs ransomware | Alertes « Defender », « ESET : détection », « FortiGate virus/IPS », « Indicateur de ransomware » ; page « Sources externes » |
 | **A.8.8** | Gestion des vulnérabilités techniques | Croisement inventaire logiciel × CISA KEV (CVE exploitées) + ancienneté des correctifs | Page « Vulnérabilités » ; `omni-vuln-scan` |
 | **A.8.12** | Prévention de la fuite de données | Détection d'exfiltration : tunneling DNS (entropie), partages externes M365, transferts mail externes, pics de volume sortant | Alertes « Tunneling DNS », « M365 partage externe / transfert mail » ; page UEBA/NDR |
@@ -41,13 +41,13 @@
   `omni-integrity`) : empreinte quotidienne de l'état du corpus, **copie hors-bande
   (partage SMB)**, vérification hebdomadaire (`--verify`) et **alerte si la chaîne
   est rompue** → toute suppression/altération rétroactive devient **prouvable**
-  (tamper-evidence). Cf. `docs/PROCEDURE-INTEGRITE-PREUVE.md` (A.8.15 / A.5.28).
+  (tamper-evidence). Cf. `docs/securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md` (A.8.15 / A.5.28).
 - **Moindre privilège (A.8.2 / A.8.3)** : rôle Graylog « OMNI - Analyste (lecture
   seule) » pour les analystes ; compte admin (seul habilité à supprimer) réservé
   en **break-glass** (MDP au coffre).
 - **Chiffrement au repos (A.8.24 / A.5.33)** : volume `/data` chiffré **LUKS2 +
   déverrouillage TPM2** (header inline, `aes-xts` 512 bits) — **réalisé le 2026-06-14**,
-  cf. `docs/PROCEDURE-CHIFFREMENT-REPOS.md`.
+  cf. `docs/securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md`.
 - **Détection de l'altération** : règle « Sabotage de l'audit » (Event ID
   1102/4719/4794/104) en P3 + **alerte « Intégrité des logs COMPROMISE »** → alerte
   immédiate (mail) si quelqu'un efface/désactive la journalisation ou rompt la chaîne.

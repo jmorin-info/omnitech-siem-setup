@@ -243,8 +243,8 @@ noise/false-positive allow-lists learned over time.
 <div align="center"><img src="docs/captures/04-detections.png" alt="Detections view" width="90%"></div>
 
 *ATT&CK coverage and the live detection catalogue are documented in
-[`docs/COUVERTURE-MITRE-ATTACK.md`](docs/COUVERTURE-MITRE-ATTACK.md) and
-[`docs/REGISTRE-DETECTIONS.md`](docs/REGISTRE-DETECTIONS.md).*
+[`docs/detection/COUVERTURE-MITRE-ATTACK.md`](docs/detection/COUVERTURE-MITRE-ATTACK.md) and
+[`docs/detection/REGISTRE-DETECTIONS.md`](docs/detection/REGISTRE-DETECTIONS.md).*
 
 <div align="center"><img src="docs/captures/06-attack.png" alt="ATT&CK matrix" width="90%"></div>
 
@@ -528,7 +528,7 @@ a complete recovery of log data and all external collectors.
   is a deliberate, manual decision. Dry run: `oms-maj-siem --simuler`.
 - **Retention** — ISO-aligned per-source retention tiers (e.g. FortiGate/Sysmon 90 d,
   Windows Security / vSphere / ESET 180 d, M365 365 d) — see
-  [`docs/POLITIQUE-RETENTION.md`](docs/POLITIQUE-RETENTION.md).
+  [`docs/securite-conformite/POLITIQUE-RETENTION.md`](docs/securite-conformite/POLITIQUE-RETENTION.md).
 - **Source watchdog** — every monitored source has a silence threshold; a blinded collector
   raises a `source_silent` alert (this is how a stalled DNS-audit or Veeam feed is caught).
 - **Self-health &amp; drift** — periodic self-checks and repo-vs-production drift detection.
@@ -547,7 +547,7 @@ a complete recovery of log data and all external collectors.
 | About 240 *connection reset by peer* on the Beats input every two hours, all hosts at the same second | Not a collection problem. The RMM health script runs `winlogbeat test output` on every machine every two hours and closes its test connection with a RST. A `log4j2.xml` filter hides those lines (applied at the next Graylog restart); real collection connections are untouched |
 | Snapshots silently stopped | The `graylog_fs` repository registration lives in the cluster state and is lost if `path.data` is migrated or wiped. Re-register it |
 
-More in [`docs/GUIDE-DEPANNAGE.md`](docs/GUIDE-DEPANNAGE.md) and the French README.
+More in [`docs/exploitation/GUIDE-DEPANNAGE.md`](docs/exploitation/GUIDE-DEPANNAGE.md) and the French README.
 
 ### Security & secrets
 
@@ -566,9 +566,9 @@ More in [`docs/GUIDE-DEPANNAGE.md`](docs/GUIDE-DEPANNAGE.md) and the French READ
 
 Detections, retention, logging policy, incident procedure, and evidence generation are mapped
 to ISO/IEC 27001 controls (notably A.8.15 logging, A.8.16 monitoring, A.5.x incident
-management). See [`docs/ISO27001-MAPPING.md`](docs/ISO27001-MAPPING.md),
-[`docs/REGISTRE-CONFORMITE-ISO27001.md`](docs/REGISTRE-CONFORMITE-ISO27001.md), and the
-`docs/EVIDENCE-AUDIT-*.md` evidence packs.
+management). See [`docs/securite-conformite/ISO27001-MAPPING.md`](docs/securite-conformite/ISO27001-MAPPING.md),
+[`docs/securite-conformite/REGISTRE-CONFORMITE-ISO27001.md`](docs/securite-conformite/REGISTRE-CONFORMITE-ISO27001.md), and the
+`docs/archives/preuves-iso/EVIDENCE-AUDIT-*.md` evidence packs.
 
 ---
 
@@ -601,9 +601,9 @@ The complete documentation set lives under [`docs/`](docs/) — start at
 
 | Document | Covers |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components, data flow, storage, services, network |
+| [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) | Components, data flow, storage, services, network |
 | [`docs/DATA-SOURCES.md`](docs/DATA-SOURCES.md) | Every source, transport, normalised schema, freshness monitoring |
-| [`docs/DETECTIONS.md`](docs/DETECTIONS.md) | Detection engine, MITRE coverage, enrichment, UEBA/NDR, correlation |
+| [`docs/detection/DETECTIONS.md`](docs/detection/DETECTIONS.md) | Detection engine, MITRE coverage, enrichment, UEBA/NDR, correlation |
 | [`docs/ALERTING-AND-TRIAGE.md`](docs/ALERTING-AND-TRIAGE.md) | Triage service, scoring, LLM judge, notification design, SOAR |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Health, watchdog, backup/DR, retention, runbook |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Prerequisites, provisioning order, rebuild procedure |
@@ -612,20 +612,20 @@ The complete documentation set lives under [`docs/`](docs/) — start at
 
 | Topic | Document |
 |---|---|
-| Architecture dossier | [`docs/DOSSIER-ARCHITECTURE-SIEM.md`](docs/DOSSIER-ARCHITECTURE-SIEM.md) |
-| Source integration &amp; inventory | [`docs/INTEGRATION-SOURCES.md`](docs/INTEGRATION-SOURCES.md) · [`docs/INVENTAIRE-SOURCES.md`](docs/INVENTAIRE-SOURCES.md) |
-| Detection registry | [`docs/REGISTRE-DETECTIONS.md`](docs/REGISTRE-DETECTIONS.md) |
-| MITRE ATT&CK coverage | [`docs/COUVERTURE-MITRE-ATTACK.md`](docs/COUVERTURE-MITRE-ATTACK.md) |
+| Architecture dossier | [`docs/architecture/DOSSIER-ARCHITECTURE-SIEM.md`](docs/architecture/DOSSIER-ARCHITECTURE-SIEM.md) |
+| Source integration &amp; inventory | [`docs/sources/INTEGRATION-SOURCES.md`](docs/sources/INTEGRATION-SOURCES.md) · [`docs/sources/INVENTAIRE-SOURCES.md`](docs/sources/INVENTAIRE-SOURCES.md) |
+| Detection registry | [`docs/detection/REGISTRE-DETECTIONS.md`](docs/detection/REGISTRE-DETECTIONS.md) |
+| MITRE ATT&CK coverage | [`docs/detection/COUVERTURE-MITRE-ATTACK.md`](docs/detection/COUVERTURE-MITRE-ATTACK.md) |
 | SOC console | [`docs/CONSOLE-SOC.md`](docs/CONSOLE-SOC.md) |
-| Automated response &amp; playbooks | [`docs/REPONSE-AUTOMATISEE.md`](docs/REPONSE-AUTOMATISEE.md) · [`docs/SOAR-PLAYBOOKS.md`](docs/SOAR-PLAYBOOKS.md) |
-| Operations runbook | [`docs/PROCEDURE-EXPLOITATION-SIEM.md`](docs/PROCEDURE-EXPLOITATION-SIEM.md) |
-| Incident procedure | [`docs/PROCEDURE-INCIDENT.md`](docs/PROCEDURE-INCIDENT.md) |
-| Disaster recovery / rebuild | [`docs/PRA-RECONSTRUCTION-SIEM.md`](docs/PRA-RECONSTRUCTION-SIEM.md) |
-| Retention policy | [`docs/POLITIQUE-RETENTION.md`](docs/POLITIQUE-RETENTION.md) |
-| Troubleshooting | [`docs/GUIDE-DEPANNAGE.md`](docs/GUIDE-DEPANNAGE.md) |
-| Glossary | [`docs/GLOSSAIRE.md`](docs/GLOSSAIRE.md) |
-| ISO 27001 mapping &amp; evidence | [`docs/ISO27001-MAPPING.md`](docs/ISO27001-MAPPING.md) · `docs/EVIDENCE-AUDIT-*.md` |
-| Executive summary | [`docs/SYNTHESE-EXECUTIVE.md`](docs/SYNTHESE-EXECUTIVE.md) |
+| Automated response &amp; playbooks | [`docs/exploitation/REPONSE-AUTOMATISEE.md`](docs/exploitation/REPONSE-AUTOMATISEE.md) · [`docs/exploitation/SOAR-PLAYBOOKS.md`](docs/exploitation/SOAR-PLAYBOOKS.md) |
+| Operations runbook | [`docs/exploitation/PROCEDURE-EXPLOITATION-SIEM.md`](docs/exploitation/PROCEDURE-EXPLOITATION-SIEM.md) |
+| Incident procedure | [`docs/exploitation/PROCEDURE-INCIDENT.md`](docs/exploitation/PROCEDURE-INCIDENT.md) |
+| Disaster recovery / rebuild | [`docs/exploitation/PRA-RECONSTRUCTION-SIEM.md`](docs/exploitation/PRA-RECONSTRUCTION-SIEM.md) |
+| Retention policy | [`docs/securite-conformite/POLITIQUE-RETENTION.md`](docs/securite-conformite/POLITIQUE-RETENTION.md) |
+| Troubleshooting | [`docs/exploitation/GUIDE-DEPANNAGE.md`](docs/exploitation/GUIDE-DEPANNAGE.md) |
+| Glossary | [`docs/reference/GLOSSAIRE.md`](docs/reference/GLOSSAIRE.md) |
+| ISO 27001 mapping &amp; evidence | [`docs/securite-conformite/ISO27001-MAPPING.md`](docs/securite-conformite/ISO27001-MAPPING.md) · `docs/archives/preuves-iso/EVIDENCE-AUDIT-*.md` |
+| Executive summary | [`docs/demarrage/SYNTHESE-EXECUTIVE.md`](docs/demarrage/SYNTHESE-EXECUTIVE.md) |
 
 > Source-specific integration notes (kept from the original French documentation):
 > [`docs/sources/VEEAM.md`](docs/sources/VEEAM.md), [`docs/sources/M365.md`](docs/sources/M365.md),

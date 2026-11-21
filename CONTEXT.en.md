@@ -827,7 +827,7 @@ notification received, including Teams.
   Verified in prod: EID12/4673/4627 -> ~0 indexed, EID1/4624 -> OK. (2) TIERED retention:
   security (winsec/sysmon/winother/m365/vsphere) -> 365d, fortigate -> 90d (traffic, forensic
   window sufficient). Projection ~5.1 TB = 12-month security dossier within 80%. (3) audit
-  evidence -> docs/POLITIQUE-RETENTION.md (maps A.8.15/16/17, risk-accepted exclusions).
+  evidence -> docs/securite-conformite/POLITIQUE-RETENTION.md (maps A.8.15/16/17, risk-accepted exclusions).
   PITFALL avoided: NO best_compression codec via ES template (would break the Graylog mappings
   of the composable index sets) -> not done, the trim+tiering is enough. set_retention() = GET index
   set + jq max_number_of_indices + PUT. Reversible (removing rules = restores collection).

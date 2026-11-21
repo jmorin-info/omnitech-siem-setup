@@ -826,7 +826,7 @@ notification recue, Teams compris.
   Verifie en prod : EID12/4673/4627 -> ~0 indexe, EID1/4624 -> OK. (2) RETENTION tiered :
   securite (winsec/sysmon/winother/m365/vsphere) -> 365j, fortigate -> 90j (trafic, fenetre
   forensic suffisante). Projection ~5,1 To = dossier securite 12 mois dans les 80%. (3) preuve
-  d'audit -> docs/POLITIQUE-RETENTION.md (mappe A.8.15/16/17, exclusions risque-acceptees).
+  d'audit -> docs/securite-conformite/POLITIQUE-RETENTION.md (mappe A.8.15/16/17, exclusions risque-acceptees).
   PIEGE evite : PAS de codec best_compression via template ES (casserait les mappings Graylog
   des index sets composables) -> non fait, le trim+tiering suffit. set_retention() = GET index
   set + jq max_number_of_indices + PUT. Reversible (retirer regles = restaure collecte).

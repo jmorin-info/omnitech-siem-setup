@@ -10,7 +10,7 @@
 #     - copie hors-SIEM (partage SMB) -> un insider ne peut pas reecrire l'historique.
 #     - attestation emise dans le SIEM (event_source:siem_integrity) + mode --verify.
 #   Complete par : role Graylog LECTURE SEULE (moindre privilege) + procedure
-#   forensique (docs/PROCEDURE-INTEGRITE-PREUVE.md). Idempotent.
+#   forensique (docs/securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md). Idempotent.
 # =============================================================================
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -186,4 +186,4 @@ echo
 echo "=== 60 termine. Verifier la chaine a tout moment : ${SBIN} --verify"
 echo "    Registre : /var/lib/omni-integrity/chain.jsonl (+ copie SMB /SIEM/integrity)."
 echo "    Affecter les comptes analystes au role LECTURE SEULE ; reserver l'admin"
-echo "    (seul a pouvoir supprimer) en break-glass. Cf. docs/PROCEDURE-INTEGRITE-PREUVE.md ==="
+echo "    (seul a pouvoir supprimer) en break-glass. Cf. docs/securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md ==="

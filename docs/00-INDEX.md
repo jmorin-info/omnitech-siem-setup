@@ -17,20 +17,20 @@ les références de l'installation historique figurent plus bas.
 
 | Réf | Document | Type ISO | Objet |
 |---|---|---|---|
-| POL | [POL-SUPERVISION-JOURNALISATION.md](POL-SUPERVISION-JOURNALISATION.md) | **Politique** | Engagements, périmètre, responsabilités, rétention — validée DSI |
-| STD | [STD-JOURNALISATION.md](STD-JOURNALISATION.md) | **Standard** | Règles techniques : sources, transport, champs, seuils, conventions |
-| PRO | [PRO-EXPLOITATION-SIEM.md](PRO-EXPLOITATION-SIEM.md) | **Procédure** | Exploitation au quotidien : revues, triage, enrôlement, relances |
-| DOS | [DOSSIER-ARCHITECTURE-SIEM.md](DOSSIER-ARCHITECTURE-SIEM.md) | **Dossier d'exploitation** | Architecture, composants, flux, MEP, secrets, sauvegarde |
-| REG | [REGISTRE-CONFORMITE-ISO27001.md](REGISTRE-CONFORMITE-ISO27001.md) | **Registre de conformité** | Mapping Annexe A ↔ preuves, actions ouvertes, méthode auditeur |
-| PRA | [PRA-RECONSTRUCTION-SIEM.md](PRA-RECONSTRUCTION-SIEM.md) | **Plan de continuité** | Reconstruction sur nouveau serveur : RTO/RPO, scénarios, validation |
-| — | [LDAPS.md](LDAPS.md) | Procédure | Authentification AD (LDAPS) sur la console Graylog |
-| — | [REPONSE-AUTOMATISEE.md](REPONSE-AUTOMATISEE.md) | Procédure | Compte canari AD + SOAR (détection avancée & réponse auto) |
-| — | [GUIDE-DEPANNAGE.md](GUIDE-DEPANNAGE.md) | Exploitation | Dépannage : symptôme → cause → solution |
-| — | [SYNTHESE-EXECUTIVE.md](SYNTHESE-EXECUTIVE.md) | Direction | Synthèse 1 page pour la DSI / comité |
-| — | [GLOSSAIRE.md](GLOSSAIRE.md) | Référence | Termes techniques pour lecteurs non spécialistes |
+| POL | [securite-conformite/POL-SUPERVISION-JOURNALISATION.md](securite-conformite/POL-SUPERVISION-JOURNALISATION.md) | **Politique** | Engagements, périmètre, responsabilités, rétention — validée DSI |
+| STD | [securite-conformite/STD-JOURNALISATION.md](securite-conformite/STD-JOURNALISATION.md) | **Standard** | Règles techniques : sources, transport, champs, seuils, conventions |
+| PRO | [securite-conformite/PRO-EXPLOITATION-SIEM.md](securite-conformite/PRO-EXPLOITATION-SIEM.md) | **Procédure** | Exploitation au quotidien : revues, triage, enrôlement, relances |
+| DOS | [architecture/DOSSIER-ARCHITECTURE-SIEM.md](architecture/DOSSIER-ARCHITECTURE-SIEM.md) | **Dossier d'exploitation** | Architecture, composants, flux, MEP, secrets, sauvegarde |
+| REG | [securite-conformite/REGISTRE-CONFORMITE-ISO27001.md](securite-conformite/REGISTRE-CONFORMITE-ISO27001.md) | **Registre de conformité** | Mapping Annexe A ↔ preuves, actions ouvertes, méthode auditeur |
+| PRA | [exploitation/PRA-RECONSTRUCTION-SIEM.md](exploitation/PRA-RECONSTRUCTION-SIEM.md) | **Plan de continuité** | Reconstruction sur nouveau serveur : RTO/RPO, scénarios, validation |
+| — | [sources/LDAPS.md](sources/LDAPS.md) | Procédure | Authentification AD (LDAPS) sur la console Graylog |
+| — | [exploitation/REPONSE-AUTOMATISEE.md](exploitation/REPONSE-AUTOMATISEE.md) | Procédure | Compte canari AD + SOAR (détection avancée & réponse auto) |
+| — | [exploitation/GUIDE-DEPANNAGE.md](exploitation/GUIDE-DEPANNAGE.md) | Exploitation | Dépannage : symptôme → cause → solution |
+| — | [demarrage/SYNTHESE-EXECUTIVE.md](demarrage/SYNTHESE-EXECUTIVE.md) | Direction | Synthèse 1 page pour la DSI / comité |
+| — | [reference/GLOSSAIRE.md](reference/GLOSSAIRE.md) | Référence | Termes techniques pour lecteurs non spécialistes |
 | — | [CHANGELOG.md](CHANGELOG.md) | Référence | Journal des évolutions daté |
 | — | [CONSOLE-SOC.md](CONSOLE-SOC.md) | Exploitation | Console SOC : vues, bande « À traiter », SOAR et déblocage, page Exploitation |
-| — | [SOAR-PLAYBOOKS.md](SOAR-PLAYBOOKS.md) | Procédure | Réponse automatisée, garde-fous et déblocage |
+| — | [exploitation/SOAR-PLAYBOOKS.md](exploitation/SOAR-PLAYBOOKS.md) | Procédure | Réponse automatisée, garde-fous et déblocage |
 
 ## Documents support SMSI / opérationnels (mêmes dossier `docs/`)
 
@@ -39,18 +39,18 @@ les références de l'installation historique figurent plus bas.
 
 | Document | Objet |
 |---|---|
-| [ISO27001-MAPPING.md](ISO27001-MAPPING.md) | Document-pont : capacités SIEM ↔ contrôles Annexe A + preuves |
-| [REGISTRE-DETECTIONS.md](REGISTRE-DETECTIONS.md) | Catalogue des règles de détection actives (alertes Graylog) |
-| [INVENTAIRE-SOURCES.md](INVENTAIRE-SOURCES.md) | Inventaire des sources/actifs supervisés (AD/Sysmon, FortiGate, M365, vSphere, Veeam, ESET, BunkerWeb, NPS) |
-| [INTEGRATION-SOURCES.md](INTEGRATION-SOURCES.md) | Procédure d'intégration des nouvelles sources (ESET PROTECT, NPS, BunkerWeb WAF) |
-| [POLITIQUE-RETENTION.md](POLITIQUE-RETENTION.md) | Politique de rétention différenciée par source (preuve A.8.15) |
-| [PROCEDURE-INCIDENT.md](PROCEDURE-INCIDENT.md) | Détection → évaluation → réponse → clôture des incidents |
-| [PROCEDURE-EXPLOITATION-SIEM.md](PROCEDURE-EXPLOITATION-SIEM.md) | Exploitation courante, maintenance, contrôle du bon fonctionnement |
-| [COUVERTURE-MITRE-ATTACK.md](COUVERTURE-MITRE-ATTACK.md) | Carte de couverture MITRE ATT&CK (+ calque `mitre-navigator-layer.json`) + plan de validation purple-team |
-| [SOAR-PLAYBOOKS.md](SOAR-PLAYBOOKS.md) | Réponse automatisée (SOAR) : catalogue de playbooks PB-01→05, garde-fous |
-| [PROCEDURE-INTEGRITE-PREUVE.md](PROCEDURE-INTEGRITE-PREUVE.md) | Intégrité & valeur probante des journaux (registre haché-signé) + forensique (A.8.15/5.28) |
-| [PROCEDURE-CHIFFREMENT-REPOS.md](PROCEDURE-CHIFFREMENT-REPOS.md) | Chiffrement des données au repos `/data` (LUKS2 + TPM2) (A.8.24/5.33) |
-| [AUDIT-DASHBOARD-2026-06-14.md](AUDIT-DASHBOARD-2026-06-14.md) | Audit senior-SoC des dashboards + plan d'amélioration (suivi des lots) |
+| [securite-conformite/ISO27001-MAPPING.md](securite-conformite/ISO27001-MAPPING.md) | Document-pont : capacités SIEM ↔ contrôles Annexe A + preuves |
+| [detection/REGISTRE-DETECTIONS.md](detection/REGISTRE-DETECTIONS.md) | Catalogue des règles de détection actives (alertes Graylog) |
+| [sources/INVENTAIRE-SOURCES.md](sources/INVENTAIRE-SOURCES.md) | Inventaire des sources/actifs supervisés (AD/Sysmon, FortiGate, M365, vSphere, Veeam, ESET, BunkerWeb, NPS) |
+| [sources/INTEGRATION-SOURCES.md](sources/INTEGRATION-SOURCES.md) | Procédure d'intégration des nouvelles sources (ESET PROTECT, NPS, BunkerWeb WAF) |
+| [securite-conformite/POLITIQUE-RETENTION.md](securite-conformite/POLITIQUE-RETENTION.md) | Politique de rétention différenciée par source (preuve A.8.15) |
+| [exploitation/PROCEDURE-INCIDENT.md](exploitation/PROCEDURE-INCIDENT.md) | Détection → évaluation → réponse → clôture des incidents |
+| [exploitation/PROCEDURE-EXPLOITATION-SIEM.md](exploitation/PROCEDURE-EXPLOITATION-SIEM.md) | Exploitation courante, maintenance, contrôle du bon fonctionnement |
+| [detection/COUVERTURE-MITRE-ATTACK.md](detection/COUVERTURE-MITRE-ATTACK.md) | Carte de couverture MITRE ATT&CK (+ calque `mitre-navigator-layer.json`) + plan de validation purple-team |
+| [exploitation/SOAR-PLAYBOOKS.md](exploitation/SOAR-PLAYBOOKS.md) | Réponse automatisée (SOAR) : catalogue de playbooks PB-01→05, garde-fous |
+| [securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md](securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md) | Intégrité & valeur probante des journaux (registre haché-signé) + forensique (A.8.15/5.28) |
+| [securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md](securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md) | Chiffrement des données au repos `/data` (LUKS2 + TPM2) (A.8.24/5.33) |
+| [archives/AUDIT-DASHBOARD-2026-06-14.md](archives/AUDIT-DASHBOARD-2026-06-14.md) | Audit senior-SoC des dashboards + plan d'amélioration (suivi des lots) |
 
 ## Documents techniques associés (racine `~/omnitech-siem-setup/`)
 
@@ -67,7 +67,7 @@ les références de l'installation historique figurent plus bas.
 
 ## Documentation de présentation en anglais
 
-Pour un lecteur extérieur, la même plateforme est décrite en anglais par [00-INDEX.en.md](00-INDEX.en.md) : [ARCHITECTURE.md](ARCHITECTURE.md), [DATA-SOURCES.md](DATA-SOURCES.md), [DETECTIONS.md](DETECTIONS.md), [ALERTING-AND-TRIAGE.md](ALERTING-AND-TRIAGE.md), [OPERATIONS.md](OPERATIONS.md) et [DEPLOYMENT.md](DEPLOYMENT.md). Les documents français ci-dessus restent la référence pour l'audit.
+Pour un lecteur extérieur, la même plateforme est décrite en anglais par [00-INDEX.en.md](00-INDEX.en.md) : [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md), [DATA-SOURCES.md](DATA-SOURCES.md), [detection/DETECTIONS.md](detection/DETECTIONS.md), [ALERTING-AND-TRIAGE.md](ALERTING-AND-TRIAGE.md), [OPERATIONS.md](OPERATIONS.md) et [DEPLOYMENT.md](DEPLOYMENT.md). Les documents français ci-dessus restent la référence pour l'audit.
 
 ## Correspondance ISO 27001:2022 (Annexe A)
 

@@ -159,7 +159,7 @@ d'origine**. Mise à jour toutes les 30 secondes. *Idéal pour un écran mural S
 - **Dossier sécurité conservé 12 mois** (Windows, Sysmon, M365, vSphere…) ;
   **trafic pare-feu 90 jours** (gros volume, valeur forensic plus courte).
 - Le bruit à faible valeur est filtré pour tenir dans l'espace disque.
-- Politique détaillée : `docs/POLITIQUE-RETENTION.md` (preuve d'audit, mappée aux
+- Politique détaillée : `docs/securite-conformite/POLITIQUE-RETENTION.md` (preuve d'audit, mappée aux
   contrôles ISO 27001 A.8.15 / A.8.16 / A.8.17).
 
 ---
@@ -200,4 +200,4 @@ d'origine**. Mise à jour toutes les 30 secondes. *Idéal pour un écran mural S
 
 *Document de référence — SIEM OMNITECH Security. Pour le détail technique
 d'implémentation, voir `docs/reference/CONTEXT.md`. Pour la politique de rétention,
-`docs/POLITIQUE-RETENTION.md`.*
+`docs/securite-conformite/POLITIQUE-RETENTION.md`.*

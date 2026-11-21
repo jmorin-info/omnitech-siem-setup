@@ -40,7 +40,7 @@
 #
 #   L'APPAT (creer les comptes en AD, deposer les fichiers canari) est l'action de Julien
 #   en DRY-RUN sur l'AD/infra OMNITECH -- JAMAIS sur le tenant co-manage invissys.com.
-#   Voir docs/DECEPTION-PLAN.md (genere). La detection ci-dessous est le PIEGE, deja arme.
+#   Voir docs/detection/DECEPTION-PLAN.md (genere). La detection ci-dessous est le PIEGE, deja arme.
 #
 #   Pipeline 'OMNI - Deception' (stage 13) connecte aux streams Windows Security / Sysmon
 #   / M365 / FortiGate. MITRE csv + alertes mk_a (count>=1, priorite haute). Idempotent.
@@ -189,5 +189,5 @@ mk_a "OMNI - LEURRE Canari ouvert (fichier appat)"               "alert_tag:cana
 echo
 echo "=== 88 termine. OMNI Sentinel - couche deception armee (5 regles, lookup omni-deception)."
 echo "    3 tags : decoy_identity (T1078), decoy_kerberoast (T1558.003), canary_token (T1005)."
-echo "    Collision 0 / baseline 0 verifies. L'APPAT = action Julien (docs/DECEPTION-PLAN.md, dry-run AD OMNITECH)."
+echo "    Collision 0 / baseline 0 verifies. L'APPAT = action Julien (docs/detection/DECEPTION-PLAN.md, dry-run AD OMNITECH)."
 echo "    Relancer 57 (carte ATT&CK) puis 14 (dashboards). ==="

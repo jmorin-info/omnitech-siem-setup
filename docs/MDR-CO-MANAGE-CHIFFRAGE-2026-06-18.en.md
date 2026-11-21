@@ -2,7 +2,7 @@
 
 **OMNITECH SECURITY — 2026-06-18 — intended for: Julien Morin (CISO/dev)**
 **Upstream decision:** adopt a **co-managed MDR** to close the 3 *irreducible* gaps of the internal build
-(24/7 human SOC, threat-intel/dark-web, cyber warranty). See `docs/REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md`.
+(24/7 human SOC, threat-intel/dark-web, cyber warranty). See `docs/archives/REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md`.
 **Scope of this doc:** frame the perimeter, the model, benchmark the 2026 market, price it, and list the
 switch criteria + RFP questions.
 
