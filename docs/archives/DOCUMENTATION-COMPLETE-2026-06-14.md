@@ -133,7 +133,7 @@ hebdomadaires et mensuelles documentées. Aucun coût de licence.
 ## Documents support SMSI / opérationnels (mêmes dossier `docs/`)
 
 > Documents factuels complémentaires, support à l'audit ISO et à l'exploitation.
-> L'index alternatif [../INDEX-DOCUMENTATION.md](../INDEX-DOCUMENTATION.md) en donne une lecture par niveau (fonctionnel vs SMSI).
+> L'index alternatif [../README.md](../README.md) en donne une lecture par niveau (fonctionnel vs SMSI).
 
 | Document | Objet |
 |---|---|
