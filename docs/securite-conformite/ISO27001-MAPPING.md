@@ -85,5 +85,5 @@ ces contrôles, et ce document comme preuve de couverture.
 ---
 *Support technique au SMSI OMNITECH — à valider et dater par le RSSI.
 Dernière revue : **2026-06-14**. Voir aussi `docs/demarrage/GUIDE.md` (vue d'ensemble),
-`docs/reference/CONTEXT.md` (détail d'implémentation), `INVENTAIRE-SOURCES.md` (actifs A.5.9),
+`docs/archives/CONTEXT.md` (détail d'implémentation), `INVENTAIRE-SOURCES.md` (actifs A.5.9),
 `REGISTRE-DETECTIONS.md` (règles A.8.16) et `POLITIQUE-RETENTION.md` (durées).*

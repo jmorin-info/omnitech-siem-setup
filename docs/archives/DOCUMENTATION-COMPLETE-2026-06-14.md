@@ -155,7 +155,7 @@ hebdomadaires et mensuelles documentées. Aucun coût de licence.
 | Document | Objet |
 |---|---|
 | `docs/demarrage/GUIDE.md` | « Comprendre le SIEM en 15 min » : schéma de flux, rôle des pages, analyses expliquées |
-| `docs/reference/CONTEXT.md` | Mémoire technique complète : historique, pièges connus (API 7.x), incidents résolus |
+| `docs/archives/CONTEXT.md` | Mémoire technique complète : historique, pièges connus (API 7.x), incidents résolus |
 | `docs/exploitation/RESTORE.md` | Restauration complète du SIEM depuis une sauvegarde config |
 | `docs/sources/VEEAM.md` | Intégration Veeam Backup & Replication |
 | `docs/sources/VSPHERE.md` | Intégration ESXi / vCenter |
@@ -356,7 +356,7 @@ dans un registre des dérogations. Une dérogation sans échéance est interdite
 - Les administrateurs systèmes/réseau sont sensibilisés aux exigences de
   journalisation (maintien de l'audit policy, des agents, du forwarding).
 - Tout incident de sécurité ou d'exploitation du SIEM alimente un retour
-  d'expérience consigné dans `docs/reference/CONTEXT.md` (pièges et résolutions) et, si
+  d'expérience consigné dans `docs/archives/CONTEXT.md` (pièges et résolutions) et, si
   pertinent, fait évoluer cette politique ou le standard.
 - **Revue** : annuelle a minima, et après tout incident majeur, changement
   d'architecture significatif ou évolution réglementaire.
@@ -646,7 +646,7 @@ mail/Teams → triage humain (la présente procédure).
 
 ## 5. Incidents connus et résolutions (mémo)
 
-Voir `docs/reference/CONTEXT.md` (sections « PIÈGE À RETENIR ») — notamment : listes
+Voir `docs/archives/CONTEXT.md` (sections « PIÈGE À RETENIR ») — notamment : listes
 EventID trop longues (canal Security muet), tempête d'alertes / grâces,
 panne silencieuse Teams (Power Automate), stream M365 qui avale le GELF,
 locale FR (`auditpol` « Réussite »), TLS 1.2 obligatoire (Server 2016),
@@ -1402,7 +1402,7 @@ ces contrôles, et ce document comme preuve de couverture.
 ---
 *Support technique au SMSI OMNITECH — à valider et dater par le RSSI.
 Dernière revue : **2026-06-14**. Voir aussi `docs/demarrage/GUIDE.md` (vue d'ensemble),
-`docs/reference/CONTEXT.md` (détail d'implémentation), `INVENTAIRE-SOURCES.md` (actifs A.5.9),
+`docs/archives/CONTEXT.md` (détail d'implémentation), `INVENTAIRE-SOURCES.md` (actifs A.5.9),
 `REGISTRE-DETECTIONS.md` (règles A.8.16) et `POLITIQUE-RETENTION.md` (durées).*
 
 
@@ -2277,7 +2277,7 @@ Tous planifiés (timers systemd), **auto-supervisés** par `omni-self-health` :
 
 ---
 *Voir `docs/demarrage/GUIDE.md` (vue d'ensemble accessible), `PROCEDURE-INCIDENT.md` (réponse),
-`ISO27001-MAPPING.md` (contrôles), `docs/reference/CONTEXT.md` (détail technique).*
+`ISO27001-MAPPING.md` (contrôles), `docs/archives/CONTEXT.md` (détail technique).*
 
 
 <a id="doc-17"></a>
@@ -2709,7 +2709,7 @@ certificat LDAPS vérifié (`Verify return code: 0`).*
 # Guide de dépannage — SIEM OMNITECH
 
 *Version 1.1 — révisé le 14/06/2026 — Classification : interne. Format : symptôme → cause → solution.
-Référence technique exhaustive des incidents résolus : `docs/reference/CONTEXT.md` (section « PIÈGE À RETENIR »).*
+Référence technique exhaustive des incidents résolus : `docs/archives/CONTEXT.md` (section « PIÈGE À RETENIR »).*
 
 > Sources actuellement collectées : AD/Sysmon (Winlogbeat, Beats TLS 5044), FortiGate (via
 > FortiAnalyzer, syslog 1514 TCP/UDP), Microsoft 365 (GELF HTTP 12201, collecte *pull*),
@@ -2816,7 +2816,7 @@ tail -f /var/log/graylog-server/server.log
 
 ---
 
-> En cas d'incident non listé : consigner symptôme + résolution dans `docs/reference/CONTEXT.md`
+> En cas d'incident non listé : consigner symptôme + résolution dans `docs/archives/CONTEXT.md`
 > (section « PIÈGE À RETENIR ») pour enrichir ce guide.
 > Voir aussi : `INTEGRATION-SOURCES.md`, `POLITIQUE-RETENTION.md`, `PROCEDURE-INCIDENT.md`.
 
@@ -3132,7 +3132,7 @@ Toutes les évolutions notables du dispositif. Format : date — changement.
   vSphere, déploiement des agents Windows (NinjaOne + GPO).
 
 ---
-*Tenir à jour à chaque évolution. Référence technique détaillée : `docs/reference/CONTEXT.md`
+*Tenir à jour à chaque évolution. Référence technique détaillée : `docs/archives/CONTEXT.md`
 (racine du dépôt). Voir aussi `INTEGRATION-SOURCES.md`, `INVENTAIRE-SOURCES.md`,
 `POLITIQUE-RETENTION.md` et `REPONSE-AUTOMATISEE.md` dans `docs/`.*
 

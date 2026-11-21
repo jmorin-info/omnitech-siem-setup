@@ -85,5 +85,5 @@ these controls, and this document as evidence of coverage.
 ---
 *Technical support to the OMNITECH ISMS — to be validated and dated by the CISO.
 Last review: **2026-06-14**. See also `docs/demarrage/GUIDE.md` (overview),
-`docs/reference/CONTEXT.md` (implementation detail), `INVENTAIRE-SOURCES.md` (assets A.5.9),
+`docs/archives/CONTEXT.md` (implementation detail), `INVENTAIRE-SOURCES.md` (assets A.5.9),
 `REGISTRE-DETECTIONS.md` (rules A.8.16) and `POLITIQUE-RETENTION.md` (durations).*

@@ -36,7 +36,7 @@ traceability. It is authoritative for audit purposes.
 **Architecture &amp; sources**
 - [architecture/DOSSIER-ARCHITECTURE-SIEM.md](architecture/DOSSIER-ARCHITECTURE-SIEM.md) — full architecture dossier
 - [sources/INTEGRATION-SOURCES.md](sources/INTEGRATION-SOURCES.md) · [sources/INVENTAIRE-SOURCES.md](sources/INVENTAIRE-SOURCES.md) — source integration &amp; inventory
-- [reference/CONTEXT.md](reference/CONTEXT.md) — project context &amp; history
+- [archives/CONTEXT.md](archives/CONTEXT.md) — project context &amp; history
 
 **Detection &amp; response**
 - [detection/REGISTRE-DETECTIONS.md](detection/REGISTRE-DETECTIONS.md) — detection registry

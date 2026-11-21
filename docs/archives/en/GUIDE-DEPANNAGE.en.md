@@ -1,7 +1,7 @@
 # Troubleshooting Guide — SIEM OMNITECH
 
 *Version 1.1 — revised 14/06/2026 — Classification: internal. Format: symptom → cause → solution.
-Exhaustive technical reference of resolved incidents: `docs/reference/CONTEXT.md` (section "PIÈGE À RETENIR").*
+Exhaustive technical reference of resolved incidents: `docs/archives/CONTEXT.md` (section "PIÈGE À RETENIR").*
 
 > Sources currently collected: AD/Sysmon (Winlogbeat, Beats TLS 5044), FortiGate (via
 > FortiAnalyzer, syslog 1514 TCP/UDP), Microsoft 365 (GELF HTTP 12201, *pull* collection),
@@ -108,6 +108,6 @@ tail -f /var/log/graylog-server/server.log
 
 ---
 
-> For an incident not listed here: record symptom + resolution in `docs/reference/CONTEXT.md`
+> For an incident not listed here: record symptom + resolution in `docs/archives/CONTEXT.md`
 > (section "PIÈGE À RETENIR") to enrich this guide.
 > See also: `INTEGRATION-SOURCES.md`, `POLITIQUE-RETENTION.md`, `PROCEDURE-INCIDENT.md`.

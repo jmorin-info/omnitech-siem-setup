@@ -164,7 +164,7 @@ dans un registre des dérogations. Une dérogation sans échéance est interdite
 - Les administrateurs systèmes/réseau sont sensibilisés aux exigences de
   journalisation (maintien de l'audit policy, des agents, du forwarding).
 - Tout incident de sécurité ou d'exploitation du SIEM alimente un retour
-  d'expérience consigné dans `docs/reference/CONTEXT.md` (pièges et résolutions) et, si
+  d'expérience consigné dans `docs/archives/CONTEXT.md` (pièges et résolutions) et, si
   pertinent, fait évoluer cette politique ou le standard.
 - **Revue** : annuelle a minima, et après tout incident majeur, changement
   d'architecture significatif ou évolution réglementaire.

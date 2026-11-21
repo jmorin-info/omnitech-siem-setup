@@ -630,7 +630,7 @@ The complete documentation set lives under [`docs/`](docs/) — start at
 > Source-specific integration notes (kept from the original French documentation):
 > [`docs/sources/VEEAM.md`](docs/sources/VEEAM.md), [`docs/sources/M365.md`](docs/sources/M365.md),
 > [`docs/sources/VSPHERE.md`](docs/sources/VSPHERE.md), [`docs/sources/FORTIANALYZER.md`](docs/sources/FORTIANALYZER.md),
-> [`docs/demarrage/GUIDE.md`](docs/demarrage/GUIDE.md), [`docs/reference/CONTEXT.md`](docs/reference/CONTEXT.md).
+> [`docs/demarrage/GUIDE.md`](docs/demarrage/GUIDE.md), [`docs/archives/CONTEXT.md`](docs/archives/CONTEXT.md).
 
 ---
 

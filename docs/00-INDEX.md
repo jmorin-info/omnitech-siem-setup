@@ -57,7 +57,7 @@ les références de l'installation historique figurent plus bas.
 | Document | Objet |
 |---|---|
 | `docs/demarrage/GUIDE.md` | « Comprendre le SIEM en 15 min » : schéma de flux, rôle des pages, analyses expliquées |
-| `docs/reference/CONTEXT.md` | Mémoire technique complète : historique, pièges connus (API 7.x), incidents résolus |
+| `docs/archives/CONTEXT.md` | Mémoire technique complète : historique, pièges connus (API 7.x), incidents résolus |
 | `docs/exploitation/RESTORE.md` | Restauration complète du SIEM depuis une sauvegarde config |
 | `README.fr.md` § Exploitation courante | Mises à jour automatiques (`oms-maj-siem`), snapshots sélectifs (`oms-snap-siem`), SOAR et déblocage d'une IP, synchronisation `deploye/` |
 | `docs/sources/VEEAM.md` | Intégration Veeam Backup & Replication |

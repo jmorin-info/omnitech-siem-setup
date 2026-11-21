@@ -165,7 +165,7 @@ prohibited.
 - System/network administrators are made aware of logging requirements
   (upkeep of the audit policy, agents, forwarding).
 - Any security or SIEM operational incident feeds a lessons-learned entry
-  recorded in `docs/reference/CONTEXT.md` (pitfalls and resolutions) and, where relevant,
+  recorded in `docs/archives/CONTEXT.md` (pitfalls and resolutions) and, where relevant,
   drives an evolution of this policy or the standard.
 - **Review**: annual at a minimum, and after any major incident, significant
   architecture change or regulatory change.

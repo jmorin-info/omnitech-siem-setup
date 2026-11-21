@@ -3,7 +3,7 @@
 **OMNITECH SECURITY — 2026-06-18 — destiné à : Julien Morin (RSSI/dev)**
 **Objet :** réconcilier les 3 dossiers de recherche (`/tmp/prompt/compass_*.md`) avec l'état réel de
 `omnitech-siem-setup`, en challenger les hypothèses, et trancher une séquence exécutable.
-**Sources :** les 3 artefacts ; `docs/reference/CONTEXT.md` (1007 l.), `README.md`, `docs/`, inventaire script-par-script
+**Sources :** les 3 artefacts ; `docs/archives/CONTEXT.md` (1007 l.), `README.md`, `docs/`, inventaire script-par-script
 (59 scripts / 10 238 lignes bash + 26 microservices Python `/usr/local/sbin/omni-*`).
 
 ---
@@ -31,7 +31,7 @@
 ## 1. Le décalage central : « à construire » vs « déjà en prod »
 
 Les trois dossiers décrivent un BUILD comme si la couche détection/corrélation/réponse n'existait pas.
-Réconciliation chiffrée (le % « déjà fait » est l'auto-évaluation de l'inventaire, corroborée par `docs/reference/CONTEXT.md`) :
+Réconciliation chiffrée (le % « déjà fait » est l'auto-évaluation de l'inventaire, corroborée par `docs/archives/CONTEXT.md`) :
 
 | Ce que les docs proposent de « construire » | Réalité dans `omnitech-siem-setup` | Déjà fait |
 |---|---|---|
@@ -129,7 +129,7 @@ si le RAG est *validé* nécessaire. **Ne pas importer un framework pour héberg
 **D. Presidio : le bon risque, mais la mauvaise architecture.** Le Doc 3 a raison de marteler le recall FR
 modeste (~0,74, téléphones FR à 0 %). Mais il rate une subtilité décisive : **tes données sont en grande
 partie structurées** — Graylog te livre `user`, `host`, `src_ip`, `dest_ip`, `process_name`… (schéma connu,
-listé dans `docs/reference/CONTEXT.md`). On **n'a pas besoin** de NER probabiliste pour anonymiser un champ connu : on le
+listé dans `docs/archives/CONTEXT.md`). On **n'a pas besoin** de NER probabiliste pour anonymiser un champ connu : on le
 **tokenise de façon déterministe** (recall 100 % sur ces champs). Presidio ne sert que pour le **texte libre
 résiduel** (lignes de commande, corps de message). Architecture correcte :
 *tokenisation déterministe par champ (spine) → Presidio/regex sur le texte libre (backstop) → fail-closed.*
@@ -193,7 +193,7 @@ et **auth nominative** (LDAPS existe, mais compte `admin` partagé encore utilis
 1. **[Critique] Key-person / absence de contrôle de version — CRITIQUE, IMMÉDIAT.**
    `git` n'est **pas installé** ; **aucun dépôt** sous `/root`. **10 238 lignes** de bash de prod (59 scripts)
    + **26 microservices Python** ne sont **sous aucun versioning**. Aucun test, aucune CI, aucun shellcheck.
-   Seul filet : le tar AES-256 quotidien vers SMB. Le savoir d'exploitation vit dans `docs/reference/CONTEXT.md` (un
+   Seul filet : le tar AES-256 quotidien vers SMB. Le savoir d'exploitation vit dans `docs/archives/CONTEXT.md` (un
    changelog) **et dans ta tête**. Si tu pars demain, c'est une boîte noire. *Note ISO : c'est aussi un trou
    de maîtrise du changement (A.8.32) et de la clause 10.* **→ Action P0, avant toute IA (cf. §7).**
 2. **[Partiel] Injection de prompt indirecte** (dès qu'un LLM lit des logs). Traité par l'architecture (politique

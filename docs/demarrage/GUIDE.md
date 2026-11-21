@@ -199,5 +199,5 @@ d'origine**. Mise à jour toutes les 30 secondes. *Idéal pour un écran mural S
 ---
 
 *Document de référence — SIEM OMNITECH Security. Pour le détail technique
-d'implémentation, voir `docs/reference/CONTEXT.md`. Pour la politique de rétention,
+d'implémentation, voir `docs/archives/CONTEXT.md`. Pour la politique de rétention,
 `docs/securite-conformite/POLITIQUE-RETENTION.md`.*

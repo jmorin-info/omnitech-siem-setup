@@ -425,7 +425,7 @@ Le serveur est physique : il n'est **pas** sauvegardé en image par Veeam. La re
 
 ## Dépannage
 
-Guide complet symptôme / cause / solution : **`docs/exploitation/GUIDE-DEPANNAGE.md`**. Référence exhaustive des incidents résolus : `docs/reference/CONTEXT.md` (sections « PIEGE A RETENIR »). Pièges récurrents à connaître avant d'intervenir :
+Guide complet symptôme / cause / solution : **`docs/exploitation/GUIDE-DEPANNAGE.md`**. Référence exhaustive des incidents résolus : `docs/archives/CONTEXT.md` (sections « PIEGE A RETENIR »). Pièges récurrents à connaître avant d'intervenir :
 
 | Piège | Règle |
 |---|---|
@@ -561,7 +561,7 @@ de l'outil de mise à jour du code du dépôt.
 | Document | Contenu |
 |---|---|
 | `docs/demarrage/GUIDE.md` | Présentation vulgarisée de la plateforme (lecteur non technique) |
-| `docs/reference/CONTEXT.md` | Référence technique exhaustive : historique, décisions, pièges rencontrés |
+| `docs/archives/CONTEXT.md` | Référence technique exhaustive : historique, décisions, pièges rencontrés |
 | `docs/00-INDEX.md` | Index du corpus documentaire ISO (politique, standards, procédures, registres, audits) |
 | `docs/architecture/DOSSIER-ARCHITECTURE-SIEM.md` | Dossier d'architecture |
 | `docs/exploitation/GUIDE-DEPANNAGE.md` | Dépannage symptôme / cause / solution |

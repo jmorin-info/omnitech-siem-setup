@@ -199,5 +199,5 @@ of origin**. Updated every 30 seconds. *Ideal for a SOC wall screen.*
 ---
 
 *Reference document — SIEM OMNITECH Security. For the technical implementation
-detail, see `docs/reference/CONTEXT.md`. For the retention policy,
+detail, see `docs/archives/CONTEXT.md`. For the retention policy,
 `docs/securite-conformite/POLITIQUE-RETENTION.md`.*
