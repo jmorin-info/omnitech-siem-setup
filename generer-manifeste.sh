@@ -7,8 +7,10 @@ OUT=manifeste-deploye.txt
 {
 echo "# Manifeste : <chemin en service><TAB><chemin dans le dépôt> (généré par generer-manifeste.sh le $(date +%d/%m/%Y))"
 emit(){ [ -f "$1" ] && printf '%s\t%s\n' "$1" "$2"; }
-for f in $(git ls-files deploye/sbin); do emit "/usr/local/sbin/${f#deploye/sbin/}" "$f"; done
-for f in $(git ls-files deploye/systemd); do emit "/etc/systemd/system/${f#deploye/systemd/}" "$f"; done
+# Robots et unités suivis dans deploye/ : toujours listés, même pas encore en service
+# (ex. drop-ins 50-depot-reference.conf), car omni-deploy les déploie depuis le dépôt.
+for f in $(git ls-files deploye/sbin); do printf '%s\t%s\n' "/usr/local/sbin/${f#deploye/sbin/}" "$f"; done
+for f in $(git ls-files deploye/systemd); do printf '%s\t%s\n' "/etc/systemd/system/${f#deploye/systemd/}" "$f"; done
 emit /etc/apt/preferences.d/oms-siem-series deploye/apt/oms-siem-series
 emit /etc/apt/apt.conf.d/52omni-siem.conf deploye/apt/52omni-siem.conf
 for f in $(git ls-files deploye/logstash); do b=${f#deploye/logstash/}
@@ -20,7 +22,7 @@ emit /usr/local/sbin/omni-alert-triage triage/omni-alert-triage
 emit /usr/local/sbin/omni-alert-digest triage/omni-alert-digest
 emit /usr/local/sbin/omni-fp tools/omni-fp
 emit /usr/local/sbin/omni-version-watch tools/omni-version-watch
-emit /opt/oms-seal-sla/seal_sla_poller.py seal/sla/seal_sla_poller.py
+# /opt/oms-seal-sla/seal_sla_poller.py est déjà suivi via deploye/opt (une cible = une seule source).
 # Le backend de la console (mobile/omni-mobile-api.py) s'exécute en place depuis le dépôt canonique
 # (OMNI_SIEM_HOME, /opt/omni-siem/repository par défaut) : il n'a pas de copie en service à suivre.
 # console SOC : coquille et scripts (les bibliothèques et images lourdes restent hors manifeste)

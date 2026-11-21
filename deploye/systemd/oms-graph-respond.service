@@ -6,8 +6,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=root
-WorkingDirectory=/opt/omni-siem/repository/oms-graph
+WorkingDirectory=/root/omnitech-siem-setup/oms-graph
 # --push (audit GELF) SANS --execute : detection + gradation + surface seulement.
 # L'execution reste MANUELLE et approuvee (oms-graph respond --execute), jamais auto.
-ExecStart=/opt/omni-siem/repository/oms-graph/.venv/bin/python -m oms_graph.run respond --push --config /etc/oms-graph/config.yaml
+ExecStart=/root/omnitech-siem-setup/oms-graph/.venv/bin/python -m oms_graph.run respond --push --config /etc/oms-graph/config.yaml
 Nice=15

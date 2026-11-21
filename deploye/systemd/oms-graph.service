@@ -6,6 +6,6 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=root
-WorkingDirectory=/opt/omni-siem/repository/oms-graph
-ExecStart=/opt/omni-siem/repository/oms-graph/.venv/bin/python -m oms_graph.run analyze --push --config /etc/oms-graph/config.yaml
+WorkingDirectory=/root/omnitech-siem-setup/oms-graph
+ExecStart=/root/omnitech-siem-setup/oms-graph/.venv/bin/python -m oms_graph.run analyze --push --config /etc/oms-graph/config.yaml
 Nice=15

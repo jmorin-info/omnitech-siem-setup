@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=root
-WorkingDirectory=/opt/omni-siem/repository/oms-xdr
+WorkingDirectory=/root/omnitech-siem-setup/oms-xdr
 # Token Graylog NON requis (lecture OpenSearch local) ; env optionnel (Teams/AD/Ninja)
 EnvironmentFile=-/etc/oms-xdr/oms-xdr.env
-ExecStart=/opt/omni-siem/repository/oms-xdr/.venv/bin/python -m oms_xdr.engine --once --config /opt/omni-siem/repository/oms-xdr/config.yaml
+ExecStart=/root/omnitech-siem-setup/oms-xdr/.venv/bin/python -m oms_xdr.engine --once --config /root/omnitech-siem-setup/oms-xdr/config.yaml

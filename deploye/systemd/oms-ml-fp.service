@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=root
-WorkingDirectory=/opt/omni-siem/repository/oms-ml
+WorkingDirectory=/root/omnitech-siem-setup/oms-ml
 # S'auto-saute tant qu'il n'y a pas assez de labels analystes (cas qualifies VP/FP).
-ExecStart=/opt/omni-siem/repository/oms-ml/.venv/bin/python -m oms_ml.run fp --train --config /etc/oms-ml/config.yaml
+ExecStart=/root/omnitech-siem-setup/oms-ml/.venv/bin/python -m oms_ml.run fp --train --config /etc/oms-ml/config.yaml
 Nice=10

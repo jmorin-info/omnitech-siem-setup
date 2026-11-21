@@ -5,6 +5,6 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/bash /opt/omni-siem/repository/30-backup-config.sh
+ExecStart=/usr/bin/bash /root/omnitech-siem-setup/30-backup-config.sh
 Nice=10
 IOSchedulingClass=idle
