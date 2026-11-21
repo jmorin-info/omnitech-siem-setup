@@ -1,0 +1,10 @@
+# Exclusions globales de ShellCheck (CI : tools/ci-lint.sh, niveau « warning »).
+# SC1090/SC1091 : 00-vars.env et les bibliothèques sont sourcés par un chemin calculé
+#   (fichier du site hors dépôt) ; l'analyse statique ne peut pas les suivre.
+disable=SC1090,SC1091
+# SC2034 : compteurs de boucle d'attente (for i in ...) et variables positionnées par
+#   lib-platform.sh pour les scripts qui la sourcent.
+disable=SC2034
+# SC2164 : « cd "$(dirname "$0")" » vers le répertoire du script, toujours présent ;
+#   environ 70 occurrences historiques, dette suivie plutôt que corrigée en masse.
+disable=SC2164

@@ -4,6 +4,8 @@
 #   ./scan-depot.sh --index          -> lignes ajoutées de l'index (git diff --cached)
 #   ./scan-depot.sh --message FICHIER -> message de commit (crochet commit-msg)
 #   ./scan-depot.sh --installer      -> pose les crochets pre-commit et commit-msg du dépôt
+#   ./scan-depot.sh --arbre          -> secrets dans tous les fichiers suivis (CI ; les mentions
+#                                       d'outillage ne sont pas cherchées : contenus de détection légitimes)
 # Code de sortie 1 = alerte (le commit est bloqué par les crochets).
 # =============================================================================
 set -u
@@ -23,6 +25,10 @@ case "${1:-}" in
     [ -n "$O" ] && { ALERTE=1; echo "MENTIONS D'OUTILLAGE :"; printf '%s\n' "$O" | cut -c1-180 | head -30; }
     [ $ALERTE = 0 ] && echo "scan : aucun secret ni mention d'outillage dans l'index."
     exit $ALERTE ;;
+  --arbre)
+    S=$(git grep -nIE "$SECRETS" -- . ':!scan-depot.sh' | grep -viE "$EXCL")
+    if [ -n "$S" ]; then echo "SECRETS possibles (valeurs masquées) :"; printf '%s\n' "$S" | masque | head -50; exit 1; fi
+    echo "scan : aucun secret dans les $(git ls-files | wc -l) fichiers suivis."; exit 0 ;;
   --message)
     if grep -v '^#' "$2" | grep -qiE "$OUTILS"; then echo "Message de commit refusé : mention d'outillage."; exit 1; fi
     exit 0 ;;
@@ -31,5 +37,5 @@ case "${1:-}" in
     printf '#!/bin/sh\n# scan des secrets et mentions d outillage (scan-depot.sh)\nexec "%s/scan-depot.sh" --index\n' "$R" > "$H/pre-commit"
     printf '#!/bin/sh\nexec "%s/scan-depot.sh" --message "$1"\n' "$R" > "$H/commit-msg"
     chmod 755 "$H/pre-commit" "$H/commit-msg"; echo "crochets posés dans $H" ;;
-  *) echo "usage : $0 --index | --message FICHIER | --installer"; exit 2 ;;
+  *) echo "usage : $0 --index | --arbre | --message FICHIER | --installer"; exit 2 ;;
 esac

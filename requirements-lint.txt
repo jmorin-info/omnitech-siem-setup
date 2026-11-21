@@ -1,0 +1,3 @@
+# Outils de contrôle statique de la CI (tools/ci-lint.sh), versions figées.
+ruff==0.17.6
+shellcheck-py==0.11.0.1
