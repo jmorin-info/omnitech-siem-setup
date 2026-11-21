@@ -80,8 +80,8 @@ cat > /etc/systemd/system/omni-iso-evidence.service <<EOF2
 Description=OMNI - Dossier de preuves ISO (genere docs/EVIDENCE-AUDIT-<date>.md)
 [Service]
 Type=oneshot
-WorkingDirectory=/root/omnitech-siem-setup
-ExecStart=/bin/bash /root/omnitech-siem-setup/68-iso-evidence.sh
+WorkingDirectory=${PWD}
+ExecStart=/bin/bash ${PWD}/68-iso-evidence.sh
 EOF2
 cat > /etc/systemd/system/omni-iso-evidence.timer <<'EOF2'
 [Unit]

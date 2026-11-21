@@ -36,6 +36,33 @@ UPDATE_LAYER_ACTIONS = {"status_all": set(), "stack_plan": {"component", "target
 ACTIONS.update(UPDATE_LAYER_ACTIONS)
 WRITES = {"install_apply", "install_resume", "install_secrets", "update_apply", "update_rollback", "update_recover", "console_publish", "module_install", "module_uninstall"}
 
+# --- Déploiement des composants maison et contrôle de santé (tools/omni-deploy.py) ---
+DEPLOY_COMPONENTS = ("all", "venvs", "robots", "etc", "apt", "opt", "logstash", "systemd", "nginx", "console")
+ACTIONS.update({
+    "deploy_plan": {"component"}, "deploy_apply": {"component"},
+    "deploy_rollback_plan": {"transaction"}, "deploy_rollback": {"transaction"},
+    "deploy_history": set(), "health_check": set(),
+})
+WRITES |= {"deploy_apply", "deploy_rollback"}
+
+
+def deploy_command(source, action, params):
+    """argv fermé de omni-deploy ; aucun paramètre libre n'atteint le shell."""
+    tool = [sys.executable, str(source / "tools/omni-deploy.py"), "--home", str(source)]
+    if action in ("deploy_plan", "deploy_apply"):
+        component = params.get("component", "all")
+        if component not in DEPLOY_COMPONENTS:
+            raise ValueError("Composant de déploiement inconnu.")
+        return tool + ["deploy", component] + (["--apply"] if action == "deploy_apply" else [])
+    if action in ("deploy_rollback_plan", "deploy_rollback"):
+        transaction = params.get("transaction", "")
+        if not isinstance(transaction, str) or not re.fullmatch(r"[a-f0-9]{32}", transaction):
+            raise ValueError("Identifiant de transaction invalide.")
+        return tool + ["rollback", transaction] + (["--apply"] if action == "deploy_rollback" else [])
+    if action == "deploy_history":
+        return tool + ["history"]
+    return [sys.executable, str(source / "tools/omni-healthcheck.py"), "--config", str(source / "00-vars.env")]
+
 
 def redact(text, secrets):
     variants = {str(s) for s in secrets if s}
@@ -98,6 +125,8 @@ class Manager:
                 if not isinstance(transaction, str) or not re.fullmatch(r"[a-f0-9]{32}", transaction):
                     raise ValueError("Identifiant de transaction invalide.")
                 argv += ["--transaction", transaction]
+        elif action.startswith("deploy_") or action == "health_check":
+            argv = deploy_command(self.source, action, params)
         elif action == "console_publish":
             argv = ["bash", str(self.source / "71-soc-console.sh")]
         elif action in UPDATE_LAYER_ACTIONS:

@@ -44,7 +44,7 @@ cat > /usr/local/sbin/omni-ad-disable <<'SH'
 # omni-ad-disable <sAMAccountName> [raison] - desactive un compte AD (LDAPS, svc_siem).
 # DRY-RUN par defaut. Voir 69-ad-response.sh.
 set -uo pipefail
-VARS=/root/omnitech-siem-setup/00-vars.env
+VARS="${OMNI_SIEM_HOME:-/opt/omni-siem/repository}/00-vars.env"
 CONF=/etc/default/omni-ad-response
 # shellcheck disable=SC1090
 source "$VARS"; [[ -f "$CONF" ]] && source "$CONF"

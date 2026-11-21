@@ -34,7 +34,7 @@ cat > /usr/local/sbin/omni-drift-check <<'DRIFTEOF'
 # 29-drift-check.sh). Emet un GELF par ecart. Lecture seule.
 import json, os, re, ssl, subprocess, sys, time, urllib.request, glob
 
-REPO     = "/root/omnitech-siem-setup"
+REPO     = "/opt/omni-siem/repository"
 OS_URL   = "http://127.0.0.1:9200"
 GELF_URL = "http://127.0.0.1:12201/gelf"
 SIEM     = "bx-it-graylog-vm"

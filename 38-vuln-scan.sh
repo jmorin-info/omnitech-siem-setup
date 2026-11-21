@@ -44,7 +44,7 @@ KEV_URL  = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulne
 NVD_URL  = "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId="
 INV_INDEX = "omni-winother_*"
 
-def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+def load_env(path="/opt/omni-siem/repository/00-vars.env"):
     env = {}
     try:
         for line in open(path):

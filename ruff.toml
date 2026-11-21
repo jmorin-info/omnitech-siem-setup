@@ -1,0 +1,14 @@
+# Configuration Ruff de la CI (tools/ci-lint.sh) : seules les erreurs qui cassent
+# l'exécution sont bloquantes (syntaxe, comparaisons invalides, noms indéfinis).
+# oms-ml, oms-xdr et oms-graph gardent leur propre configuration (pyproject.toml).
+line-length = 120
+# Python 3.12 minimum (Ubuntu 24.04) : triage/omni-alert-digest utilise des barres obliques
+# inverses dans des f-strings, syntaxe refusée par Python 3.11 (Debian 12) et 3.10 (Ubuntu 22.04).
+target-version = "py312"
+
+[lint]
+select = ["E9", "F63", "F7", "F82"]
+
+[lint.per-file-ignores]
+# Annotation chaîne "NoReturn" sous `from __future__ import annotations` : jamais évaluée.
+"seal/graylog/provision_seal.py" = ["F821"]

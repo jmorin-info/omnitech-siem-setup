@@ -6,7 +6,7 @@
 import json, os, re, ssl, subprocess, sys, time, urllib.request, urllib.error
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "--simuler"
-VARS = "/root/omnitech-siem-setup/00-vars.env"
+VARS = "/opt/omni-siem/repository/00-vars.env"
 env = {}
 for l in open(VARS, encoding="utf-8"):
     m = re.match(r'^(?:export\s+)?([A-Z_]+)=["\']?([^"\'\n]*)', l)

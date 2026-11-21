@@ -46,3 +46,18 @@ api-restart: ## Redémarre le backend de la console (refusé s'il ne tourne pas 
 	 case "$$exe" in *"$(CURDIR)/mobile/omni-mobile-api.py"*) ;; \
 	 *) echo "omni-mobile-api ne tourne pas depuis $(CURDIR) (ExecStart : $$exe) : redémarrer n'appliquerait pas ce code. Voir docs/AUDIT-COHERENCE-2026-11-21.md." >&2; exit 2;; esac
 	@python3 -m py_compile mobile/omni-mobile-api.py && systemctl restart omni-mobile-api && systemctl is-active omni-mobile-api
+
+# --- Déploiement unifié (tools/omni-deploy.py) : plan par défaut, C=composant -------
+.PHONY: deploy-plan deploy health lint
+C ?= all
+deploy-plan: ## Plan de déploiement des composants maison (C=all|venvs|robots|systemd|nginx|console|...)
+	@python3 tools/omni-deploy.py deploy $(C)
+
+deploy: ## Déploie C avec sauvegarde, retour arrière automatique et contrôle de santé
+	@python3 tools/omni-deploy.py deploy $(C) --apply
+
+health: ## Contrôle de santé de bout en bout (lecture seule)
+	@python3 tools/omni-healthcheck.py
+
+lint: ## ShellCheck + Ruff comme la CI (pip install -r requirements-lint.txt)
+	@bash tools/ci-lint.sh

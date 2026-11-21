@@ -55,7 +55,7 @@ GELF_URL = "http://127.0.0.1:12201/gelf"
 SIEM     = "bx-it-graylog-vm"
 IDX      = "omni-winsec_*"
 
-def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+def load_env(path="/opt/omni-siem/repository/00-vars.env"):
     env = {}
     try:
         for line in open(path):

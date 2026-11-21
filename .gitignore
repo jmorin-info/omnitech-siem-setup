@@ -68,3 +68,5 @@ seal/docs/preflight.json
 # Residus de patch
 *.orig
 *.rej
+.venv/
+.venv.prev*/

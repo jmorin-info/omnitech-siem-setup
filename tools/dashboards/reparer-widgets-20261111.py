@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Réparation ciblée des widgets de dashboards Graylog qui pointent sur des champs inexistants (OMNITECH 11/11/2026).
-Usage (root, sur BX-IT-GRAYLOG-VM) : set -a; . /root/omnitech-siem-setup/00-vars.env; set +a; python3 reparer-widgets-20261111.py [--appliquer]
+Usage (root, sur BX-IT-GRAYLOG-VM) : set -a; . /opt/omni-siem/repository/00-vars.env; set +a; python3 reparer-widgets-20261111.py [--appliquer]
 Sans --appliquer : simulation (affiche les remplacements). Sauvegardes : /var/backups/siem/dashboards-avant-20261111/<view_id>.json
 Retour : retour-dashboards-20261111.py (remet search + state d'origine)."""
 import sys, json, os, ssl, base64, secrets, urllib.request, re, copy
