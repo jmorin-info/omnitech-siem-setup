@@ -111,6 +111,7 @@ Corpus documentaire du SMSI pour le périmètre SIEM (référentiel ISO/IEC
 | [Scripts de provisioning](reference/SCRIPTS-PROVISIONING.md) | Inventaire, numéros en double, plan de renumérotation |
 | [Glossaire](reference/GLOSSAIRE.md) | Définitions |
 | [Audit de portabilité du 19/11/2026](AUDIT-PORTABILITE-2026-11-19.md) | Reproductibilité de l'installation (état daté) |
+| [Sécurité du dépôt](../SECURITY.md) | Signalement de vulnérabilité, gestion des secrets |
 
 Documentation des sous-projets : [oms-xdr](../oms-xdr/README.md),
 [oms-ml](../oms-ml/README.md), [oms-graph](../oms-graph/README.md),
