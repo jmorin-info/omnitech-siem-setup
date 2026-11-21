@@ -18,6 +18,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 |---|---|
 | [README du dépôt](../README.fr.md) | Présentation, capacités en service, architecture, limites |
 | [Comprendre le SIEM en 15 minutes](demarrage/GUIDE.md) | Explication en langage simple des flux, des écrans et des analyses |
+| [Aperçu visuel](demarrage/APERCU-VISUEL.md) | Captures de la console SOC, de la PWA et des tableaux de bord Graylog |
 | [Synthèse exécutive](demarrage/SYNTHESE-EXECUTIVE.md) | Une page pour la direction (rédigée le 12/06/2026) |
 | [Architecture](architecture/ARCHITECTURE.md) | Composants, flux et choix techniques (en anglais) |
 | [Dossier d'architecture et d'exploitation](architecture/DOSSIER-ARCHITECTURE-SIEM.md) | Document « DOS » du corpus ISO : composants, flux, mise en production, sauvegarde |

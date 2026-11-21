@@ -108,7 +108,7 @@ English overview documents: [architecture](docs/architecture/ARCHITECTURE.md),
 [data sources](docs/DATA-SOURCES.md), [detection engine](docs/detection/DETECTIONS.md),
 [alerting and triage](docs/ALERTING-AND-TRIAGE.md),
 [operations and resilience](docs/OPERATIONS.md), [deployment](docs/DEPLOYMENT.md),
-[SOC console guide](docs/CONSOLE-SOC.en.md).
+[SOC console guide](docs/CONSOLE-SOC.en.md). Screenshots: [visual overview](docs/demarrage/APERCU-VISUEL.md) (French captions).
 
 ## Requirements
 

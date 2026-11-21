@@ -159,7 +159,7 @@ fréquents :
 
 - [Guide d'exploitation de l'installation de référence](docs/exploitation/GUIDE-EXPLOITATION.md)
   (configuration, enrôlement des hôtes, sauvegardes, dépannage, supervision) ;
-- [Utiliser la console SOC](docs/CONSOLE-SOC.md) ;
+- [Aperçu visuel](docs/demarrage/APERCU-VISUEL.md) et [utilisation de la console SOC](docs/CONSOLE-SOC.md) ;
 - [Procédure de gestion des incidents](docs/exploitation/PROCEDURE-INCIDENT.md) ;
 - [Restauration](docs/exploitation/RESTORE.md) et [plan de reconstruction](docs/exploitation/PRA-RECONSTRUCTION-SIEM.md).
 
