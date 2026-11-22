@@ -1,0 +1,22 @@
+[Unit]
+Description=OMNI SIEM - validation hebdomadaire des detections Graylog (lecture seule, aucune injection)
+Documentation=file:///opt/omni-siem/repository/docs/detection/VALIDATION-DETECTIONS.md
+After=graylog-server.service opensearch.service
+
+[Service]
+Type=oneshot
+# Outil versionne execute depuis le depot de reference (fixtures lues a cote de l'outil).
+# Code retour 2 = au moins une detection critique cassee : l'unite passe en echec (systemctl --failed).
+ExecStart=/usr/bin/python3 /opt/omni-siem/repository/tools/omni-detection-validate.py --vars /opt/omni-siem/repository/00-vars.env --sortie /var/lib/omni-detection-validate --pause 0.05
+StateDirectory=omni-detection-validate
+StateDirectoryMode=0750
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=1800
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true

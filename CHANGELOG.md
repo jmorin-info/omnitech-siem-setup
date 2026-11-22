@@ -21,6 +21,7 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Ajouté
 
+- Validation continue des détections (`tools/omni-detection-validate.py`, lecture seule) : contrôles statiques des définitions actives via l'API Graylog en GET (requête, flux, notifications, champs présents dans le mapping OpenSearch, planification, producteurs `alert_tag`), vivacité par `_count` sur 30 et 7 jours, 18 fixtures synthétiques de détections critiques rejouées en mémoire (`tools/detection-validation/fixtures/`), mode replay réservé à un OpenSearch jetable, rapports JSON et Markdown datés, code retour 2 si une détection critique est cassée. Unité et minuterie hebdomadaires `omni-detection-validate` (lundi 05:30) ajoutées au manifeste, non installées. Documentation `docs/detection/VALIDATION-DETECTIONS.md`, tests `tests/test_detection_validate.py`.
 - Sauvegarde MongoDB native quotidienne (`omni-mongo-backup`, timer 02:40) : contrôle d'intégrité, préfixe propre `omni-mongo-*`, archives héritées conservées, purge après succès seulement, verrou et secrets temporaires privés. Le test de restauration possède son processus et son socket Unix privé ; sa comparaison porte sur les comptages de collections.
 - `26-graylog-objets-manuels.sh` : versionne les objets Graylog créés à la main en
   production (audit de cohérence du 21/11/2026, écarts G2 et G3). Sont concernées les

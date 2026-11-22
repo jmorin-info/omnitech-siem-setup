@@ -1,0 +1,140 @@
+{
+  "titre": "OMNI - Force brute SUIVIE d'un succès (même compte / 15 min)",
+  "critique": true,
+  "mitre": "T1110",
+  "justification": "Force brute réussie : condition composée (&&) sur deux séries sum, la plus fragile du catalogue.",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "((event_id:4624 OR event_id:4625) AND NOT user:*$ AND NOT user:ninjaone AND NOT user:ADSyncMSA_*) AND NOT winlogbeat_winlog_event_data_Status:0xc00002ee",
+    "streams": [
+      "OMNI - Windows Security"
+    ],
+    "group_by": [
+      "user"
+    ],
+    "series": [
+      {
+        "type": "sum",
+        "id": "sum(logon_fail)",
+        "field": "logon_fail"
+      },
+      {
+        "type": "sum",
+        "id": "sum(logon_ok)",
+        "field": "logon_ok"
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": "&&",
+        "left": {
+          "expr": ">=",
+          "left": {
+            "expr": "number-ref",
+            "ref": "sum(logon_fail)"
+          },
+          "right": {
+            "expr": "number",
+            "value": 10.0
+          }
+        },
+        "right": {
+          "expr": ">=",
+          "left": {
+            "expr": "number-ref",
+            "ref": "sum(logon_ok)"
+          },
+          "right": {
+            "expr": "number",
+            "value": 1.0
+          }
+        }
+      }
+    },
+    "search_within_ms": 900000,
+    "execute_every_ms": 900000
+  },
+  "cas": [
+    {
+      "nom": "10 échecs puis un succès",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "jdupont"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 400,
+          "champs": {
+            "event_id": "4625",
+            "logon_fail": 1,
+            "user": "jdupont"
+          },
+          "repeter": 10,
+          "pas_s": 30
+        },
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "event_id": "4624",
+            "logon_ok": 1,
+            "user": "jdupont"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "10 échecs sans succès",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "event_id": "4625",
+            "logon_fail": 1,
+            "user": "jdupont"
+          },
+          "repeter": 10,
+          "pas_s": 30
+        }
+      ]
+    },
+    {
+      "nom": "échecs en mot de passe expiré (0xc00002ee) exclus",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 400,
+          "champs": {
+            "event_id": "4625",
+            "logon_fail": 1,
+            "user": "jdupont",
+            "winlogbeat_winlog_event_data_Status": "0xc00002ee"
+          },
+          "repeter": 10,
+          "pas_s": 30
+        },
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "event_id": "4624",
+            "logon_ok": 1,
+            "user": "jdupont"
+          }
+        }
+      ]
+    }
+  ]
+}

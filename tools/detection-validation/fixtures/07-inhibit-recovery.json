@@ -1,0 +1,68 @@
+{
+  "titre": "OMNI - Destruction des sauvegardes (vssadmin/wbadmin/bcdedit)",
+  "critique": true,
+  "mitre": "T1490",
+  "justification": "Destruction des moyens de restauration (wbadmin, bcdedit) avant chiffrement.",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "alert_tag:inhibit_recovery",
+    "streams": [
+      "OMNI - Sysmon"
+    ],
+    "group_by": [],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 1.0
+        }
+      }
+    },
+    "search_within_ms": 300000,
+    "execute_every_ms": 300000
+  },
+  "cas": [
+    {
+      "nom": "wbadmin delete catalog",
+      "attendu": {
+        "evenements": 1
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "inhibit_recovery"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "étiquette voisine",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "inhibit_recovery_test"
+          }
+        }
+      ]
+    }
+  ]
+}

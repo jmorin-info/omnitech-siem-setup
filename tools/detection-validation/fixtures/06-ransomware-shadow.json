@@ -1,0 +1,53 @@
+{
+  "titre": "OMNI - Indicateur de ransomware (suppression shadow copies)",
+  "critique": true,
+  "mitre": "T1490",
+  "justification": "Suppression des clichés instantanés : signe d'un chiffrement imminent, alerte sans agrégation.",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "alert_tag:ransomware_indicator",
+    "streams": [
+      "OMNI - Sysmon"
+    ],
+    "group_by": [],
+    "series": [],
+    "conditions": {
+      "expression": null
+    },
+    "search_within_ms": 300000,
+    "execute_every_ms": 300000
+  },
+  "cas": [
+    {
+      "nom": "vssadmin delete shadows",
+      "attendu": {
+        "evenements": 1
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "ransomware_indicator",
+            "host": "BX-SRV-FS"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "autre flux",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "ransomware_indicator"
+          }
+        }
+      ]
+    }
+  ]
+}

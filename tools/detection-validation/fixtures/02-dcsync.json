@@ -1,0 +1,55 @@
+{
+  "titre": "OMNI - DCSync suspect",
+  "critique": true,
+  "mitre": "T1003.006",
+  "justification": "Réplication d'annuaire par un compte non-DC : vol de tous les secrets du domaine (Tier 0).",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "alert_tag:dcsync",
+    "streams": [
+      "OMNI - Windows Security"
+    ],
+    "group_by": [],
+    "series": [],
+    "conditions": {
+      "expression": null
+    },
+    "search_within_ms": 300000,
+    "execute_every_ms": 300000
+  },
+  "cas": [
+    {
+      "nom": "un événement par message (définition sans agrégation)",
+      "attendu": {
+        "evenements": 2
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "dcsync",
+            "user": "jdupont"
+          },
+          "repeter": 2
+        }
+      ]
+    },
+    {
+      "nom": "aucun message étiqueté",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "admin_share",
+            "user": "jdupont"
+          }
+        }
+      ]
+    }
+  ]
+}

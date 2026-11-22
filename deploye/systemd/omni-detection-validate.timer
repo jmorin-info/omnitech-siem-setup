@@ -1,0 +1,11 @@
+[Unit]
+Description=OMNI SIEM - validation des detections (hebdomadaire, lundi 05:30)
+
+[Timer]
+# Avant le recapitulatif du lundi 8h : le rapport du week-end est disponible a l'ouverture.
+OnCalendar=Mon *-*-* 05:30:00
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

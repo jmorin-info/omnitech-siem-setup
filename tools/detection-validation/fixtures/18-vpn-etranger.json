@@ -1,0 +1,90 @@
+{
+  "titre": "OMNI - VPN monté depuis l'étranger",
+  "critique": true,
+  "mitre": "T1133",
+  "justification": "Accès distant depuis l'étranger : termes échappés (tunnel\\-up) et exclusion sur pays.",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "subtype:vpn AND (action:tunnel\\-up OR action:ssl\\-login) AND _exists_:remip_country_code AND NOT remip_country_code:FR",
+    "streams": [
+      "OMNI - FortiGate"
+    ],
+    "group_by": [],
+    "series": [],
+    "conditions": {
+      "expression": null
+    },
+    "search_within_ms": 600000,
+    "execute_every_ms": 600000
+  },
+  "cas": [
+    {
+      "nom": "tunnel SSL depuis la Russie",
+      "attendu": {
+        "evenements": 1
+      },
+      "documents": [
+        {
+          "flux": "OMNI - FortiGate",
+          "age_s": 60,
+          "champs": {
+            "subtype": "vpn",
+            "action": "ssl-login",
+            "remip_country_code": "RU",
+            "remip": "203.0.113.7"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "depuis la France",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - FortiGate",
+          "age_s": 60,
+          "champs": {
+            "subtype": "vpn",
+            "action": "tunnel-up",
+            "remip_country_code": "FR"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "pays inconnu (champ absent)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - FortiGate",
+          "age_s": 60,
+          "champs": {
+            "subtype": "vpn",
+            "action": "tunnel-up"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "autre action VPN",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - FortiGate",
+          "age_s": 60,
+          "champs": {
+            "subtype": "vpn",
+            "action": "tunnel-down",
+            "remip_country_code": "RU"
+          }
+        }
+      ]
+    }
+  ]
+}
