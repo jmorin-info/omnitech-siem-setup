@@ -21,6 +21,7 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Ajouté
 
+- Sauvegarde MongoDB native quotidienne (`omni-mongo-backup`, timer 02:40) avec contrôle d'intégrité, rétention de 14 jours et deux détections Graylog (échec, absence) ; `tools/omni-mongo-restore-test.sh` pour une restauration chronométrée en instance isolée.
 - `26-graylog-objets-manuels.sh` : versionne les objets Graylog créés à la main en
   production (audit de cohérence du 21/11/2026, écarts G2 et G3). Sont concernées les
   définitions « balayage IKE », « scan applicatif WAF (404) » et « lecture d'un mot de

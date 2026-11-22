@@ -266,6 +266,11 @@ ensure_def_simple "OMNI - Sauvegarde quotidienne SIEM en échec" \
   "event_action:backup_daily_echec" "${COND_GE1}" 1800000 1800000 14400000
 ensure_def_simple "OMNI - Sauvegarde quotidienne SIEM absente (>26h)" \
   "event_action:backup_daily_ok" "${COND_LT1}" 93600000 21600000 43200000
+# Sauvegarde MongoDB native (omni-mongo-backup, 02:40, décision du 22/11/2026).
+ensure_def_simple "OMNI - Sauvegarde MongoDB en échec" \
+  "event_action:backup_mongo_echec" "${COND_GE1}" 1800000 1800000 14400000
+ensure_def_simple "OMNI - Sauvegarde MongoDB absente (>26h)" \
+  "event_action:backup_mongo_ok" "${COND_LT1}" 93600000 21600000 43200000
 
 echo "==> [5/5] Garde-fou disque /data (32-disk-guard)"
 

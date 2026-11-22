@@ -1,0 +1,10 @@
+[Unit]
+Description=OMNI SIEM - déclencheur quotidien de la sauvegarde MongoDB (02:40)
+
+[Timer]
+OnCalendar=*-*-* 02:40:00
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

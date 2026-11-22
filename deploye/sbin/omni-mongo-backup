@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# =============================================================================
+# omni-mongo-backup : sauvegarde quotidienne de la configuration Graylog (MongoDB).
+#   Dump compressé (archive mongodump), contrôle d'intégrité (gzip -t et lecture
+#   de l'archive par mongorestore --dryRun), rétention locale, compte rendu GELF :
+#   event_source=siem_backup, event_action=backup_mongo_ok | backup_mongo_echec.
+#   Les snapshots OpenSearch relèvent d'oms-snap-siem ; ce robot ne les touche pas.
+# Paramètres lus dans 00-vars.env du dépôt (OMNI_SIEM_HOME) : MONGO_ADMIN_PASS,
+#   BACKUP_DIR ; MONGO_BACKUP_RETENTION_DAYS (défaut 14).
+# Le mot de passe passe par un fichier de configuration temporaire (0600),
+#   jamais sur la ligne de commande.
+# Décision du 22/11/2026 (sauvegarde MongoDB native arrêtée depuis le 14/08).
+# =============================================================================
+set -uo pipefail
+HOME_DEPOT="${OMNI_SIEM_HOME:-/opt/omni-siem/repository}"
+ENVFILE="${OMNI_VARS_FILE:-$HOME_DEPOT/00-vars.env}"
+GELF_URL="${GELF_URL:-http://127.0.0.1:12201/gelf}"
+SIEM_HOST="$(hostname -s)"
+
+gelf() {  # gelf <ok|echec> <message>
+  local msg="${2//\"/\'}"
+  curl -s -m 10 -X POST "$GELF_URL" -H 'Content-Type: application/json' -d "{
+    \"version\":\"1.1\",\"host\":\"$SIEM_HOST\",
+    \"short_message\":\"sauvegarde MongoDB ${1}: ${msg}\",
+    \"_event_source\":\"siem_backup\",\"_event_action\":\"backup_mongo_${1}\",
+    \"_alert_tag\":\"backup_mongo_${1}\"}" >/dev/null || true
+}
+echec() { echo "ERREUR : $*" >&2; gelf echec "$*"; exit 1; }
+
+[[ -r "$ENVFILE" ]] || echec "fichier de configuration illisible : $ENVFILE"
+# shellcheck disable=SC1090
+source "$ENVFILE"
+[[ -n "${MONGO_ADMIN_PASS:-}" ]] || echec "MONGO_ADMIN_PASS absent de $ENVFILE"
+DEST="${BACKUP_DIR:-/home/siem-backup}/mongo"
+RET="${MONGO_BACKUP_RETENTION_DAYS:-14}"
+[[ "$RET" =~ ^[0-9]+$ && "$RET" -ge 2 ]] || echec "MONGO_BACKUP_RETENTION_DAYS invalide : $RET"
+install -d -m 700 "$DEST" || echec "création de $DEST impossible"
+
+TS="$(date +%Y%m%d-%H%M)"
+ARCH="$DEST/graylog-mongo-$TS.archive.gz"
+CONF="$(mktemp)"; trap 'rm -f "$CONF" "$ARCH.part"' EXIT
+chmod 600 "$CONF"
+printf 'password: "%s"\n' "${MONGO_ADMIN_PASS//\"/\\\"}" > "$CONF"
+URI="mongodb://admin@127.0.0.1:27017/?replicaSet=rs0&authSource=admin"
+
+DEBUT=$(date +%s)
+mongodump --quiet --config="$CONF" --uri="$URI" --gzip --archive="$ARCH.part" \
+  || echec "mongodump rc=$?"
+gzip -t "$ARCH.part" || echec "archive corrompue (gzip -t)"
+mongorestore --quiet --config="$CONF" --uri="$URI" --gzip --archive="$ARCH.part" --dryRun \
+  || echec "archive illisible par mongorestore --dryRun"
+mv "$ARCH.part" "$ARCH" && chmod 600 "$ARCH" || echec "finalisation de l'archive impossible"
+TAILLE=$(du -h "$ARCH" | cut -f1)
+
+# Rétention : uniquement les archives de ce robot (même motif que l'ancien siem-backup.sh).
+find "$DEST" -maxdepth 1 -name 'graylog-mongo-*.archive.gz' -mtime +"$RET" -delete
+
+echo "sauvegarde MongoDB OK : $ARCH ($TAILLE, $(( $(date +%s) - DEBUT )) s, rétention $RET j)"
+gelf ok "$(basename "$ARCH") $TAILLE"

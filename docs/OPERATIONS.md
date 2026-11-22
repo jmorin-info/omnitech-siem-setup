@@ -46,6 +46,12 @@ OpenSearch snapshot (message data), and a config tarball. Restore is documented 
 in [exploitation/RESTORE.md](exploitation/RESTORE.md); a full rebuild-from-source procedure is
 [exploitation/PRA-RECONSTRUCTION-SIEM.md](exploitation/PRA-RECONSTRUCTION-SIEM.md).
 
+Since 22/11/2026 the MongoDB dump runs on its own: `omni-mongo-backup.timer` (02:40, 14-day
+local retention, GELF `backup_mongo_ok`/`backup_mongo_echec` with two Graylog detections). A timed
+restore into an isolated temporary `mongod` is `sudo bash tools/omni-mongo-restore-test.sh`.
+OpenSearch data is covered by the selective `oms-snap-siem` snapshots; the historical
+`siem-backup.timer` stays disabled (a full snapshot no longer fits on `/home`).
+
 ```bash
 systemctl status siem-backup.service
 systemctl list-timers | grep siem-backup
