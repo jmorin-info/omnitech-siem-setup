@@ -124,7 +124,7 @@ ls -la /root/omnitech-siem-setup/docs/archives/preuves-iso/EVIDENCE-AUDIT-2026-0
 ### Manques et action minimale
 
 - Deux robots en échec depuis le wipe du 28/06 (`systemctl list-units --failed` : `omni-ueba-score`, `omni-monthly-report`, HTTP 400). Causes identifiées : conflit de mapping `src_ip` (keyword dans `omni-interne_0..4` contre ip ailleurs) pour l'UEBA ; tri sur `incident_score`/`ueba_score` absent du mapping de `graylog_0` recréé, pour le rapport. Action : corriger les requêtes (`40-ueba-ndr.sh`, `45-monthly-report.sh`), régénérer le rapport de juin.
-- Fausse panne chronique : `omni-self-health` signale `omni-incident-correlate` en panne alors que sa désactivation est volontaire (`44-incidents.sh`, remplacé par `oms-xdr`). Action : retirer l'entrée de la liste JOBS (`61-supervision-robots.sh`) sans réactiver le timer.
+- Fausse panne chronique : `omni-self-health` signale `omni-incident-correlate` en panne alors que sa désactivation est volontaire (`tools/ponctuel/44-incidents.sh`, remplacé par `oms-xdr`). Action : retirer l'entrée de la liste JOBS (`61-supervision-robots.sh`) sans réactiver le timer.
 - Angle mort : `omni-monthly-report` n'est pas dans la liste des robots surveillés par `omni-self-health` ; son échec n'est signalé nulle part. Action : l'ajouter à la liste JOBS.
 
 ---

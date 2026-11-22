@@ -23,7 +23,7 @@
 | **Total agrégation** | **87** | **26 (mail)** | **87 (Teams)** |
 
 > Toutes les alertes vont à **Teams** (firehose) ; **26** critiques vont **aussi**
-> au mail (cf. `KEEP[]` de `22-alert-routing.sh`). Au-delà des définitions, des
+> au mail (historiquement la liste `KEEP[]` de `22-alert-routing.sh`, archivé ; le mail est désormais décidé par le triage `38-alert-triage.sh`). Au-delà des définitions, des
 > **tags d'enrichissement** posés au pipeline n'ont pas d'alerte dédiée (anti-bruit) :
 > `persistence_autorun` (T1547.001), `remote_discovery` (T1018), `service_stop_securite`
 > (T1489), `threat_intel`, `explicit_cred_use` — visibles en investigation/dashboards.
@@ -171,6 +171,6 @@
 ## Maintenance du registre
 À chaque ajout/retrait de définition (`13`/`16`/`47`/`48`/`59`/`60`…) : mettre à
 jour la table concernée + la répartition. Compteurs vérifiables en direct :
-`GET /api/events/definitions` (total) et `22-alert-routing.sh` (sortie « MAIL
-conservé sur N »). Couverture technique : cf. **COUVERTURE-MITRE-ATTACK.md** +
+`GET /api/events/definitions` (total) et les décisions du triage
+(`event_source:alert_triage`, champ `triage_decision`). Couverture technique : cf. **COUVERTURE-MITRE-ATTACK.md** +
 le calque `mitre-navigator-layer.json`.

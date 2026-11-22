@@ -139,7 +139,7 @@ d'index conservés (= nombre de jours).
 
 ## 6. Détections (88 définitions actives)
 
-Routage **2 tiers** (script `22-alert-routing.sh`) : **Teams = firehose** (87
+Routage **2 tiers** (historiquement `22-alert-routing.sh`, archivé sous `tools/ponctuel/` ; le mail critique est aujourd'hui décidé par le triage `38-alert-triage.sh`) : **Teams = firehose** (87
 définitions, canal SOC) ; **MAIL = 26 alertes critiques « réveille-moi »**
 (compromission confirmée + santé du SIEM). Légende ci-dessous : **MT** = mail+Teams ·
 **T** = Teams seul.
@@ -213,7 +213,7 @@ définitions, canal SOC) ; **MAIL = 26 alertes critiques « réveille-moi »**
 
 > La liste complète des 88 définitions et de leur routage exact se génère/contrôle
 > via `13-graylog-alerts.sh`, `21-alert-hygiene.sh`, les scripts de détections
-> additionnelles (47/48/50/51) et `22-alert-routing.sh`. Voir aussi
+> additionnelles (47/48/50/51) et `38-alert-triage.sh` (triage du mail). Voir aussi
 > `docs/detection/REGISTRE-DETECTIONS.md`.
 
 ## 7. Dashboard « OMNI - SOC » (24 pages)
@@ -273,7 +273,7 @@ Dashboard unique `requires={}` → 100 % OSS (pas d'Enterprise requis).
 | `16/17/18-m365-*.sh` + `/usr/local/sbin/omni-m365-*` | input GELF + collecteurs cloud + timers |
 | `19-vsphere.sh` | volet vSphere |
 | `21-alert-hygiene.sh` | **surcouche obligatoire après 13** : grâces/clés, alertes svc/Veeam/backup/disque/rapport, stream « OMNI - Interne SIEM » |
-| `22-alert-routing.sh` | **routage 2 tiers** (Teams firehose / mail 26 critiques), grâce mail ≥60 min |
+| `tools/ponctuel/22-alert-routing.sh` | **retiré** (27/06/2026) : ancien routage 2 tiers, remplacé par `38-alert-triage.sh` |
 | `30/32-*.sh` | sauvegarde config, garde-fou disque |
 | `41-retention-iso.sh` | rétentions ISO par index set (remplace l'ancien 31) |
 | `33-ldaps-auth.sh` | authentification AD (LDAPS) sur la console |
@@ -287,7 +287,7 @@ Dashboard unique `requires={}` → 100 % OSS (pas d'Enterprise requis).
 | `40-ueba-ndr.sh` + `/usr/local/sbin/omni-ueba-*` + `omni-ndr-*` | UEBA (scoring, géo, volume) et NDR (beacon, DNS, exfil, latéral, scan) |
 | `42-carte-cyber.sh` + `/usr/local/sbin/omni-geo-flux` | cartographie / flux géographiques |
 | `43-ndr-dns.sh`, `48-ndr-scan.sh` | détections NDR additionnelles |
-| `44-incidents.sh` + `/usr/local/sbin/omni-incident-correlate` | corrélation d'incidents (kill-chain, déduplication) |
+| `tools/ponctuel/44-incidents.sh` + `/usr/local/sbin/omni-incident-correlate` | **retiré** (28/06/2026) : ancienne corrélation d'incidents, remplacée par `oms-xdr` |
 | `46-self-health.sh` + `/usr/local/sbin/omni-self-health` | auto-supervision du SIEM (robots en panne) |
 | `47-detections-extra.sh`, `48-m365-fail-codes.sh`, `49-*`, `50-enrich-lot3.sh`, `51-enrich-lot4.sh` | détections et enrichissements complémentaires (Lot3/Lot4, exposition réseau, recon LDAP, M365 fail codes) |
 | `52-new-sources.sh` | **intégration ESET (1515) + BunkerWeb (Filebeat) + mapping NPS** |

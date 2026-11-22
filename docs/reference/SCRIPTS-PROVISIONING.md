@@ -53,18 +53,18 @@ paquets installés.
 
 | N° | Script | Rôle | Idempotent | Dépendances | Trace en production | Statut |
 |---|---|---|---|---|---|---|
-| 15 | `15-rapport-hebdo.sh` | Rapport hebdomadaire HTML par `cron.weekly` | non déclaré | `00-vars.env` | `/etc/cron.weekly/omni-siem-rapport` présent | optionnel (recouvre 34, à arbitrer) |
+| 15 | `tools/ponctuel/15-rapport-hebdo.sh` | Ancien rapport hebdomadaire HTML par `cron.weekly` | non déclaré | `00-vars.env` | `/etc/cron.weekly/omni-siem-rapport` encore présent au 22/11/2026 (doublon de 34, retrait en production à faire) | **archivé** le 22/11/2026 (remplacé par 34) |
 | 16 | `16-m365-input.sh` | Réception Microsoft 365 : input GELF HTTP 12201, jeu d'index, stream | oui | 10 à 13 | input « M365 (GELF HTTP 12201) » | optionnel |
 | 17 | `17-m365-fetcher.sh` | Collecteur Microsoft Graph vers GELF (minuterie 5 min) | oui | 16, variables `M365_*` | `omni-m365-fetch.timer` | optionnel |
 | 18 | `18-m365-activity.sh` | Audit Exchange, SharePoint, OneDrive (Management Activity API) | oui | 16 | `omni-m365-activity.timer`, pipeline « OMNI - M365 Activite » | optionnel |
 | 19 | `19-vsphere.sh` | Collecte ESXi/vCenter : inputs 1516, jeu d'index, pipeline | oui | 06 | inputs « vSphere » 1516, pipeline « OMNI - vSphere » | optionnel |
 | 21 | `21-alert-hygiene.sh` | Surcouche anti-tempête des définitions (délais de grâce, clés) | oui | 13 (à relancer après chaque 13) | n.v. | optionnel |
-| 22 | `22-alert-routing.sh` | Ancien routage mail/Teams à deux niveaux | non déclaré | sans objet | sans objet | **obsolète** (remplacé par 38-alert-triage) |
+| 22 | `tools/ponctuel/22-alert-routing.sh` | Ancien routage mail/Teams à deux niveaux | non déclaré | sans objet | sans objet | **archivé** le 22/11/2026 (remplacé par 38-alert-triage) |
 | 27 | `27-harden-services.sh` | Durcissement systemd de masse des services `omni-*` et `oms-*` | oui | services installés | fichiers `hardening.conf` présents | optionnel |
 | 28 | `28-vpn-remip-ti.sh` | Détection T1133 : connexion SSL-VPN depuis une IP malveillante | oui | 12 | définition « Login SSL-VPN depuis IP malveillante ou Tor (T1133) » | optionnel |
 | 29 | `29-drift-check.sh` | Contrôle de dérive dépôt/production, minuterie et alerte | oui | 06, 21, 30 | `omni-drift-check.timer` | optionnel |
 | 30 | `30-backup-config.sh` | Sauvegarde chiffrée de la configuration, export SMB, test de restaurabilité | non déclaré | `00-vars.env` (partage SMB) | `omni-backup-config.timer` (l'unité appelle le script de la copie `/root/omnitech-siem-setup`) | optionnel |
-| 31 | `31-retention-iso.sh` | Rétentions des jeux d'index (version du 12/06/2026) | oui | 10 | sans objet | **obsolète** (remplacé par 83, lui-même partiellement annulé) |
+| 31 | `tools/ponctuel/31-retention-iso.sh` | Rétentions des jeux d'index (version du 12/06/2026) | oui | 10 | sans objet | **archivé** le 22/11/2026 (remplacé par 83) |
 | 32 | `32-disk-guard.sh` | Garde-fou du disque `/data` toutes les 6 h | non déclaré | 31 | `omni-disk-guard.timer` (appelle le script de la copie `/root`) | optionnel |
 | 33 | `33-ldaps-auth.sh` | Authentification Active Directory (LDAPS) sur la console Graylog | oui | compte de liaison AD | backend « Active Directory OMNITECH » | optionnel |
 | 34 | `34-weekly-report.sh` | Rapport hebdomadaire `omni-weekly-report` (lundi 08:00) | oui | `00-vars.env` | `omni-weekly-report.timer` | optionnel |
@@ -85,7 +85,7 @@ paquets installés.
 | 41 | `41-retention-iso.sh` | Réduction de bruit (pipeline étape 30) et rétention différenciée | oui | 12 | pipeline « OMNI - Reduction volume (ISO) » ; volet rétention remplacé par 83 | optionnel (partiellement remplacé) |
 | 42 | `42-carte-cyber.sh` | Carte des flux temps réel servie sous `/kit/` | oui | nginx, OpenSearch | `omni-geo-flux.timer` | optionnel |
 | 43 | `43-ndr-dns.sh` | Détection d'exfiltration et de tunnel DNS | oui | 21, 37 | `omni-ndr-dns.timer` | optionnel |
-| 44 | `44-incidents.sh` | Ancien moteur de corrélation `omni-incident-correlate` | oui | sans objet | unité présente, minuterie désactivée | **obsolète** (remplacé par `oms-xdr`) |
+| 44 | `tools/ponctuel/44-incidents.sh` | Ancien moteur de corrélation `omni-incident-correlate` | oui | sans objet | unité présente, minuterie désactivée | **archivé** le 22/11/2026 (remplacé par `oms-xdr`) |
 | 45 | `45-monthly-report.sh` | Rapport exécutif mensuel (HTML et PDF) | non déclaré | `00-vars.env` | `omni-monthly-report.timer` | optionnel |
 | 46 | `46-self-health.sh` | Auto-supervision des robots d'analyse | non déclaré | 21 | `omni-self-health.timer` | optionnel |
 | 47 | `47-detections-extra.sh` | Détections complémentaires (GPO, etc.) en pipeline dédié | oui | 12, 37 | pipeline « OMNI - Detections complementaires » | optionnel |
@@ -154,7 +154,9 @@ paquets installés.
 | 98 | `98-index-templates.sh` | Bridage du mapping des index à fort volume | oui | OpenSearch | gabarit non posé (préfixes vides par choix documenté) | outil (non appliqué) |
 | 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré | 06 | input absent, jeu d'index retiré | **obsolète** (serveur décommissionné) |
 
-Les numéros 20 et 23 à 26 ne sont pas attribués.
+Les numéros 20 et 23 à 26 ne sont pas attribués. Les scripts 15, 22, 31 et 44,
+retirés, sont archivés sous [`tools/ponctuel/`](../../tools/ponctuel/README.md#scripts-retirés)
+sans changement de nom ; leurs numéros ne doivent pas être réutilisés.
 
 ### Note sur le script 83
 
@@ -207,7 +209,7 @@ la politique : le script le signale et ne la réduit pas.
 | `run-tests.sh` | Suites de tests hors ligne et contrôle des liens de la documentation | actif |
 | `scan-depot.sh` | Blocage des secrets et des mentions d'outillage dans les commits (crochets Git) | actif |
 | `generer-manifeste.sh`, `synchro-manifeste.sh`, `manifeste-deploye.txt` | Comparaison et recopie du code en service vers `deploye/` | actifs |
-| `sync-deploye.sh` | Ancien outil de recopie, réduit à un message de renvoi vers `synchro-manifeste.sh` | retiré (suppression à arbitrer) |
+| `tools/ponctuel/sync-deploye.sh` | Ancien outil de recopie, réduit à un message de renvoi vers `synchro-manifeste.sh` | **archivé** le 22/11/2026 |
 | `verif-post-reboot.sh` | Vérification en lecture seule après un redémarrage (déchiffrement `/data`, services, collecte) | outil |
 | `seal_graylog_setup.py` | Orchestrateur de l'intégration SEAL vers Graylog (voir `seal/`) | optionnel |
 

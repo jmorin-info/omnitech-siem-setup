@@ -241,7 +241,7 @@ ensure_lookup() {
 #   title, description, priority, alert, config.{query,streams,group_by,series,
 #   conditions,search_within_ms,execute_every_ms,event_limit}, key_spec.
 # CE QUI EST DELIBEREMENT EXCLU (co-gere ailleurs -> un PUT le clobbererait) :
-#   - notifications / storage / scheduler : ajoutes par 21/22-alert-routing ;
+#   - notifications / storage / scheduler : ajoutes par 21-alert-hygiene et l'ancien 22-alert-routing (archive) ;
 #     un live typique porte 2-3 notifications, le desire n'en construit qu'1.
 #   - notification_settings.grace_period_ms + field_spec : co-geres par
 #     21-alert-hygiene.sh (surcouche anti-tempete). grace/key_spec sont donc

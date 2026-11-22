@@ -2,7 +2,7 @@
 # =============================================================================
 # synchro-manifeste.sh : recopie dans le dépôt les fichiers EN SERVICE listés dans
 # manifeste-deploye.txt (et seulement eux), après comparaison SHA-256.
-# Remplace sync-deploye.sh (son étape « 2 bis » recopiait des versions anciennes).
+# Remplace sync-deploye.sh, archivé sous tools/ponctuel/ (son étape « 2 bis » recopiait des versions anciennes).
 #   ./synchro-manifeste.sh            -> état : IDENTIQUE / DIFFERENT / NOUVEAU / ABSENT (rien n'est modifié)
 #   ./synchro-manifeste.sh --copier   -> copie les DIFFERENT et NOUVEAU, les ajoute à l'index,
 #                                        puis lance scan-depot.sh ; en cas d'alerte, tout est annulé.

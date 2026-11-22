@@ -3,7 +3,7 @@
 # 83-retention-consolidee.sh - Source unique des retentions des index sets omni-*
 #
 #   Valeurs alignees sur docs/securite-conformite/POLITIQUE-RETENTION.md.
-#   Remplace 31-retention-iso.sh (archive sous tools/ponctuel/) et le volet 2
+#   Remplace tools/ponctuel/31-retention-iso.sh (archive) et le volet 2
 #   de 41-retention-iso.sh, qui se contredisaient.
 #
 #   REVISION 22/11/2026 (decision de l'administrateur) :

@@ -4,7 +4,7 @@
 # -----------------------------------------------------------------------------
 # Reponse au "et si le disque se remplit ?" :
 #   < 80 %  : rien (la retention normale supprime les index a J+retention).
-#   >= 80 % : alerte mail "Disque SIEM >80%" (revoir le plan 31-retention-iso).
+#   >= 80 % : alerte mail "Disque SIEM >80%" (revoir le plan 83-retention-consolidee.sh).
 #   >= 88 % : PURGE D'URGENCE -> suppression des index omni-* les plus ANCIENS
 #             (jamais l'index actif d'un flux) jusqu'a repasser sous 82 %,
 #             + alerte mail. Derniere ligne de defense AVANT les watermarks
@@ -37,7 +37,7 @@ if (( U < SEUIL_WARN )); then
   exit 0
 fi
 if (( U < SEUIL_PRUNE )); then
-  gelf disk_warn "/data a ${U}% (seuil ${SEUIL_WARN}%) - revoir 31-retention-iso.sh"
+  gelf disk_warn "/data a ${U}% (seuil ${SEUIL_WARN}%) - revoir 83-retention-consolidee.sh"
   echo "WARN : /data a ${U}%"
   exit 0
 fi

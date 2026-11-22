@@ -65,7 +65,7 @@ spécialistes (direction, audit, nouveaux arrivants).*
 | **Threat feed** | Liste d'IP/domaines malveillants qu'un pare-feu lit pour bloquer ; le SIEM en alimente une dynamiquement. |
 | **LDAPS** | LDAP sécurisé (chiffré) : protocole d'authentification des comptes AD sur la console. |
 | **P2 / P3** | Niveaux de priorité des alertes (P3 = critique ; P2 = important). Le P3 « réveille-moi » part en mail ; toutes priorités confondues partent aussi sur Teams. |
-| **Routage 2 tiers (mail / Teams)** | Acheminement des notifications : **Teams = firehose** (toutes les alertes) ; **mail = 26 alertes critiques** seulement (compromission confirmée + santé du SIEM). Évite le spam de la boîte mail (script `22-alert-routing.sh`). |
+| **Routage 2 tiers (mail / Teams)** | Acheminement des notifications : **Teams = firehose** (toutes les alertes) ; **mail = 26 alertes critiques** seulement (compromission confirmée + santé du SIEM). Évite le spam de la boîte mail (aujourd'hui par le triage `38-alert-triage.sh` ; l'ancien script `22-alert-routing.sh` est archivé). |
 | **Grâce (anti-tempête)** | Délai pendant lequel une même alerte ne re-notifie pas, pour éviter le spam (≥ 60 min sur les alertes mail récurrentes). |
 
 ## Gouvernance et exploitation
