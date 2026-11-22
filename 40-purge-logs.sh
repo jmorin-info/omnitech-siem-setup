@@ -39,7 +39,8 @@ curl -s -X POST "127.0.0.1:9200/graylog_*/_delete_by_query?conflicts=proceed&ref
   -H 'Content-Type: application/json' -d '{"query":{"match_all":{}}}' -o /dev/null -w "  graylog_* (vide) -> %{http_code}\n"
 
 echo "==> [4/6] Purge de l'historique des echecs d'indexation (MongoDB)"
-MONGO_URI="$(grep -E '^mongodb_uri' /etc/graylog/server/server.conf | sed 's/^[^=]*=[[:space:]]*//')"
+# server.conf peut contenir plusieurs lignes mongodb_uri : comme Graylog, on retient la derniere.
+MONGO_URI="$(grep -E '^[[:space:]]*mongodb_uri[[:space:]]*=' /etc/graylog/server/server.conf | tail -n 1 | sed 's/^[^=]*=[[:space:]]*//')"
 mongosh "${MONGO_URI}" --quiet --eval 'db.index_failures.deleteMany({}); print("index_failures purgee")' || echo "  (purge failures non bloquante)"
 
 echo "==> [5/6] Redemarrage de Graylog (recreation des index vides)"
