@@ -90,7 +90,7 @@ qemu-system-x86_64 -enable-kvm -cpu host -smp 2 -m 16384 -display none \
 VM_PID=$!
 SSH=(-i "$WORK/id_vm" -p 22026 -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$WORK/known_hosts" root@127.0.0.1)
 READY=0
-for attempt in $(seq 1 120); do
+for _ in $(seq 1 120); do
   kill -0 "$VM_PID" 2>/dev/null || { echo 'The isolated VM stopped during boot.' >&2; exit 1; }
   if ssh "${SSH[@]}" 'true' > "$WORK/ssh.log" 2>&1; then READY=1; break; fi
   sleep 5

@@ -13,7 +13,7 @@
 # Sortie : "OK" par test ; code de sortie != 0 si un test echoue.
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 # On charge lib-graylog.sh sans toucher au reseau : les fonctions pures
 # (_event_desired_json/_event_canon) n'appellent pas l'API. On neutralise les

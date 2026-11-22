@@ -8,7 +8,3 @@ target-version = "py312"
 
 [lint]
 select = ["E9", "F63", "F7", "F82"]
-
-[lint.per-file-ignores]
-# Annotation chaîne "NoReturn" sous `from __future__ import annotations` : jamais évaluée.
-"seal/graylog/provision_seal.py" = ["F821"]

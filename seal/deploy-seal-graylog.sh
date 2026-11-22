@@ -20,7 +20,7 @@
 #  (cf logstash/install-logstash-siem.sh). Ordre global : voir README.
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/.."          # racine du depot
+cd "$(dirname "$0")/.." || exit 1          # racine du depot
 [[ -f ./00-vars.env ]] || { echo "00-vars.env introuvable (lancer depuis la racine du depot)"; exit 1; }
 set -a; source ./00-vars.env; set +a
 

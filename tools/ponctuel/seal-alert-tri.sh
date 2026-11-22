@@ -73,7 +73,7 @@
 #          APPLY=1 bash tools/ponctuel/seal-alert-tri.sh  # applique (PUT idempotents)
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." || exit 1
 
 # shellcheck disable=SC1091
 source 00-vars.env

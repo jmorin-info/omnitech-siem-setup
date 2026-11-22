@@ -39,7 +39,7 @@ transport_email_web_interface_url = https://${SIEM_FQDN}
 EOF
   ok "SMTP ajoute -> redemarrage graylog-server"
   systemctl restart graylog-server
-  for i in $(seq 1 60); do
+  for _ in $(seq 1 60); do
     api_get "/system" | jq -e '.version' >/dev/null 2>&1 && break
     sleep 5
   done
