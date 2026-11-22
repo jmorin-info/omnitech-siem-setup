@@ -23,6 +23,7 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 ### Modifié
 
 - `oms-snap-siem` lit le dépôt et son emplacement dans `/etc/oms-snap-siem.conf` (`DEPOT`, `DEPOT_CHEMIN`, `LIBRE_ARRET_PCT`) au lieu de `graylog_fs` et `/home` codés en dur ; `omni-drift-check` (script 29 et miroir) et `omni-update-status.py` suivent le même dépôt.
+- `oms-maj-siem.timer` : `Persistent=false` confirmé et justifié (`docs/UPDATES.md`, en-tête de `62-auto-security-updates.sh`) : avec le redémarrage automatique conservé, un rattrapage au démarrage ferait une mise à jour suivie d'un redémarrage à une heure imprévue ; les correctifs de sécurité quotidiens d'`unattended-upgrades` ne dépendent pas de ce timer.
 - Cert Orchestrator (`99-cert-orchestrator.sh`) : source renommée `cert_orchestrator` (`cert_parc` reste la source PKI Windows de bx-pki2022, 5 035 messages en production) ; index set créé directement en rotation `P1M` x 3, cohérent avec le script 83 et la politique de rétention, au lieu de `P1D` x 90 copié du modèle ; seuil watchdog dédié dans le modèle de `74-source-watchdog.sh` ; documentation des sources et de la rétention.
 
 ### Corrigé

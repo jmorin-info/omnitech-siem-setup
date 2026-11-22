@@ -299,10 +299,27 @@ résultat d'`oms-maj-siem` avec son prochain passage, ainsi que la date du **der
 réel** (hors simulation) : au-delà de 8 jours, un passage hebdomadaire a été manqué.
 `oms-maj-siem.timer` est en `Persistent=false` : si la machine est arrêtée ou redémarre
 pendant la fenêtre du dimanche, le passage est perdu sans rattrapage ni alerte ; ce contrôle
-le rend visible. Le rattrapage automatique au démarrage (`Persistent=true`) n'est pas
-recommandé en l'état, car le script peut redémarrer la machine : il ferait alors une mise à
-jour et un redémarrage à une heure imprévue. Si un rattrapage est voulu, il faut d'abord
-ajouter au script un contrôle de fenêtre horaire (décision de l'administrateur).
+le rend visible.
+
+**Règle retenue le 22/11/2026 : `Persistent=false` est conservé.** Avec le redémarrage
+automatique maintenu, c'est la règle la plus sûre :
+
+- `Persistent=true` lancerait le passage manqué dès le démarrage suivant, donc à une heure
+  imprévue, souvent en journée : mise à jour de la pile puis redémarrage 60 s après la fin si
+  `/var/run/reboot-required` existe. Le cas le plus probable de passage manqué est un arrêt
+  non planifié (coupure, comme le 26/06/2026) : le rattrapage enchaînerait alors une mise à
+  jour et un second redémarrage sur une machine qui vient juste de reprendre ;
+- le coût d'un passage manqué est borné : les correctifs de sécurité Debian restent appliqués
+  chaque jour par `unattended-upgrades` (`apt-daily-upgrade.timer`, indépendant de ce
+  timer) ; seuls la pile épinglée, les autres paquets et le redémarrage attendent une
+  semaine ;
+- le passage manqué est visible : `omni-update-status.py --layer os` signale un dernier
+  passage réel de plus de 8 jours.
+
+Pour rattraper sans attendre, lancer `sudo systemctl start oms-maj-siem.service` à un moment
+choisi (mêmes contrôles ; redémarrage possible). Un rattrapage automatique dans une fenêtre
+de nuit (second créneau conditionné à l'absence de passage dans la semaine) demanderait une
+modification d'`oms-maj-siem` ; il n'est pas implémenté.
 Constat du 21/11/2026 : le passage du 15/11 a bien eu lieu (démarrage 04:38:41, journal
 `/var/log/oms-maj-siem.log` et `journalctl -u oms-maj-siem.service`) ; le redémarrage du
 timer à 04:43 correspond au redémarrage de la machine qu'il a lui-même déclenché. Attention : `oms-maj-siem --simuler`
