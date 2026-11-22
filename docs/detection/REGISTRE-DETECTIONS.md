@@ -55,6 +55,7 @@
 | Connexion compte admin (adm-*) hors heures ouvrées | P3 | T | 4624 adm-* + `off_hours:oui` | T1078 |
 | Échec logon service/batch (compte de service cassé) | P3 | T | 4625 LogonType 4/5 | — |
 | Balayage de partages admin (≥3 hôtes / compte / 15 min) | P3 | T | 5140 `card(host)` | T1021.002 |
+| v3 - Lecture d'un mot de passe LAPS (hors équipe IT) | P3 | T + mail critique | 4662 ciblé sur un attribut LAPS (liste ≤ 400 caractères), comptes `adm-*` écartés par `omni-v3-laps-lecture-it` ; source `objets-graylog/` (script 26) | T1555 |
 
 ## 2. Endpoint & exécution / élévation (A.8.7)
 
@@ -85,6 +86,7 @@
 | VPN monté depuis l'étranger | P3 | T | tunnel `remip` hors FR | T1133 |
 | Scan réseau interne (reconnaissance / lateral) | P2 | T | `ndr_scan` / `network_scan` | T1046 |
 | SOAR : IP bloquée automatiquement | P3 | T | action `omni-soar` (telemetry) | — |
+| FortiGate : balayage IKE (≥10 échecs phase 1 / IP / 6 h) → SOAR en simulation | P2 | T | négociation IKE sans tunnel (`vpntunnel:N/A`) groupée par `remip` ; source `objets-graylog/definitions/fortigate-balayage-ike.json` (script 26) | T1595 / T1133 |
 
 ## 4. Cloud Microsoft 365 / Entra (A.5.23)
 
@@ -124,7 +126,7 @@
 | Brute force coffre Vaultwarden (≥10 échecs / IP / 15 min) | P3 | **M** | `vault_auth_fail` (src_ip + compte) | T1555.005 |
 | ESET : détection/menace antivirus | P2 | **M** | `eset_detection` (menace poste/serveur) | T1204 |
 | BunkerWeb : pic de blocages WAF (≥20 / IP / 10 min) | P3 | T | `waf_block` agrégé IP | T1190 |
-| WAF : scan applicatif (≥25 erreurs 404 / IP / 10 min) | P3 | T | HTTP 404 répétés / IP | T1190 |
+| WAF : scan applicatif (≥25 erreurs 404 / IP / 10 min) | P3 | T | HTTP 404 répétés / IP ; source `objets-graylog/definitions/waf-scan-applicatif-404.json` (script 26) | T1190 |
 | Accès massif à des fichiers sensibles (exfiltration ?) | P3 | **M** | `file_sensitive_access` ≥200 / compte / 10 min | T1039 |
 | Suppressions massives de fichiers (ransomware ?) | P3 | **M** | `file_delete_sensible` ≥30 / compte / 10 min | T1485 |
 

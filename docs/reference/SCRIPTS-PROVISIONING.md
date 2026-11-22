@@ -1,6 +1,6 @@
 # Scripts de provisioning numérotés : inventaire et statut
 
-Ce document recense les 105 scripts `NN-*.sh` de la racine du dépôt. Ils ne
+Ce document recense les 106 scripts `NN-*.sh` de la racine du dépôt. Ils ne
 sont **ni renommés ni déplacés** : leurs noms sont cités par l'installateur
 (`tools/install-platform.py`), par d'autres scripts, par la documentation et
 par trois unités systemd de production (voir [Contraintes](#contraintes-pour-toute-renumérotation)).
@@ -60,6 +60,7 @@ paquets installés.
 | 19 | `19-vsphere.sh` | Collecte ESXi/vCenter : inputs 1516, jeu d'index, pipeline | oui | 06 | inputs « vSphere » 1516, pipeline « OMNI - vSphere » | optionnel |
 | 21 | `21-alert-hygiene.sh` | Surcouche anti-tempête des définitions (délais de grâce, clés) | oui | 13 (à relancer après chaque 13) | n.v. | optionnel |
 | 22 | `22-alert-routing.sh` | Ancien routage mail/Teams à deux niveaux | non déclaré | sans objet | sans objet | **obsolète** (remplacé par 38-alert-triage) |
+| 26 | `26-graylog-objets-manuels.sh` | Recrée les objets Graylog posés à la main en novembre 2026 (détections balayage IKE, scan WAF 404, lecture LAPS ; règles `omni-v3-laps-lecture*` et les 15 `omni-fp-26-*` ; raccordement à leurs pipelines). Plan en lecture seule par défaut, `--apply` pour créer ; un objet présent n'est jamais modifié. Sources : `objets-graylog/`, `tools/alertes-v2/regles/` | oui (test hors ligne `tests/test_graylog_objets_manuels.py`) | 36, 38, 49-expo-port-class, 81, `tools/omni-v3/v3_build.py` ; **à relancer après 49-expo-port-class, 49-enrich-lots, 81 et v3_build.py**, qui réécrivent la source de leur pipeline | plan du 22/11/2026 : 37 objets « déjà présent », aucun écart | optionnel |
 | 27 | `27-harden-services.sh` | Durcissement systemd de masse des services `omni-*` et `oms-*` | oui | services installés | fichiers `hardening.conf` présents | optionnel |
 | 28 | `28-vpn-remip-ti.sh` | Détection T1133 : connexion SSL-VPN depuis une IP malveillante | oui | 12 | définition « Login SSL-VPN depuis IP malveillante ou Tor (T1133) » | optionnel |
 | 29 | `29-drift-check.sh` | Contrôle de dérive dépôt/production, minuterie et alerte | oui | 06, 21, 30 | `omni-drift-check.timer` | optionnel |
@@ -154,7 +155,7 @@ paquets installés.
 | 98 | `98-index-templates.sh` | Bridage du mapping des index à fort volume | oui | OpenSearch | gabarit non posé (préfixes vides par choix documenté) | outil (non appliqué) |
 | 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré | 06 | input absent, jeu d'index retiré | **obsolète** (serveur décommissionné) |
 
-Les numéros 20 et 23 à 26 ne sont pas attribués.
+Les numéros 20 et 23 à 25 ne sont pas attribués.
 
 ### Note sur le script 83
 
@@ -210,7 +211,7 @@ désigne une opération.
 | Statut | Nombre | Scripts |
 |---|---|---|
 | socle | 15 | 00 à 08, 10 à 14, 71 (08 est remplacé en production mais reste utilisé par les installations neuves) |
-| optionnel | 77 | extensions activées sur l'installation de référence |
+| optionnel | 78 | extensions activées sur l'installation de référence |
 | ponctuel | 6 | 40-purge-logs, 53, 54, 79, 84-kerberoast-dedup, 97-enrich-alerts |
 | outil | 2 | 57, 98 |
 | obsolète | 4 | 22, 31, 44, 99 |
@@ -234,7 +235,7 @@ tant que les contraintes ci-dessous ne sont pas levées.
    | Plage | Domaine | Exemples actuels |
    |---|---|---|
    | 100-199 | Sources et collecteurs | 16, 17, 18, 19, 52, 55, 56, 63, 64, 90, 92, 93, 94 |
-   | 200-299 | Détections | 28, 35, 47, 50, 51, 67, 73, 76, 78, 80, 85, 86, 87, 88, 91 |
+   | 200-299 | Détections | 26, 28, 35, 47, 50, 51, 67, 73, 76, 78, 80, 85, 86, 87, 88, 91 |
    | 300-399 | Enrichissement et corrélation | 37, 48-m365, 49 (trois), 58, 66, 81, 96, 97-multisite |
    | 400-499 | Triage, réponse et SOAR | 36, 38-triage, 39-digest, 69 |
    | 500-599 | Analyses comportementales et ML | 40-ueba, 43, 48-ndr, 49-ldap, 77, 89 |

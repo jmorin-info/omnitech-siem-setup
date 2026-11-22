@@ -189,7 +189,7 @@ in the [roadmap](docs/ROADMAP.md):
   logs are only covered by selective snapshots (recent windows of large indices).
 - **Account and endpoint response not armed**: AD account disabling and
   endpoint isolation remain recommendations (simulation).
-- **Organisational debt**: 105 numbered scripts, nine of them sharing a
+- **Organisational debt**: 106 numbered scripts, nine of them sharing a
   prefix, a few obsolete scripts, and several services still running from an
   older copy of the repository on the server.
 

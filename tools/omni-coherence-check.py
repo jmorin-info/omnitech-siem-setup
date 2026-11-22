@@ -13,7 +13,9 @@ Contrôles :
                échec, dernier résultat non « success » ;
   versions   : paquets installés comparés à stack-versions.env ;
   graylog    : (option --graylog) inventaire par requêtes GET uniquement, titres
-               présents en production mais introuvables dans le dépôt.
+               présents en production mais introuvables dans le dépôt (tout
+               fichier suivi hors docs/ ; les objets manuels versionnés par
+               26-graylog-objets-manuels.sh le sont sous objets-graylog/).
 
 Aucune écriture : pas de systemctl start/stop, pas de POST/PUT/DELETE, Git
 appelé avec --no-optional-locks. Dépendances : bibliothèque standard seule.
