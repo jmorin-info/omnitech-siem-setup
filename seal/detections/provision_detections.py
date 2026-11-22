@@ -76,6 +76,7 @@ IMMEDIATE_SEV = {"Critical", "High"}
 # =============================================================================
 #  CATALOGUE v1 - source de verite (aligne sur catalog.md / REG_030_delta.csv)
 #  cond : ("count_ge", N) | ("card_ge", field, N) | ("count_lt", N)
+#         | ("sum_ge_min_le", field, S, M) : sum(field) >= S ET min(field) <= M
 #  Toutes les requetes n'emploient QUE des champs normalises CONTRACT D4.
 # =============================================================================
 RULES: list[dict] = [
@@ -84,10 +85,17 @@ RULES: list[dict] = [
          stream="audit", sev="High", tech="T1110", statut="actif",
          query="event_domain:hypervisor_audit AND event_action:ConnectionFailure",
          group_by=["actor_login"], cond=("count_ge", 5), within=10, every=1),
+    # HYP-002 (correctif 11/2026) : la version initiale attendait alert_tag:seal_bf_then_success,
+    # qu'aucune regle de pipeline ni aucun service ne pose -> detection morte. Elle est rendue
+    # autonome sur severity_num, pose par 12-seal-audit.rule : 5 sur ConnectionFailure, 0 sur
+    # Connection. Par compte et par site, sur 15 min : sum >= 25 (au moins 5 echecs) ET
+    # min <= 0 (au moins un succes). Approximation sans ordre (comme la force brute Windows) ;
+    # actor_login n'est pas normalise (casse, prefixe de domaine) : une variante de casse entre
+    # echecs et succes n'est pas regroupee (normalisation par pipeline = chantier separe).
     dict(id="HYP-002", title="Brute force suivie d'un succès (même compte)",
          stream="audit", sev="High", tech="T1110/T1078", statut="[SEQ]-approx",
-         query="event_domain:hypervisor_audit AND alert_tag:seal_bf_then_success",
-         group_by=["actor_login"], cond=("count_ge", 1), within=15, every=1),
+         query="event_domain:hypervisor_audit AND event_action:(ConnectionFailure OR Connection)",
+         group_by=["actor_login"], cond=("sum_ge_min_le", "severity_num", 25, 0), within=15, every=1),
     dict(id="HYP-003", title="Connexion console d'administration (SealAdmin)",
          stream="audit", sev="Medium", tech="T1078", statut="actif",
          query="event_domain:hypervisor_audit AND event_action:Connection AND operation_channel:SealAdmin",
@@ -357,6 +365,15 @@ def build_series_conditions(cond: tuple):
         series = [{"id": f"card({field})", "type": "card", "field": field}]
         expr = {"expr": ">=", "left": {"expr": "number-ref", "ref": f"card({field})"},
                 "right": {"expr": "number", "value": cond[2]}}
+    elif kind == "sum_ge_min_le":
+        field, seuil_somme, seuil_min = cond[1], cond[2], cond[3]
+        series = [{"id": f"sum({field})", "type": "sum", "field": field},
+                  {"id": f"min({field})", "type": "min", "field": field}]
+        expr = {"expr": "&&",
+                "left": {"expr": ">=", "left": {"expr": "number-ref", "ref": f"sum({field})"},
+                         "right": {"expr": "number", "value": seuil_somme}},
+                "right": {"expr": "<=", "left": {"expr": "number-ref", "ref": f"min({field})"},
+                          "right": {"expr": "number", "value": seuil_min}}}
     else:
         raise ValueError(f"condition inconnue : {cond}")
     return series, {"expression": expr}

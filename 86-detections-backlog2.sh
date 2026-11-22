@@ -84,7 +84,7 @@ mk_detect "OMNI - Altération des journaux d'audit cloud M365 (T1562.008)" 2 \
 # --- T1204.002 Execution d'un binaire depose via archiveur ou Outlook (Sysmon) --
 # Parent archiveur interactif / Outlook -> enfant PE en zone inscriptible = loader.
 mk_detect "OMNI - Exécution d'un binaire déposé via archiveur ou Outlook (T1204.002)" 2 \
-  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_ParentImage:(*WinRAR.exe OR *Rar.exe OR *7zFM.exe OR *7zG.exe OR *Bandizip.exe OR *PeaZip.exe OR *OUTLOOK.EXE) AND winlogbeat_winlog_event_data_Image:(*Downloads* OR *AppData* OR *Windows*Temp* OR *Users*Public* OR *ProgramData*)' \
+  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_ParentImage:(/.*[wW][iI][nN][rR][aA][rR][.][eE][xX][eE]/ OR /.*[rR][aA][rR][.][eE][xX][eE]/ OR /.*7[zZ][fF][mM][.][eE][xX][eE]/ OR /.*7[zZ][gG][.][eE][xX][eE]/ OR /.*[bB][aA][nN][dD][iI][zZ][iI][pP][.][eE][xX][eE]/ OR /.*[pP][eE][aA][zZ][iI][pP][.][eE][xX][eE]/ OR /.*[oO][uU][tT][lL][oO][oO][kK][.][eE][xX][eE]/) AND winlogbeat_winlog_event_data_Image:(/.*[dD][oO][wW][nN][lL][oO][aA][dD][sS].*/ OR /.*[aA][pP][pP][dD][aA][tT][aA].*/ OR /.*[wW][iI][nN][dD][oO][wW][sS].*[tT][eE][mM][pP].*/ OR /.*[uU][sS][eE][rR][sS].*[pP][uU][bB][lL][iI][cC].*/ OR /.*[pP][rR][oO][gG][rR][aA][mM][dD][aA][tT][aA].*/)' \
   "$ST_SYSMON" '["host"]' 1 900000 300000 1800000 \
   "86/T1204.002 : un archiveur interactif (WinRAR/7-Zip/Bandizip/PeaZip) ou Outlook lance un binaire depose en zone inscriptible = execution d'une piece jointe malveillante (loader QakBot/IcedID). 7z.exe CLI et Explorer exclus."
 

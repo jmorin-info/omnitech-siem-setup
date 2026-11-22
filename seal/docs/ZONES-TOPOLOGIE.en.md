@@ -71,6 +71,17 @@ As soon as the CSV is populated, `seal_zone` appears on the new events (the widg
 `ZON-001` fill up). To re-decorate history: not necessary for the SOC
 (zone analysis concerns the current flow); otherwise re-backfill with Logstash.
 
+## Template pending the SQL view (22/11/2026)
+
+Finding: the installed table only holds its header; the physical zone plan (which door belongs
+to which zone) is available neither to the service account in SEAL nor in the repository.
+ZON-001 is disabled in production (`tools/maj-detections-2026-11.py`) while the table is empty.
+
+`seal/graylog/gabarit_zone_portes.py` lists, read-only, the doors seen in OpenSearch with the
+rule's key (`seal_site:OBFI_ID`): `gabarit` mode writes the template (fill in `ZONE_PATH`),
+`table` mode writes the lookup CSV keeping only doors with a zone. Snapshot of 22/11/2026:
+`seal/graylog/omni-seal-zone.gabarit.csv` (127 doors). See the French version for the commands.
+
 ## Discovering the zones of another site
 
 `event_domain:audit AND target_object_type:GroupeZone` (zone labels) and

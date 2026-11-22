@@ -926,11 +926,13 @@ def controles_statiques(r: Resultat, d: dict, inv: dict, ctx: dict):
         if t.champ is None:
             r.ajouter("requete", "moyenne", "terme sans champ : dépend du champ par défaut d'OpenSearch")
         if t.nature == "wildcard" and t.champ not in CHAMPS_TEXTE and not neg:
+            # Un joker garde la casse écrite, en minuscules comme en casse mixte (*WinRAR.exe ne
+            # trouve pas winrar.exe). Correctif : expression régulière à classes /.*[wW][iI].../.
             lettres = re.sub(r"[^A-Za-z]", "", _desechapper(t.valeur))
-            if lettres and lettres == lettres.lower() and re.search(r"(?i)image|path|file|command|object|name",
-                                                                       t.champ or ""):
-                r.ajouter("requete", "faible", f"joker en minuscules sur {t.champ} ({t.valeur}) : les champs "
-                                               "keyword sont sensibles à la casse")
+            if lettres and re.search(r"(?i)image|path|file|command|object|name|details|dns_query",
+                                     t.champ or ""):
+                r.ajouter("requete", "faible", f"joker sensible à la casse sur {t.champ} ({t.valeur}) : les "
+                                               "champs keyword sont sensibles à la casse")
     return arbre
 
 
@@ -944,14 +946,18 @@ def _date(s):
 
 
 def producteur_champ(champ: str, ctx: dict) -> str | None:
-    """Règle de pipeline connectée qui pose `champ` (set_field), sinon None.
+    """Règle de pipeline connectée qui pose `champ` (set_field), sinon robot GELF du dépôt
+    qui émet le champ additionnel `_champ`, sinon None.
 
-    Les robots GELF ne sont pas pris en compte : le nom d'un champ apparaît aussi
-    dans le code qui le lit, la recherche littérale serait trompeuse."""
+    Pour les robots, seule la clé GELF (`"_champ":` ou `["_champ"]`) est reconnue : le nom
+    nu d'un champ apparaît aussi dans le code qui le lit, la recherche littérale serait
+    trompeuse ; le préfixe « _ » est propre à l'émission GELF."""
     motif = re.compile(r"""set_field\(\s*["']""" + re.escape(champ) + r"""["']""")
     for nom, src in ctx["regles"].items():
         if nom in ctx["regles_connectees"] and motif.search(src):
             return f"règle « {nom} »"
+    if ctx.get("corpus") and re.search(r"""["']_""" + re.escape(champ) + r"""["']\s*[\]:]""", ctx["corpus"]):
+        return f"robot GELF du dépôt (champ _{champ})"
     return None
 
 

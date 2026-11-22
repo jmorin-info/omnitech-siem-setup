@@ -1,0 +1,232 @@
+{
+  "titre": "OMNI - SEAL HYP-002 - Brute force suivie d'un succès (même compte)",
+  "critique": true,
+  "mitre": "T1110",
+  "justification": "Compte console SEAL qui réussit à se connecter après une série d'échecs : mot de passe deviné sur l'hyperviseur de contrôle d'accès physique. Jusqu'en 11/2026 la définition attendait une étiquette qu'aucun producteur ne posait.",
+  "capture": "2026-11-22, GET /api/events/definitions (production) + cible de tools/maj-detections-2026-11/cibles.json",
+  "definition": {
+    "query": "event_domain:hypervisor_audit AND event_action:(ConnectionFailure OR Connection)",
+    "streams": [
+      "OMNI - SEAL Audit"
+    ],
+    "group_by": [
+      "actor_login",
+      "seal_site"
+    ],
+    "series": [
+      {
+        "id": "sum(severity_num)",
+        "type": "sum",
+        "field": "severity_num"
+      },
+      {
+        "id": "min(severity_num)",
+        "type": "min",
+        "field": "severity_num"
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": "&&",
+        "left": {
+          "expr": ">=",
+          "left": {
+            "expr": "number-ref",
+            "ref": "sum(severity_num)"
+          },
+          "right": {
+            "expr": "number",
+            "value": 25.0
+          }
+        },
+        "right": {
+          "expr": "<=",
+          "left": {
+            "expr": "number-ref",
+            "ref": "min(severity_num)"
+          },
+          "right": {
+            "expr": "number",
+            "value": 0.0
+          }
+        }
+      }
+    },
+    "search_within_ms": 900000,
+    "execute_every_ms": 900000
+  },
+  "cas": [
+    {
+      "nom": "5 échecs puis un succès (même compte, même site)",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "BX-SEAL-OMEGA\\ADMINISTRATEUR",
+            "bx-seal-omega"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - SEAL Audit",
+          "age_s": 300,
+          "repeter": 5,
+          "pas_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "hypervisor_audit",
+            "event_action": "ConnectionFailure",
+            "actor_login": "BX-SEAL-OMEGA\\ADMINISTRATEUR",
+            "seal_site": "bx-seal-omega",
+            "severity_num": 5
+          }
+        },
+        {
+          "flux": "OMNI - SEAL Audit",
+          "age_s": 60,
+          "repeter": 1,
+          "pas_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "hypervisor_audit",
+            "event_action": "Connection",
+            "actor_login": "BX-SEAL-OMEGA\\ADMINISTRATEUR",
+            "seal_site": "bx-seal-omega",
+            "severity_num": 0
+          }
+        }
+      ]
+    },
+    {
+      "nom": "5 échecs sans succès (relève de HYP-001)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - SEAL Audit",
+          "age_s": 60,
+          "repeter": 5,
+          "pas_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "hypervisor_audit",
+            "event_action": "ConnectionFailure",
+            "actor_login": "admin",
+            "seal_site": "bx-seal-omega",
+            "severity_num": 5
+          }
+        }
+      ]
+    },
+    {
+      "nom": "4 échecs puis un succès (sous le seuil)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - SEAL Audit",
+          "age_s": 200,
+          "repeter": 4,
+          "pas_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "hypervisor_audit",
+            "event_action": "ConnectionFailure",
+            "actor_login": "admin",
+            "seal_site": "bx-seal-omega",
+            "severity_num": 5
+          }
+        },
+        {
+          "flux": "OMNI - SEAL Audit",
+          "age_s": 60,
+          "repeter": 1,
+          "pas_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "hypervisor_audit",
+            "event_action": "Connection",
+            "actor_login": "admin",
+            "seal_site": "bx-seal-omega",
+            "severity_num": 0
+          }
+        }
+      ]
+    },
+    {
+      "nom": "échecs et succès sur deux comptes différents",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - SEAL Audit",
+          "age_s": 300,
+          "repeter": 6,
+          "pas_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "hypervisor_audit",
+            "event_action": "ConnectionFailure",
+            "actor_login": "admin",
+            "seal_site": "bx-seal-omega",
+            "severity_num": 5
+          }
+        },
+        {
+          "flux": "OMNI - SEAL Audit",
+          "age_s": 60,
+          "repeter": 1,
+          "pas_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "hypervisor_audit",
+            "event_action": "Connection",
+            "actor_login": "jdupont",
+            "seal_site": "bx-seal-omega",
+            "severity_num": 0
+          }
+        }
+      ]
+    },
+    {
+      "nom": "même compte sur deux sites (regroupement par site)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - SEAL Audit",
+          "age_s": 300,
+          "repeter": 5,
+          "pas_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "hypervisor_audit",
+            "event_action": "ConnectionFailure",
+            "actor_login": "admin",
+            "seal_site": "bx-qa-seal-vm",
+            "severity_num": 5
+          }
+        },
+        {
+          "flux": "OMNI - SEAL Audit",
+          "age_s": 60,
+          "repeter": 1,
+          "pas_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "hypervisor_audit",
+            "event_action": "Connection",
+            "actor_login": "admin",
+            "seal_site": "bx-seal-omega",
+            "severity_num": 0
+          }
+        }
+      ]
+    }
+  ]
+}

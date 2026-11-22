@@ -1,0 +1,116 @@
+{
+  "titre": "OMNI - IP malveillante (Tor / Spamhaus)",
+  "critique": true,
+  "mitre": "T1071",
+  "justification": "Hôte interne qui établit une session autorisée vers une IP Tor / Spamhaus DROP : poste compromis ou balise C2. Avant 11/2026, action:accept seul ignorait les fins de session (server-rst, close, timeout) et la détection était muette malgré 6 sessions sortantes autorisées du 26/10 au 02/11/2026.",
+  "capture": "2026-11-22, GET /api/events/definitions (production) + cible de tools/maj-detections-2026-11/cibles.json",
+  "definition": {
+    "query": "alert_tag:threat_intel AND src_ip_reserved_ip:true AND dest_ip_threat_indicated:true AND action:(accept OR start OR close OR timeout OR server\\-rst OR client\\-rst)",
+    "streams": [
+      "OMNI - FortiGate"
+    ],
+    "group_by": [],
+    "series": [],
+    "conditions": {
+      "expression": null
+    },
+    "search_within_ms": 300000,
+    "execute_every_ms": 300000
+  },
+  "cas": [
+    {
+      "nom": "session sortante autorisée close par reset serveur (server-rst)",
+      "attendu": {
+        "evenements": 1
+      },
+      "documents": [
+        {
+          "flux": "OMNI - FortiGate",
+          "age_s": 60,
+          "champs": {
+            "event_source": "fortigate",
+            "alert_tag": "threat_intel",
+            "src_ip": "10.33.60.29",
+            "src_ip_reserved_ip": true,
+            "dest_ip": "42.167.39.56",
+            "dest_ip_threat_indicated": true,
+            "dest_port": "443",
+            "type": "traffic",
+            "subtype": "forward",
+            "action": "server-rst"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "session sortante autorisée (accept)",
+      "attendu": {
+        "evenements": 1
+      },
+      "documents": [
+        {
+          "flux": "OMNI - FortiGate",
+          "age_s": 60,
+          "champs": {
+            "event_source": "fortigate",
+            "alert_tag": "threat_intel",
+            "src_ip": "10.33.60.29",
+            "src_ip_reserved_ip": true,
+            "dest_ip": "42.167.39.56",
+            "dest_ip_threat_indicated": true,
+            "dest_port": "443",
+            "type": "traffic",
+            "subtype": "forward",
+            "action": "accept"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "sortant bloqué par le pare-feu (deny)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - FortiGate",
+          "age_s": 60,
+          "champs": {
+            "event_source": "fortigate",
+            "alert_tag": "threat_intel",
+            "src_ip": "10.33.60.29",
+            "src_ip_reserved_ip": true,
+            "dest_ip": "42.167.39.56",
+            "dest_ip_threat_indicated": true,
+            "dest_port": "443",
+            "type": "traffic",
+            "subtype": "forward",
+            "action": "deny"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "entrant depuis une IP listée vers un service publié (exclu à dessein)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - FortiGate",
+          "age_s": 60,
+          "champs": {
+            "event_source": "fortigate",
+            "alert_tag": "threat_intel",
+            "src_ip": "185.220.101.4",
+            "src_ip_threat_indicated": true,
+            "dest_ip": "10.33.70.1",
+            "dest_ip_reserved_ip": true,
+            "dest_ip_threat_indicated": false,
+            "action": "accept"
+          }
+        }
+      ]
+    }
+  ]
+}

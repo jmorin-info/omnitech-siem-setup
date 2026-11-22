@@ -238,8 +238,10 @@ mk_leak_alert() {
   local T="$1" Q="$2" P="$3"
   api_get "/events/definitions?per_page=300" | jq -e --arg t "$T" '.event_definitions[]|select(.title==$t)' >/dev/null && { skip "alerte '$T'"; return; }
   local NF; NF="$(jq -n --arg m "$NMAIL" --arg tm "$NTEAMS" '[{notification_id:$m,notification_parameters:null}]+(if $tm=="" or $tm=="null" then [] else [{notification_id:$tm,notification_parameters:null}] end)')"
-  jq -n --arg t "$T" --arg q "$Q" --argjson p "$P" --argjson n "$NF" '{title:$t,description:"Module Fuites & Dark Web (72-leak-darkweb.sh)",priority:$p,alert:true,
-    config:{type:"aggregation-v1",query:$q,query_parameters:[],streams:[],group_by:[],series:[{id:"count()",type:"count"}],
+  # Flux : les messages leak_intel arrivent en GELF HTTP 12201 (entree M365) -> flux OMNI - M365.
+  local ST_LEAK; ST_LEAK="$(get_stream_id 'OMNI - M365')"
+  jq -n --arg t "$T" --arg q "$Q" --argjson p "$P" --argjson n "$NF" --arg st "$ST_LEAK" '{title:$t,description:"Module Fuites & Dark Web (72-leak-darkweb.sh)",priority:$p,alert:true,
+    config:{type:"aggregation-v1",query:$q,query_parameters:[],streams:(if $st=="" then [] else [$st] end),group_by:[],series:[{id:"count()",type:"count"}],
       conditions:{expression:{expr:">=",left:{expr:"number-ref",ref:"count()"},right:{expr:"number",value:1}}},
       search_within_ms:86400000,execute_every_ms:86400000,use_cron_scheduling:false,event_limit:50},
     field_spec:{},key_spec:[],notification_settings:{grace_period_ms:86400000,backlog_size:10},notifications:$n}' \
