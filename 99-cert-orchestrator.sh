@@ -8,13 +8,22 @@
 #   Pose, de facon IDEMPOTENTE :
 #     - input  GELF UDP 0.0.0.0:12201 (coexiste avec le GELF HTTP loopback M365 :
 #       TCP 12201 != UDP 12201, et le HTTP est lie a 127.0.0.1 uniquement)
-#     - index set 'omni-cert' + stream 'OMNI - Cert Orchestrator' (route sur l'input)
-#     - pipeline : tag event_source=cert_parc (garanti quelle que soit la payload
+#     - index set 'omni-cert' (rotation P1M x 3 index = 90 j, aligne sur
+#       83-retention-consolidee.sh et POLITIQUE-RETENTION.md) + stream
+#       'OMNI - Cert Orchestrator' (route sur l'input)
+#     - pipeline : tag event_source=cert_orchestrator (garanti quelle que soit la payload
 #       de l'app), event_category=pki, severite depuis le NIVEAU GELF structure
 #       (fiable - pas de mots-cles devines), et remontee des erreurs.
 #
 #   Pre-requis cote reseau : nftables ouvre udp/12201 depuis ${IP_CERT}
-#   (cf. 06-firewall.sh). Le watchdog connait deja 'cert_parc' (cf. 74).
+#   (cf. 06-firewall.sh).
+#
+#   NB source : 'cert_parc' designe les journaux Windows de l'autorite de
+#   certification (bx-pki2022, canal OMNI-Certificats via Winlogbeat, regle
+#   omni-winother-10-cert-parc du script 12). L'orchestrateur a sa propre source
+#   'cert_orchestrator' (renommage du 22/11/2026) : les deux ne se masquent plus
+#   dans le watchdog (74). Mise a jour d'une production deja provisionnee :
+#   tools/maj-cert-orchestrator-prod.sh (plan puis --apply).
 #
 #   NB detections fines (CN, expiration, echec renouvellement OVH) : a ajouter
 #   quand on dispose d'un echantillon reel du schema GELF emis par l'app
@@ -30,13 +39,24 @@ require_api
 IP_CERT="${IP_CERT:-10.33.120.7}"
 
 # ----------------------------------------------------------------- helpers idx
-ensure_index_set() {  # prefix  titre  retention_indices -> stdout: id
-  local PFX="$1" TITLE="$2" RET="$3" ID
-  ID="$(api_get '/system/indices/index_sets?limit=200' | jq -r --arg p "$PFX" '.index_sets[]|select(.index_prefix==$p)|.id')"
-  if [[ -n "$ID" ]]; then echo "$ID"; return; fi
+ensure_index_set() {  # prefix  titre  periode_rotation  retention_indices -> stdout: id
+  local PFX="$1" TITLE="$2" PER="$3" RET="$4" ID CUR
+  CUR="$(api_get '/system/indices/index_sets?limit=200' | jq -c --arg p "$PFX" '[.index_sets[]|select(.index_prefix==$p)][0] // empty')"
+  if [[ -n "$CUR" ]]; then
+    ID="$(jq -r '.id' <<<"$CUR")"
+    # Index set existant : jamais modifie ici (une rotation ne se change pas a la legere).
+    if [[ "$(jq -r '.rotation_strategy.rotation_period // ""' <<<"$CUR")" != "$PER" \
+       || "$(jq -r '.retention_strategy.max_number_of_indices // ""' <<<"$CUR")" != "$RET" ]]; then
+      warn "index set '$TITLE' : rotation/retention differentes de ${PER} x ${RET} -> tools/maj-cert-orchestrator-prod.sh" >&2
+    fi
+    echo "$ID"; return
+  fi
+  # Modele omni-fortigate (rotation temporelle heritee, retention par suppression) ;
+  # periode et nombre d'index sont imposes, pas herites.
   local TMPL; TMPL="$(api_get '/system/indices/index_sets?limit=200' | jq -c '.index_sets[]|select(.index_prefix=="omni-fortigate")')"
-  ID="$(echo "$TMPL" | jq --arg t "$TITLE" --arg p "$PFX" --argjson r "$RET" \
-        'del(.id,.creation_date,.default,.can_be_default) | .title=$t | .index_prefix=$p | .description=$t | .retention_strategy.max_number_of_indices=$r' \
+  ID="$(echo "$TMPL" | jq --arg t "$TITLE" --arg p "$PFX" --arg per "$PER" --argjson r "$RET" \
+        'del(.id,.creation_date,.default,.can_be_default) | .title=$t | .index_prefix=$p | .description=$t
+         | .rotation_strategy.rotation_period=$per | .retention_strategy.max_number_of_indices=$r' \
         | api_post '/system/indices/index_sets' | jqr '.id')"
   [[ -n "$ID" && "$ID" != null ]] && ok "index set '$TITLE' cree" >&2 || warn "index set '$TITLE' refuse" >&2
   echo "$ID"
@@ -77,9 +97,10 @@ else skip "input GELF UDP existe ($IID)"; fi
 
 # ------------------------------------------------------- [1] index set + stream
 echo "==> [1/5] Index set 'omni-cert' + stream 'OMNI - Cert Orchestrator'"
-# 90 j (etait 12 : incoherent avec la politique de retention, corrige 02/07/2026
-# apres audit — la retention live a ete alignee par PUT le meme jour).
-IDX_CERT="$(ensure_index_set 'omni-cert' 'OMNI - Cert Orchestrator' 90)"
+# 90 j = P1M x 3 (source peu volumineuse : rotation mensuelle, comme dans
+# 83-retention-consolidee.sh et POLITIQUE-RETENTION.md). La version precedente
+# copiait la rotation P1D du modele (P1D x 90), refusee ensuite par le script 83.
+IDX_CERT="$(ensure_index_set 'omni-cert' 'OMNI - Cert Orchestrator' P1M 3)"
 if [[ -z "$(get_stream_id 'OMNI - Cert Orchestrator')" ]]; then
   jq -n --arg idx "$IDX_CERT" --arg in "$IID" '{title:"OMNI - Cert Orchestrator",description:"Renouvellements/demandes de certificats OVH (BX-IT-CERT-VM, GELF UDP 12201)",matching_type:"AND",remove_matches_from_default_stream:true,index_set_id:$idx,
     rules:[{field:"gl2_source_input",type:1,value:$in,inverted:false}]}' \
@@ -92,14 +113,15 @@ reassign_stream_idx "$ST_CERT" "$IDX_CERT"
 echo "==> [2/5] Pipeline 'OMNI - Cert Orchestrator' (tag + severite + erreurs)"
 
 # Tag de source GARANTI : tout message du stream provient de l'input cert.
-# On normalise event_source=cert_parc (override) pour que watchdog/console le
-# voient quelle que soit la payload emise par l'application.
+# On normalise event_source=cert_orchestrator (override) pour que watchdog/console
+# le voient quelle que soit la payload emise par l'application. Ne pas reutiliser
+# cert_parc : c'est la source PKI Windows (bx-pki2022), voir l'en-tete.
 ensure_rule "omni-cert-00-tag" <<'EOF'
 rule "omni-cert-00-tag"
 when
   has_field("source")
 then
-  set_field("event_source", "cert_parc");
+  set_field("event_source", "cert_orchestrator");
   set_field("event_category", "pki");
   set_field("host", to_string($message.source));
 end
@@ -111,7 +133,7 @@ EOF
 ensure_rule "omni-cert-05-sev-eleve" <<'EOF'
 rule "omni-cert-05-sev-eleve"
 when
-  to_string($message.event_source) == "cert_parc" AND has_field("level") AND to_long($message.level, 6) <= 3
+  to_string($message.event_source) == "cert_orchestrator" AND has_field("level") AND to_long($message.level, 6) <= 3
 then
   set_field("risk_severity", "eleve");
 end
@@ -119,7 +141,7 @@ EOF
 ensure_rule "omni-cert-05-sev-moyen" <<'EOF'
 rule "omni-cert-05-sev-moyen"
 when
-  to_string($message.event_source) == "cert_parc" AND to_long($message.level, 6) == 4
+  to_string($message.event_source) == "cert_orchestrator" AND to_long($message.level, 6) == 4
 then
   set_field("risk_severity", "moyen");
 end
@@ -127,7 +149,7 @@ EOF
 ensure_rule "omni-cert-05-sev-info" <<'EOF'
 rule "omni-cert-05-sev-info"
 when
-  to_string($message.event_source) == "cert_parc" AND to_long($message.level, 6) >= 5
+  to_string($message.event_source) == "cert_orchestrator" AND to_long($message.level, 6) >= 5
 then
   set_field("risk_severity", "info");
 end
@@ -138,7 +160,7 @@ EOF
 ensure_rule "omni-cert-10-error" <<'EOF'
 rule "omni-cert-10-error"
 when
-  to_string($message.event_source) == "cert_parc" AND has_field("level") AND to_long($message.level, 6) <= 3
+  to_string($message.event_source) == "cert_orchestrator" AND has_field("level") AND to_long($message.level, 6) <= 3
 then
   set_field("alert_tag", "cert_orchestrator_error");
   set_field("event_action", "erreur_orchestrateur_certificats");
@@ -186,6 +208,8 @@ fi
 # ----------------------------------------------------------------- [4] resume
 echo "==> [4/5] Recapitulatif"
 ok "input=${IID}  stream=${ST_CERT:-?}  index_set=${IDX_CERT:-?}  pipeline=${PL:-?}"
-echo "    Source 'cert_parc' surveillee par le watchdog (74, seuil 2880 min)."
+echo "    Source 'cert_orchestrator' : seuil watchdog 2880 min dans le modele de 74 ; sur un serveur"
+echo "    deja installe, ajouter cert_orchestrator:2880 a WATCHDOG_SOURCES (/etc/default/omni-watchdog)"
+echo "    apres reception du premier message (sinon alerte de silence immediate)."
 echo "    Detections fines (echec OVH, expiration, CN) : a ajouter sur echantillon reel."
 echo "==> [5/5] Termine."

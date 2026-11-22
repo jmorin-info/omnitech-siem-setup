@@ -18,9 +18,12 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 - Drop-in `deploye/systemd/omni-iso-evidence.service.d/50-depot-reference.conf` : `omni-iso-evidence` exécute `68-iso-evidence.sh` du dépôt canonique et n'écrit que dans `/var/lib` et `docs/archives/preuves-iso` ; `hardening.conf` (lu après le drop-in) et `27-harden-services.sh` portent la même liste. Le service est ajouté à `tools/migrer-chemin-canonique.sh` et au manifeste ; `68-iso-evidence.sh` ne réécrit plus l'unité quand il tourne sous systemd.
 
+- `tools/maj-cert-orchestrator-prod.sh` (plan, `--apply`) : met à jour par PUT idempotent les 5 règles `omni-cert-*` déjà créées en production et aligne l'index set `omni-cert` sur `P1M` x 3, sans création ni suppression. Tests `tests/test_cert_orchestrator.py`.
+
 ### Modifié
 
 - `oms-snap-siem` lit le dépôt et son emplacement dans `/etc/oms-snap-siem.conf` (`DEPOT`, `DEPOT_CHEMIN`, `LIBRE_ARRET_PCT`) au lieu de `graylog_fs` et `/home` codés en dur ; `omni-drift-check` (script 29 et miroir) et `omni-update-status.py` suivent le même dépôt.
+- Cert Orchestrator (`99-cert-orchestrator.sh`) : source renommée `cert_orchestrator` (`cert_parc` reste la source PKI Windows de bx-pki2022, 5 035 messages en production) ; index set créé directement en rotation `P1M` x 3, cohérent avec le script 83 et la politique de rétention, au lieu de `P1D` x 90 copié du modèle ; seuil watchdog dédié dans le modèle de `74-source-watchdog.sh` ; documentation des sources et de la rétention.
 
 ## [Non publié] - Décisions d'exploitation du 22/11/2026
 

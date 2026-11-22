@@ -153,7 +153,7 @@ paquets installés.
 | 97 | `97-enrich-alerts.sh` | Enrichit le contenu des alertes (regroupement, champs) | oui | API | n.v. | ponctuel |
 | 97 | `97-multisite-soar.sh` | Dimension site FortiGate (BDX/IV/LC) et alimentation SOAR WAF | oui | 36, 12, 93 | table `omni-fortigate-site` | optionnel |
 | 98 | `98-index-templates.sh` | Bridage du mapping des index à fort volume | oui | OpenSearch | gabarit non posé (préfixes vides par choix documenté) | outil (non appliqué) |
-| 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré, sans mode plan | 06 | Réinstallé le 22/11/2026 selon le compte rendu opérateur : entrée, jeu d'index, stream, pipeline et alerte ; réception des journaux de la source encore à valider | optionnel ; ne pas relancer pour une mise à jour de code |
+| 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré, sans mode plan | 06 | Réinstallé le 22/11/2026 selon le compte rendu opérateur : entrée, jeu d'index, stream, pipeline et alerte ; réception des journaux de la source encore à valider. Source `cert_orchestrator` et index set `P1M` x 3 depuis le 22/11/2026 ; production antérieure : `tools/maj-cert-orchestrator-prod.sh` | optionnel ; ne pas relancer pour une mise à jour de code |
 
 Les numéros 20 et 23 à 25 ne sont pas attribués. Les scripts 15, 22, 31 et 44,
 retirés, sont archivés sous [`tools/ponctuel/`](../../tools/ponctuel/README.md#scripts-retirés)
