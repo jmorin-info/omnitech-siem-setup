@@ -289,7 +289,11 @@ def test_real_repository_plan_in_fake_root_covers_console_assets(tmp_path):
     deployer = Deployer(ROOT, home=ROOT, root=tmp_path / "root", runner=FakeRunner())
     # SEAL SLA has a separate runtime, outside the canonical repository.
     missing = deployer.plan(["all"])
-    assert missing["blockers"] == ["oms-seal-sla.service : exécutable /opt/oms-seal-sla/.venv/bin/python absent"]
+    # Hors racine factice, le moteur accepte un exécutable présent sur l'hôte (cas du serveur
+    # de production, où ce runtime existe) : le blocage n'est attendu que s'il est absent.
+    host_has_runtime = Path("/opt/oms-seal-sla/.venv/bin/python").exists()
+    expected = [] if host_has_runtime else ["oms-seal-sla.service : exécutable /opt/oms-seal-sla/.venv/bin/python absent"]
+    assert missing["blockers"] == expected
     write(tmp_path / "root/opt/oms-seal-sla/.venv/bin/python", "", 0o755)
     plan = deployer.plan(["all"])
     assert not plan["blockers"], plan["blockers"]
