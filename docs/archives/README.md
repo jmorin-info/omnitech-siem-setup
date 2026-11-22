@@ -13,6 +13,7 @@ sont **pas mis à jour** : pour l'état courant, partir de
 | [MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md](MDR-CO-MANAGE-CHIFFRAGE-2026-06-18.md) | 18/06/2026 | Chiffrage d'un service MDR co-managé |
 | [REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md](REVUE-CRITIQUE-PLATEFORME-IA-2026-06-18.md) | 18/06/2026 | Revue critique d'un projet de plateforme de détection et de réponse |
 | [AUDIT-2026-07-17-RESTE-A-TRAITER.md](AUDIT-2026-07-17-RESTE-A-TRAITER.md) | 17/07/2026 | Audit alerting et corrélation : points restant à traiter |
+| [INCIDENT-CONSOLE-2026-11-21.md](INCIDENT-CONSOLE-2026-11-21.md) | 21/11/2026 | Incident : tests de la console écrits en production, message de test conservé dans Graylog |
 | [preuves-iso/](preuves-iso/) | mensuel | Dossiers de preuves ISO 27001 générés par `68-iso-evidence.sh` |
 | [en/](en/README.md) | divers | Traductions anglaises non maintenues |
 
