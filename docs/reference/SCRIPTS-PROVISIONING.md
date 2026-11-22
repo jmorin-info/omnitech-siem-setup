@@ -111,7 +111,7 @@ paquets installés.
 | N° | Script | Rôle | Idempotent | Dépendances | Trace en production | Statut |
 |---|---|---|---|---|---|---|
 | 61 | `61-supervision-robots.sh` | Versionne `omni-self-health` et `omni-collect-health` | oui | API | exécutables présents | optionnel |
-| 62 | `62-auto-security-updates.sh` | Mises à jour de sécurité durcies, jamais de redémarrage automatique | oui | aucune | `/etc/apt/apt.conf.d/52omni-siem.conf` | optionnel |
+| 62 | `62-auto-security-updates.sh` | Mises à jour de sécurité durcies ; `unattended-upgrades` ne redémarre jamais, le redémarrage automatique est porté par `oms-maj-siem` (dimanche 04:30, si `/var/run/reboot-required`) | oui | aucune | `/etc/apt/apt.conf.d/52omni-siem.conf` | optionnel |
 | 63 | `63-fortimanager.sh` | Source FortiManager : inputs 1517, jeu d'index, pipeline | oui | 06, 07, 12, 37 | inputs « FortiManager (Syslog 1517) », pipeline | optionnel |
 | 64 | `64-m365-fwd-audit.sh` | Audit des règles de transfert de messagerie existantes | oui | 16, 17 | `omni-m365-fwd-audit.timer` | optionnel |
 | 65 | `65-mobile-pwa.sh` | Première version de la PWA mobile et de son backend | oui | 04, 05, 12, 13 | `omni-mobile-api.service` actif | optionnel (publication reprise par 71) |

@@ -49,8 +49,8 @@ Tous les outils se trouvent dans `tools/` et reposent sur le paquet Python `omni
 
 | Couche | Fréquence |
 |---|---|
-| Correctifs de sécurité Debian | quotidienne, automatique, sans redémarrage (`unattended-upgrades`) **[en place]** |
-| Autres paquets Debian et correctifs de la pile **dans la série épinglée** | hebdomadaire, automatique, dimanche 04:30 (`oms-maj-siem`) **[en place]** |
+| Correctifs de sécurité Debian | quotidienne, automatique, sans redémarrage immédiat (`unattended-upgrades`) ; un redémarrage requis est effectué au passage hebdomadaire suivant **[en place]** |
+| Autres paquets Debian et correctifs de la pile **dans la série épinglée** | hebdomadaire, automatique, dimanche 04:30 (`oms-maj-siem`), avec redémarrage automatique si `/var/run/reboot-required` **[en place]** |
 | Changement de série de la pile (ex. Graylog 7.2 vers 7.3) | au plus une fois par trimestre, en fenêtre planifiée, après lecture des notes de version et recette sur une VM de test **[proposé]** |
 | Code du dépôt | à la demande, uniquement une révision dont la suite `bash run-tests.sh` est verte **[proposé]** |
 | Dépendances Python | audit mensuel (`omni-pydeps.py audit`) ; mise à jour trimestrielle ou immédiate en cas de vulnérabilité publiée **[proposé]** |
@@ -62,11 +62,32 @@ Tous les outils se trouvent dans `tools/` et reposent sur le paquet Python `omni
 - Automatique : dimanche 04:30 (`oms-maj-siem.timer`, délai aléatoire de 10 min) **[en place]**.
 - Manuelle (pile, code, venvs) : jour ouvré, en matinée, administrateur présent pendant
   toute l'opération et la vérification, jamais la veille d'un jour non travaillé **[proposé]**.
-- Redémarrage : `unattended-upgrades` ne redémarre jamais (`52omni-siem.conf`) ;
-  `oms-maj-siem` **redémarre automatiquement** la machine dans sa fenêtre du dimanche si
-  `/var/run/reboot-required` existe (cas du 15/11/2026), puis contrôle au démarrage
-  (`oms-maj-siem-postboot.service`) **[en place]**. Cette pratique diffère de l'en-tête de
-  `62-auto-security-updates.sh` (« jamais d'auto-reboot ») : décision à confirmer par le RSSI.
+- Redémarrage automatique : règle retenue par l'administrateur le 22/11/2026 **[en place]**.
+  `unattended-upgrades` ne redémarre jamais (`52omni-siem.conf`, `Automatic-Reboot "false"`) ;
+  c'est `oms-maj-siem` qui redémarre la machine, dans les conditions exactes suivantes
+  (`deploye/sbin/oms-maj-siem`, `deploye/systemd/oms-maj-siem*.{timer,service}`) :
+  - déclenchement par `oms-maj-siem.timer`, dimanche 04:30 plus un délai aléatoire de 0 à
+    10 minutes, sans rattrapage (`Persistent=false`) ;
+  - redémarrage uniquement si `/var/run/reboot-required` existe à la fin du passage, que
+    l'indicateur vienne d'un paquet installé ce jour-là ou d'un correctif appliqué dans la
+    semaine par `unattended-upgrades` (un indicateur présent suffit à lancer le passage
+    même sans paquet en attente) ;
+  - jamais avant les contrôles préalables (`/data` monté, OpenSearch vert, API Graylog,
+    3 Gio libres sur `/var`, `apt-get update`) ni avant la sauvegarde : si l'un échoue, ou
+    si `mongodump` échoue, le passage est annulé sans redémarrage ; rien non plus s'il n'y a
+    rien à faire, ni en mode `--simuler` ;
+  - le redémarrage est programmé 60 secondes après la fin (`systemd-run`, unité
+    `oms-maj-siem-reboot`), y compris si `apt-get dist-upgrade` a signalé un échec ;
+  - au démarrage, `oms-maj-siem-postboot.service` (activé, `oms-maj-siem --apres-boot`,
+    120 s après le démarrage) n'agit que si le redémarrage vient d'`oms-maj-siem` : il
+    refait les réparations connues, le contrôle final (services, OpenSearch, API Graylog,
+    montage de `/data` déverrouillé par TPM2) et envoie le compte rendu par courriel ;
+  - un lancement manuel (`systemctl start oms-maj-siem.service`) applique les mêmes règles
+    et peut donc redémarrer la machine hors de la fenêtre du dimanche.
+
+  Si le déverrouillage TPM2 de `/data` échoue au redémarrage, le compte rendu signale
+  « /data NON MONTE » et l'ouverture se fait à la main avec la passphrase de secours
+  ([procédure de chiffrement au repos](securite-conformite/PROCEDURE-CHIFFREMENT-REPOS.md)).
 
 ### Qui valide
 
@@ -245,8 +266,9 @@ vérifier `/soc/` ; une mise à jour de code n'est pas une migration complète d
 
 - `unattended-upgrades` (quotidien via `apt-daily-upgrade.timer`) applique les origines
   Debian et Debian-Security ; `52omni-siem.conf` (installé par
-  `62-auto-security-updates.sh`, miroir `deploye/apt/52omni-siem.conf`) interdit le
-  redémarrage automatique, exclut `graylog-server`, `opensearch`, `mongodb-org*` et
+  `62-auto-security-updates.sh`, miroir `deploye/apt/52omni-siem.conf`) interdit à
+  `unattended-upgrades` de redémarrer la machine (le redémarrage éventuel est fait par
+  `oms-maj-siem`, voir § 2), exclut `graylog-server`, `opensearch`, `mongodb-org*` et
   `mongodb-mongosh`, et `needrestart` est en mode liste. Logstash n'est pas dans la liste
   d'exclusion mais ne provient pas d'une origine Debian : il n'est donc pas concerné.
 - `oms-maj-siem` (`deploye/sbin/oms-maj-siem`, timer du dimanche 04:30) : contrôles
@@ -255,7 +277,8 @@ vérifier `/soc/` ; une mise à jour de code n'est pas une migration complète d
   `/data/backups/maj-*`, 4 dernières conservées), `dist-upgrade` de **tout** ce qui est en
   attente dans les séries autorisées par `/etc/apt/preferences.d/oms-siem-series`
   (les paquets gelés sont dégelés le temps de l'opération puis regelés), réparations
-  connues (greffon GELF Logstash, magasins de confiance), redémarrage si nécessaire,
+  connues (greffon GELF Logstash, magasins de confiance), redémarrage si
+  `/var/run/reboot-required` existe (conditions détaillées au § 2),
   compte rendu par courriel et `/var/log/oms-maj-siem.log`. Mode `--simuler` sans
   modification.
 - Gels (`apt-mark showhold`) au 21/11/2026 : `opensearch` et les paquets `mongodb-org*`
@@ -289,7 +312,8 @@ lance `apt-get update` (rafraîchissement des listes), contrairement à
 ### Exécuter hors fenêtre automatique, vérifier, revenir en arrière
 
 Hors de la fenêtre du dimanche, préférer `sudo systemctl start oms-maj-siem.service` (mêmes
-contrôles et sauvegardes) à un `apt-get` manuel. Vérifier ensuite
+contrôles et sauvegardes) à un `apt-get` manuel, en sachant qu'il redémarre la machine si
+`/var/run/reboot-required` existe à la fin : le lancer seulement quand un redémarrage est acceptable. Vérifier ensuite
 `tail -50 /var/log/oms-maj-siem.log`, `systemctl --failed` et
 `python3 tools/omni-update-status.py`. Retour arrière d'un paquet Debian :
 `apt-get install --allow-downgrades paquet=<version précédente>` si la version est encore
