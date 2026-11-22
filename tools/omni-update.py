@@ -37,12 +37,47 @@ class UpdateError(RuntimeError):
     pass
 
 
-def git(repo, *args, binary=False, check=True):
-    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}
-    process = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, env=env)
+GIT_TIMEOUT_SECONDS = 300
+
+# Classified Git failures. Git output is never echoed verbatim: a remote URL or a
+# local path may contain sensitive data. LC_ALL=C makes the patterns locale-proof
+# (a French locale prints "impossible de trouver la reference distante").
+GIT_FAILURES = (
+    ("unsafe_repository", ("dubious ownership", "safe.directory")),
+    ("ref_not_found", ("couldn't find remote ref", "could not find remote ref", "unknown revision",
+                       "not a valid ref", "invalid refspec")),
+    ("authentication_required", ("could not read username", "authentication failed", "terminal prompts disabled",
+                                 "http basic: access denied", "403", "401")),
+    ("repository_not_found", ("repository not found", "does not appear to be a git repository",
+                              "not found", "no such file or directory")),
+    ("network_unavailable", ("could not resolve host", "failed to connect", "could not connect", "connection refused",
+                             "connection timed out", "network is unreachable", "operation timed out",
+                             "temporary failure in name resolution", "ssl", "tls", "gnutls", "proxy")),
+)
+
+
+def classify_git_error(stderr):
+    text = (stderr or "").lower()
+    for reason, needles in GIT_FAILURES:
+        if any(needle in text for needle in needles):
+            return reason
+    return "git_error"
+
+
+def git(repo, *args, binary=False, check=True, timeout=None):
+    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C", "LANGUAGE": "C",
+           "GIT_ASKPASS": "", "SSH_ASKPASS": ""}
+    operation = next((a for i, a in enumerate(args) if not a.startswith("-") and (i == 0 or args[i - 1] != "-c")), "git")
+    try:
+        process = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, env=env,
+                                 timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise UpdateError("Git operation failed: " + operation + " (network_unavailable: timeout after "
+                          + str(timeout) + " s)")
     if check and process.returncode:
         # Do not echo command output: remote URLs or local files can contain secrets.
-        raise UpdateError("Git operation failed: " + args[0])
+        reason = classify_git_error(process.stderr.decode("utf-8", errors="replace"))
+        raise UpdateError("Git operation failed: " + operation + " (" + reason + ")")
     if not check:
         return process.returncode
     return process.stdout if binary else process.stdout.decode("utf-8", errors="strict").strip()
@@ -175,6 +210,7 @@ def plan(source, state, target):
     migrations = [p for p in changed if p in CORE or p.startswith(("migrations/", "docker/migrations/"))
                   or PurePosixPath(p).name in {"pyproject.toml", "poetry.lock", "uv.lock"}
                   or re.fullmatch(r"requirements[^/]*\.txt", PurePosixPath(p).name)
+                  or p.startswith("python-locks/")
                   or PurePosixPath(p).name.startswith("Dockerfile")]
     return {"schema_version": 1, "source_root": str(source), "source_head": head,
             "base_code_revision": base, "target": candidate, "code_files": code,
@@ -200,23 +236,59 @@ def lock(state):
         path.unlink(missing_ok=True)
 
 
-def fetch(source, state, remote, ref):
+def validate_remote(remote):
     parsed = urlsplit(remote)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+    try:
+        _ = parsed.port
+    except ValueError:
         raise UpdateError("Remote must be an HTTPS repository URL without embedded credentials/query")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./-]*", ref):
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+            or "@" in parsed.netloc or parsed.query or parsed.fragment
+            or any(ord(c) < 33 or ord(c) == 127 for c in remote)):
+        raise UpdateError("Remote must be an HTTPS repository URL without embedded credentials/query")
+    return remote
+
+
+def validate_ref(ref):
+    if (not isinstance(ref, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./-]{0,200}", ref)
+            or ".." in ref or "//" in ref or ref.endswith((".", "/", ".lock")) or "/." in ref or "@{" in ref):
         raise UpdateError("Invalid remote ref")
+    return ref
+
+
+def fetch(source, state, remote, ref, timeout=GIT_TIMEOUT_SECONDS):
+    """Download one remote ref into the private cache; never touches the checkout.
+
+    Guarantees covered by tests/test_updater_fetch.py: credentials in the URL and
+    malformed refs are refused before any state is created; a missing ref, an
+    unreachable network or a timeout fail with a classified message and release
+    the lock; the fetched candidate and the installed baseline are both pinned by
+    refs so that a later "git gc" cannot make planning fail offline.
+    """
+    validate_remote(remote)
+    validate_ref(ref)
+    source = source.resolve()
+    base, _ = current_revision(source, state) if (state / "current.json").exists() else (resolve(source, "HEAD"), None)
     with lock(state):
         cache = state / "repository.git"
-        if not cache.exists():
-            cache.mkdir()
-            git(cache, "init", "--bare")
-        git(cache, "fetch", "--no-tags", "--", remote, ref)
+        if not (cache / "HEAD").exists():
+            cache.mkdir(mode=0o700, exist_ok=True)
+            git(cache, "init", "--bare", "--quiet")
+        git(cache, "-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=60",
+            "fetch", "--no-tags", "--no-recurse-submodules", "--", remote, ref, timeout=timeout)
         target = resolve(cache, "FETCH_HEAD")
         git(cache, "update-ref", "refs/omni/candidates/" + target, target)
         # Import the source baseline so subsequent planning is fully offline.
-        git(cache, "fetch", "--no-tags", "--", str(source.resolve()), "HEAD")
-        return {"target": target, "remote": remote, "ref": ref, "next": "plan --target " + target}
+        git(cache, "fetch", "--no-tags", "--no-recurse-submodules", "--", str(source), "HEAD", timeout=timeout)
+        head = resolve(cache, "FETCH_HEAD")
+        git(cache, "update-ref", "refs/omni/base/" + head, head)
+        if base != head and git(cache, "cat-file", "-e", base + "^{commit}", check=False) == 0:
+            git(cache, "update-ref", "refs/omni/base/" + base, base)
+        descends = git(cache, "merge-base", "--is-ancestor", base, target, check=False) == 0
+        return {"target": target, "remote": remote, "ref": ref, "installed_code_revision": base,
+                "descends_from_installed": descends,
+                "next": ("plan --target " + target) if descends else
+                        "target does not descend from the installed revision (divergent history): plan will refuse it"}
 
 
 def stage(source, state, target):

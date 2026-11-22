@@ -6,8 +6,10 @@ de support des éditeurs. Voir [le parcours opérateur](UBUNTU-DEMARRAGE.md).
 
 ## Résultat constaté le 21 novembre 2026
 
-La [recette 44908196520](https://github.com/jmorin-info/omnitech-siem-setup/actions/runs/44908196520)
-a réussi sur le commit `e02fb9ca6b08a0ecd83440a6d8cc9ff9bb4c14d4`.
+La [recette 44910053654, tentative 2](https://github.com/jmorin-info/omnitech-siem-setup/actions/runs/44910053654/attempts/2)
+a réussi sur le commit `ee4263fc6bb8a744589e280552ea42cb66e259b1`, avec la
+reprise bornée des collisions de métriques des nouveaux inputs. La première
+tentative s'était arrêtée au démarrage de la VM, avant toute installation.
 Son artefact `ubuntu-2604-acceptance` contient la preuve expurgée des secrets.
 
 | Contrôle | Résultat |

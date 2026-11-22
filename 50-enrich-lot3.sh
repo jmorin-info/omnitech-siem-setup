@@ -43,7 +43,7 @@ SIEM     = "bx-it-graylog-vm"
 PRIVATE  = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
             "127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10"]
 
-def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+def load_env(path="/opt/omni-siem/repository/00-vars.env"):
     env = {}
     try:
         for line in open(path):
@@ -194,7 +194,7 @@ OS_URL   = "http://127.0.0.1:9200"
 GELF_URL = "http://127.0.0.1:12201/gelf"
 SIEM     = "bx-it-graylog-vm"
 
-def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+def load_env(path="/opt/omni-siem/repository/00-vars.env"):
     env = {}
     try:
         for line in open(path):

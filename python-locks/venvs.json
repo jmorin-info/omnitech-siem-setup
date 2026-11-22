@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "comment": "Venvs Python des services. venv_candidates : le premier chemin existant est audité ({source} = racine du dépôt installé). Les chemins historiques reflètent le relevé du 21/11/2026 ; vérifier le chemin retourné après une migration. mobile/requirements.txt décrit le runtime console ; les outils de tests navigateur du relevé historique sont ignorés.",
+  "venvs": [
+    {
+      "id": "mobile",
+      "description": "Backend de la console SOC (omni-mobile-api)",
+      "requirements": "mobile/requirements.txt",
+      "direct": [],
+      "lock": "python-locks/mobile.txt",
+      "venv_candidates": ["/opt/omni-siem/console/.venv", "/root/omnitech-siem-setup/mobile/.venv", "{source}/mobile/.venv"],
+      "ignore": ["playwright", "pyee", "greenlet"]
+    },
+    {
+      "id": "oms-xdr",
+      "description": "Moteur de corrélation oms-xdr",
+      "requirements": "oms-xdr/requirements.txt",
+      "lock": "python-locks/oms-xdr.txt",
+      "venv_candidates": ["/root/omnitech-siem-setup/oms-xdr/.venv", "{source}/oms-xdr/.venv"],
+      "ignore": ["oms-xdr"]
+    },
+    {
+      "id": "oms-graph",
+      "description": "Graphe d'attaque oms-graph",
+      "requirements": "oms-graph/requirements.txt",
+      "lock": "python-locks/oms-graph.txt",
+      "venv_candidates": ["/root/omnitech-siem-setup/oms-graph/.venv", "{source}/oms-graph/.venv"],
+      "ignore": ["oms-graph"]
+    },
+    {
+      "id": "oms-ml",
+      "description": "Couche ML oms-ml (anomalies, faux positifs)",
+      "requirements": "oms-ml/requirements.txt",
+      "lock": "python-locks/oms-ml.txt",
+      "venv_candidates": ["/root/omnitech-siem-setup/oms-ml/.venv", "{source}/oms-ml/.venv"],
+      "ignore": ["oms-ml"]
+    },
+    {
+      "id": "oms-seal-sla",
+      "description": "Sondeur SLA SEAL (oms-seal-sla)",
+      "requirements": null,
+      "lock": "python-locks/oms-seal-sla.txt",
+      "venv_candidates": ["/opt/oms-seal-sla/.venv"],
+      "ignore": [],
+      "optional": true
+    }
+  ]
+}

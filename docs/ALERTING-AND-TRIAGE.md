@@ -80,7 +80,7 @@ whitelist-aware), **reversible** (24 h TTL, clearable), and **auditable** (each 
 re-injected as an event, shown on the console). A **manual block** path lets an analyst block
 an IP straight from an alert e-mail via an HMAC-signed, time-boxed link.
 
-See also [REPONSE-AUTOMATISEE.md](REPONSE-AUTOMATISEE.md) and [SOAR-PLAYBOOKS.md](SOAR-PLAYBOOKS.md).
+See also [exploitation/REPONSE-AUTOMATISEE.md](exploitation/REPONSE-AUTOMATISEE.md) and [exploitation/SOAR-PLAYBOOKS.md](exploitation/SOAR-PLAYBOOKS.md).
 
 ## Noise control (November 2026)
 

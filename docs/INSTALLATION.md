@@ -16,7 +16,9 @@ la réussite. Voir [la recette Ubuntu 26.04](QUALIFICATION-UBUNTU2604.md).
 
 Ce profil est une installation neuve. Il refuse une machine qui possède déjà les
 configurations MongoDB, OpenSearch ou Graylog. Pour une instance existante, suivre
-[UPDATES.md](UPDATES.md) ; ne pas relancer une boucle sur les scripts numérotés.
+[UPDATES.md](UPDATES.md) pour le code et [DEPLOYMENT.md](DEPLOYMENT.md) pour
+redéployer un composant (robots, unités, venvs, console) avec sauvegarde et retour
+arrière ; ne pas relancer une boucle sur les scripts numérotés.
 Certains de ces scripts sont des opérations de maintenance ou de purge.
 
 ## Plateformes et versions
@@ -52,8 +54,8 @@ au moins 3 Gio aux autres services et au système. Les valeurs d'exemple pour
 32 Go sont donc refusées sur une VM de 16 Go tant qu'elles ne sont pas adaptées.
 
 ```bash
-git clone https://github.com/jmorin-info/omnitech-siem-setup.git
-cd omnitech-siem-setup
+sudo git clone https://github.com/jmorin-info/omnitech-siem-setup.git /opt/omni-siem/repository
+cd /opt/omni-siem/repository
 cp 00-vars.env.example 00-vars.env
 chmod 600 00-vars.env
 # Renseigner identité, réseau, stockage, SMTP et le secret administrateur Graylog.
@@ -62,6 +64,11 @@ sudo bash install.sh --generate-secrets
 sudo bash install.sh --plan
 sudo bash install.sh --apply
 ```
+
+`/opt/omni-siem/repository` est le dépôt canonique (variable `OMNI_SIEM_HOME`) :
+les robots et unités déployés y lisent `00-vars.env` et y exécutent le code. Un
+clone ailleurs fonctionne pour l'installation, mais `tools/omni-deploy.py` doit alors
+recevoir `--home` ; voir [DEPLOYMENT.md](DEPLOYMENT.md#dépôt-canonique).
 
 `00-vars.env` est un fichier shell de confiance. Il est exécuté par les scripts ;
 il doit contenir des affectations uniquement et rester hors du dépôt. Utiliser
@@ -155,8 +162,14 @@ Teams si configuré. Avec cette option, le triage précède le routage des déte
 
 ## Contrôles de réception
 
+`tools/verify-installation.py` est la réception d'une installation neuve (versions
+exactes, entités Graylog attendues, fichiers de la console identiques au dépôt).
+`tools/omni-healthcheck.py` est le contrôle de santé réutilisable ensuite, après
+chaque déploiement ou redémarrage ; voir [DEPLOYMENT.md](DEPLOYMENT.md#3-vérifier--toolsomni-healthcheckpy).
+
 ```bash
 sudo python3 tools/verify-installation.py --output /var/lib/omni-siem/acceptance.json
+sudo python3 tools/omni-healthcheck.py
 systemctl is-active mongod opensearch graylog-server nginx omni-mobile-api
 curl -fsS http://127.0.0.1:8090/m/api/vapid
 curl --cacert /etc/nginx/ssl/graylog.crt -I https://<fqdn>/soc/

@@ -37,7 +37,7 @@ import threading, queue, io, signal
 ENVFILE   = "/etc/omni-alert-triage.env"
 TIERSFILE = "/etc/omni-alert-triage-tiers.json"
 STATE     = "/var/lib/omni-alert-triage/state.json"
-GUIDANCE  = "/root/omnitech-siem-setup/lookups/alert-guidance.json"
+GUIDANCE  = "/opt/omni-siem/repository/lookups/alert-guidance.json"
 GELF_URL  = "http://127.0.0.1:12201/gelf"
 LISTEN    = ("127.0.0.1", 8089)
 # 11/11/2026 : pause du juge LLM apres un echec (credit epuise, panne API) -> plus

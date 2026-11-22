@@ -407,7 +407,7 @@ EOF
 #    Couvre les codes vus en live (50053/50126/50014/500142/50074/50140/90094)
 #    + les codes d'echec Azure AD usuels (le brief) pour les echecs a venir.
 # ===========================================================================
-cat > /root/omnitech-siem-setup/lookups/m365-status.csv <<'CSV'
+cat > ./lookups/m365-status.csv <<'CSV'
 status_code,label
 0,Succes
 50053,Compte verrouille (trop d'echecs)
@@ -443,7 +443,7 @@ status_code,label
 81010,SSO transparent : echec de validation du ticket Kerberos
 81012,SSO transparent : utilisateur connecte different
 CSV
-echo "OK lookups/m365-status.csv ($(wc -l < /root/omnitech-siem-setup/lookups/m365-status.csv) lignes)"
+echo "OK lookups/m365-status.csv ($(wc -l < ./lookups/m365-status.csv) lignes)"
 
 # ---- Ventilation des echecs de connexion M365 par code d'ech ----
 # ===========================================================================
@@ -454,7 +454,7 @@ echo "OK lookups/m365-status.csv ($(wc -l < /root/omnitech-siem-setup/lookups/m3
 #    Modeles : ensure_lookup (37), ensure_rule/ensure_pipeline/connect (47).
 #    Relancer 14-graylog-dashboards.sh ensuite pour les widgets.
 # ===========================================================================
-cat > /root/omnitech-siem-setup/48-m365-fail-codes.sh <<'SH'
+cat > ./48-m365-fail-codes.sh <<'SH'
 #!/usr/bin/env bash
 # =============================================================================
 # 48-m365-fail-codes.sh - Ventilation des echecs de connexion M365 par CODE.
@@ -513,7 +513,7 @@ echo "=== 48-m365-fail-codes.sh termine. Les NOUVEAUX echecs M365 portent"
 echo "    m365_fail_label / m365_fail_code. Relancer 14-graylog-dashboards.sh"
 echo "    pour la ventilation par libelle sur la page M365. ==="
 SH
-chmod +x /root/omnitech-siem-setup/48-m365-fail-codes.sh
+chmod +x ./48-m365-fail-codes.sh
 echo OK 48-m365-fail-codes.sh
 
 # ---- Exposition Internet + classe de port a risque (FortiGat ----

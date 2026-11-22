@@ -1,7 +1,7 @@
 # OMNITECH 2026-11-11 : mises a jour automatiques limitees aux series validees (pas de saut de version majeure).
-# Pour changer de serie (ex. Graylog 7.2), modifier ce fichier APRES lecture des notes de version.
+# Pour changer de serie (ex. Graylog 7.3), modifier ce fichier APRES lecture des notes de version.
 Package: graylog-server
-Pin: version 7.1.*
+Pin: version 7.2.*
 Pin-Priority: 500
 
 Package: opensearch

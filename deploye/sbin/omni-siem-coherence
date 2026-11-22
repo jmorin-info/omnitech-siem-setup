@@ -142,7 +142,7 @@ NOTIF_FAILS = c("NOTIF_FAILS", 2)
 def gl_title(did):
     try:
         env = {}
-        for l in open("/root/omnitech-siem-setup/00-vars.env"):
+        for l in open("/opt/omni-siem/repository/00-vars.env"):
             if l.startswith("GRAYLOG_ADMIN_PASS="): env["p"] = l.split("=", 1)[1].strip().strip('"').strip("'")
         auth = "Basic " + base64.b64encode(("admin:" + env["p"]).encode()).decode()
         r = urllib.request.Request("https://127.0.0.1:9000/api/events/definitions/" + did,

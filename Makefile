@@ -3,7 +3,9 @@
 .DEFAULT_GOAL := help
 SOC_WWW := /var/www/siem-soc
 PWA_WWW := /var/www/siem-mobile
-OMSML   := oms-ml/.venv/bin/python
+# Interpréteur de oms-ml (venv créé hors Git) ; surcharger : make ml OMSML=/chemin/python
+OMSML   ?= $(CURDIR)/oms-ml/.venv/bin/python
+NEED_OMSML = @test -x "$(OMSML)" || { echo "venv oms-ml absent : $(OMSML) (créer oms-ml/.venv ou passer OMSML=...)" >&2; exit 2; }
 
 .PHONY: help test ml ml-status ml-push fp-train console-deploy pwa-deploy api-restart check-js
 
@@ -14,15 +16,18 @@ test: ## Suite de tests hors-ligne (rédaction + oms-ml)
 	@bash run-tests.sh
 
 check-js: ## Vérifie la syntaxe JS de la console (esprima ES2017)
+	$(NEED_OMSML)
 	@for f in mobile/soc/index.html mobile/www/index.html; do \
 	  $(OMSML) -c "import re,esprima; src=open('$$f',encoding='utf-8').read(); js='\n'.join(re.findall(r'<script>(.*?)</script>',src,re.S)).replace('??',' || ').replace('?.','.'); esprima.parseScript(js); print('JS OK','$$f')"; \
 	done
 
 ml: ## Scoring d'anomalie ML (lecture seule, sans push)
-	@cd oms-ml && .venv/bin/python -m oms_ml.run anomaly --entity all --top 12 --config /etc/oms-ml/config.yaml
+	$(NEED_OMSML)
+	@cd oms-ml && "$(OMSML)" -m oms_ml.run anomaly --entity all --top 12 --config /etc/oms-ml/config.yaml
 
 ml-status: ## État des labels du modèle de réduction de FP
-	@cd oms-ml && .venv/bin/python -m oms_ml.run status --config /etc/oms-ml/config.yaml
+	$(NEED_OMSML)
+	@cd oms-ml && "$(OMSML)" -m oms_ml.run status --config /etc/oms-ml/config.yaml
 
 ml-push: ## Déclenche le scoring ML + réinjection GELF (prod)
 	@systemctl start oms-ml-anomaly.service && echo "oms-ml-anomaly déclenché"
@@ -33,8 +38,26 @@ fp-train: ## (Ré)entraîne le modèle de réduction de FP (si assez de labels)
 console-deploy: ## Déploie tous les assets et les routes de la console SOC
 	@bash tools/install-console.sh --apply
 
-pwa-deploy: check-js ## Déploie la PWA mobile vers nginx
-	@install -m 644 mobile/www/index.html $(PWA_WWW)/ && chown www-data:www-data $(PWA_WWW)/index.html && echo "PWA déployée → $(PWA_WWW)"
+pwa-deploy: ## RETIRÉE : /m/ redirige vers /soc/ depuis le 12/11/2026 (utiliser console-deploy)
+	@echo "pwa-deploy est retirée : nginx redirige /m/ vers /soc/, $(PWA_WWW)/index.html n'est plus servi. Utiliser : make console-deploy" >&2; exit 2
 
-api-restart: ## Redémarre le backend de la console (omni-mobile-api)
+api-restart: ## Redémarre le backend de la console (refusé s'il ne tourne pas depuis ce dépôt)
+	@exe="$$(systemctl show omni-mobile-api.service -p ExecStart --value)"; \
+	 case "$$exe" in *"$(CURDIR)/mobile/omni-mobile-api.py"*) ;; \
+	 *) echo "omni-mobile-api ne tourne pas depuis $(CURDIR) (ExecStart : $$exe) : redémarrer n'appliquerait pas ce code. Voir docs/AUDIT-COHERENCE-2026-11-21.md." >&2; exit 2;; esac
 	@python3 -m py_compile mobile/omni-mobile-api.py && systemctl restart omni-mobile-api && systemctl is-active omni-mobile-api
+
+# --- Déploiement unifié (tools/omni-deploy.py) : plan par défaut, C=composant -------
+.PHONY: deploy-plan deploy health lint
+C ?= all
+deploy-plan: ## Plan de déploiement des composants maison (C=all|venvs|robots|systemd|nginx|console|...)
+	@python3 tools/omni-deploy.py deploy $(C)
+
+deploy: ## Déploie C avec sauvegarde, retour arrière automatique et contrôle de santé
+	@python3 tools/omni-deploy.py deploy $(C) --apply
+
+health: ## Contrôle de santé de bout en bout (lecture seule)
+	@python3 tools/omni-healthcheck.py
+
+lint: ## ShellCheck + Ruff comme la CI (pip install -r requirements-lint.txt)
+	@bash tools/ci-lint.sh

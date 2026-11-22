@@ -214,7 +214,7 @@ SIEM     = "bx-it-graylog-vm"
 # "host" = nom d'equipement : legitime a superviser aussi.
 IDX = "omni-winsec*,omni-sysmon*,omni-winother*,omni-fortigate*,omni-vsphere*"
 
-def load_env(path="/root/omnitech-siem-setup/00-vars.env"):
+def load_env(path="/opt/omni-siem/repository/00-vars.env"):
     env = {}
     try:
         for line in open(path):

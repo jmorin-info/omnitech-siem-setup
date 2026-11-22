@@ -144,12 +144,12 @@ def plan_install(client, module, params):
 
 
 def _start_new_input(client, input_id):
-    """Serialize native creation/reload cleanup before starting the new input once.
+    """Clean up only this newly owned input, with bounded metric-race recovery.
 
-    Graylog starts inputs asynchronously and static fields emit InputUpdated.
-    Stopping an input removes it from InputRegistry after transport/metric cleanup;
-    require that absence to settle before a single explicit start. This helper is
-    called only for a newly created, owned input, never for an existing install.
+    Static-field updates can leave metrics from a competing native launch. A
+    failed launch registers those names in its local registry, so stopping that
+    failed instance removes them. Retry only this exact worker-metric collision;
+    bind, authentication and configuration errors remain failures.
     """
     path = "/system/inputstates/" + input_id
     def state():
@@ -157,37 +157,44 @@ def _start_new_input(client, input_id):
             response = client.call("GET", path)
             if not isinstance(response, dict) or response.get("id") != input_id:
                 raise ValueError("Unexpected native input state response")
-            return response.get("state")
+            return response.get("state"), response.get("detailed_message", "")
         except ApiError as exc:
             if exc.status != 404:
                 raise
-            return "NOT_FOUND"
+            return "NOT_FOUND", ""
 
-    # DELETE here stops the runtime; it does not delete the persisted input.
-    # Even an early RUNNING state can belong to a native launch still racing
-    # with static-field reloads. Do not start over a live or half-stopped input.
-    client.call("DELETE", path)
-    absent = 0
-    for _ in range(60):
-        absent = absent + 1 if state() == "NOT_FOUND" else 0
-        if absent >= 6:
-            break
-        time.sleep(1)
-    else:
-        raise RuntimeError("New module input did not stop cleanly; inspect System > Inputs before retrying")
+    # Metrics 4.2.39 registers seven worker gauges; allow their cleanup and a start.
+    for attempt in range(8):
+        # This endpoint stops the runtime; it never deletes the saved input.
+        client.call("DELETE", path)
+        absent = 0
+        for _ in range(60):
+            current, _ = state()
+            absent = absent + 1 if current == "NOT_FOUND" else 0
+            if absent >= 6:
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError("New module input did not stop cleanly; inspect System > Inputs before retrying")
 
-    client.call("PUT", path)
-    previous, stable = None, 0
-    for _ in range(60):
-        current = state()
-        stable = stable + 1 if current == previous else 1
-        previous = current
-        if current == "RUNNING" and stable >= 6:
-            return
-        if current in ("FAILED", "STOPPED", "TERMINATED", "NOT_FOUND") and stable >= 3:
-            raise RuntimeError("New module input failed to start; inspect System > Inputs before retrying")
-        time.sleep(1)
-    raise RuntimeError("New module input did not become RUNNING; inspect System > Inputs before retrying")
+        client.call("PUT", path)
+        previous, stable = None, 0
+        for _ in range(60):
+            current, detail = state()
+            stable = stable + 1 if current == previous else 1
+            previous = current
+            if current == "RUNNING" and stable >= 6:
+                return
+            if current in ("FAILED", "STOPPED", "TERMINATED", "NOT_FOUND") and stable >= 3:
+                own_metric_collision = (current == "FAILED" and isinstance(detail, str)
+                    and "metric named " in detail and "already exists" in detail
+                    and "." + input_id + ".workers.executor-service." in detail)
+                if own_metric_collision and attempt < 7:
+                    break
+                raise RuntimeError("New module input failed to start; inspect System > Inputs before retrying")
+            time.sleep(1)
+        else:
+            raise RuntimeError("New module input did not become RUNNING; inspect System > Inputs before retrying")
 
 
 def install(client, module, params, *, apply=False):

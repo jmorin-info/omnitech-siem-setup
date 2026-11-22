@@ -232,6 +232,50 @@ def test_cleanup_that_never_finishes_cannot_start_a_second_transport(monkeypatch
     assert not any(method == "PUT" for method, _, _ in client.calls)
 
 
+@pytest.mark.parametrize("failures", [1, 7])
+def test_new_input_recovers_only_its_orphaned_worker_metrics(monkeypatch, failures):
+    monkeypatch.setattr("omni_integrations.client.time.sleep", lambda _: None)
+    client, module = FakeGraylog(), load_module("watchguard")
+    original = client.call
+    starts = 0
+    def racy(method, path, body=None):
+        nonlocal starts
+        result = original(method, path, body)
+        if method == "PUT" and path.startswith("/system/inputstates/"):
+            starts += 1
+            if starts <= failures:
+                client.input_state = "FAILED"
+        if method == "GET" and path.startswith("/system/inputstates/") and client.input_state == "FAILED":
+            result["detailed_message"] = "A metric named org.graylog2.inputs.raw.udp.RawUDPInput." + "c" * 24 + ".workers.executor-service.pool.size already exists"
+        return result
+    client.call = racy
+    assert install(client, module, parameters(module), apply=True)["action"] == "installed"
+    assert starts == failures + 1
+    assert len([1 for method, path, _ in client.calls if method == "POST" and path.endswith("/installations")]) == 1
+
+
+@pytest.mark.parametrize("failure", ["other-input-metric", "bind-error", "persistent-own-metric"])
+def test_metric_recovery_is_scoped_and_bounded_and_never_masks_other_errors(monkeypatch, failure):
+    monkeypatch.setattr("omni_integrations.client.time.sleep", lambda _: None)
+    client, module = FakeGraylog(), load_module("watchguard")
+    original = client.call
+    def failed(method, path, body=None):
+        result = original(method, path, body)
+        if method == "PUT" and path.startswith("/system/inputstates/"):
+            client.input_state = "FAILED"
+        if method == "GET" and path.startswith("/system/inputstates/") and client.input_state == "FAILED":
+            result["state"] = "FAILED"
+            result["detailed_message"] = ("Address already in use: dummy-private-value" if failure == "bind-error" else
+                "A metric named org.graylog2.inputs.raw.udp.RawUDPInput." + ("d" if failure == "other-input-metric" else "c") * 24 + ".workers.executor-service.pool.size already exists")
+        return result
+    client.call = failed
+    with pytest.raises(RuntimeError, match="failed to start") as error:
+        install(client, module, parameters(module), apply=True)
+    assert "dummy-private" not in str(error.value)
+    starts = [path for method, path, _ in client.calls if method == "PUT"]
+    assert starts == ["/system/inputstates/" + "c" * 24] * (8 if failure == "persistent-own-metric" else 1)
+
+
 @pytest.mark.parametrize("scenario", ["changed-pack", "port-conflict", "other-revision", "other-parameters"])
 def test_conflicts_abort_before_any_write(scenario):
     module = load_module("watchguard")

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # 33-ldaps-auth.sh - Authentification AD (LDAPS) sur la console Graylog
-# Pre-requis et mode d'emploi : docs/LDAPS.md
+# Pre-requis et mode d'emploi : docs/sources/LDAPS.md
 #   - compte de liaison AD en lecture seule (LDAP_BIND_DN / LDAP_BIND_PASS
 #     dans 00-vars.env)
 #   - regle FortiGate Reseau ELK -> DC en TCP 636
@@ -20,7 +20,7 @@ LDAP_HOST="${LDAP_HOST:-bx-ad-01.omnitech.security}"
 LDAP_PORT="${LDAP_PORT:-636}"
 LDAP_SEARCH_BASE="${LDAP_SEARCH_BASE:-DC=omnitech,DC=security}"
 [[ -n "${LDAP_BIND_DN:-}" && -n "${LDAP_BIND_PASS:-}" ]] \
-  || die "renseigner LDAP_BIND_DN et LDAP_BIND_PASS dans 00-vars.env (cf. docs/LDAPS.md)"
+  || die "renseigner LDAP_BIND_DN et LDAP_BIND_PASS dans 00-vars.env (cf. docs/sources/LDAPS.md)"
 
 # --- 1. Verification du certificat LDAPS contre la CA interne -----------------
 if echo | timeout 5 openssl s_client -connect "${LDAP_HOST}:${LDAP_PORT}" \

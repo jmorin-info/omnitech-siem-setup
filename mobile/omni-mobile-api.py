@@ -43,6 +43,14 @@ for path in (os.environ.get("MOBILE_CONFIG", "/etc/default/omni-mobile"),):
     except OSError:
         pass
 
+def _setting(name, default):
+    """Fichier de configuration d'abord, puis environnement, puis valeur par défaut."""
+    return CONF.get(name) or os.environ.get(name) or default
+
+
+# Clone du dépôt de référence (lookups, oms-graph). Ancienne valeur codée en dur :
+# /root/omnitech-siem-setup ; le service doit être repointé vers ce clone.
+OMNI_REPO_DIR = _setting("OMNI_REPO_DIR", "/opt/omni-siem/repository").rstrip("/")
 LISTEN = (CONF.get("MOBILE_BIND", "127.0.0.1"), int(CONF.get("MOBILE_PORT", "8090")))
 OS_URL = CONF.get("OPENSEARCH", "http://127.0.0.1:9200")
 GL_URL = CONF.get("GRAYLOG_API", "http://127.0.0.1:9000/api")
@@ -54,7 +62,7 @@ if SECRET == b"change-me" or PUSH_SECRET == "change-me-push":
     sys.exit("FATAL omni-mobile: MOBILE_SECRET/MOBILE_PUSH_SECRET sur la valeur par defaut "
              "-> definir un vrai secret dans /etc/default/omni-mobile.")
 SESSION_TTL = int(CONF.get("MOBILE_SESSION_TTL", "43200"))  # 12 h
-SUBS_FILE = CONF.get("MOBILE_SUBS_FILE", "/var/lib/omni-mobile/subscriptions.json")
+SUBS_FILE = _setting("MOBILE_SUBS_FILE", "/var/lib/omni-mobile/subscriptions.json")
 VAPID_PUB = CONF.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIV_FILE = CONF.get("VAPID_PRIVATE_FILE", "/etc/omni-mobile/vapid_private.pem")
 VAPID_SUBJECT = CONF.get("VAPID_SUBJECT", "mailto:informatique@omnitech-security.fr")
@@ -385,7 +393,7 @@ def get_attack_matrix():
     rows = []
     try:
         import csv as _csv
-        with open(CONF.get("MITRE_LOOKUP", "/root/omnitech-siem-setup/lookups/mitre-attack.csv")) as f:
+        with open(_setting("MITRE_LOOKUP", OMNI_REPO_DIR + "/lookups/mitre-attack.csv")) as f:
             rd = _csv.reader(f); next(rd, None)
             for r in rd:
                 if len(r) >= 4 and r[1].startswith("T"):
@@ -421,7 +429,7 @@ def _tech_tactic_map():
     m = {}
     try:
         import csv as _csv
-        with open(CONF.get("MITRE_LOOKUP", "/root/omnitech-siem-setup/lookups/mitre-attack.csv")) as f:
+        with open(_setting("MITRE_LOOKUP", OMNI_REPO_DIR + "/lookups/mitre-attack.csv")) as f:
             rd = _csv.reader(f); next(rd, None)
             for r in rd:
                 if len(r) >= 4 and r[1].startswith("T"):
@@ -453,7 +461,7 @@ def get_graph():
     return {"nodes": nodes, "edges": edges}
 
 
-CASES_FILE = CONF.get("MOBILE_CASES_FILE", "/var/lib/omni-mobile/cases.json")
+CASES_FILE = _setting("MOBILE_CASES_FILE", "/var/lib/omni-mobile/cases.json")
 _CASES_LOCK = threading.Lock()   # serialise read-modify-write (ThreadingHTTPServer)
 
 
@@ -569,7 +577,7 @@ def soar_block(ip, by):
 
 
 # --- Watchlist : entités à surveiller (compromission suspectée, suivi) ----------
-WATCH_FILE = CONF.get("MOBILE_WATCH_FILE", "/var/lib/omni-mobile/watchlist.json")
+WATCH_FILE = _setting("MOBILE_WATCH_FILE", "/var/lib/omni-mobile/watchlist.json")
 _WATCH_LOCK = threading.Lock()
 
 
@@ -1732,9 +1740,9 @@ def get_deploy():
         "aruba": _hosts("omni-aruba*", [since])}}
 
 
-OMS_GRAPH_DIR = "/root/omnitech-siem-setup/oms-graph"
-OMS_GRAPH_PY = OMS_GRAPH_DIR + "/.venv/bin/python"
-OMS_GRAPH_CFG = "/etc/oms-graph/config.yaml"
+OMS_GRAPH_DIR = _setting("OMS_GRAPH_DIR", OMNI_REPO_DIR + "/oms-graph")
+OMS_GRAPH_PY = _setting("OMS_GRAPH_PY", OMS_GRAPH_DIR + "/.venv/bin/python")
+OMS_GRAPH_CFG = _setting("OMS_GRAPH_CFG", "/etc/oms-graph/config.yaml")
 
 
 def get_entity_exposure(name):
@@ -1793,7 +1801,7 @@ _SOAR_EXCL = "/var/lib/omni-soar/exclusions.json"
 _SOAR_FIX = "/etc/omni-soar/exclusions-statiques.txt"
 _SOAR_FEED = "/var/www/siem-kit/soar/blocklist.txt"
 _SOAR_DEC = "/var/log/omni-soar/decisions.log"
-SOC_REQ_DIR = CONF.get("SOC_REQ_DIR", "/var/lib/omni-mobile/soc-requests")
+SOC_REQ_DIR = _setting("SOC_REQ_DIR", "/var/lib/omni-mobile/soc-requests")
 SOC_ADMINS = {u.strip().lower() for u in CONF.get("SOC_ADMINS", "").split(",") if u.strip()}
 _SITE_ORIGINS = ",".join(filter(None, (CONF.get("SIEM_FQDN", ""), CONF.get("SIEM_IP", ""),
                                      urllib.parse.urlparse(GL_URL).hostname)))
@@ -1830,7 +1838,8 @@ def origin_ok(headers):
     return host in SOC_ORIGINS
 
 def soc_is_admin(user):
-    return bool(user) and user.lower() in SOC_ADMINS
+    """Administrateur SOC : SOC_ADMINS (configuration) ou rôle attribué depuis la console."""
+    return bool(user) and role_of(user) == "administrateur"
 
 def get_soar():
     now = time.time()
@@ -1889,17 +1898,12 @@ def soc_soar_request(body, user):
     motif = " ".join(str(body.get("motif", "")).replace("#", " ").split())[:80]
     if exclure and len(motif) < 4:
         return {"ok": False, "error": "motif obligatoire (4 caractères min.) pour une exclusion définitive"}
-    pend = os.path.join(SOC_REQ_DIR, "pending")
-    os.makedirs(pend, exist_ok=True)
-    if len(_glob.glob(os.path.join(pend, "*.json"))) >= 20:
-        return {"ok": False, "error": "trop de demandes en attente"}
-    rid = time.strftime("%Y%m%d-%H%M%S") + "-" + _uuid.uuid4().hex[:8]
-    req = {"id": rid, "t": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "user": str(user)[:64], "action": "debloquer",
-           "ip": str(ipo), "exclure": exclure, "motif": motif, "status": "pending"}
-    tmp = os.path.join(pend, "." + rid + ".tmp")
-    with open(tmp, "w") as f:
-        json.dump(req, f)
-    os.replace(tmp, os.path.join(pend, rid + ".json"))
+    try:
+        rid = _queue_soar_unblock(str(ipo), user, exclure, motif)
+    except AdminError as ex:
+        return {"ok": False, "error": str(ex)}
+    audit_append(user, "execution", "soar_unblock" + ("_exclusion" if exclure else ""), str(ipo), motif,
+                 "bloquée", "non bloquée", "transmise (page SOAR)", rid)
     return {"ok": True, "id": rid, "message": "Demande enregistrée : déblocage appliqué sous 1 min, effet sur les FortiGate sous 2 min."}
 
 def _run(cmd, timeout=8):
@@ -1980,6 +1984,1061 @@ def get_siem_ops():
     worst = max((sev.get(i["status"], 0) for i in items), default=0)
     return {"items": items, "status": ["ok", "warn", "crit"][worst], "versions": vers.splitlines(),
             "kernel": os.uname().release, "generated": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+
+# =============================================================================
+# ESPACE ADMINISTRATION SOC (21/11/2026)
+#   Rôles (lecteur < analyste < administrateur), journal d'audit chaîné en ajout
+#   seul, actions d'administration avec simulation préalable et, pour les actions
+#   à fort impact, validation par un second administrateur (approbation à deux
+#   temps). Les actions réutilisent les mécanismes existants :
+#     - faux positifs   : API du triage (127.0.0.1:8089 /fp) ;
+#     - blocage SOAR    : API omni-soar (127.0.0.1:8088 /block, mode manuel) ;
+#     - déblocage SOAR  : file soc-requests traitée par omni-soc-actions ;
+#     - détections      : API Graylog schedule/unschedule (jeton dédié, optionnel) ;
+#     - paramètres, exclusions fixes, redémarrages : file « exec » traitée par
+#       l'exécuteur privilégié omni-soc-admin-exec (le backend est confiné et
+#       n'écrit que dans son répertoire de données).
+#   Aucune commande shell n'est construite à partir d'une entrée utilisateur.
+# =============================================================================
+import fcntl as _fcntl
+import ipaddress as _ipa2
+
+CONSOLE_BUILD = "2026112101"
+ROLE_RANK = {"lecteur": 1, "analyste": 2, "administrateur": 3}
+ROLE_LABEL = {"lecteur": "Lecteur", "analyste": "Analyste", "administrateur": "Administrateur"}
+_DATA_DIR = os.path.dirname(SUBS_FILE) or "/var/lib/omni-mobile"
+SOC_ADMIN_DIR = _setting("SOC_ADMIN_DIR", os.path.join(_DATA_DIR, "admin"))
+SOC_DEFAULT_ROLE = CONF.get("SOC_DEFAULT_ROLE", "analyste").strip().lower()
+if SOC_DEFAULT_ROLE not in ("lecteur", "analyste"):
+    SOC_DEFAULT_ROLE = "lecteur"          # jamais administrateur par défaut
+SOC_ADMIN_INTERNAL_ONLY = CONF.get("SOC_ADMIN_INTERNAL_ONLY", "1") != "0"
+_DEFAULT_ADMIN_NETS = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128,fc00::/7"
+
+
+def _parse_nets(value):
+    nets = []
+    for part in (value or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            nets.append(_ipa2.ip_network(part, strict=False))
+        except ValueError:
+            sys.exit(f"FATAL omni-mobile: SOC_ADMIN_NETS contient une plage invalide ({part[:40]}).")
+    return nets
+
+
+SOC_ADMIN_NETS = _parse_nets(CONF.get("SOC_ADMIN_NETS", _DEFAULT_ADMIN_NETS))
+SOC_ADMIN_SELF_APPROVE = CONF.get("SOC_ADMIN_SELF_APPROVE", "0") == "1"
+SOC_ADMIN_APPROVAL_TTL = max(600, min(int(CONF.get("SOC_ADMIN_APPROVAL_TTL", "86400") or 86400), 7 * 86400))
+SOC_ADMIN_DRY_RUN = CONF.get("SOC_ADMIN_DRY_RUN", "0") == "1"
+SOC_ADMIN_GELF_URL = CONF.get("SOC_ADMIN_GELF_URL", os.environ.get("SOC_ADMIN_GELF_URL", "http://127.0.0.1:12201/gelf"))
+SOC_ADMIN_WRITES_PER_5MIN = int(CONF.get("SOC_ADMIN_WRITES_PER_5MIN", "30") or 30)
+SOC_GRAYLOG_TOKEN_FILE = CONF.get("SOC_GRAYLOG_TOKEN_FILE", "")
+SOC_TRIAGE_URL = CONF.get("SOC_TRIAGE_URL", "http://127.0.0.1:8089").rstrip("/")
+SOC_TRIAGE_ENV = CONF.get("SOC_TRIAGE_ENV", "/etc/omni-alert-triage.env")
+SOC_SOAR_URL = CONF.get("SOC_SOAR_URL", "http://127.0.0.1:8088").rstrip("/")
+SOC_SOAR_ENV = CONF.get("SOC_SOAR_ENV", "/etc/omni-soar/soar.env")
+SOC_SYSTEMCTL = CONF.get("SOC_SYSTEMCTL", "systemctl")
+SOC_ADMIN_RESTARTABLE = [u.strip() for u in CONF.get("SOC_ADMIN_RESTARTABLE", "").split(",") if u.strip()]
+# chemins SOAR : surchargeables (tests, autre installation) ; valeurs historiques par défaut
+_SOAR_STATE = CONF.get("SOC_SOAR_STATE", _SOAR_STATE)
+_SOAR_META = CONF.get("SOC_SOAR_META", _SOAR_META)
+_SOAR_EXCL = CONF.get("SOC_SOAR_EXCL", _SOAR_EXCL)
+_SOAR_FIX = CONF.get("SOC_SOAR_FIX", _SOAR_FIX)
+_SOAR_DEC = CONF.get("SOC_SOAR_DEC", _SOAR_DEC)
+
+# Garde-fou des tests (OMNI_TEST_MODE=1) : aucun chemin d'état ne doit viser la production,
+# et aucune copie GELF n'est émise. Refus de démarrer plutôt qu'écrire au mauvais endroit.
+_PROD_PREFIXES = ("/var/lib", "/etc", "/var/www", "/var/log", "/usr", "/opt/oms-")
+
+
+def state_paths():
+    return {"MOBILE_SUBS_FILE": SUBS_FILE, "MOBILE_CASES_FILE": CASES_FILE, "MOBILE_WATCH_FILE": WATCH_FILE,
+            "SOC_REQ_DIR": SOC_REQ_DIR, "SOC_ADMIN_DIR": SOC_ADMIN_DIR}
+
+
+def enforce_test_isolation():
+    if os.environ.get("OMNI_TEST_MODE") != "1":
+        return
+    bad = [k for k, v in state_paths().items()
+           if any(os.path.realpath(v) == p or os.path.realpath(v).startswith(p + "/") for p in _PROD_PREFIXES)]
+    if bad:
+        sys.exit("FATAL omni-mobile (OMNI_TEST_MODE=1) : chemin d'état de production refusé : " + ", ".join(bad))
+    global SOC_ADMIN_GELF_URL
+    SOC_ADMIN_GELF_URL = ""
+
+
+enforce_test_isolation()
+ADMIN_ROLES_FILE = os.path.join(SOC_ADMIN_DIR, "roles.json")
+ADMIN_AUDIT_FILE = os.path.join(SOC_ADMIN_DIR, "audit.jsonl")
+ADMIN_REQ_DIR = os.path.join(SOC_ADMIN_DIR, "requests")
+ADMIN_EXEC_DIR = os.path.join(SOC_ADMIN_DIR, "exec")
+ADMIN_FP_META = os.path.join(SOC_ADMIN_DIR, "fp-meta.json")
+_ADMIN_LOCK = threading.RLock()
+_ADMIN_RATE: dict = {}
+
+# Paramètres modifiables : liste blanche fermée + bornes. Doit rester identique à
+# celle de l'exécuteur (omni-soc-admin-exec), qui revalide tout (test dédié).
+_EMAIL_ONE = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}$")
+TRIAGE_PARAMS = {
+    "MAIL_SCORE_THRESHOLD": {"type": "int", "min": 50, "max": 100, "label": "Seuil de score pour l'envoi d'un mail"},
+    "GRAY_SCORE_THRESHOLD": {"type": "int", "min": 30, "max": 95, "label": "Seuil de score de la zone grise"},
+    "TRIAGE_DEDUP_SECONDS": {"type": "int", "min": 300, "max": 86400, "label": "Fenêtre de déduplication (secondes)"},
+    "FP_DEFAULT_TTL_DAYS": {"type": "int", "min": 1, "max": 90, "label": "Durée par défaut d'un faux positif (jours)"},
+    "KILLCHAIN_COUNT": {"type": "int", "min": 2, "max": 10, "label": "Types d'alertes distincts pour une kill-chain"},
+    "KILLCHAIN_WINDOW": {"type": "int", "min": 300, "max": 7200, "label": "Fenêtre de kill-chain (secondes)"},
+    "MAIL_RECIPIENTS": {"type": "emails", "max_items": 10, "label": "Destinataires des mails d'alerte"},
+}
+SOAR_PARAMS = {
+    "SOAR_MODE": {"type": "enum", "values": ["actif", "simulation"], "label": "Mode du moteur SOAR"},
+    "SOAR_MIN_HITS": {"type": "int", "min": 1, "max": 100, "label": "Occurrences minimales avant blocage"},
+    "SOAR_MIN_HITS_PAYS_NORMAL": {"type": "int", "min": 1, "max": 200, "label": "Occurrences minimales (pays habituel)"},
+    "SOAR_TTL_HOURS": {"type": "int", "min": 1, "max": 168, "label": "Durée d'un blocage (heures)"},
+    "SOAR_MAX": {"type": "int", "min": 10, "max": 2000, "label": "Nombre maximal d'IP bloquées"},
+}
+_UNIT_RE = re.compile(r"^(omni|oms)-[A-Za-z0-9@._-]{1,80}\.(service|timer)$")
+_USER_RE2 = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@\\-]{0,63}$")
+_FP_KEYS = ("src_ip", "user", "host", "upn", "dest_ip", "srcip", "source")
+_GL_ID_RE = re.compile(r"^[0-9a-f]{24}$")
+
+
+class AdminError(Exception):
+    def __init__(self, message, code=400):
+        super().__init__(message)
+        self.code = code
+
+
+def _now_iso():
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def _clean_text(value, max_len, min_len=0, what="texte"):
+    s = " ".join(str(value if value is not None else "").split())
+    if any(ord(c) < 32 for c in s):
+        raise AdminError(f"{what} : caractères de contrôle refusés")
+    if len(s) < min_len:
+        raise AdminError(f"{what} obligatoire ({min_len} caractères minimum)")
+    if len(s) > max_len:
+        raise AdminError(f"{what} trop long ({max_len} caractères maximum)")
+    return s
+
+
+def _atomic_write_json(path, data, mode=0o640):
+    d = os.path.dirname(path)
+    os.makedirs(d, exist_ok=True)
+    tmp = os.path.join(d, "." + os.path.basename(path) + "." + _uuid.uuid4().hex[:8] + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1, sort_keys=True)
+        f.flush()
+        os.fsync(f.fileno())
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
+
+
+def _read_env_keys(path, keys):
+    """Lit uniquement les clés demandées d'un fichier KEY=VALUE (jamais les autres : secrets)."""
+    out = {}
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                m = re.match(r"\s*([A-Z_][A-Z0-9_]*)=(.*)", line)
+                if m and m.group(1) in keys:
+                    out[m.group(1)] = m.group(2).strip().strip("'").strip('"')
+    except OSError:
+        return None
+    return out
+
+
+# ------------------------------------------------------------------ rôles
+def _load_roles():
+    data = _jl(ADMIN_ROLES_FILE, {})
+    users = data.get("users") if isinstance(data, dict) else None
+    return users if isinstance(users, dict) else {}
+
+
+def role_of(user):
+    u = (user or "").strip().lower()
+    if not u:
+        return None
+    if u in SOC_ADMINS:
+        return "administrateur"
+    r = (_load_roles().get(u) or {}).get("role")
+    return r if r in ROLE_RANK else SOC_DEFAULT_ROLE
+
+
+def role_at_least(user, role):
+    r = role_of(user)
+    return bool(r) and ROLE_RANK.get(r, 0) >= ROLE_RANK[role]
+
+
+def admin_users():
+    """Liste des comptes ayant un rôle explicite (configuration + console)."""
+    out = [{"user": u, "role": "administrateur", "source": "configuration", "modifiable": False,
+            "by": "", "ts": ""} for u in sorted(SOC_ADMINS)]
+    for u, rec in sorted(_load_roles().items()):
+        if u in SOC_ADMINS:
+            continue
+        out.append({"user": u, "role": rec.get("role"), "source": "console", "modifiable": True,
+                    "by": rec.get("by", ""), "ts": rec.get("ts", ""), "motif": rec.get("motif", "")})
+    admins = sum(1 for x in out if x["role"] == "administrateur")
+    return {"users": out, "default_role": SOC_DEFAULT_ROLE, "admins": admins,
+            "roles": [{"id": k, "label": ROLE_LABEL[k]} for k in ROLE_RANK],
+            "note": "Tout compte authentifié par Graylog sans rôle explicite reçoit le rôle par défaut."}
+
+
+# ------------------------------------------------------------------ audit
+def _audit_last_hash(fh):
+    fh.seek(0, 2)
+    size = fh.tell()
+    if not size:
+        return "0" * 64, 0
+    fh.seek(max(0, size - 65536))
+    lines = [l for l in fh.read().decode("utf-8", "replace").splitlines() if l.strip()]
+    for line in reversed(lines):
+        try:
+            e = json.loads(line)
+            return str(e.get("hash", "0" * 64)), int(e.get("seq", 0))
+        except Exception:
+            continue
+    return "0" * 64, 0
+
+
+def _audit_hash(entry):
+    body = {k: v for k, v in entry.items() if k != "hash"}
+    return hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def audit_append(actor, event, action, target="", motif="", before=None, after=None, result="",
+                 request_id="", ip="", extra=None):
+    """Ajoute une entrée au journal d'audit (ajout seul, chaînage SHA-256, verrou fichier)."""
+    entry = {"ts": _now_iso(), "actor": str(actor or "?")[:64], "role": role_of(actor) or "",
+             "ip": str(ip or "")[:45], "event": event, "action": action, "target": str(target)[:200],
+             "motif": str(motif or "")[:300], "before": before, "after": after,
+             "result": str(result or "")[:500], "request_id": request_id}
+    if extra:
+        entry["extra"] = extra
+    os.makedirs(SOC_ADMIN_DIR, exist_ok=True)
+    with _ADMIN_LOCK:
+        fd = os.open(ADMIN_AUDIT_FILE, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o640)
+        with os.fdopen(fd, "rb+") as fh:
+            _fcntl.flock(fh.fileno(), _fcntl.LOCK_EX)
+            try:
+                prev, seq = _audit_last_hash(fh)
+                entry["seq"] = seq + 1
+                entry["prev"] = prev
+                entry["hash"] = _audit_hash(entry)
+                fh.seek(0, 2)
+                fh.write((json.dumps(entry, ensure_ascii=False) + "\n").encode("utf-8"))
+                fh.flush()
+                os.fsync(fh.fileno())
+            finally:
+                _fcntl.flock(fh.fileno(), _fcntl.LOCK_UN)
+    if SOC_ADMIN_GELF_URL:
+        threading.Thread(target=_audit_gelf, args=(entry,), daemon=True).start()
+    return entry
+
+
+def _audit_gelf(entry):
+    try:
+        msg = {"version": "1.1", "host": "omni-soc-console",
+               "short_message": f"SOC admin {entry['event']} {entry['action']} {entry['target']} par {entry['actor']}",
+               "_event_source": "soc_admin", "_soc_user": entry["actor"], "_soc_event": entry["event"],
+               "_soc_action": entry["action"], "_soc_target": entry["target"], "_soc_result": entry["result"][:200],
+               "_soc_request_id": entry["request_id"], "_soc_audit_seq": entry["seq"]}
+        req = urllib.request.Request(SOC_ADMIN_GELF_URL, data=json.dumps(msg).encode(),
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=3).close()
+    except Exception:
+        pass
+
+
+def audit_read(limit=200):
+    """Dernières entrées + vérification complète de la chaîne."""
+    entries, ok, broken_at, prev = [], True, None, "0" * 64
+    try:
+        with open(ADMIN_AUDIT_FILE, encoding="utf-8", errors="replace") as fh:
+            for n, line in enumerate(fh, 1):
+                if not line.strip():
+                    continue
+                try:
+                    e = json.loads(line)
+                except Exception:
+                    ok, broken_at = False, broken_at or n
+                    continue
+                if ok and (e.get("prev") != prev or _audit_hash(e) != e.get("hash")):
+                    ok, broken_at = False, n
+                prev = e.get("hash", "")
+                entries.append(e)
+                if len(entries) > 5000:
+                    entries = entries[-limit:]
+    except OSError:
+        pass
+    return {"entries": list(reversed(entries[-limit:])), "chain_ok": ok, "broken_at_line": broken_at,
+            "total": entries[-1]["seq"] if entries and isinstance(entries[-1].get("seq"), int) else 0}
+
+
+# ------------------------------------------------------------------ réseau / débit
+def admin_client_ip(handler):
+    peer = handler.client_address[0] if handler.client_address else ""
+    if peer in ("127.0.0.1", "::1") and handler.headers.get("X-Real-IP"):
+        return handler.headers.get("X-Real-IP").strip()   # posé par nginx ($remote_addr)
+    return peer
+
+
+def admin_ip_internal(ip):
+    try:
+        a = _ipa2.ip_address(ip)
+    except ValueError:
+        return False
+    return any(a in n for n in SOC_ADMIN_NETS)
+
+
+def admin_rate_ok(user):
+    now = time.time()
+    with _ADMIN_LOCK:
+        hist = [t for t in _ADMIN_RATE.get(user, []) if now - t < 300]
+        if len(hist) >= SOC_ADMIN_WRITES_PER_5MIN:
+            _ADMIN_RATE[user] = hist
+            return False
+        hist.append(now)
+        _ADMIN_RATE[user] = hist
+    return True
+
+
+def csrf_token(session_token):
+    return hmac.new(SECRET, b"csrf|" + (session_token or "").encode(), hashlib.sha256).hexdigest()[:40]
+
+
+# ------------------------------------------------------------------ services locaux
+def _http_json(method, url, payload=None, headers=None, timeout=8):
+    data = json.dumps(payload).encode() if payload is not None else None
+    h = {"Accept": "application/json"}
+    if data is not None:
+        h["Content-Type"] = "application/json"
+    h.update(headers or {})
+    req = urllib.request.Request(url, data=data, headers=h, method=method)
+    with urllib.request.urlopen(req, timeout=timeout, context=_ssl_ctx if url.startswith("https://") else None) as r:
+        raw = r.read()
+    return json.loads(raw or b"null")
+
+
+def _triage_token():
+    v = _read_env_keys(SOC_TRIAGE_ENV, {"TRIAGE_TOKEN"}) or {}
+    return v.get("TRIAGE_TOKEN", "")
+
+
+def _graylog_token():
+    if not SOC_GRAYLOG_TOKEN_FILE:
+        return ""
+    try:
+        with open(SOC_GRAYLOG_TOKEN_FILE) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _graylog(method, path, timeout=15):
+    tok = _graylog_token()
+    if not tok:
+        raise AdminError("jeton Graylog non configuré (SOC_GRAYLOG_TOKEN_FILE)", 503)
+    auth = base64.b64encode(f"{tok}:token".encode()).decode()
+    return _http_json(method, GL_URL + path, None,
+                      {"Authorization": "Basic " + auth, "X-Requested-By": "omni-soc-admin"}, timeout)
+
+
+# ------------------------------------------------------------------ lectures
+def admin_fp_list():
+    rules, err = [], ""
+    try:
+        rules = _http_json("GET", SOC_TRIAGE_URL + "/fp") or []
+    except Exception as ex:
+        err = f"service de triage injoignable ({type(ex).__name__})"
+    meta = _jl(ADMIN_FP_META, {})
+    out = []
+    for r in rules if isinstance(rules, list) else []:
+        k = f"{r.get('entity', '')}|{r.get('tag', '')}"
+        m = meta.get(k, {})
+        out.append({"entity": r.get("entity", ""), "tag": r.get("tag", ""), "title_sub": r.get("title_sub", ""),
+                    "until": int(float(r.get("until", 0) or 0)), "by": r.get("by", ""),
+                    "justification": m.get("justification", ""), "added": m.get("ts", "")})
+    out.sort(key=lambda x: x["until"])
+    return {"rules": out, "error": err,
+            "note": "Les alertes critiques et les kill-chains ne sont jamais masquées par le triage."}
+
+
+def _static_exclusions():
+    out = []
+    try:
+        with open(_SOAR_FIX, encoding="utf-8", errors="replace") as fh:
+            for n, line in enumerate(fh, 1):
+                parts = line.split("#", 1)
+                val = parts[0].strip()
+                if not val:
+                    continue
+                out.append({"value": val, "motif": parts[1].strip() if len(parts) > 1 else "", "line": n})
+    except OSError:
+        return None
+    return out
+
+
+def _soar_excluded(ip):
+    """Même logique que omni-soar.motif_exclusion (whitelist d'environnement exceptée si absente)."""
+    a = _ipa2.ip_address(ip)
+    dyn = (_jl(_SOAR_EXCL, {}) or {}).get("ips") or {}
+    if ip in dyn:
+        return f"exclusion automatique : {dyn[ip]}"
+    for e in _static_exclusions() or []:
+        try:
+            if a in _ipa2.ip_network(e["value"], strict=False):
+                return f"exclusion fixe : {e['motif'] or e['value']}"
+        except ValueError:
+            continue
+    wl = (_read_env_keys(SOC_SOAR_ENV, {"SOAR_WHITELIST"}) or {}).get("SOAR_WHITELIST", "")
+    if ip in {x.strip() for x in wl.split(",") if x.strip()}:
+        return "SOAR_WHITELIST"
+    return None
+
+
+def admin_soar():
+    base = get_soar()
+    params = _read_env_keys(SOC_SOAR_ENV, set(SOAR_PARAMS))
+    return {"active": base.get("active", []), "count": base.get("count", 0),
+            "requests": base.get("requests", []), "history": base.get("history", [])[:20],
+            "static_exclusions": _static_exclusions(), "params": params,
+            "param_spec": SOAR_PARAMS, "mode": (params or {}).get("SOAR_MODE", "actif") if params is not None else None,
+            "env_readable": params is not None}
+
+
+def admin_settings():
+    vals = _read_env_keys(SOC_TRIAGE_ENV, set(TRIAGE_PARAMS))
+    return {"triage": vals, "triage_readable": vals is not None, "triage_spec": TRIAGE_PARAMS,
+            "soar": _read_env_keys(SOC_SOAR_ENV, set(SOAR_PARAMS)), "soar_spec": SOAR_PARAMS,
+            "note": "Les secrets des fichiers de configuration ne sont jamais lus ni affichés."}
+
+
+def admin_detections():
+    if not _graylog_token():
+        return {"available": False, "definitions": [],
+                "error": "Jeton Graylog non configuré : renseigner SOC_GRAYLOG_TOKEN_FILE (voir la documentation)."}
+    defs, page = [], 1
+    while page <= 20:
+        d = _graylog("GET", f"/events/definitions?per_page=100&page={page}") or {}
+        batch = d.get("event_definitions") or d.get("elements") or []
+        for x in batch:
+            defs.append({"id": x.get("id"), "title": x.get("title", ""), "priority": x.get("priority"),
+                         "state": x.get("state") or "?", "description": str(x.get("description") or "")[:240],
+                         "updated_at": x.get("updated_at", "")})
+        if not batch or page * 100 >= int(d.get("total") or 0):
+            break
+        page += 1
+    defs.sort(key=lambda x: (x["state"] != "DISABLED", x["title"].lower()))
+    return {"available": True, "definitions": defs,
+            "enabled": sum(1 for x in defs if x["state"] == "ENABLED"),
+            "disabled": sum(1 for x in defs if x["state"] == "DISABLED")}
+
+
+def _systemctl(args, timeout=10):
+    return _run([SOC_SYSTEMCTL] + list(args), timeout)
+
+
+def admin_services():
+    listing = _systemctl(["list-units", "--all", "--plain", "--no-legend", "--no-pager",
+                          "--type=service,timer", "omni-*", "oms-*"])
+    units = []
+    for line in listing.splitlines():
+        name = (line.split() or [""])[0]
+        if _UNIT_RE.match(name) and name not in units:
+            units.append(name)
+    units = units[:300]
+    props = "Id,Description,ActiveState,SubState,UnitFileState,Result,ExecMainStartTimestamp,ExecMainStatus,LastTriggerUSec,NextElapseUSecRealtime"
+    raw = _systemctl(["show", "-p", props, "--"] + units, 20) if units else ""
+    rows, cur = [], {}
+    for line in raw.splitlines() + [""]:
+        if not line.strip():
+            if cur.get("Id"):
+                rows.append(cur)
+            cur = {}
+            continue
+        k, _, v = line.partition("=")
+        cur[k] = v
+    out = []
+    for r in rows:
+        uid = r.get("Id", "")
+        if not _UNIT_RE.match(uid):
+            continue
+        st = r.get("ActiveState", "")
+        res = r.get("Result", "")
+        level = "crit" if st == "failed" or res not in ("", "success") else ("ok" if st in ("active", "activating") or uid.endswith(".service") and st == "inactive" and res == "success" else "warn")
+        out.append({"unit": uid, "description": r.get("Description", "")[:120], "active": st, "sub": r.get("SubState", ""),
+                    "enabled": r.get("UnitFileState", ""), "result": res, "level": level,
+                    "started": r.get("ExecMainStartTimestamp", ""), "exit_status": r.get("ExecMainStatus", ""),
+                    "last_trigger": r.get("LastTriggerUSec", ""), "next": r.get("NextElapseUSecRealtime", ""),
+                    "restartable": uid in SOC_ADMIN_RESTARTABLE and uid.endswith(".service")})
+    out.sort(key=lambda x: ({"crit": 0, "warn": 1, "ok": 2}[x["level"]], x["unit"]))
+    try:
+        with open(os.path.abspath(__file__), "rb") as f:
+            backend_sha = hashlib.sha256(f.read()).hexdigest()[:16]
+    except OSError:
+        backend_sha = ""
+    hb = os.path.join(ADMIN_EXEC_DIR, "executor-heartbeat")
+    try:
+        hb_age = int(time.time() - os.path.getmtime(hb))
+    except OSError:
+        hb_age = None
+    return {"units": out, "failed": sum(1 for x in out if x["level"] == "crit"),
+            "versions": {"console_build": CONSOLE_BUILD, "backend_sha256": backend_sha,
+                         "backend_path": os.path.abspath(__file__), "python": sys.version.split()[0]},
+            "restartable": SOC_ADMIN_RESTARTABLE, "executor_heartbeat_age_s": hb_age,
+            "generated": _now_iso()}
+
+
+# ------------------------------------------------------------------ validation des actions
+def _v_ip(value, public=True):
+    s = str(value or "").strip()
+    try:
+        a = _ipa2.ip_address(s)
+    except ValueError:
+        raise AdminError("adresse IP invalide")
+    if public and not (a.version == 4 and a.is_global):
+        raise AdminError("seules les IPv4 publiques sont gérées par le SOAR")
+    return str(a)
+
+
+def _v_net(value):
+    s = str(value or "").strip()
+    if len(s) > 43:
+        raise AdminError("valeur trop longue")
+    try:
+        n = _ipa2.ip_network(s, strict=False)
+    except ValueError:
+        raise AdminError("adresse IP ou réseau CIDR invalide")
+    if n.version != 4 or not n.network_address.is_global or n.prefixlen < 16:
+        raise AdminError("réseau IPv4 public attendu, préfixe /16 au minimum")
+    return str(n.network_address) if n.num_addresses == 1 else str(n)
+
+
+def _v_param(spec_table, key, value):
+    if key not in spec_table:
+        raise AdminError("paramètre non modifiable depuis la console")
+    spec = spec_table[key]
+    if spec["type"] == "int":
+        try:
+            iv = int(str(value).strip())
+        except ValueError:
+            raise AdminError("valeur entière attendue")
+        if not spec["min"] <= iv <= spec["max"]:
+            raise AdminError(f"valeur hors bornes ({spec['min']} à {spec['max']})")
+        return str(iv)
+    if spec["type"] == "enum":
+        v = str(value).strip().lower()
+        if v not in spec["values"]:
+            raise AdminError("valeur non autorisée")
+        return v
+    if spec["type"] == "emails":
+        items = [x.strip() for x in str(value).replace(";", ",").split(",") if x.strip()]
+        if not items or len(items) > spec["max_items"]:
+            raise AdminError(f"entre 1 et {spec['max_items']} adresses")
+        for x in items:
+            if not _EMAIL_ONE.match(x):
+                raise AdminError("adresse électronique invalide")
+        return ",".join(items)
+    raise AdminError("type de paramètre inconnu")
+
+
+def _v_entity(value):
+    s = str(value or "").strip()
+    if any(ord(c) < 32 for c in s) or len(s) > 200:
+        raise AdminError("entité invalide")
+    if "=" in s:
+        k, _, v = s.partition("=")
+        if k not in _FP_KEYS or len(v.strip()) < 3:
+            raise AdminError("entité attendue sous la forme clé=valeur (src_ip, user, host, upn, dest_ip, source), valeur de 3 caractères minimum")
+        return f"{k}={v.strip()}"
+    if len(s) < 6:
+        raise AdminError("entité trop courte : une règle trop large masquerait d'autres alertes")
+    return s
+
+
+def _a_role_set(p, actor):
+    user = str(p.get("user", "")).strip().lower()
+    if not _USER_RE2.match(user):
+        raise AdminError("identifiant de compte invalide")
+    role = str(p.get("role", "")).strip().lower()
+    if role not in ROLE_RANK and role != "aucun":
+        raise AdminError("rôle inconnu")
+    if user in SOC_ADMINS:
+        raise AdminError("compte administrateur défini par la configuration (SOC_ADMINS) : non modifiable depuis la console")
+    if user == (actor or "").lower():
+        raise AdminError("un administrateur ne modifie pas son propre rôle")
+    return {"user": user, "role": role}
+
+
+def _p_role_set(c):
+    cur = (_load_roles().get(c["user"]) or {}).get("role")
+    eff_before = cur or f"{SOC_DEFAULT_ROLE} (par défaut)"
+    eff_after = f"{SOC_DEFAULT_ROLE} (par défaut)" if c["role"] == "aucun" else c["role"]
+    fort = "administrateur" in (cur, c["role"])
+    return {"before": eff_before, "after": eff_after, "impact": "fort" if fort else "normal",
+            "effects": [f"Rôle de {c['user']} : {eff_before} -> {eff_after}"], "refus": "" if eff_before != eff_after else "aucun changement"}
+
+
+def _x_role_set(c, actor, motif, rid):
+    with _ADMIN_LOCK:
+        data = _jl(ADMIN_ROLES_FILE, {})
+        users = data.get("users") if isinstance(data, dict) and isinstance(data.get("users"), dict) else {}
+        if c["role"] == "aucun":
+            users.pop(c["user"], None)
+        else:
+            users[c["user"]] = {"role": c["role"], "by": actor, "ts": _now_iso(), "motif": motif, "request_id": rid}
+        _atomic_write_json(ADMIN_ROLES_FILE, {"users": users, "updated": _now_iso()})
+    return {"ok": True, "message": "Rôle mis à jour."}
+
+
+def _a_fp_add(p, actor):
+    ttl = p.get("ttl_days")
+    try:
+        ttl = int(ttl)
+    except (TypeError, ValueError):
+        raise AdminError("durée de validité obligatoire (jours)")
+    if not 1 <= ttl <= 90:
+        raise AdminError("durée de validité : 1 à 90 jours")
+    return {"entity": _v_entity(p.get("entity")), "tag": _clean_text(p.get("tag", ""), 60, what="étiquette"),
+            "title_sub": _clean_text(p.get("title_sub", ""), 80, what="extrait de titre"), "ttl_days": ttl,
+            "justification": _clean_text(p.get("justification", ""), 300, 10, "justification")}
+
+
+def _p_fp_add(c):
+    cur = [r for r in admin_fp_list()["rules"] if r["entity"] == c["entity"]]
+    until = time.strftime("%d/%m/%Y", time.localtime(time.time() + c["ttl_days"] * 86400))
+    scope = f"détection {c['tag']}" if c["tag"] else (f"titres contenant « {c['title_sub']} »" if c["title_sub"] else "toutes les détections non critiques")
+    return {"before": [f"{r['entity']} | {r['tag'] or r['title_sub'] or '*'}" for r in cur],
+            "after": f"{c['entity']} | {c['tag'] or c['title_sub'] or '*'} jusqu'au {until}",
+            "impact": "normal", "refus": "",
+            "effects": [f"Sourdine des mails non critiques pour {c['entity']} ({scope}) jusqu'au {until}.",
+                        "Les alertes restent indexées et visibles dans la console ; les critiques ne sont jamais masquées."],
+            "warnings": [] if c["tag"] or c["title_sub"] else ["Portée large : préciser une étiquette de détection si possible."]}
+
+
+def _x_fp_add(c, actor, motif, rid):
+    tok = _triage_token()
+    res = _http_json("POST", SOC_TRIAGE_URL + "/fp",
+                     {"entity": c["entity"], "tag": c["tag"], "title_sub": c["title_sub"],
+                      "by": f"soc-admin:{actor}"[:60], "ttl_days": c["ttl_days"]},
+                     {"X-Triage-Token": tok})
+    if not (isinstance(res, dict) and res.get("ok")):
+        return {"ok": False, "error": "le service de triage a refusé la règle"}
+    with _ADMIN_LOCK:
+        meta = _jl(ADMIN_FP_META, {})
+        meta[f"{c['entity']}|{c['tag']}"] = {"justification": c["justification"], "by": actor, "ts": _now_iso(),
+                                             "ttl_days": c["ttl_days"], "request_id": rid}
+        _atomic_write_json(ADMIN_FP_META, meta)
+    return {"ok": True, "message": "Faux positif enregistré.",
+            "rollback": {"action": "fp_remove", "params": {"entity": c["entity"]}}}
+
+
+def _a_fp_remove(p, actor):
+    return {"entity": _v_entity(p.get("entity"))}
+
+
+def _p_fp_remove(c):
+    cur = [r for r in admin_fp_list()["rules"] if r["entity"] == c["entity"]]
+    return {"before": [f"{r['entity']} | {r['tag'] or r['title_sub'] or '*'}" for r in cur], "after": [],
+            "impact": "normal", "refus": "" if cur else "aucune règle active pour cette entité",
+            "effects": [f"Retrait de {len(cur)} règle(s) : le service de triage retire toutes les règles de l'entité."]}
+
+
+def _x_fp_remove(c, actor, motif, rid):
+    tok = _triage_token()
+    res = _http_json("DELETE", SOC_TRIAGE_URL + "/fp?entity=" + urllib.parse.quote(c["entity"], safe=""),
+                     None, {"X-Triage-Token": tok})
+    with _ADMIN_LOCK:
+        meta = _jl(ADMIN_FP_META, {})
+        for k in [k for k in meta if k.split("|", 1)[0] == c["entity"]]:
+            meta.pop(k, None)
+        _atomic_write_json(ADMIN_FP_META, meta)
+    return {"ok": bool(isinstance(res, dict) and res.get("ok")), "message": "Règles retirées."}
+
+
+def _a_soar_block(p, actor):
+    return {"ip": _v_ip(p.get("ip"))}
+
+
+def _p_soar_block(c):
+    ip, now = c["ip"], time.time()
+    bl = _jl(_SOAR_STATE, {})
+    params = _read_env_keys(SOC_SOAR_ENV, set(SOAR_PARAMS)) or {}
+    active = sum(1 for v in bl.values() if isinstance(v, (int, float)) and v > now)
+    excl = _soar_excluded(ip)
+    warnings = []
+    if params.get("SOAR_MODE", "actif") == "simulation":
+        warnings.append("Le moteur SOAR est en mode simulation pour les blocages automatiques ; un blocage manuel approuvé reste appliqué.")
+    if isinstance(bl.get(ip), (int, float)) and bl[ip] > now:
+        warnings.append("IP déjà bloquée : le blocage serait prolongé.")
+    ttl = params.get("SOAR_TTL_HOURS", "24")
+    return {"before": "bloquée" if ip in bl and bl[ip] > now else "non bloquée", "after": f"bloquée {ttl} h",
+            "impact": "fort", "refus": f"IP exclue ({excl}) : blocage refusé" if excl else "",
+            "effects": [f"Ajout de {ip} à la liste lue par les FortiGate (effet sous 2 min), levée automatique après {ttl} h.",
+                        f"IP actuellement bloquées : {active}."], "warnings": warnings}
+
+
+def _x_soar_block(c, actor, motif, rid):
+    res = _http_json("POST", SOC_SOAR_URL + "/block", {"ip": c["ip"], "manual": True, "by": f"soc:{actor}"[:60]})
+    ok = bool(isinstance(res, dict) and res.get("ok"))
+    return {"ok": ok, "message": "IP bloquée." if ok else "", "error": "" if ok else str((res or {}).get("error", "refus du SOAR"))[:200],
+            "rollback": {"action": "soar_unblock", "params": {"ip": c["ip"]}} if ok else None}
+
+
+def _a_soar_unblock(p, actor):
+    return {"ip": _v_ip(p.get("ip"))}
+
+
+def _p_soar_unblock(c):
+    bl = _jl(_SOAR_STATE, {})
+    blocked = isinstance(bl.get(c["ip"]), (int, float)) and bl[c["ip"]] > time.time()
+    return {"before": "bloquée" if blocked else "non bloquée", "after": "non bloquée", "impact": "normal",
+            "refus": "" if blocked else "IP non bloquée actuellement",
+            "effects": ["Demande déposée pour omni-soc-actions (outil omni-soar-debloquer), traitée sous 1 min."]}
+
+
+def _queue_soar_unblock(ip, user, exclure=False, motif=""):
+    pend = os.path.join(SOC_REQ_DIR, "pending")
+    os.makedirs(pend, exist_ok=True)
+    if len(_glob.glob(os.path.join(pend, "*.json"))) >= 20:
+        raise AdminError("trop de demandes SOAR en attente", 429)
+    rid = time.strftime("%Y%m%d-%H%M%S") + "-" + _uuid.uuid4().hex[:8]
+    req = {"id": rid, "t": _now_iso(), "user": str(user)[:64], "action": "debloquer",
+           "ip": ip, "exclure": bool(exclure), "motif": motif[:80], "status": "pending"}
+    tmp = os.path.join(pend, "." + rid + ".tmp")
+    with open(tmp, "w") as f:
+        json.dump(req, f)
+    os.replace(tmp, os.path.join(pend, rid + ".json"))
+    return rid
+
+
+def _x_soar_unblock(c, actor, motif, rid):
+    qid = _queue_soar_unblock(c["ip"], actor, False, motif)
+    return {"ok": True, "queued": qid, "message": "Déblocage transmis (effet sous 2 min sur les FortiGate)."}
+
+
+def _a_exclusion_add(p, actor):
+    return {"value": _v_net(p.get("value"))}
+
+
+def _p_exclusion_add(c):
+    cur = _static_exclusions()
+    dup = cur is not None and any(e["value"] == c["value"] for e in cur)
+    return {"before": "absente", "after": "exclusion fixe", "impact": "fort",
+            "refus": "déjà présente dans la liste fixe" if dup else "",
+            "effects": [f"{c['value']} ne sera plus jamais bloquée automatiquement par le SOAR.",
+                        "Écriture par l'exécuteur privilégié (sauvegarde du fichier avant modification)."],
+            "warnings": [] if cur is not None else ["Liste fixe illisible depuis la console."]}
+
+
+def _a_exclusion_remove(p, actor):
+    return {"value": _v_net(p.get("value"))}
+
+
+def _p_exclusion_remove(c):
+    cur = _static_exclusions() or []
+    present = any(e["value"] == c["value"] for e in cur)
+    return {"before": "exclusion fixe", "after": "absente", "impact": "fort",
+            "refus": "" if present else "valeur absente de la liste fixe",
+            "effects": [f"{c['value']} pourra de nouveau être bloquée par le SOAR si une détection la vise."]}
+
+
+def _a_param(table, kind):
+    def validate(p, actor):
+        key = str(p.get("key", "")).strip().upper()
+        return {"key": key, "value": _v_param(table, key, p.get("value")), "file": kind}
+    return validate
+
+
+def _p_param(table, path, label):
+    def preview(c):
+        cur = _read_env_keys(path, set(table))
+        before = (cur or {}).get(c["key"])
+        refus = "" if before != c["value"] else "aucun changement"
+        if table is TRIAGE_PARAMS and c["key"] in ("MAIL_SCORE_THRESHOLD", "GRAY_SCORE_THRESHOLD") and cur:
+            mail = int(c["value"] if c["key"] == "MAIL_SCORE_THRESHOLD" else cur.get("MAIL_SCORE_THRESHOLD", 80))
+            gray = int(c["value"] if c["key"] == "GRAY_SCORE_THRESHOLD" else cur.get("GRAY_SCORE_THRESHOLD", 70))
+            if gray >= mail:
+                refus = "le seuil de zone grise doit rester inférieur au seuil de mail"
+        return {"before": before, "after": c["value"], "impact": "fort", "refus": refus,
+                "effects": [f"{label} : {table[c['key']]['label']} {before if before is not None else '(non défini)'} -> {c['value']}",
+                            "Écriture par l'exécuteur privilégié avec sauvegarde ; pris en compte à la prochaine alerte."],
+                "warnings": [] if cur is not None else ["Fichier de configuration illisible depuis la console."]}
+    return preview
+
+
+def _a_detection(p, actor):
+    did = str(p.get("id", "")).strip().lower()
+    if not _GL_ID_RE.match(did):
+        raise AdminError("identifiant de détection invalide")
+    en = p.get("enabled")
+    if not isinstance(en, bool):
+        raise AdminError("état cible attendu (activer ou désactiver)")
+    return {"id": did, "enabled": en}
+
+
+def _p_detection(c):
+    d = _graylog("GET", f"/events/definitions/{c['id']}") or {}
+    cur = d.get("state") or "?"
+    want = "ENABLED" if c["enabled"] else "DISABLED"
+    return {"before": cur, "after": want, "impact": "normal" if c["enabled"] else "fort",
+            "refus": "" if cur != want else "la détection est déjà dans cet état",
+            "effects": [f"« {str(d.get('title', c['id']))[:120]} » : {cur} -> {want}"],
+            "warnings": [] if c["enabled"] else ["Une détection désactivée ne produit plus d'alerte : angle mort tant qu'elle reste coupée."]}
+
+
+def _x_detection(c, actor, motif, rid):
+    _graylog("PUT", f"/events/definitions/{c['id']}/{'schedule' if c['enabled'] else 'unschedule'}")
+    return {"ok": True, "message": "Détection " + ("activée." if c["enabled"] else "désactivée."),
+            "rollback": {"action": "detection_toggle", "params": {"id": c["id"], "enabled": not c["enabled"]}}}
+
+
+def _a_restart(p, actor):
+    unit = str(p.get("unit", "")).strip()
+    if not _UNIT_RE.match(unit) or not unit.endswith(".service"):
+        raise AdminError("nom de service invalide")
+    if unit not in SOC_ADMIN_RESTARTABLE:
+        raise AdminError("service absent de la liste blanche des redémarrages (SOC_ADMIN_RESTARTABLE)", 403)
+    return {"unit": unit}
+
+
+def _p_restart(c):
+    st = _systemctl(["show", "-p", "ActiveState", "--value", "--", c["unit"]])
+    return {"before": st or "?", "after": "redémarré", "impact": "fort", "refus": "",
+            "effects": [f"Redémarrage de {c['unit']} par l'exécuteur privilégié (liste blanche revalidée côté exécuteur)."]}
+
+
+def _x_exec(kind):
+    """Dépôt dans la file de l'exécuteur privilégié (omni-soc-admin-exec)."""
+    def execute(c, actor, motif, rid):
+        pend = os.path.join(ADMIN_EXEC_DIR, "pending")
+        os.makedirs(pend, exist_ok=True)
+        if len(_glob.glob(os.path.join(pend, "*.json"))) >= 20:
+            raise AdminError("trop d'actions en attente d'exécution", 429)
+        job = {"id": rid, "kind": kind, "params": {k: v for k, v in c.items()}, "actor": actor,
+               "motif": motif, "t": _now_iso()}
+        _atomic_write_json(os.path.join(pend, rid + ".json"), job, 0o640)
+        return {"ok": True, "queued": rid, "message": "Action transmise à l'exécuteur (traitement sous 1 min)."}
+    return execute
+
+
+ADMIN_ACTIONS = {
+    "role_set": {"label": "Rôle d'un utilisateur", "validate": _a_role_set, "preview": _p_role_set, "execute": _x_role_set},
+    "fp_add": {"label": "Ajout d'un faux positif", "validate": _a_fp_add, "preview": _p_fp_add, "execute": _x_fp_add},
+    "fp_remove": {"label": "Retrait d'un faux positif", "validate": _a_fp_remove, "preview": _p_fp_remove, "execute": _x_fp_remove},
+    "soar_block": {"label": "Blocage manuel SOAR", "validate": _a_soar_block, "preview": _p_soar_block, "execute": _x_soar_block},
+    "soar_unblock": {"label": "Déblocage SOAR", "validate": _a_soar_unblock, "preview": _p_soar_unblock, "execute": _x_soar_unblock},
+    "soar_exclusion_add": {"label": "Ajout d'une exclusion SOAR", "validate": _a_exclusion_add, "preview": _p_exclusion_add, "execute": _x_exec("soar_exclusion_add")},
+    "soar_exclusion_remove": {"label": "Retrait d'une exclusion SOAR", "validate": _a_exclusion_remove, "preview": _p_exclusion_remove, "execute": _x_exec("soar_exclusion_remove")},
+    "soar_param": {"label": "Paramètre SOAR", "validate": _a_param(SOAR_PARAMS, "soar"),
+                   "preview": _p_param(SOAR_PARAMS, SOC_SOAR_ENV, "SOAR"), "execute": _x_exec("soar_param")},
+    "triage_param": {"label": "Paramètre de triage", "validate": _a_param(TRIAGE_PARAMS, "triage"),
+                     "preview": _p_param(TRIAGE_PARAMS, SOC_TRIAGE_ENV, "Triage"), "execute": _x_exec("triage_param")},
+    "detection_toggle": {"label": "Activation d'une détection", "validate": _a_detection, "preview": _p_detection, "execute": _x_detection},
+    "service_restart": {"label": "Redémarrage d'un service", "validate": _a_restart, "preview": _p_restart, "execute": _x_exec("service_restart")},
+}
+
+
+def _param_rollback(action, c, before):
+    if action in ("soar_param", "triage_param") and before is not None:
+        return {"action": action, "params": {"key": c["key"], "value": before}}
+    if action == "soar_exclusion_add":
+        return {"action": "soar_exclusion_remove", "params": {"value": c["value"]}}
+    if action == "soar_exclusion_remove":
+        return {"action": "soar_exclusion_add", "params": {"value": c["value"]}}
+    if action == "role_set":
+        b = str(before or "")
+        return {"action": "role_set", "params": {"user": c["user"], "role": b if b in ROLE_RANK else "aucun"}}
+    return None
+
+
+def _req_path(rid):
+    if not re.match(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{8}$", rid or ""):
+        raise AdminError("identifiant de demande invalide")
+    return os.path.join(ADMIN_REQ_DIR, rid + ".json")
+
+
+def _run_action(name, clean, actor, motif, rid, preview, ip):
+    """Exécute (ou simule si SOC_ADMIN_DRY_RUN) puis journalise. Renvoie le résultat."""
+    spec = ADMIN_ACTIONS[name]
+    if SOC_ADMIN_DRY_RUN:
+        audit_append(actor, "simulation", name, _target(clean), motif, preview.get("before"), preview.get("after"),
+                     "mode simulation global : aucune modification", rid, ip)
+        return {"ok": True, "simulation": True, "message": "Mode simulation global actif : action simulée, rien n'a été modifié.",
+                "preview": preview}
+    try:
+        res = spec["execute"](clean, actor, motif, rid) or {}
+    except AdminError:
+        raise
+    except Exception as ex:
+        res = {"ok": False, "error": f"échec de l'exécution ({type(ex).__name__})"}
+    rb = res.get("rollback") or _param_rollback(name, clean, preview.get("before"))
+    res["rollback"] = rb
+    status = "transmise" if res.get("queued") else ("faite" if res.get("ok") else "echec")
+    audit_append(actor, "execution", name, _target(clean), motif, preview.get("before"), preview.get("after"),
+                 status + (" : " + str(res.get("error")) if res.get("error") else ""), rid, ip,
+                 {"rollback": rb} if rb else None)
+    res["status"] = status
+    return res
+
+
+def _target(c):
+    return c.get("user") or c.get("entity") or c.get("ip") or c.get("value") or c.get("unit") or \
+        (f"{c.get('key')}" if c.get("key") else "") or c.get("id") or ""
+
+
+def admin_action(body, actor, ip):
+    name = str(body.get("action", ""))
+    if name not in ADMIN_ACTIONS:
+        raise AdminError("action inconnue")
+    params = body.get("params") if isinstance(body.get("params"), dict) else {}
+    simulate = body.get("simulate") is True
+    spec = ADMIN_ACTIONS[name]
+    clean = spec["validate"](params, actor)
+    motif = _clean_text(body.get("motif", ""), 300, 0 if simulate else 4, "motif")
+    preview = spec["preview"](clean)
+    if simulate:
+        audit_append(actor, "simulation", name, _target(clean), motif, preview.get("before"), preview.get("after"),
+                     preview.get("refus") or "simulation", "", ip)
+        return {"ok": True, "simulation": True, "preview": preview, "impact": preview.get("impact"),
+                "label": spec["label"]}
+    if preview.get("refus"):
+        audit_append(actor, "refus", name, _target(clean), motif, preview.get("before"), preview.get("after"),
+                     preview["refus"], "", ip)
+        raise AdminError(preview["refus"], 409)
+    rid = time.strftime("%Y%m%d-%H%M%S") + "-" + _uuid.uuid4().hex[:8]
+    if preview.get("impact") == "fort":
+        with _ADMIN_LOCK:
+            os.makedirs(ADMIN_REQ_DIR, exist_ok=True)
+            pending = [r for r in _list_requests(500) if r.get("status") == "en_attente"]
+            if len(pending) >= 50:
+                raise AdminError("trop de demandes en attente de validation", 429)
+            req = {"id": rid, "action": name, "label": spec["label"], "params": clean, "motif": motif,
+                   "requested_by": actor, "requested_at": _now_iso(), "requested_ts": int(time.time()),
+                   "expires_ts": int(time.time()) + SOC_ADMIN_APPROVAL_TTL, "status": "en_attente",
+                   "preview": preview, "requested_ip": ip}
+            _atomic_write_json(_req_path(rid), req)
+        audit_append(actor, "demande", name, _target(clean), motif, preview.get("before"), preview.get("after"),
+                     "en attente de validation par un second administrateur", rid, ip)
+        return {"ok": True, "pending": True, "id": rid, "status": "en_attente",
+                "message": "Demande enregistrée : validation par un second administrateur requise."
+                if not SOC_ADMIN_SELF_APPROVE else "Demande enregistrée : confirmer dans l'onglet Validations."}
+    res = _run_action(name, clean, actor, motif, rid, preview, ip)
+    res["id"] = rid
+    return res
+
+
+def _list_requests(limit=100):
+    out = []
+    for p in sorted(_glob.glob(os.path.join(ADMIN_REQ_DIR, "*.json")), reverse=True)[:limit]:
+        r = _jl(p, None)
+        if not isinstance(r, dict):
+            continue
+        if r.get("status") == "en_attente" and int(r.get("expires_ts", 0)) < time.time():
+            r["status"] = "expiree"
+        if r.get("status") == "transmise":
+            done = _jl(os.path.join(ADMIN_EXEC_DIR, "done", r["id"] + ".json"), None)
+            if isinstance(done, dict):
+                r["execution"] = {k: done.get(k) for k in ("status", "resultat", "before", "after", "t_traitement")}
+        out.append(r)
+    return out
+
+
+def admin_requests():
+    return {"requests": _list_requests(100), "self_approve": SOC_ADMIN_SELF_APPROVE,
+            "approval_ttl_s": SOC_ADMIN_APPROVAL_TTL}
+
+
+def admin_decide(body, actor, ip):
+    rid = str(body.get("id", ""))
+    decision = str(body.get("decision", ""))
+    if decision not in ("approuver", "rejeter"):
+        raise AdminError("décision attendue : approuver ou rejeter")
+    motif = _clean_text(body.get("motif", ""), 300, 4 if decision == "rejeter" else 0, "motif")
+    with _ADMIN_LOCK:
+        path = _req_path(rid)
+        req = _jl(path, None)
+        if not isinstance(req, dict):
+            raise AdminError("demande introuvable", 404)
+        if req.get("status") != "en_attente":
+            raise AdminError("demande déjà traitée", 409)
+        if int(req.get("expires_ts", 0)) < time.time():
+            req["status"] = "expiree"
+            _atomic_write_json(path, req)
+            raise AdminError("demande expirée : la reformuler", 409)
+        if decision == "approuver" and req.get("requested_by", "").lower() == actor.lower() and not SOC_ADMIN_SELF_APPROVE:
+            audit_append(actor, "refus", req["action"], _target(req.get("params", {})), motif, None, None,
+                         "auto-approbation refusée", rid, ip)
+            raise AdminError("validation par un second administrateur obligatoire (auto-approbation interdite)", 403)
+        if decision == "approuver" and req.get("action") == "role_set" and \
+                str((req.get("params") or {}).get("user", "")).lower() == actor.lower():
+            raise AdminError("un administrateur ne valide pas une demande qui le concerne", 403)
+        req.update(decided_by=actor, decided_at=_now_iso(), decision_motif=motif, decided_ip=ip)
+        if decision == "rejeter":
+            req["status"] = "rejetee"
+            _atomic_write_json(path, req)
+            audit_append(actor, "rejet", req["action"], _target(req.get("params", {})), motif, None, None,
+                         "demande rejetée", rid, ip)
+            return {"ok": True, "status": "rejetee"}
+        req["status"] = "approuvee"
+        _atomic_write_json(path, req)
+    audit_append(actor, "approbation", req["action"], _target(req.get("params", {})), motif, None, None,
+                 f"demande de {req.get('requested_by')} approuvée", rid, ip)
+    spec = ADMIN_ACTIONS.get(req["action"])
+    if not spec:
+        raise AdminError("action inconnue", 400)
+    # revalidation complète : l'état a pu changer depuis la demande
+    clean = spec["validate"](req.get("params") or {}, req.get("requested_by", ""))
+    preview = spec["preview"](clean)
+    if preview.get("refus"):
+        res = {"ok": False, "status": "echec", "error": preview["refus"]}
+        audit_append(actor, "execution", req["action"], _target(clean), req.get("motif", ""), preview.get("before"),
+                     preview.get("after"), "echec : " + preview["refus"], rid, ip)
+    else:
+        res = _run_action(req["action"], clean, actor, req.get("motif", ""), rid, preview, ip)
+    with _ADMIN_LOCK:
+        req = _jl(path, req)
+        req["status"] = res.get("status") or ("faite" if res.get("ok") else "echec")
+        req["result"] = {k: res.get(k) for k in ("ok", "message", "error", "queued", "simulation") if k in res}
+        if res.get("simulation"):
+            req["status"] = "simulee"
+        _atomic_write_json(path, req)
+    res["id"] = rid
+    return res
+
+
+def admin_me(user, session_token, ip):
+    role = role_of(user)
+    is_admin = role == "administrateur"
+    out = {"user": user, "role": role, "role_label": ROLE_LABEL.get(role, role), "is_admin": is_admin}
+    if is_admin:
+        internal = admin_ip_internal(ip)
+        out.update(csrf=csrf_token(session_token), client_ip=ip, client_internal=internal,
+                   internal_only=SOC_ADMIN_INTERNAL_ONLY,
+                   writes_allowed=internal or not SOC_ADMIN_INTERNAL_ONLY,
+                   dry_run=SOC_ADMIN_DRY_RUN, self_approve=SOC_ADMIN_SELF_APPROVE,
+                   approval_ttl_s=SOC_ADMIN_APPROVAL_TTL, admins=admin_users()["admins"],
+                   detections_available=bool(_graylog_token()), restartable=SOC_ADMIN_RESTARTABLE,
+                   actions={k: v["label"] for k, v in ADMIN_ACTIONS.items()})
+    return out
+
+
+
+ADMIN_GET_ROUTES = {
+    "/m/api/admin/users": lambda q: admin_users(),
+    "/m/api/admin/fp": lambda q: admin_fp_list(),
+    "/m/api/admin/soar": lambda q: admin_soar(),
+    "/m/api/admin/detections": lambda q: admin_detections(),
+    "/m/api/admin/settings": lambda q: admin_settings(),
+    "/m/api/admin/services": lambda q: admin_services(),
+    "/m/api/admin/requests": lambda q: admin_requests(),
+    "/m/api/admin/audit": lambda q: audit_read(max(1, min(int((q.get("limit") or ["200"])[0] or 200), 1000))),
+}
+
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silencieux
@@ -2066,9 +3125,11 @@ class H(BaseHTTPRequestHandler):
             return self._json({"publicKey": VAPID_PUB})
         if p == "/m/api/me":
             u = self._user()
-            return self._json({"user": u} if u else {"user": None}, 200 if u else 401)
+            return self._json({"user": u, "role": role_of(u)} if u else {"user": None}, 200 if u else 401)
         if not self._user():
             return self._json({"error": "auth"}, 401)
+        if p.startswith("/m/api/admin/"):
+            return self._admin_get(p)
         if p == "/m/api/soar":
             d = get_soar(); d["is_admin"] = soc_is_admin(self._user())
             return self._json(d)
@@ -2225,8 +3286,96 @@ class H(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, OSError):
             return
 
+    # ------------------------------------------------------------ administration
+    def _session_token(self):
+        c = SimpleCookie(self.headers.get("Cookie", ""))
+        return c["oms_session"].value if "oms_session" in c else ""
+
+    def _json_raw(self, obj, code=200):
+        """Réponse sans pseudonymisation : l'administration agit sur les valeurs réelles."""
+        body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _admin_get(self, p):
+        u = self._user()
+        ip = admin_client_ip(self)
+        if p == "/m/api/admin/me":
+            return self._json_raw(admin_me(u, self._session_token(), ip))
+        if not soc_is_admin(u):
+            return self._json_raw({"ok": False, "error": "espace réservé aux administrateurs SOC"}, 403)
+        route = ADMIN_GET_ROUTES.get(p)
+        if not route:
+            return self._json_raw({"error": "not found"}, 404)
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+        try:
+            return self._json_raw(route(q))
+        except AdminError as ex:
+            return self._json_raw({"ok": False, "error": str(ex)}, ex.code)
+        except Exception as ex:
+            return self._json_raw({"ok": False, "error": f"source indisponible ({type(ex).__name__})"}, 502)
+
+    def _admin_post(self, p):
+        """Garde commune des écritures d'administration, dans cet ordre :
+        session, rôle, méthode/Content-Type JSON, Origin obligatoire, jeton CSRF,
+        réseau interne, débit, taille du corps. Tout refus d'un compte authentifié est journalisé."""
+        u = self._user()
+        if not u:
+            return self._json_raw({"error": "auth"}, 401)
+        ip = admin_client_ip(self)
+        def deny(msg, code):
+            if code != 429:
+                try:
+                    audit_append(u, "refus", p.rsplit("/", 1)[-1], "", "", None, None, msg, "", ip)
+                except Exception:
+                    pass
+            return self._json_raw({"ok": False, "error": msg}, code)
+        if not soc_is_admin(u):
+            return deny("action réservée aux administrateurs SOC", 403)
+        if not (self.headers.get("Content-Type", "").split(";")[0].strip().lower() == "application/json"):
+            return deny("Content-Type application/json requis", 415)
+        origin = self.headers.get("Origin", "")
+        if not origin or urllib.parse.urlparse(origin).hostname not in SOC_ORIGINS:
+            return deny("origine absente ou refusée", 403)
+        if not hmac.compare_digest(self.headers.get("X-SOC-CSRF", ""), csrf_token(self._session_token())):
+            return deny("jeton anti-CSRF absent ou invalide", 403)
+        if SOC_ADMIN_INTERNAL_ONLY and not admin_ip_internal(ip):
+            return deny("écritures d'administration limitées aux réseaux internes", 403)
+        if not admin_rate_ok(u.lower()):
+            return deny("trop d'actions d'administration : patienter quelques minutes", 429)
+        try:
+            n = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            n = -1
+        if n < 0 or n > 16384:
+            return deny("requête trop volumineuse", 413)
+        try:
+            body = json.loads(self.rfile.read(n) or b"{}")
+        except Exception:
+            return deny("JSON invalide", 400)
+        if not isinstance(body, dict):
+            return deny("objet JSON attendu", 400)
+        try:
+            if p == "/m/api/admin/action":
+                r = admin_action(body, u, ip)
+            elif p == "/m/api/admin/decide":
+                r = admin_decide(body, u, ip)
+            else:
+                return self._json_raw({"error": "not found"}, 404)
+        except AdminError as ex:
+            return self._json_raw({"ok": False, "error": str(ex)}, ex.code)
+        except Exception as ex:
+            return self._json_raw({"ok": False, "error": f"échec ({type(ex).__name__})"}, 502)
+        return self._json_raw(r, 200)
+
     def do_POST(self):
         p = self.path.split("?")[0]
+        if p.startswith("/m/api/admin/"):
+            return self._admin_post(p)
         b = self._body()
         if p == "/m/api/login":
             ip = self.headers.get("X-Real-IP") or self.client_address[0]
@@ -2258,22 +3407,19 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"ok": False, "error": "origine refusée"}, 403)
             r = soc_soar_request(b, u)
             return self._json(r, 200 if r.get("ok") else 403)
-        if p == "/m/api/case":
-            if not self._user():
+        if p in ("/m/api/case", "/m/api/fp", "/m/api/watch"):
+            u = self._user()
+            if not u:
                 return self._json({"error": "auth"}, 401)
             if not origin_ok(self.headers):
                 return self._json({"ok": False, "error": "origine refusée"}, 403)
-            return self._json(update_case(b, self._user()))
-        if p == "/m/api/fp":            # marquer une alerte faux positif -> triage /fp
-            if not self._user():
-                return self._json({"error": "auth"}, 401)
-            return self._json(triage_fp_add(b.get("entity", ""), b.get("title_sub", ""), self._user(), b.get("tag", "")))
-        if p == "/m/api/watch":
-            if not self._user():
-                return self._json({"error": "auth"}, 401)
-            if not origin_ok(self.headers):
-                return self._json({"ok": False, "error": "origine refusée"}, 403)
-            return self._json(update_watch(b, self._user()))
+            if not role_at_least(u, "analyste"):
+                return self._json({"ok": False, "error": "action réservée aux analystes (rôle lecteur)"}, 403)
+            if p == "/m/api/case":
+                return self._json(update_case(b, u))
+            if p == "/m/api/fp":        # marquer une alerte faux positif -> triage /fp
+                return self._json(triage_fp_add(b.get("entity", ""), b.get("title_sub", ""), u, b.get("tag", "")))
+            return self._json(update_watch(b, u))
         if p == "/m/api/subscribe":
             u = self._user()
             if not u:
@@ -2281,7 +3427,7 @@ class H(BaseHTTPRequestHandler):
             if not origin_ok(self.headers):
                 return self._json({"ok": False, "error": "origine refusée"}, 403)
             # OMNITECH-SOC-20261112-V4 : notifications réservées aux administrateurs SOC
-            if not (SOC_ADMINS and u.lower() in SOC_ADMINS):
+            if not soc_is_admin(u):
                 return self._json({"ok": False, "error": "notifications réservées aux administrateurs SOC"}, 403)
             sub = b.get("subscription")
             if isinstance(sub, dict) and str(sub.get("endpoint", "")).startswith("https://") and isinstance(sub.get("keys"), dict):
@@ -2306,7 +3452,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "removed": known})
             if not known:
                 return self._json({"ok": False, "error": "appareil non abonné : réactivez les notifications"}, 404)
-            if not (SOC_ADMINS and u.lower() in SOC_ADMINS):   # OMNITECH-SOC-20261112-V4
+            if not soc_is_admin(u):   # OMNITECH-SOC-20261112-V4
                 return self._json({"ok": False, "error": "notifications réservées aux administrateurs SOC"}, 403)
             now = time.time()
             if now - _PUSH_TEST.get(ep, 0) < 20:
@@ -2363,7 +3509,7 @@ def push_all(title: str, body: str, url: str = "", sev: str = "", tag: str = "",
     if only:
         subs = [s for s in subs if s.get("endpoint") == only]
     # OMNITECH-SOC-20261112-V4 : seulement les abonnements d'un administrateur SOC
-    subs = [s for s in subs if SOC_ADMINS and str(s.get("omni_user", "")).lower() in SOC_ADMINS]
+    subs = [s for s in subs if soc_is_admin(str(s.get("omni_user", "")))]
     ok, dead = 0, []
     for s in subs:
         try:

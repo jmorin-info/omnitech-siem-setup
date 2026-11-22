@@ -29,7 +29,39 @@ ACTIONS = {
     "module_uninstall": {"module", "api", "installation_id", "ca", "api_token"},
     "module_uninstall_plan": {"module", "api", "installation_id", "ca", "api_token"},
 }
+# Update layers (omni_update): read-only consultation and planning only. The stack
+# upgrade itself is never launched from the menu: an SSH disconnection would kill
+# apt mid-transaction; the menu prints the exact command to run under tmux/screen.
+UPDATE_LAYER_ACTIONS = {"status_all": set(), "stack_plan": {"component", "target"}, "pydeps_audit": set()}
+ACTIONS.update(UPDATE_LAYER_ACTIONS)
 WRITES = {"install_apply", "install_resume", "install_secrets", "update_apply", "update_rollback", "update_recover", "console_publish", "module_install", "module_uninstall"}
+
+# --- Déploiement des composants maison et contrôle de santé (tools/omni-deploy.py) ---
+DEPLOY_COMPONENTS = ("all", "venvs", "robots", "etc", "apt", "opt", "logstash", "systemd", "nginx", "console")
+ACTIONS.update({
+    "deploy_plan": {"component"}, "deploy_apply": {"component"},
+    "deploy_rollback_plan": {"transaction"}, "deploy_rollback": {"transaction"},
+    "deploy_history": set(), "health_check": set(),
+})
+WRITES |= {"deploy_apply", "deploy_rollback"}
+
+
+def deploy_command(source, action, params):
+    """argv fermé de omni-deploy ; aucun paramètre libre n'atteint le shell."""
+    tool = [sys.executable, str(source / "tools/omni-deploy.py"), "--home", str(source)]
+    if action in ("deploy_plan", "deploy_apply"):
+        component = params.get("component", "all")
+        if component not in DEPLOY_COMPONENTS:
+            raise ValueError("Composant de déploiement inconnu.")
+        return tool + ["deploy", component] + (["--apply"] if action == "deploy_apply" else [])
+    if action in ("deploy_rollback_plan", "deploy_rollback"):
+        transaction = params.get("transaction", "")
+        if not isinstance(transaction, str) or not re.fullmatch(r"[a-f0-9]{32}", transaction):
+            raise ValueError("Identifiant de transaction invalide.")
+        return tool + ["rollback", transaction] + (["--apply"] if action == "deploy_rollback" else [])
+    if action == "deploy_history":
+        return tool + ["history"]
+    return [sys.executable, str(source / "tools/omni-healthcheck.py"), "--config", str(source / "00-vars.env")]
 
 
 def redact(text, secrets):
@@ -93,8 +125,12 @@ class Manager:
                 if not isinstance(transaction, str) or not re.fullmatch(r"[a-f0-9]{32}", transaction):
                     raise ValueError("Identifiant de transaction invalide.")
                 argv += ["--transaction", transaction]
+        elif action.startswith("deploy_") or action == "health_check":
+            argv = deploy_command(self.source, action, params)
         elif action == "console_publish":
             argv = ["bash", str(self.source / "71-soc-console.sh")]
+        elif action in UPDATE_LAYER_ACTIONS:
+            argv += self.update_layer_command(action, params)
         elif action.startswith("module_"):
             token = params.get("api_token", "")
             if not isinstance(token, str) or not token or any(ord(c) < 32 for c in token):
@@ -106,6 +142,20 @@ class Manager:
                                         apply=action in WRITES, ca=params.get("ca"))
             env["GRAYLOG_API_TOKEN"] = token
         return argv, env
+
+    def update_layer_command(self, action, params):
+        from omni_update.stack import COMPONENTS, VERSION_SYNTAX
+        if action == "status_all":
+            return [str(self.source / "tools/omni-update-status.py"), "--source", str(self.source),
+                    "--updater-state-dir", str(self.updater_state)]
+        if action == "pydeps_audit":
+            return [str(self.source / "tools/omni-pydeps.py"), "audit"]
+        component, target = params.get("component"), params.get("target")
+        if component not in COMPONENTS:
+            raise ValueError("Composant de la pile inconnu.")
+        if not isinstance(target, str) or not VERSION_SYNTAX.fullmatch(target):
+            raise ValueError("Version cible invalide.")
+        return [str(self.source / "tools/omni-stack-upgrade.py"), "plan", "--component", component, "--to", target]
 
     def _secrets(self, overlay):
         secrets = list(overlay.values())

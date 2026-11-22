@@ -34,11 +34,26 @@ def api(tmp_path, monkeypatch):
     if not _API.exists():
         pytest.skip(f"backend mobile introuvable : {_API}")
     config = tmp_path / "mobile.conf"
+    data = tmp_path / "mobile-data"
+    # Tous les chemins d'écriture et l'envoi GELF du backend pointent vers le test :
+    # aucun test ne doit écrire dans /var/lib/omni-mobile ni joindre Graylog.
     config.write_text("MOBILE_SECRET=dummy-session-secret\nMOBILE_PUSH_SECRET=dummy-push-secret\n"
-                      "GRAYLOG_API=http://127.0.0.1:9000/api\n", encoding="utf-8")
+                      "GRAYLOG_API=http://127.0.0.1:9000/api\n"
+                      f"MOBILE_SUBS_FILE={data}/subscriptions.json\nMOBILE_CASES_FILE={data}/cases.json\n"
+                      f"MOBILE_WATCH_FILE={data}/watchlist.json\nSOC_REQ_DIR={data}/soc-requests\n"
+                      f"SOC_ADMIN_DIR={data}/admin\nSOC_ADMIN_GELF_URL=\n", encoding="utf-8")
     monkeypatch.setenv("MOBILE_CONFIG", str(config))
+    monkeypatch.setenv("OMNI_TEST_MODE", "1")
     mod = _load_api()
     mod.REDACT = True
     mod._RD_MAP.clear()
     mod._RD_REV.clear()
     return mod
+
+
+@pytest.fixture(autouse=True)
+def _omni_test_mode(monkeypatch):
+    """Tous les tests tournent en mode test : le backend et l'exécuteur refusent de
+    démarrer si un chemin d'état vise la production (/var/lib, /etc, /var/www...)."""
+    monkeypatch.setenv("OMNI_TEST_MODE", "1")
+

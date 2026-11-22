@@ -1,0 +1,22 @@
+# Verrouillage du venv oms-ml - versions exactes relevées le 2026-11-21
+# Origine : /root/omnitech-siem-setup/oms-ml/.venv
+# Régénérer : python3 tools/omni-pydeps.py lock --venv oms-ml --write
+# Réinstaller à l'identique : <venv>/bin/pip install --no-deps -r python-locks/oms-ml.txt
+certifi==2026.6.17
+charset-normalizer==3.4.7
+esprima==4.0.1
+idna==3.18
+iniconfig==2.3.0
+joblib==1.5.3
+narwhals==2.22.1
+numpy==2.4.6
+packaging==26.2
+pluggy==1.6.0
+pygments==2.20.0
+pytest==9.1.1
+pyyaml==6.0.3
+requests==2.34.2
+scikit-learn==1.9.0
+scipy==1.18.0
+threadpoolctl==3.6.0
+urllib3==2.7.0

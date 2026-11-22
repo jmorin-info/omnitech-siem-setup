@@ -51,6 +51,7 @@
 /etc/systemd/system/omni-alert-lot.timer	deploye/systemd/omni-alert-lot.timer
 /etc/systemd/system/omni-alert-triage.service	deploye/systemd/omni-alert-triage.service
 /etc/systemd/system/omni-backup-config.service	deploye/systemd/omni-backup-config.service
+/etc/systemd/system/omni-backup-config.service.d/50-depot-reference.conf	deploye/systemd/omni-backup-config.service.d/50-depot-reference.conf
 /etc/systemd/system/omni-backup-config.timer	deploye/systemd/omni-backup-config.timer
 /etc/systemd/system/omni-cert-check.service	deploye/systemd/omni-cert-check.service
 /etc/systemd/system/omni-cert-check.service.d/hardening.conf	deploye/systemd/omni-cert-check.service.d/hardening.conf
@@ -62,6 +63,7 @@
 /etc/systemd/system/omni-collect-health.timer	deploye/systemd/omni-collect-health.timer
 /etc/systemd/system/omni-disk-guard.service	deploye/systemd/omni-disk-guard.service
 /etc/systemd/system/omni-disk-guard.service.d/hardening.conf	deploye/systemd/omni-disk-guard.service.d/hardening.conf
+/etc/systemd/system/omni-disk-guard.service.d/50-depot-reference.conf	deploye/systemd/omni-disk-guard.service.d/50-depot-reference.conf
 /etc/systemd/system/omni-disk-guard.timer	deploye/systemd/omni-disk-guard.timer
 /etc/systemd/system/omni-drift-check.service	deploye/systemd/omni-drift-check.service
 /etc/systemd/system/omni-drift-check.service.d/hardening.conf	deploye/systemd/omni-drift-check.service.d/hardening.conf
@@ -114,6 +116,7 @@
 /etc/systemd/system/omni-m365-fwd-audit.timer	deploye/systemd/omni-m365-fwd-audit.timer
 /etc/systemd/system/omni-mobile-api.service	deploye/systemd/omni-mobile-api.service
 /etc/systemd/system/omni-mobile-api.service.d/hardening.conf	deploye/systemd/omni-mobile-api.service.d/hardening.conf
+/etc/systemd/system/omni-mobile-api.service.d/50-depot-reference.conf	deploye/systemd/omni-mobile-api.service.d/50-depot-reference.conf
 /etc/systemd/system/omni-monthly-report.service	deploye/systemd/omni-monthly-report.service
 /etc/systemd/system/omni-monthly-report.service.d/hardening.conf	deploye/systemd/omni-monthly-report.service.d/hardening.conf
 /etc/systemd/system/omni-monthly-report.timer	deploye/systemd/omni-monthly-report.timer
@@ -180,18 +183,22 @@
 /etc/systemd/system/omni-weekly-report.timer	deploye/systemd/omni-weekly-report.timer
 /etc/systemd/system/oms-graph-respond.service	deploye/systemd/oms-graph-respond.service
 /etc/systemd/system/oms-graph-respond.service.d/hardening.conf	deploye/systemd/oms-graph-respond.service.d/hardening.conf
+/etc/systemd/system/oms-graph-respond.service.d/50-depot-reference.conf	deploye/systemd/oms-graph-respond.service.d/50-depot-reference.conf
 /etc/systemd/system/oms-graph-respond.timer	deploye/systemd/oms-graph-respond.timer
 /etc/systemd/system/oms-graph.service	deploye/systemd/oms-graph.service
 /etc/systemd/system/oms-graph.service.d/hardening.conf	deploye/systemd/oms-graph.service.d/hardening.conf
+/etc/systemd/system/oms-graph.service.d/50-depot-reference.conf	deploye/systemd/oms-graph.service.d/50-depot-reference.conf
 /etc/systemd/system/oms-graph.timer	deploye/systemd/oms-graph.timer
 /etc/systemd/system/oms-maj-siem-postboot.service	deploye/systemd/oms-maj-siem-postboot.service
 /etc/systemd/system/oms-maj-siem.service	deploye/systemd/oms-maj-siem.service
 /etc/systemd/system/oms-maj-siem.timer	deploye/systemd/oms-maj-siem.timer
 /etc/systemd/system/oms-ml-anomaly.service	deploye/systemd/oms-ml-anomaly.service
 /etc/systemd/system/oms-ml-anomaly.service.d/hardening.conf	deploye/systemd/oms-ml-anomaly.service.d/hardening.conf
+/etc/systemd/system/oms-ml-anomaly.service.d/50-depot-reference.conf	deploye/systemd/oms-ml-anomaly.service.d/50-depot-reference.conf
 /etc/systemd/system/oms-ml-anomaly.timer	deploye/systemd/oms-ml-anomaly.timer
 /etc/systemd/system/oms-ml-fp.service	deploye/systemd/oms-ml-fp.service
 /etc/systemd/system/oms-ml-fp.service.d/hardening.conf	deploye/systemd/oms-ml-fp.service.d/hardening.conf
+/etc/systemd/system/oms-ml-fp.service.d/50-depot-reference.conf	deploye/systemd/oms-ml-fp.service.d/50-depot-reference.conf
 /etc/systemd/system/oms-ml-fp.timer	deploye/systemd/oms-ml-fp.timer
 /etc/systemd/system/oms-seal-sla.service	deploye/systemd/oms-seal-sla.service
 /etc/systemd/system/oms-seal-sla.timer	deploye/systemd/oms-seal-sla.timer
@@ -201,6 +208,7 @@
 /etc/systemd/system/oms-snap-siem.timer	deploye/systemd/oms-snap-siem.timer
 /etc/systemd/system/oms-xdr.service	deploye/systemd/oms-xdr.service
 /etc/systemd/system/oms-xdr.service.d/hardening.conf	deploye/systemd/oms-xdr.service.d/hardening.conf
+/etc/systemd/system/oms-xdr.service.d/50-depot-reference.conf	deploye/systemd/oms-xdr.service.d/50-depot-reference.conf
 /etc/systemd/system/oms-xdr.timer	deploye/systemd/oms-xdr.timer
 /etc/systemd/system/siem-backup.service	deploye/systemd/siem-backup.service
 /etc/systemd/system/siem-backup.timer	deploye/systemd/siem-backup.timer
@@ -221,8 +229,6 @@
 /usr/local/sbin/omni-alert-digest	triage/omni-alert-digest
 /usr/local/sbin/omni-fp	tools/omni-fp
 /usr/local/sbin/omni-version-watch	tools/omni-version-watch
-/opt/oms-seal-sla/seal_sla_poller.py	seal/sla/seal_sla_poller.py
-/root/omnitech-siem-setup/mobile/omni-mobile-api.py	mobile/omni-mobile-api.py
 /var/www/siem-soc/index.html	mobile/soc/index.html
 /var/www/siem-soc/sw.js	mobile/soc/sw.js
 /var/www/siem-soc/manifest.webmanifest	mobile/soc/manifest.webmanifest

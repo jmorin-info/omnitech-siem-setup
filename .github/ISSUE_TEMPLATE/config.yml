@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Signaler une vulnérabilité
+    url: https://github.com/jmorin-info/omnitech-siem-setup/security
+    about: Ne pas ouvrir de ticket public ; suivre SECURITY.md (canal privé).

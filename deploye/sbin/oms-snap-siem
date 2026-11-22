@@ -111,7 +111,7 @@ fi
 log "=== snapshot selectif : $NB index, ~${TAILLE} Go bruts ==="
 ST=$(curl -s "$OS/_cluster/health" | jq -r .status)
 [ "$ST" = red ] && { alerte "snapshot annule" "OpenSearch est rouge"; exit 1; }
-curl -s "$OS/_snapshot/$REPO" | grep -q "\"$REPO\"" || { alerte "snapshot annule" "depot $REPO absent (voir /root/omnitech-siem-setup/08-backup.sh etape 1)"; exit 1; }
+curl -s "$OS/_snapshot/$REPO" | grep -q "\"$REPO\"" || { alerte "snapshot annule" "depot $REPO absent (voir /opt/omni-siem/repository/08-backup.sh etape 1)"; exit 1; }
 [ "$(curl -s "$OS/_snapshot/_status" | jq '.snapshots|length')" = 0 ] || { log "un snapshot est deja en cours : abandon"; exit 0; }
 [ "$(libre_pct)" -ge "$LIBRE_MIN_PCT" ] || { alerte "snapshot annule" "/home n'a plus que $(libre_pct) % libres (minimum $LIBRE_MIN_PCT %)"; exit 1; }
 NOM="oms-sel-$(date +%Y%m%d-%H%M)"

@@ -11,7 +11,7 @@ import sys
 from .configuration import Configuration, FIELDS, SECRETS
 from .inventory import inventory
 from .modules import catalogue
-from .operations import Manager, WRITES
+from .operations import DEPLOY_COMPONENTS, Manager, WRITES
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_GROUPS = {
@@ -30,6 +30,22 @@ ACTION_LABELS = {
     "console_publish": "Publier les fichiers de /soc/ et activer le backend géré",
     "module_plan": "Préparer l'installation du module", "module_install": "Installer le Content Pack et reprendre son stream",
     "module_uninstall_plan": "Examiner les entités à désinstaller", "module_uninstall": "Désinstaller le Content Pack sélectionné",
+    # Couches de mise à jour (lecture seule)
+    "status_all": "État des mises à jour de toutes les couches", "stack_plan": "Plan de montée de version de la pile",
+    "pydeps_audit": "Audit des dépendances Python des venvs",
+}
+
+# --- Déploiement des composants maison et contrôle de santé ---
+ACTION_LABELS.update({
+    "deploy_plan": "Afficher le plan de déploiement", "deploy_apply": "Déployer avec sauvegarde et retour arrière automatique",
+    "deploy_rollback_plan": "Afficher le plan de retour arrière", "deploy_rollback": "Annuler une transaction de déploiement",
+    "deploy_history": "Historique des déploiements", "health_check": "Contrôle de santé de bout en bout",
+})
+DEPLOY_LABELS = {
+    "all": "Tout (sauf préférences APT)", "venvs": "Environnements Python (mobile, oms-xdr, oms-graph, oms-ml)",
+    "robots": "Robots /usr/local/sbin", "etc": "Fichiers de configuration /etc suivis", "apt": "Préférences APT (explicite)",
+    "opt": "Applications /opt suivies", "logstash": "Pipelines Logstash", "systemd": "Unités et drop-ins systemd",
+    "nginx": "Fragments nginx (nginx -t avant rechargement)", "console": "Fichiers de la console /soc/ et /m/",
 }
 
 
@@ -58,6 +74,8 @@ class Terminal:
         self.config = Configuration(source, state)
         self.target = ""
         self.transaction = ""
+        self.deploy_component = "all"
+        self.deploy_transaction = ""
         self.triage = False
         self.experimental_ubuntu_2604 = False
         self.allow_local_changes = False
@@ -72,7 +90,7 @@ class Terminal:
     def run(self, action, params=None):
         params = params or {}
         label = ACTION_LABELS[action]
-        details = ", ".join(str(params[key]) for key in ("module", "api", "target", "transaction", "installation_id") if key in params)
+        details = ", ".join(str(params[key]) for key in ("module", "api", "target", "transaction", "installation_id", "component") if key in params)
         if action in WRITES and not confirm(label + (" — " + details if details else "") + ". Lire le plan avant de confirmer."):
             print("Annulé.")
             return None
@@ -146,7 +164,9 @@ class Terminal:
             choice = menu("Mises à jour du code — bases et configuration préservées", [
                 "Télécharger main / un tag dans le cache", "Choisir un SHA complet", "Afficher le plan",
                 "Préparer le candidat", "Appliquer le code préparé", "Publier / réparer la console",
-                "Afficher l'état des mises à jour", "Annuler une transaction de code", "Récupérer une transaction interrompue"])
+                "Afficher l'état des mises à jour", "Annuler une transaction de code", "Récupérer une transaction interrompue",
+                "État de toutes les couches (OS, pile, Python, contenus, sauvegardes)",
+                "Plan de montée de version de la pile (lecture seule)", "Audit des dépendances Python des venvs"])
             if choice == 0:
                 return
             if choice == 1:
@@ -163,6 +183,50 @@ class Terminal:
                 print("Le retour de code ne restaure pas une base ni des fichiers publiés séparément.")
                 transaction = prompt("Identifiant de transaction", self.transaction)
                 self.run("update_rollback" if choice == 8 else "update_recover", {"transaction": transaction})
+            elif choice in (10, 11, 12):
+                self.update_layers(choice)
+
+    def update_layers(self, choice):
+        if choice == 10:
+            self.run("status_all")
+        elif choice == 12:
+            self.run("pydeps_audit")
+        else:
+            component = prompt("Composant (graylog, opensearch, mongodb, logstash)", "graylog")
+            target = prompt("Version de paquet cible exacte (apt-cache policy)")
+            job = self.run("stack_plan", {"component": component, "target": target})
+            if job and job["status"] == "success":
+                print("\nL'exécution ne se lance pas depuis ce menu (une coupure SSH interromprait apt).")
+                print("Après lecture du plan et validation, dans tmux ou screen :")
+                print(f"  sudo python3 {self.manager.source}/tools/omni-stack-upgrade.py apply --component {component} "
+                      f"--to {target} --execute --confirm {component}={target}")
+
+    def deployment(self):
+        while True:
+            print("\nComposant : " + DEPLOY_LABELS[self.deploy_component]
+                  + " ; dernière transaction : " + (self.deploy_transaction or "aucune"))
+            choice = menu("Déploiement des composants maison — plan d'abord, sauvegarde systématique", [
+                "Choisir le composant", "Afficher le plan", "Déployer après lecture du plan",
+                "Contrôle de santé de bout en bout", "Historique des déploiements",
+                "Plan de retour arrière d'une transaction", "Annuler une transaction"])
+            if choice == 0:
+                return
+            if choice == 1:
+                picked = menu("Composant à déployer", [DEPLOY_LABELS[c] for c in DEPLOY_COMPONENTS])
+                if 1 <= picked <= len(DEPLOY_COMPONENTS):
+                    self.deploy_component = DEPLOY_COMPONENTS[picked - 1]
+            elif choice in (2, 3):
+                job = self.run("deploy_plan" if choice == 2 else "deploy_apply", {"component": self.deploy_component})
+                for line in (job or {}).get("lines", []):
+                    if line.strip().startswith("Transaction : "):
+                        self.deploy_transaction = line.split(":", 1)[1].strip()
+            elif choice == 4:
+                self.run("health_check")
+            elif choice == 5:
+                self.run("deploy_history")
+            elif choice in (6, 7):
+                transaction = prompt("Identifiant de transaction", self.deploy_transaction)
+                self.run("deploy_rollback_plan" if choice == 6 else "deploy_rollback", {"transaction": transaction})
 
     def modules(self):
         modules = catalogue()
@@ -227,11 +291,13 @@ class Terminal:
             choice = menu("OMNI SIEM — Administration locale SSH", [
                 "État et révision", "Configurer le site et les secrets", "Installer / reprendre une instance neuve",
                 "Préparer et appliquer une mise à jour", "WatchGuard / UniFi / Palo Alto", "Publier / réparer /soc/",
-                "Catalogue de tous les composants et scripts", "Historique des opérations"])
+                "Catalogue de tous les composants et scripts", "Historique des opérations",
+                "Déployer les composants maison / contrôle de santé"])
             if choice == 0:
                 return 0
             action = {1: self.overview, 2: self.configure, 3: self.installation, 4: self.updates, 5: self.modules,
-                      6: lambda: self.run("console_publish"), 7: self.catalogue, 8: self.history}.get(choice)
+                      6: lambda: self.run("console_publish"), 7: self.catalogue, 8: self.history,
+                      9: self.deployment}.get(choice)
             if action:
                 try:
                     action()

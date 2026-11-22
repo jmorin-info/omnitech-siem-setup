@@ -9,7 +9,7 @@
 #     - m365_app_credential_add : ajout de secret/cert sur une app/SP = backdoor cloud.
 #     - m365_ca_change          : modif/suppression de policy Conditional Access.
 #   La couverture riskDetections (m365_type=risk=0) + le blocage legacy auth (1461
-#   auth SMTP mesurees) = actions cote tenant : voir docs/ENTRA-SETUP.md.
+#   auth SMTP mesurees) = actions cote tenant : voir docs/sources/ENTRA-SETUP.md.
 #   Idempotent. Prerequis : 16/17 (input + fetcher M365).
 # =============================================================================
 set -uo pipefail
@@ -70,7 +70,7 @@ add_mitre m365_ca_change          T1556.009 "Modify Authentication Process (Cond
 install -m 644 "$CSV" /etc/graylog/lookup/mitre-attack.csv; chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true
 ok "MITRE m365_app_credential_add / m365_ca_change"
 
-echo "==> [3/3] Rappel actions tenant (docs/ENTRA-SETUP.md)"
+echo "==> [3/3] Rappel actions tenant (docs/sources/ENTRA-SETUP.md)"
 echo "    - riskDetections (m365_type=risk=0) : licence Entra ID P2 + permission Graph"
 echo "      IdentityRiskEvent.Read.All + consentement admin -> debloque m365_risque."
 echo "    - 1461 auth legacy (Authenticated SMTP) mesurees : bloquer la legacy auth (CA)."

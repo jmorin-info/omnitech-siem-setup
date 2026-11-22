@@ -4,13 +4,13 @@
 #   1. Inputs syslog TCP + UDP 1516 dedies vSphere (port distinct du FAZ/1514)
 #   2. Index omni-vsphere (90 j) + stream "OMNI - vSphere"
 #   3. Pipeline de parsing/detection (best-effort sur le texte syslog ESXi/VCSA ;
-#      a affiner avec les vrais logs - cf. VSPHERE.md) :
+#      a affiner avec les vrais logs - cf. docs/sources/VSPHERE.md) :
 #        - event_source=vsphere, extraction user/src_ip
 #        - tags : vsphere_auth_fail, vsphere_shell_ssh, vsphere_vm_destroy,
 #                 vsphere_config (lockdown / permissions)
 #   4. Alertes : brute force, acces SSH/Shell, suppression de VM
 #
-# Prerequis : 06 (port 1516 ouvert) + API up. Cote ESXi/vCenter : cf. VSPHERE.md.
+# Prerequis : 06 (port 1516 ouvert) + API up. Cote ESXi/vCenter : cf. docs/sources/VSPHERE.md.
 # Idempotent. Suite : relancer 14 pour la page dashboard vSphere.
 # ==============================================================================
 set -euo pipefail
@@ -384,4 +384,4 @@ ev_vs "OMNI - vSphere accès SSH/Shell ESXi" 2 'alert_tag:vsphere_shell_ssh' '[]
 ev_vs "OMNI - vSphere suppression de VM" 3 'alert_tag:vsphere_vm_destroy' '[]' '[]' "${NC}" 30 10 5
 
 echo
-echo "=== 19-vsphere.sh termine. Configurer ESXi/vCenter (cf. VSPHERE.md) puis 14. ==="
+echo "=== 19-vsphere.sh termine. Configurer ESXi/vCenter (cf. docs/sources/VSPHERE.md) puis 14. ==="

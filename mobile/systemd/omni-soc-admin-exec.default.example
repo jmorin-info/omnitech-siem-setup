@@ -1,0 +1,9 @@
+# /etc/default/omni-soc-admin-exec - configuration de l'exécuteur (facultative)
+# Répertoire partagé avec omni-mobile-api (SOC_ADMIN_DIR du backend).
+SOC_ADMIN_DIR=/var/lib/omni-mobile/admin
+# Services redémarrables depuis la console : liste blanche FERMÉE, vide par défaut
+# (aucun redémarrage). Doit AUSSI figurer dans SOC_ADMIN_RESTARTABLE du backend.
+# Exemple : SOC_EXEC_RESTARTABLE=omni-alert-triage.service,omni-soar.service
+SOC_EXEC_RESTARTABLE=
+# 1 = un administrateur peut approuver sa propre demande (déconseillé).
+SOC_EXEC_SELF_APPROVE=0

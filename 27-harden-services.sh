@@ -12,7 +12,7 @@
 #     STD     : ecrit /var/lib (state des robots).
 #     WEB     : STD + /var/www/siem-kit + SupplementaryGroups=www-data.
 #     LOOKUP  : STD + /etc/graylog/lookup (CSV threat-intel/dhcp).
-#     DOCS    : STD + /root/omnitech-siem-setup/docs (dossier de preuves ISO).
+#     DOCS    : STD + /opt/omni-siem/repository/docs (dossier de preuves ISO).
 #     BACKUPS : STD + /var/backups/siem (rapport hebdo).
 #   NON durcis (privileges incompressibles) : omni-backup-config et
 #   omni-cert-renew montent un partage CIFS (CAP_SYS_ADMIN) et/ou renouvellent
@@ -88,7 +88,7 @@ for u in "${STD_UNITS[@]}"; do
     omni-ti-feeds|omni-fortidhcp-fetch)
       emit "${unit}" "/var/lib /etc/graylog/lookup" ;;
     omni-iso-evidence)
-      emit "${unit}" "/var/lib /root/omnitech-siem-setup/docs" ;;
+      emit "${unit}" "/var/lib ${PWD}/docs" ;;
     omni-weekly-report)
       emit "${unit}" "/var/lib /var/backups/siem" ;;
     *)

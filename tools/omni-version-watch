@@ -47,7 +47,7 @@ import sys
 import time
 import urllib.request
 
-REPO = "/root/omnitech-siem-setup"
+REPO = "/opt/omni-siem/repository"
 GELF_URL = "http://127.0.0.1:12201/gelf"
 SIEM = "bx-it-graylog-vm"
 STATE_FILE = "/var/lib/omni-version-watch/state.json"

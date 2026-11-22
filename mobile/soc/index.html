@@ -15,10 +15,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="OMNI SOC">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<script src="/soc/app-boot.js?v=2026112001"></script><script src="/soc/app-csp.js?v=2026112001"></script>
+<script src="/soc/app-boot.js?v=2026112101"></script><script src="/soc/app-csp.js?v=2026112101"></script>
 <script src="/soc/chart.min.js"></script>
 <!-- cytoscape (graphe) + globe.gl (1,8 Mo, carte) : charges A LA DEMANDE (lazy) -> ne bloquent plus le rendu initial -->
-<script src="/soc/app-loader.js?v=2026112001"></script>
+<script src="/soc/app-loader.js?v=2026112101"></script>
 <style>
   :root{
     --bg:#070a11; --bg2:#0a0f18; --card:#0d131e; --card2:#111824; --bd:#1b2433; --bd2:#28354a;
@@ -728,7 +728,7 @@
   html[data-theme=light] #bnav{background:rgba(255,255,255,.96)}
   html[data-theme=light] .kpitrend.kt-bad{color:#a3162a;background:#fde4e7}html[data-theme=light] .kpitrend.kt-good{color:#13805b;background:#e3f6ee}
 </style>
-<link rel="stylesheet" href="/soc/app-professional.css?v=2026112001">
+<link rel="stylesheet" href="/soc/app-professional.css?v=2026112101">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -949,6 +949,9 @@
       <div class="opsgrid" id="oitems"></div>
       <div class="card" style="margin-top:16px"><h3><svg class="svi"><use href="#i-cpu"></use></svg> <span>Versions du socle</span><span class="tag">mises à jour automatiques le dimanche 04:30 · séries épinglées</span></h3><div id="overs" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
     </section>
+    <section class="page" id="p-admin" aria-label="Administration SOC">
+      <div id="admRoot"><div class="empty">Espace réservé aux administrateurs SOC.</div></div>
+    </section>
     <section class="page" id="p-report">
       <div style="display:flex;align-items:center;margin-bottom:14px"><h3 class="sec" style="margin:0" data-i18n="card_posture">Rapport de posture</h3>
         <button class="iconbtn" style="margin-left:auto" data-onclick="window.print()"><svg class="svi"><use href="#i-print"></use></svg> <span data-i18n="btn_print">Imprimer / PDF</span></button></div>
@@ -997,9 +1000,10 @@
   </div>
 </div>
 
-<script src="/soc/app.js?v=2026112001"></script>
-<script src="/soc/app-soar.js?v=2026112001"></script>
-<script src="/soc/app-v3.js?v=2026112001"></script><script src="/soc/app-handlers.js?v=2026112001"></script>
-<script src="/soc/app-professional.js?v=2026112001"></script>
+<script src="/soc/app.js?v=2026112101"></script>
+<script src="/soc/app-soar.js?v=2026112101"></script>
+<script src="/soc/app-v3.js?v=2026112101"></script><script src="/soc/app-handlers.js?v=2026112101"></script>
+<script src="/soc/app-professional.js?v=2026112101"></script>
+<script src="/soc/app-admin.js?v=2026112101"></script>
 </body>
 </html>
