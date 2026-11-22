@@ -10,56 +10,21 @@ publie pas de versions numérotées : chaque livraison est identifiée par sa da
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
-## [Non publié] - Indicateurs SOC (22/11/2026)
+## [Non publié]
 
 ### Ajouté
 
 - `tools/omni-soc-kpi.py` : indicateurs SOC calculés en lecture seule (OpenSearch `_search`, API Graylog en GET, fichiers d'état) sur une période paramétrable, sortie JSON et Markdown avec médiane et p90 : volume d'alertes par sévérité, source et détection ; MTTD exact pour les détections unitaires et encadré pour les agrégations ; prise en charge et clôture des dossiers, délai alerte vers blocage SOAR, journal d'audit ; faux positifs du triage ; couverture ATT&CK des définitions actives. Les données absentes sont listées dans « lacunes ». Documentation `docs/exploitation/INDICATEURS-SOC.md`, tests `tests/test_soc_kpi.py`.
 - Console SOC : page « Indicateurs » (`mobile/soc/app-kpi.js`) et point d'API `GET /m/api/soc-kpi?days=N` réservé aux rôles analyste et administrateur, calcul partagé avec l'outil, cache de 10 minutes.
-
-### Modifié
-
-- Dossiers de la console (`update_case`) : historique daté (`history`) des changements de statut, d'assignation et de qualification, et horodatage de clôture (`closed_ts`), pour mesurer le MTTR. Ajout seul, champs ignorés par l'affichage.
-
-## [Non publié] - Chantier exploitation du 22/11/2026
-
-### Ajouté
-
 - `tools/migrer-depot-snapshots.sh` : relocalisation du dépôt de snapshots OpenSearch de `/home` (`graylog_fs`) vers `/data` (`graylog_fs_data`) ; plan en lecture seule par défaut, `--apply` (ancien chemin conservé dans `path.repo`, redémarrage contrôlé avec santé avant et après, enregistrement et vérification du dépôt, bascule de `/etc/oms-snap-siem.conf`, premier snapshot vérifié), `--rollback`, et `--retirer-ancien` refusé avant 3 snapshots réussis. Tests hors ligne `tests/test_migration_snapshots.py`.
-
 - Drop-in `deploye/systemd/omni-iso-evidence.service.d/50-depot-reference.conf` : `omni-iso-evidence` exécute `68-iso-evidence.sh` du dépôt canonique et n'écrit que dans `/var/lib` et `docs/archives/preuves-iso` ; `hardening.conf` (lu après le drop-in) et `27-harden-services.sh` portent la même liste. Le service est ajouté à `tools/migrer-chemin-canonique.sh` et au manifeste ; `68-iso-evidence.sh` ne réécrit plus l'unité quand il tourne sous systemd.
-
 - `tools/maj-cert-orchestrator-prod.sh` (plan, `--apply`) : met à jour par PUT idempotent les 5 règles `omni-cert-*` déjà créées en production et aligne l'index set `omni-cert` sur `P1M` x 3, sans création ni suppression. Tests `tests/test_cert_orchestrator.py`.
-
 - `tools/retirer-ancienne-copie.sh` (plan, `--apply`, `--rollback`) : étape 4 du plan de cohérence, renommage de `/root/omnitech-siem-setup` et lien vers le dépôt canonique, après contrôle de la date, des unités systemd (configuration effective), des tâches cron, des processus et de l'identité des `00-vars.env` ; liste des secrets en clair pour l'étape 5. Tests `tests/test_retrait_ancienne_copie.py`.
-
-### Modifié
-
-- `oms-snap-siem` lit le dépôt et son emplacement dans `/etc/oms-snap-siem.conf` (`DEPOT`, `DEPOT_CHEMIN`, `LIBRE_ARRET_PCT`) au lieu de `graylog_fs` et `/home` codés en dur ; `omni-drift-check` (script 29 et miroir) et `omni-update-status.py` suivent le même dépôt.
-- `21-alert-hygiene.sh` ne crée plus « OMNI - Sauvegarde quotidienne SIEM absente (>26h) » (liée à `siem-backup.timer`, arrêté en août 2026) et ne la re-pointe plus : ce PUT `?schedule=true` l'aurait réactivée après sa désactivation. Il crée à la place « OMNI - Snapshot OpenSearch absent (>26h) » (`backup_daily_ok` émis par `oms-snap-siem`) et signale l'ancienne définition si elle est encore active, sans la modifier.
-- `oms-maj-siem.timer` : `Persistent=false` confirmé et justifié (`docs/UPDATES.md`, en-tête de `62-auto-security-updates.sh`) : avec le redémarrage automatique conservé, un rattrapage au démarrage ferait une mise à jour suivie d'un redémarrage à une heure imprévue ; les correctifs de sécurité quotidiens d'`unattended-upgrades` ne dépendent pas de ce timer.
-- Cert Orchestrator (`99-cert-orchestrator.sh`) : source renommée `cert_orchestrator` (`cert_parc` reste la source PKI Windows de bx-pki2022, 5 035 messages en production) ; index set créé directement en rotation `P1M` x 3, cohérent avec le script 83 et la politique de rétention, au lieu de `P1D` x 90 copié du modèle ; seuil watchdog dédié dans le modèle de `74-source-watchdog.sh` ; documentation des sources et de la rétention.
-
-### Corrigé
-
-- Logstash : drop-in `deploye/systemd/logstash.service.d/50-attente-graylog.conf` (ordre après `graylog-server`, attente bornée de l'input GELF TCP 12202) ; cause des 4 relances du 17/11/2026 : sortie GELF de la collecte SEAL refusée (`ECONNREFUSED`) tant que Graylog n'écoutait pas.
-- `omni-ti-feeds` (miroir `deploye/sbin` et script 66) : URLhaus a fermé ses exports publics (HTTP 410 depuis le 21/10/2026, 553 domaines figés) ; le robot utilise l'API authentifiée avec la clé abuse.ch (`ABUSECH_AUTH_KEY`, ou `THREATFOX_AUTH_KEY`) et dit explicitement pourquoi il ignore la source sans clé. Tests `tests/test_ti_feeds.py`.
-
-## [Non publié] - Décisions d'exploitation du 22/11/2026
-
-### Modifié
-
-- `83-retention-consolidee.sh` augmente uniquement les compteurs de rétention : stratégie et période conservées, aucune réduction de compteur, plan par défaut et relecture avant écriture. Une erreur API arrête l'opération ; le routage reste contrôlé en lecture seule. Tests hors ligne `tests/test_retention_consolidee.py`.
-- Redémarrage automatique : la règle retenue est de conserver celui d'`oms-maj-siem` (dimanche 04:30, seulement si `/var/run/reboot-required` existe après contrôles et sauvegarde). `62-auto-security-updates.sh`, le commentaire de `52omni-siem.conf` (script et miroir `deploye/apt`), `docs/UPDATES.md`, le guide d'exploitation et l'inventaire des scripts décrivent ce comportement ; `unattended-upgrades` ne redémarre toujours jamais.
-- `39-alert-digest.sh` installe la minuterie du récapitulatif d'alertes du lundi au vendredi à 08:00 (`OnCalendar=Mon..Fri *-*-* 08:00:00`), comme en production.
-- Politique de rétention : nombre d'index × période est une estimation ; les mois calendaires et les rotations anticipées empêchent d'en déduire une garantie d'âge minimal.
-- Règles versionnées raccordées aux pipelines d'autres scripts : `49-expo-port-class.sh`, `49-enrich-lots.sh` (« OMNI - Exposition reseau »), `81-fp-allowlist.sh` (« OMNI - Allowlist FP ») et `tools/omni-v3/v3_build.py` (« OMNI v3 - Detections et correlation ») incluent eux-mêmes les 17 règles `omni-v3-laps-lecture*` et `omni-fp-26-*` dans la source qu'ils écrivent, à leur étape et à leur place. Inventaire unique `objets-graylog/raccordements.txt`, sources uniques les fichiers `.rule`, logique commune `lib-regles-versionnees.sh` (équivalent Python dans `v3_build.py`, testé identique). Les règles absentes sont créées, les présentes jamais modifiées. Cela remplace la consigne « à relancer après 49, 81 et v3_build.py » de l'entrée `26-graylog-objets-manuels.sh` ci-dessous : il n'y a plus de contrainte d'ordre.
-- `26-graylog-objets-manuels.sh` ne crée plus que les trois définitions d'événements ; les règles versionnées et leur raccordement sont seulement contrôlés (script propriétaire indiqué si absent).
-- Option `--source-pipeline` (hors ligne, sans API ni écriture) sur ces quatre scripts, et `tools/verif-pipelines-versionnees.sh` qui compare en lecture seule (un GET) la source générée à celle en service. Tests hors ligne : `tests/test_pipelines_versionnes.py`.
-- Qualité : `SC2034` n'est plus exclu globalement de ShellCheck (8 constats restants listés dans `tools/shellcheck-baseline.txt`), 16 `cd` vers le répertoire du script sortent explicitement en cas d'échec (SC2164, scripts ponctuels et outils), `lib-graylog.sh` déclare son shell, l'exclusion Ruff `F821` de `seal/graylog/provision_seal.py` est supprimée (import de `NoReturn`), imports inutilisés retirés de quatre fichiers non déployés.
-
-### Ajouté
-
+- `tools/omni-restore-drill.py` : exercice de restauration complète sur VM isolée (socle, archive de configuration déchiffrée avec une clé fournie à l'exécution, MongoDB, snapshots OpenSearch en dépôt lecture seule avec `include_aliases=false`, démarrage de Graylog, contrôles de réception), étapes chronométrées, rapport JSON et Markdown avec RTO mesuré et RPO déduit de l'âge des sauvegardes. Garde anti-production avant toute écriture : nom d'hôte, adresse, nœud OpenSearch, volume d'index préexistant, variable `OMNI_RESTORE_DRILL_ISOLATED=1`. Courriel Graylog désactivé, robots et unités systemd jamais réappliqués. Sous-commandes `plan`, `analyser`, et pour le banc VM `jeu-factice` et `sinistre-factice`.
+- `tools/omni-backup-inventory.py` : mesure en lecture seule (GET OpenSearch, liste des archives, journal d'`oms-snap-siem`, `systemctl show`) de l'âge, de la fréquence, de la taille des sauvegardes, de la couverture des index et du débit, avec estimation du RTO ; inventaire des index pour l'exercice.
+- `docs/exploitation/RESTAURATION-COMPLETE.md` : couverture des sauvegardes, intrants mesurés le 22/11/2026, objectifs RTO/RPO proposés, procédure d'exercice, constats sur les sauvegardes.
+- Banc VM : étape facultative `restore_drill` de `tools/test-ubuntu-vm.sh` (variable `OMNI_VM_RESTORE_DRILL=1`, option manuelle `restore_drill` du flux `ubuntu-vm.yml`), sur données factices générées dans la VM.
+- Tests hors ligne `tests/test_restore_drill.py` et `tests/test_backup_inventory.py`.
 - Validation continue des détections (`tools/omni-detection-validate.py`, lecture seule) : contrôles statiques des définitions actives via l'API Graylog en GET (requête, flux, notifications, champs présents dans le mapping OpenSearch, planification, producteurs `alert_tag`), vivacité par `_count` sur 30 et 7 jours, 18 fixtures synthétiques de détections critiques rejouées en mémoire (`tools/detection-validation/fixtures/`), mode replay réservé à un OpenSearch jetable, rapports JSON et Markdown datés, code retour 2 si une détection critique est cassée. Unité et minuterie hebdomadaires `omni-detection-validate` (lundi 05:30) ajoutées au manifeste, non installées. Documentation `docs/detection/VALIDATION-DETECTIONS.md`, tests `tests/test_detection_validate.py`.
 - Sauvegarde MongoDB native quotidienne (`omni-mongo-backup`, timer 02:40) : contrôle d'intégrité, préfixe propre `omni-mongo-*`, archives héritées conservées, purge après succès seulement, verrou et secrets temporaires privés. Le test de restauration possède son processus et son socket Unix privé ; sa comparaison porte sur les comptages de collections.
 - `26-graylog-objets-manuels.sh` : versionne les objets Graylog créés à la main en
@@ -76,8 +41,28 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
   pipeline et en retirent les règles raccordées par le script 26.
 - Fiche de l'incident du 21/11/2026 (tests de la console écrits en production, message de test `soc_admin` conservé dans Graylog) : `docs/archives/INCIDENT-CONSOLE-2026-11-21.md`.
 
+### Modifié
+
+- Dossiers de la console (`update_case`) : historique daté (`history`) des changements de statut, d'assignation et de qualification, et horodatage de clôture (`closed_ts`), pour mesurer le MTTR. Ajout seul, champs ignorés par l'affichage.
+- `oms-snap-siem` lit le dépôt et son emplacement dans `/etc/oms-snap-siem.conf` (`DEPOT`, `DEPOT_CHEMIN`, `LIBRE_ARRET_PCT`) au lieu de `graylog_fs` et `/home` codés en dur ; `omni-drift-check` (script 29 et miroir) et `omni-update-status.py` suivent le même dépôt.
+- `21-alert-hygiene.sh` ne crée plus « OMNI - Sauvegarde quotidienne SIEM absente (>26h) » (liée à `siem-backup.timer`, arrêté en août 2026) et ne la re-pointe plus : ce PUT `?schedule=true` l'aurait réactivée après sa désactivation. Il crée à la place « OMNI - Snapshot OpenSearch absent (>26h) » (`backup_daily_ok` émis par `oms-snap-siem`) et signale l'ancienne définition si elle est encore active, sans la modifier.
+- `oms-maj-siem.timer` : `Persistent=false` confirmé et justifié (`docs/UPDATES.md`, en-tête de `62-auto-security-updates.sh`) : avec le redémarrage automatique conservé, un rattrapage au démarrage ferait une mise à jour suivie d'un redémarrage à une heure imprévue ; les correctifs de sécurité quotidiens d'`unattended-upgrades` ne dépendent pas de ce timer.
+- Cert Orchestrator (`99-cert-orchestrator.sh`) : source renommée `cert_orchestrator` (`cert_parc` reste la source PKI Windows de bx-pki2022, 5 035 messages en production) ; index set créé directement en rotation `P1M` x 3, cohérent avec le script 83 et la politique de rétention, au lieu de `P1D` x 90 copié du modèle ; seuil watchdog dédié dans le modèle de `74-source-watchdog.sh` ; documentation des sources et de la rétention.
+- `RESTORE.md` : chemin réel du partage SMB et rétention locale de 3 jours, restauration de l'historique couvert par les snapshots (§4 bis), recréation de `/etc/mongod.keyfile` absent de l'archive, dernière ligne `mongodb_uri` retenue, en-tête LUKS absent de l'archive.
+- PRA : objectifs RTO/RPO révisés sur mesures (à valider par le RSSI), versions de référence, checklist de réception chiffrée, fréquence des exercices, journal des tests.
+- `83-retention-consolidee.sh` augmente uniquement les compteurs de rétention : stratégie et période conservées, aucune réduction de compteur, plan par défaut et relecture avant écriture. Une erreur API arrête l'opération ; le routage reste contrôlé en lecture seule. Tests hors ligne `tests/test_retention_consolidee.py`.
+- Redémarrage automatique : la règle retenue est de conserver celui d'`oms-maj-siem` (dimanche 04:30, seulement si `/var/run/reboot-required` existe après contrôles et sauvegarde). `62-auto-security-updates.sh`, le commentaire de `52omni-siem.conf` (script et miroir `deploye/apt`), `docs/UPDATES.md`, le guide d'exploitation et l'inventaire des scripts décrivent ce comportement ; `unattended-upgrades` ne redémarre toujours jamais.
+- `39-alert-digest.sh` installe la minuterie du récapitulatif d'alertes du lundi au vendredi à 08:00 (`OnCalendar=Mon..Fri *-*-* 08:00:00`), comme en production.
+- Politique de rétention : nombre d'index × période est une estimation ; les mois calendaires et les rotations anticipées empêchent d'en déduire une garantie d'âge minimal.
+- Règles versionnées raccordées aux pipelines d'autres scripts : `49-expo-port-class.sh`, `49-enrich-lots.sh` (« OMNI - Exposition reseau »), `81-fp-allowlist.sh` (« OMNI - Allowlist FP ») et `tools/omni-v3/v3_build.py` (« OMNI v3 - Detections et correlation ») incluent eux-mêmes les 17 règles `omni-v3-laps-lecture*` et `omni-fp-26-*` dans la source qu'ils écrivent, à leur étape et à leur place. Inventaire unique `objets-graylog/raccordements.txt`, sources uniques les fichiers `.rule`, logique commune `lib-regles-versionnees.sh` (équivalent Python dans `v3_build.py`, testé identique). Les règles absentes sont créées, les présentes jamais modifiées. Cela remplace la consigne « à relancer après 49, 81 et v3_build.py » de l'entrée `26-graylog-objets-manuels.sh` ci-dessous : il n'y a plus de contrainte d'ordre.
+- `26-graylog-objets-manuels.sh` ne crée plus que les trois définitions d'événements ; les règles versionnées et leur raccordement sont seulement contrôlés (script propriétaire indiqué si absent).
+- Option `--source-pipeline` (hors ligne, sans API ni écriture) sur ces quatre scripts, et `tools/verif-pipelines-versionnees.sh` qui compare en lecture seule (un GET) la source générée à celle en service. Tests hors ligne : `tests/test_pipelines_versionnes.py`.
+- Qualité : `SC2034` n'est plus exclu globalement de ShellCheck (8 constats restants listés dans `tools/shellcheck-baseline.txt`), 16 `cd` vers le répertoire du script sortent explicitement en cas d'échec (SC2164, scripts ponctuels et outils), `lib-graylog.sh` déclare son shell, l'exclusion Ruff `F821` de `seal/graylog/provision_seal.py` est supprimée (import de `NoReturn`), imports inutilisés retirés de quatre fichiers non déployés.
+
 ### Corrigé
 
+- Logstash : drop-in `deploye/systemd/logstash.service.d/50-attente-graylog.conf` (ordre après `graylog-server`, attente bornée de l'input GELF TCP 12202) ; cause des 4 relances du 17/11/2026 : sortie GELF de la collecte SEAL refusée (`ECONNREFUSED`) tant que Graylog n'écoutait pas.
+- `omni-ti-feeds` (miroir `deploye/sbin` et script 66) : URLhaus a fermé ses exports publics (HTTP 410 depuis le 21/10/2026, 553 domaines figés) ; le robot utilise l'API authentifiée avec la clé abuse.ch (`ABUSECH_AUTH_KEY`, ou `THREATFOX_AUTH_KEY`) et dit explicitement pourquoi il ignore la source sans clé. Tests `tests/test_ti_feeds.py`.
 - `49-enrich-lots.sh` : la règle `omni-extra-10-explicit-cred` était écrite dans un heredoc non cité, si bien que bash remplaçait `$message` par une chaîne vide et `\\` par `\`. Le heredoc est désormais cité ; la source produite est identique à celle en service (vérifié par GET le 22/11/2026).
 
 ### Supprimé

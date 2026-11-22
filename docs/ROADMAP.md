@@ -77,7 +77,9 @@ simulation et une validation humaine.
 | Fait | Snapshots OpenSearch sélectifs quotidiens et test hebdomadaire de restauration dans un index temporaire | minuteries `oms-snap-siem` et `oms-snap-siem-test` |
 | Fait | Test de restaurabilité de l'archive de configuration (22/06/2026) | journal des tests du PRA |
 | Fait | Pile Docker distincte pour un environnement de préproduction ou de secours | [docker/README-DOCKER.md](../docker/README-DOCKER.md) |
-| À faire | Reconstruction complète chronométrée sur VM jetable, RTO et RPO mesurés et consignés (exigence annuelle du PRA, non réalisée à ce jour) | |
+| Fait | Intrants RPO/RTO mesurés en lecture seule, objectifs révisés et proposés (22/11/2026) ; exercice de restauration complète outillé avec garde anti-production | [RESTAURATION-COMPLETE.md](exploitation/RESTAURATION-COMPLETE.md) |
+| À faire | Exécuter la reconstruction complète chronométrée sur VM isolée et consigner le RTO mesuré (exigence annuelle du PRA, non réalisée à ce jour) | `tools/omni-restore-drill.py` |
+| À faire | Copie hors serveur du dépôt de snapshots `graylog_fs` (aujourd'hui sur le même serveur que les index) | [RESTAURATION-COMPLETE.md](exploitation/RESTAURATION-COMPLETE.md) §7 |
 | À faire | Scénarios documentés d'indisponibilité : serveur SIEM, stockage `/data`, flux réseau des sources | |
 | À faire | Réduction du point de défaillance unique (architecture mono-serveur) : au minimum un nœud de secours tiède restaurable dans le RTO | |
 
