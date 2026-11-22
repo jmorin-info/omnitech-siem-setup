@@ -69,7 +69,7 @@ Une détection est **critique** si sa priorité Graylog est supérieure ou égal
 |---|---|---|
 | requete | critique | requête non analysable localement, refusée par `_validate/query` ou par `_count` |
 | requete | moyenne | terme sans champ (dépend du champ par défaut d'OpenSearch) |
-| requete | faible | joker en minuscules sur un champ keyword de type chemin ou ligne de commande (voir limites) |
+| requete | faible | joker positif sur un champ keyword de type chemin, ligne de commande ou nom DNS (le joker garde la casse écrite, minuscules comme casse mixte ; correctif : expression régulière à classes, voir « Correctifs de novembre 2026 ») |
 | flux | critique | flux inexistant, désactivé, sans index set, ou aucun flux visé n'existe |
 | flux | élevée | index set visé vide sur toute la rétention (source jamais reçue) |
 | notifications | critique | notification référencée inexistante |
@@ -87,10 +87,11 @@ Statut d'une définition : **CASSEE** si au moins un défaut critique, **DEFAUT*
 défaut élevé ou moyen, **OK** sinon.
 
 La satisfiabilité est calculée en logique à trois valeurs sur l'arbre de la requête (un terme
-sur un champ absent est faux ; `a OR b` reste possible si `b` existe). La recherche du
-producteur d'un champ se limite aux `set_field("champ"` des règles connectées : le nom d'un
-champ apparaît aussi dans le code qui le lit, une recherche littérale dans les robots serait
-trompeuse.
+sur un champ absent est faux ; `a OR b` reste possible si `b` existe). Le producteur d'un
+champ est cherché dans les `set_field("champ"` des règles connectées, puis dans les robots du
+dépôt sous la seule forme d'une clé GELF additionnelle (`"_champ":` ou `["_champ"]`) : le nom
+nu d'un champ apparaît aussi dans le code qui le lit, une recherche littérale serait
+trompeuse. Exemple : `TEST_SIEM`, émis par `seal_sla_poller.py` en mode test seulement.
 
 ## Vivacité
 
@@ -167,7 +168,7 @@ l'instantané est signalée pour mise à jour de la fixture. Les tests hors lign
 l'instantané et vérifient en plus, par mutation, qu'une requête cassée, une exclusion perdue
 ou un seuil modifié font bien échouer la fixture.
 
-### Sélection (18 détections)
+### Sélection (21 détections)
 
 Critère : impact maximal en cas de panne silencieuse, en couvrant la diversité des
 mécanismes du moteur (étiquette seule, exclusions, seuil, cardinalité, condition composée,
@@ -193,6 +194,15 @@ absence, requête vide, définition sans flux, définition sans agrégation, deu
 | 16-silence-winlogbeat | Silence Winlogbeat | requête vide et absence |
 | 17-rat-rmm | Logiciel d'accès distant (T1219) | constaté en production, exclusions hôte et agent |
 | 18-vpn-etranger | VPN monté depuis l'étranger | termes échappés, exclusion par pays |
+| 19-ip-malveillante-sortante | IP malveillante (Tor / Spamhaus) | issues de session FortiGate (accept, server-rst), entrant exclu |
+| 20-seal-hyp002-force-brute-succes | SEAL HYP-002 | condition `&&` sur `sum` et `min`, regroupement compte et site |
+| 21-seal-sla001 | SEAL SLA-001 | exclusion du marqueur de test du poller (`TEST_SIEM`) |
+
+Les fixtures 17, 19 et 20 décrivent la requête **cible** de `tools/maj-detections-2026-11.py`.
+Tant que cet outil n'a pas été appliqué en production, l'exécution complète les rejoue sur
+l'ancienne requête de production : leurs cas de régression échouent et les trois définitions
+apparaissent CASSEE (code retour 2). C'est le comportement attendu ; il disparaît après
+`--apply`. Le test `test_fixtures_novembre_echouent_sur_l_ancienne_requete` le vérifie.
 
 ### Ajouter ou mettre à jour une fixture
 
@@ -240,7 +250,12 @@ Fichier optionnel `tools/detection-validation/exceptions.json` (ou `--exceptions
 ```
 
 Un contrôle ignoré reste tracé dans le rapport (défaut `info` « exception » avec le motif).
-Aucune exception n'est livrée : chaque exception est une décision de l'administrateur.
+Le fichier livré ne contient que des décisions déjà prises et tracées dans le dépôt :
+quatre définitions non alertantes à dessein (contrôle `notifications`) : connexion d'un
+compte adm-* hors heures et enregistrement d'appareil ou de méthode MFA M365 (arbitrage RSSI
+du 23/09/2026, `tools/ponctuel/fp-tuning4-2026-09-23.sh`), blocage SOAR automatique
+(traçabilité sans doublon de notification, `36-soar.sh`) et SEAL EVT-001 (sévérité Info du
+catalogue SEAL). Retirer une entrée réactive le contrôle.
 
 ## Exécution hebdomadaire
 
@@ -258,3 +273,107 @@ rattrapage au démarrage). Le service s'exécute depuis le dépôt de référenc
 production. Vivacité : 96 vivantes, 25 rares, 79 muettes, 1 source absente. Les défauts et les
 recommandations sont consignés dans le rapport daté produit par l'outil ; ils ne sont pas
 recopiés ici pour ne pas figer un état qui évolue.
+
+## Correctifs de novembre 2026
+
+Chantier `correctifs-detections` : correction dans le dépôt des défauts trouvés par le premier
+passage, et outil de mise à jour de la production `tools/maj-detections-2026-11.py` (plan en
+lecture seule par défaut). Cibles : `tools/maj-detections-2026-11/cibles.json`. Les comptages
+ci-dessous sont des `_count` OpenSearch sur 30 jours, mesurés le 22/11/2026 avec la traduction
+de requête de l'outil de validation.
+
+### Jokers sensibles à la casse
+
+Les champs Sysmon (`winlogbeat_winlog_event_data_Image`, `ParentImage`, `Details`,
+`TargetObject`), `command_line` et `dns_query` sont des `keyword` sans normaliseur : un joker
+garde la casse écrite. Constat : `Image:*anydesk*` ne trouve pas
+`C:\Program Files (x86)\AnyDesk\AnyDesk.exe`. Le validateur signalait 28 termes répartis sur
+4 définitions ; l'inventaire complet des jokers positifs avec lettres sur ces champs en donne 7
+(les jokers des exclusions `NOT` ne sont pas modifiés : les élargir masquerait davantage).
+
+Technique retenue : expression régulière Lucene à classes de caractères
+(`/.*[aA][nN][yY][dD][eE][sS][kK].*/`). Elle est insensible à la casse, ne touche ni au
+mapping ni aux pipelines, et trouve par construction au moins tout ce que trouvait le joker.
+Écartées : variantes de casse explicites (`*anydesk* OR *AnyDesk*`, incomplet : `Anydesk`,
+`ANYDESK`) ; normaliseur `lowercase` sur ces champs (modification des modèles d'index, effet
+au prochain roulement seulement, risque sur les autres usages du champ) ; champ en minuscules
+posé par pipeline (coût de traitement sur tout Sysmon) : chantier séparé, non engagé.
+
+| Détection | Avant | Après | Écart expliqué |
+|---|---|---|---|
+| Logiciel d'accès distant (RAT/RMM) T1219 | 15 | 315 | 300 lancements manqués : AnyDesk.exe sous `Program Files (x86)`, `Downloads`, `WinGet` (au moins 8 postes), Assistance rapide Windows (`MicrosoftCorporationII.QuickAssist`, 58) |
+| Persistance autorun (Run key) T1547.001 | 1 | 11 | `/StartHidden` (client Tixeo, 6, faux positif probable) et `-WindowStyle Hidden` (installation Notepad++, 4) |
+| Reconnaissance antivirus T1518.001 | 0 | 1 | une commande `pwsh` d'un poste d'administration |
+| Vol Credential Manager T1555.004 | 29 | 29 | aucun |
+| Binaire déposé via archiveur T1204.002 | 38 | 38 | aucun |
+| Navigateur lance un interpréteur T1203 | 0 | 0 | aucun |
+| Tunnel ngrok/cloudflared T1572 | 0 | 0 | aucun |
+
+### Autres correctifs
+
+- **IP malveillante (Tor / Spamhaus)** : les 1 761 messages `threat_intel` et `accept` sont
+  tous entrants (IP source publique listée ; la recherche threat-intel n'interroge que les IP
+  publiques, `src_ip_reserved_ip` n'est vrai que pour une IP privée). Leur exclusion est voulue
+  (commit 147ed8d). Le défaut réel : FortiGate journalise une session autorisée en `accept` ou
+  `start` puis `close`, `timeout`, `server-rst` ou `client-rst` ; `action:accept` seul ignorait
+  6 sessions sortantes autorisées (10.33.60.29 vers des IP d'hébergeur listées, du 26/10 au
+  02/11/2026, politique 84). Cible : `dest_ip_threat_indicated:true` et toutes les issues
+  autorisées ; 0 -> 6 messages.
+- **SEAL HYP-002** : aucun producteur de `alert_tag:seal_bf_then_success`. Une règle de
+  pipeline ne peut pas exprimer une séquence ; la définition est rendue autonome sur
+  `severity_num` (5 pour `ConnectionFailure`, 0 pour `Connection`, posé par
+  `12-seal-audit.rule`) : `sum >= 25` et `min <= 0` par compte et site sur 15 min. Rejeu sur
+  30 jours : aucun déclenchement. Limite : `actor_login` n'est pas normalisé (casse, préfixe de
+  domaine `BX-QA-SEAL-VM\`), une normalisation par pipeline est un chantier séparé.
+- **SEAL SLA-001 / SLA-002** : `TEST_SIEM` est bien le marqueur du poller
+  (`seal_sla_poller.py` ajoute `_TEST_SIEM` aux marqueurs émis quand
+  `SEAL_SLA_INCLUDE_TEST=1`, désactivé en production). L'exclusion est correcte mais n'a jamais
+  servi : le validateur reconnaît désormais ce producteur GELF. Requête inchangée. Les 8
+  événements SLA-001 de 30 jours viennent tous de `bx-qa-seal-vm` (banc de test) : exclure ce
+  site des SLA est une décision d'exploitation, non prise ici.
+- **SEAL ZON-001** : la table `omni-seal-zone.csv` ne contient que son en-tête faute de vue
+  `vw_SealZone_SIEM` (étapes SQL opérateur, `seal/docs/ZONES-TOPOLOGIE.md`) ; le plan des zones
+  physiques manque. La source la déclare parquée, la production l'avait activée : désactivation
+  explicite. Gabarit des 127 portes vues en 30 jours : `seal/graylog/omni-seal-zone.gabarit.csv`,
+  générateur `seal/graylog/gabarit_zone_portes.py`.
+- **Définitions sans flux** : C2 connu, domaine malveillant (URLhaus), comptes exposés,
+  fuite GitHub et mention ransomware rattachés aux flux où leur étiquette peut exister
+  (pipeline « OMNI - Threat Intel IOC » ; GELF HTTP 12201 vers le flux OMNI - M365 pour
+  `leak_intel`). Comptages inchangés.
+
+### Notifications SEARCH_ERROR (gl-system-events, 30 jours)
+
+52 notifications système, dont 51 `SEARCH_ERROR` et une `OUTDATED_VERSION`. Aucune n'est due
+à une requête invalide (toutes les requêtes passent `_validate/query`) :
+
+| Date | Nombre | Cause |
+|---|---|---|
+| 17/11 14:21 | 36 | file de recherche OpenSearch saturée (`rejected_execution_exception`, 6 121 tâches en attente pour 1 000 places) ; 10 de ces échecs sont remontés sans message (`null`) |
+| 15/11 03:xx | 11 | échecs simultanés sans message (`null`), toutes sources confondues |
+| 06/11 00:17 | 2 | idem (MFA fatigue, tunnel ngrok) |
+| 11/11 19:56 et 20:xx | 2 | disjoncteur `fielddata` sur le champ texte `source` (4,8 Go pour 4,7 Go) : Port-flap Aruba, échec logon service/batch |
+
+Les rafales simultanées désignent la plateforme, pas les définitions. Le disjoncteur
+`fielddata` vient des agrégations sur `source` (champ `text` avec `fielddata: true`) : 12
+définitions actives regroupent par `source`, ainsi que des tableaux de bord. Remplacer
+`source` par un champ `keyword` (`host`, valeurs identiques pour Aruba et vSphere ; FQDN pour
+Windows) changerait la valeur de clé des événements et doit être fait avec
+`97-enrich-alerts.sh` et les tableaux de bord : chantier séparé, comme le plafonnement de
+`indices.fielddata.cache.size`.
+
+### Appliquer en production
+
+```
+python3 tools/maj-detections-2026-11.py --vars /opt/omni-siem/repository/00-vars.env
+python3 tools/maj-detections-2026-11.py --vars /opt/omni-siem/repository/00-vars.env \
+        --apply --sauvegardes /var/backups/omni-maj-detections-2026-11
+python3 tools/maj-detections-2026-11.py --vars /opt/omni-siem/repository/00-vars.env \
+        --rollback --sauvegardes /var/backups/omni-maj-detections-2026-11
+```
+
+`--apply` sauvegarde chaque définition avant de l'écrire (la première sauvegarde est
+conservée si l'outil est relancé), applique par PUT une définition à la fois en conservant
+son état de planification, relit et compare, et s'arrête au premier échec. Une valeur de
+production différente de celle relevée le 22/11/2026 (`attendu_avant`) est une dérive : la
+cible est sautée sauf `--forcer`. Seule écriture d'état : la désactivation de ZON-001
+(`PUT .../unschedule`).

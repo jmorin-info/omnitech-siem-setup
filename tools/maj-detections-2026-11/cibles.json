@@ -1,0 +1,263 @@
+{
+  "version": 1,
+  "description": "Cibles de la mise à jour des détections de novembre 2026 (chantier correctifs-detections). attendu_avant = valeur relevée en production le 22/11/2026 (GET) ; une valeur de production différente est une dérive et bloque --apply pour cette définition sauf --forcer.",
+  "cibles": [
+    {
+      "id": "6a403ddab5993e874b5db2ca",
+      "titre": "OMNI - Logiciel d'acces distant non autorise (RAT/RMM) - T1219",
+      "chantier": "1-casse",
+      "motif": "Jokers sensibles à la casse sur un champ keyword (chemin, ligne de commande, nom DNS) : remplacés par des expressions régulières Lucene à classes de caractères [aA], insensibles à la casse sans toucher au mapping. Ensemble de correspondances inclus dans le nouveau.",
+      "attendu_avant": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (winlogbeat_winlog_event_data_OriginalFileName:(\"AnyDesk.exe\" OR \"RustDesk.exe\" OR \"ngrok.exe\") OR winlogbeat_winlog_event_data_Image:(*anydesk* OR *screenconnect* OR *splashtop* OR *atera* OR *rustdesk* OR *gotoassist* OR *remoteutilities* OR *zohoassist* OR *action1* OR *pulseway* OR *quickassist*)) AND NOT winlogbeat_winlog_event_data_Image:*ninjarmm* AND NOT source:bx\\-hl\\-*"
+      },
+      "cible": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (winlogbeat_winlog_event_data_OriginalFileName:(\"AnyDesk.exe\" OR \"RustDesk.exe\" OR \"ngrok.exe\") OR winlogbeat_winlog_event_data_Image:(/.*[aA][nN][yY][dD][eE][sS][kK].*/ OR /.*[sS][cC][rR][eE][eE][nN][cC][oO][nN][nN][eE][cC][tT].*/ OR /.*[sS][pP][lL][aA][sS][hH][tT][oO][pP].*/ OR /.*[aA][tT][eE][rR][aA].*/ OR /.*[rR][uU][sS][tT][dD][eE][sS][kK].*/ OR /.*[gG][oO][tT][oO][aA][sS][sS][iI][sS][tT].*/ OR /.*[rR][eE][mM][oO][tT][eE][uU][tT][iI][lL][iI][tT][iI][eE][sS].*/ OR /.*[zZ][oO][hH][oO][aA][sS][sS][iI][sS][tT].*/ OR /.*[aA][cC][tT][iI][oO][nN]1.*/ OR /.*[pP][uU][lL][sS][eE][wW][aA][yY].*/ OR /.*[qQ][uU][iI][cC][kK][aA][sS][sS][iI][sS][tT].*/)) AND NOT winlogbeat_winlog_event_data_Image:*ninjarmm* AND NOT source:bx\\-hl\\-*"
+      }
+    },
+    {
+      "id": "6a403fa4b5993e874b5db46f",
+      "titre": "OMNI - Exploitation client : navigateur/PDF lance un interpreteur - T1203",
+      "chantier": "1-casse",
+      "motif": "Jokers sensibles à la casse sur un champ keyword (chemin, ligne de commande, nom DNS) : remplacés par des expressions régulières Lucene à classes de caractères [aA], insensibles à la casse sans toucher au mapping. Ensemble de correspondances inclus dans le nouveau.",
+      "attendu_avant": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_ParentImage:(*chrome.exe OR *msedge.exe OR *firefox.exe OR *AcroRd32.exe OR *Acrobat.exe OR *iexplore.exe) AND winlogbeat_winlog_event_data_Image:(*powershell.exe OR *wscript.exe OR *cscript.exe OR *mshta.exe)"
+      },
+      "cible": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_ParentImage:(/.*[cC][hH][rR][oO][mM][eE][.][eE][xX][eE]/ OR /.*[mM][sS][eE][dD][gG][eE][.][eE][xX][eE]/ OR /.*[fF][iI][rR][eE][fF][oO][xX][.][eE][xX][eE]/ OR /.*[aA][cC][rR][oO][rR][dD]32[.][eE][xX][eE]/ OR /.*[aA][cC][rR][oO][bB][aA][tT][.][eE][xX][eE]/ OR /.*[iI][eE][xX][pP][lL][oO][rR][eE][.][eE][xX][eE]/) AND winlogbeat_winlog_event_data_Image:(/.*[pP][oO][wW][eE][rR][sS][hH][eE][lL][lL][.][eE][xX][eE]/ OR /.*[wW][sS][cC][rR][iI][pP][tT][.][eE][xX][eE]/ OR /.*[cC][sS][cC][rR][iI][pP][tT][.][eE][xX][eE]/ OR /.*[mM][sS][hH][tT][aA][.][eE][xX][eE]/)"
+      }
+    },
+    {
+      "id": "6a404012b5993e874b5db52b",
+      "titre": "OMNI - Vol Credential Manager Windows (cmdkey/vaultcmd) - T1555.004",
+      "chantier": "1-casse",
+      "motif": "Jokers sensibles à la casse sur un champ keyword (chemin, ligne de commande, nom DNS) : remplacés par des expressions régulières Lucene à classes de caractères [aA], insensibles à la casse sans toucher au mapping. Ensemble de correspondances inclus dans le nouveau.",
+      "attendu_avant": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (command_line:*cmdkey* OR command_line:*vaultcmd*) AND command_line:*list*"
+      },
+      "cible": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (command_line:/.*[cC][mM][dD][kK][eE][yY].*/ OR command_line:/.*[vV][aA][uU][lL][tT][cC][mM][dD].*/) AND command_line:/.*[lL][iI][sS][tT].*/"
+      }
+    },
+    {
+      "id": "6a4046a2b5993e874b5dbbc7",
+      "titre": "OMNI - Reconnaissance de l'antivirus/EDR (Security Software Discovery) - T1518.001",
+      "chantier": "1-casse",
+      "motif": "Jokers sensibles à la casse sur un champ keyword (chemin, ligne de commande, nom DNS) : remplacés par des expressions régulières Lucene à classes de caractères [aA], insensibles à la casse sans toucher au mapping. Ensemble de correspondances inclus dans le nouveau.",
+      "attendu_avant": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (command_line:*MpComputerStatus* OR command_line:*MpPreference* OR command_line:*securitycenter2* OR (command_line:*tasklist* AND (command_line:*defender* OR command_line:*sentinel* OR command_line:*crowdstrike* OR command_line:*eset*)))"
+      },
+      "cible": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (command_line:/.*[mM][pP][cC][oO][mM][pP][uU][tT][eE][rR][sS][tT][aA][tT][uU][sS].*/ OR command_line:/.*[mM][pP][pP][rR][eE][fF][eE][rR][eE][nN][cC][eE].*/ OR command_line:/.*[sS][eE][cC][uU][rR][iI][tT][yY][cC][eE][nN][tT][eE][rR]2.*/ OR (command_line:/.*[tT][aA][sS][kK][lL][iI][sS][tT].*/ AND (command_line:/.*[dD][eE][fF][eE][nN][dD][eE][rR].*/ OR command_line:/.*[sS][eE][nN][tT][iI][nN][eE][lL].*/ OR command_line:/.*[cC][rR][oO][wW][dD][sS][tT][rR][iI][kK][eE].*/ OR command_line:/.*[eE][sS][eE][tT].*/)))"
+      }
+    },
+    {
+      "id": "6a46d0f33411482ad6d5427b",
+      "titre": "OMNI - Exécution d'un binaire déposé via archiveur ou Outlook (T1204.002)",
+      "chantier": "1-casse",
+      "motif": "Jokers sensibles à la casse sur un champ keyword (chemin, ligne de commande, nom DNS) : remplacés par des expressions régulières Lucene à classes de caractères [aA], insensibles à la casse sans toucher au mapping. Ensemble de correspondances inclus dans le nouveau.",
+      "attendu_avant": {
+        "query": "(event_source:sysmon AND winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_ParentImage:(*WinRAR.exe OR *Rar.exe OR *7zFM.exe OR *7zG.exe OR *Bandizip.exe OR *PeaZip.exe OR *OUTLOOK.EXE) AND winlogbeat_winlog_event_data_Image:(*Downloads* OR *AppData* OR *Windows*Temp* OR *Users*Public* OR *ProgramData*)) AND NOT fp_allowlist:true"
+      },
+      "cible": {
+        "query": "(event_source:sysmon AND winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_ParentImage:(/.*[wW][iI][nN][rR][aA][rR][.][eE][xX][eE]/ OR /.*[rR][aA][rR][.][eE][xX][eE]/ OR /.*7[zZ][fF][mM][.][eE][xX][eE]/ OR /.*7[zZ][gG][.][eE][xX][eE]/ OR /.*[bB][aA][nN][dD][iI][zZ][iI][pP][.][eE][xX][eE]/ OR /.*[pP][eE][aA][zZ][iI][pP][.][eE][xX][eE]/ OR /.*[oO][uU][tT][lL][oO][oO][kK][.][eE][xX][eE]/) AND winlogbeat_winlog_event_data_Image:(/.*[dD][oO][wW][nN][lL][oO][aA][dD][sS].*/ OR /.*[aA][pP][pP][dD][aA][tT][aA].*/ OR /.*[wW][iI][nN][dD][oO][wW][sS].*[tT][eE][mM][pP].*/ OR /.*[uU][sS][eE][rR][sS].*[pP][uU][bB][lL][iI][cC].*/ OR /.*[pP][rR][oO][gG][rR][aA][mM][dD][aA][tT][aA].*/)) AND NOT fp_allowlist:true"
+      }
+    },
+    {
+      "id": "6a405145b5993e874b5dc622",
+      "titre": "OMNI - Persistance autorun malveillant (Run key) - T1547.001",
+      "chantier": "1-casse",
+      "motif": "Jokers sensibles à la casse sur un champ keyword (chemin, ligne de commande, nom DNS) : remplacés par des expressions régulières Lucene à classes de caractères [aA], insensibles à la casse sans toucher au mapping. Ensemble de correspondances inclus dans le nouveau.",
+      "attendu_avant": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:13 AND winlogbeat_winlog_event_data_TargetObject:*CurrentVersion*Run* AND winlogbeat_winlog_event_data_Details:(*EncodedCommand* OR *FromBase64* OR *DownloadString* OR *DownloadFile* OR *IEX* OR *hidden* OR *bitsadmin* OR *certutil*)"
+      },
+      "cible": {
+        "query": "event_source:sysmon AND winlogbeat_winlog_event_id:13 AND winlogbeat_winlog_event_data_TargetObject:/.*[cC][uU][rR][rR][eE][nN][tT][vV][eE][rR][sS][iI][oO][nN].*[rR][uU][nN].*/ AND winlogbeat_winlog_event_data_Details:(/.*[eE][nN][cC][oO][dD][eE][dD][cC][oO][mM][mM][aA][nN][dD].*/ OR /.*[fF][rR][oO][mM][bB][aA][sS][eE]64.*/ OR /.*[dD][oO][wW][nN][lL][oO][aA][dD][sS][tT][rR][iI][nN][gG].*/ OR /.*[dD][oO][wW][nN][lL][oO][aA][dD][fF][iI][lL][eE].*/ OR /.*[iI][eE][xX].*/ OR /.*[hH][iI][dD][dD][eE][nN].*/ OR /.*[bB][iI][tT][sS][aA][dD][mM][iI][nN].*/ OR /.*[cC][eE][rR][tT][uU][tT][iI][lL].*/)"
+      }
+    },
+    {
+      "id": "6a403ddbb5993e874b5db2d7",
+      "titre": "OMNI - Tunnel sortant ngrok/cloudflared (Protocol Tunneling) - T1572",
+      "chantier": "1-casse",
+      "motif": "Jokers sensibles à la casse sur un champ keyword (chemin, ligne de commande, nom DNS) : remplacés par des expressions régulières Lucene à classes de caractères [aA], insensibles à la casse sans toucher au mapping. Ensemble de correspondances inclus dans le nouveau.",
+      "attendu_avant": {
+        "query": "event_source:sysmon AND ((winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_OriginalFileName:(\"cloudflared.exe\" OR \"ngrok.exe\")) OR (winlogbeat_winlog_event_id:22 AND dns_query:(*.ngrok.io OR *.ngrok\\-free.app OR *.ngrok.app OR *.trycloudflare.com OR *.loca.lt OR *.serveo.net OR *.lhr.life OR *.localhost.run)))"
+      },
+      "cible": {
+        "query": "event_source:sysmon AND ((winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_OriginalFileName:(\"cloudflared.exe\" OR \"ngrok.exe\")) OR (winlogbeat_winlog_event_id:22 AND dns_query:(/.*[.][nN][gG][rR][oO][kK][.][iI][oO]/ OR /.*[.][nN][gG][rR][oO][kK]-[fF][rR][eE][eE][.][aA][pP][pP]/ OR /.*[.][nN][gG][rR][oO][kK][.][aA][pP][pP]/ OR /.*[.][tT][rR][yY][cC][lL][oO][uU][dD][fF][lL][aA][rR][eE][.][cC][oO][mM]/ OR /.*[.][lL][oO][cC][aA][.][lL][tT]/ OR /.*[.][sS][eE][rR][vV][eE][oO][.][nN][eE][tT]/ OR /.*[.][lL][hH][rR][.][lL][iI][fF][eE]/ OR /.*[.][lL][oO][cC][aA][lL][hH][oO][sS][tT][.][rR][uU][nN]/)))"
+      }
+    },
+    {
+      "id": "6a57500bef35b1c51c663929",
+      "titre": "OMNI - SEAL HYP-002 - Brute force suivie d'un succès (même compte)",
+      "chantier": "3-hyp002",
+      "motif": "Aucun producteur de alert_tag:seal_bf_then_success. Détection rendue autonome : échecs (severity_num=5) et succès (severity_num=0) de connexion console agrégés par compte et site sur 15 min ; déclenche si au moins 5 échecs (somme >= 25) et au moins un succès (minimum 0).",
+      "attendu_avant": {
+        "query": "event_domain:hypervisor_audit AND alert_tag:seal_bf_then_success",
+        "series": [
+          {
+            "type": "count",
+            "id": "count()",
+            "field": null
+          }
+        ],
+        "conditions": {
+          "expression": {
+            "expr": ">=",
+            "left": {
+              "expr": "number-ref",
+              "ref": "count()"
+            },
+            "right": {
+              "expr": "number",
+              "value": 1.0
+            }
+          }
+        }
+      },
+      "cible": {
+        "query": "event_domain:hypervisor_audit AND event_action:(ConnectionFailure OR Connection)",
+        "series": [
+          {
+            "id": "sum(severity_num)",
+            "type": "sum",
+            "field": "severity_num"
+          },
+          {
+            "id": "min(severity_num)",
+            "type": "min",
+            "field": "severity_num"
+          }
+        ],
+        "conditions": {
+          "expression": {
+            "expr": "&&",
+            "left": {
+              "expr": ">=",
+              "left": {
+                "expr": "number-ref",
+                "ref": "sum(severity_num)"
+              },
+              "right": {
+                "expr": "number",
+                "value": 25.0
+              }
+            },
+            "right": {
+              "expr": "<=",
+              "left": {
+                "expr": "number-ref",
+                "ref": "min(severity_num)"
+              },
+              "right": {
+                "expr": "number",
+                "value": 0.0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "6a578c7def35b1c51c668815",
+      "titre": "OMNI - SEAL ZON-001 - Rafale de refus d'acces dans une zone",
+      "chantier": "4-zon001",
+      "motif": "Table omni-seal-zone vide (en-tête seul) : seal_zone jamais posé, détection inerte. La source (seal/detections/provision_detections.py) la déclare PARQUEE ; la production l'a activée. Désactivation explicite jusqu'au remplissage de la table (voir seal/docs/ZONES-TOPOLOGIE.md).",
+      "attendu_avant": {
+        "state": "ENABLED"
+      },
+      "cible": {
+        "state": "DISABLED"
+      }
+    },
+    {
+      "id": "6a33eb1d6a3de2fbb24c1050",
+      "titre": "OMNI - C2 connu contacte (IP malveillante abuse.ch/Feodo)",
+      "chantier": "7-flux",
+      "motif": "Tag c2_ioc posé par le pipeline « OMNI - Threat Intel IOC », connecté à ces cinq flux uniquement.",
+      "attendu_avant": {
+        "streams_titres": []
+      },
+      "cible": {
+        "streams_titres": [
+          "OMNI - FortiGate",
+          "OMNI - Sysmon",
+          "OMNI - Windows autres",
+          "OMNI - BunkerWeb",
+          "OMNI - M365"
+        ]
+      }
+    },
+    {
+      "id": "6a33eb1d6a3de2fbb24c105c",
+      "titre": "OMNI - Domaine malveillant resolu (URLhaus)",
+      "chantier": "7-flux",
+      "motif": "Même cause que C2 connu (même fonction mk_ti_alert de 66-threatintel.sh) : tag malware_domain posé par le même pipeline.",
+      "attendu_avant": {
+        "streams_titres": []
+      },
+      "cible": {
+        "streams_titres": [
+          "OMNI - FortiGate",
+          "OMNI - Sysmon",
+          "OMNI - Windows autres",
+          "OMNI - BunkerWeb",
+          "OMNI - M365"
+        ]
+      }
+    },
+    {
+      "id": "6a340d8e6a3de2fbb24d4682",
+      "titre": "OMNI - Comptes/données OMNITECH exposés (fuite / dark web)",
+      "chantier": "7-flux",
+      "motif": "Messages leak_intel émis en GELF HTTP 12201 (omni-leak-hibp/dehashed) : entrée M365, flux OMNI - M365 (event_source leak_intel non exclu).",
+      "attendu_avant": {
+        "streams_titres": []
+      },
+      "cible": {
+        "streams_titres": [
+          "OMNI - M365"
+        ]
+      }
+    },
+    {
+      "id": "6a33f8096a3de2fbb24c8381",
+      "titre": "OMNI - Fuite potentielle sur GitHub (données OMNITECH)",
+      "chantier": "7-flux",
+      "motif": "Messages leak_intel émis en GELF HTTP 12201 (omni-leak-github) : entrée M365, flux OMNI - M365 (event_source leak_intel non exclu).",
+      "attendu_avant": {
+        "streams_titres": []
+      },
+      "cible": {
+        "streams_titres": [
+          "OMNI - M365"
+        ]
+      }
+    },
+    {
+      "id": "6a2abecb65bc77613c8382a0",
+      "titre": "OMNI - IP malveillante (Tor / Spamhaus)",
+      "chantier": "8-tor",
+      "motif": "action:accept ne retient que les journaux de début de session FortiGate ; une session autorisée se termine en close, timeout, server-rst ou client-rst. Les 1 761 accept threat_intel sont tous ENTRANTS (source publique, exclue à dessein depuis 147ed8d). La cible exige la destination listée (sortant) et toute issue autorisée.",
+      "attendu_avant": {
+        "query": "alert_tag:threat_intel AND action:accept AND src_ip_reserved_ip:true"
+      },
+      "cible": {
+        "query": "alert_tag:threat_intel AND src_ip_reserved_ip:true AND dest_ip_threat_indicated:true AND action:(accept OR start OR close OR timeout OR server\\-rst OR client\\-rst)"
+      }
+    },
+    {
+      "id": "6a340d8e6a3de2fbb24d4676",
+      "titre": "OMNI - RANSOMWARE : OMNITECH nomme sur un site d'extorsion",
+      "chantier": "7-flux",
+      "motif": "Même cause que Comptes exposés (même fonction mk_leak_alert de 72-leak-darkweb.sh) : messages leak_intel (RansomLook, ransomware.live) émis en GELF HTTP 12201, flux OMNI - M365.",
+      "attendu_avant": {
+        "streams_titres": []
+      },
+      "cible": {
+        "streams_titres": [
+          "OMNI - M365"
+        ]
+      }
+    }
+  ]
+}
