@@ -27,6 +27,7 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Corrigé
 
+- Logstash : drop-in `deploye/systemd/logstash.service.d/50-attente-graylog.conf` (ordre après `graylog-server`, attente bornée de l'input GELF TCP 12202) ; cause des 4 relances du 17/11/2026 : sortie GELF de la collecte SEAL refusée (`ECONNREFUSED`) tant que Graylog n'écoutait pas.
 - `omni-ti-feeds` (miroir `deploye/sbin` et script 66) : URLhaus a fermé ses exports publics (HTTP 410 depuis le 21/10/2026, 553 domaines figés) ; le robot utilise l'API authentifiée avec la clé abuse.ch (`ABUSECH_AUTH_KEY`, ou `THREATFOX_AUTH_KEY`) et dit explicitement pourquoi il ignore la source sans clé. Tests `tests/test_ti_feeds.py`.
 
 ## [Non publié] - Décisions d'exploitation du 22/11/2026

@@ -11,6 +11,7 @@
 /etc/nginx/snippets/omni-sec-headers-soc.conf	deploye/nginx/omni-sec-headers-soc.conf
 /etc/nginx/snippets/omni-sec-headers.conf	deploye/nginx/omni-sec-headers.conf
 /etc/oms-snap-siem.conf	deploye/etc/oms-snap-siem.conf
+/etc/systemd/system/logstash.service.d/50-attente-graylog.conf	deploye/systemd/logstash.service.d/50-attente-graylog.conf
 /etc/systemd/system/omni-alert-digest.service	deploye/systemd/omni-alert-digest.service
 /etc/systemd/system/omni-alert-digest.timer	deploye/systemd/omni-alert-digest.timer
 /etc/systemd/system/omni-alert-lot.service	deploye/systemd/omni-alert-lot.service

@@ -110,3 +110,13 @@ def test_iso_evidence_dropin_points_to_canonical_repository_only():
     # hardening.conf est lu après le drop-in : il doit porter la même liste, sans l'ancienne copie.
     assert expected in hardening and "/root/" not in hardening
     assert (ROOT / "docs/archives/preuves-iso").is_dir()
+
+
+def test_logstash_waits_for_graylog_gelf_input_with_a_bounded_delay():
+    dropin = (ROOT / "deploye/systemd/logstash.service.d/50-attente-graylog.conf").read_text()
+    assert "After=graylog-server.service" in dropin
+    pre = next(line for line in dropin.splitlines() if line.startswith("ExecStartPre="))
+    # $$ = $ littéral pour systemd ; l'attente se termine toujours par exit 0 (300 s au plus).
+    assert "/dev/tcp/127.0.0.1/12202" in pre and "$$i -lt 60" in pre and "sleep 5" in pre
+    assert pre.rstrip("'").endswith("exit 0")
+    assert "TimeoutStartSec=420" in dropin
