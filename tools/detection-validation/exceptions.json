@@ -1,0 +1,25 @@
+{
+  "commentaire": "Exceptions du validateur de détections. Chaque entrée reprend une décision déjà prise et tracée dans le dépôt ; la retirer réactive le contrôle. Voir docs/detection/VALIDATION-DETECTIONS.md, section Exceptions.",
+  "exceptions": [
+    {
+      "titre": "OMNI - Connexion compte admin (adm-*) hors heures ouvrées",
+      "ignorer": ["notifications"],
+      "motif": "Événement non alertant (alert=false) par arbitrage RSSI du 23/09/2026 (tools/ponctuel/fp-tuning4-2026-09-23.sh) : 11 024 connexions en 7 jours pour un seul compte d'administration depuis des IP internes ; valeur en corrélation et en chasse, pas en alerte isolée. Mesure du 22/11/2026 : 52 414 messages et 1 487 événements sur 30 jours, une notification inonderait le canal."
+    },
+    {
+      "titre": "OMNI - M365 enregistrement appareil / méthode MFA (T1098.005)",
+      "ignorer": ["notifications"],
+      "motif": "Événement non alertant (alert=false) par arbitrage RSSI du 23/09/2026 (tools/ponctuel/fp-tuning4-2026-09-23.sh) : inscriptions légitimes ; une méthode MFA ajoutée n'est suspecte que juste après une connexion anormale, ce qui relève de la corrélation."
+    },
+    {
+      "titre": "OMNI - SOAR : IP bloquée automatiquement",
+      "ignorer": ["notifications"],
+      "motif": "Traçabilité sans notification par conception (36-soar.sh, constat du 30/06/2026) : le blocage automatique est la conséquence d'une alerte qui a déjà notifié ; un second message pour la même IP serait un doublon. L'événement reste visible en console et dans les tableaux de bord."
+    },
+    {
+      "titre": "OMNI - SEAL EVT-001 - Accès usager accordé (base corrélation/chasse)",
+      "ignorer": ["notifications"],
+      "motif": "Sévérité Info du catalogue SEAL (seal/detections/provision_detections.py) : seules les sévérités Critical et High reçoivent une notification immédiate ; EVT-001 est une base de corrélation et de chasse (5 685 accès accordés en 30 jours au 22/11/2026)."
+    }
+  ]
+}

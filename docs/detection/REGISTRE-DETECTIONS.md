@@ -14,6 +14,15 @@
 > `21-alert-hygiene.sh`, `36-soar.sh`, `47-detections-extra.sh`, `48`, modules 37-46,
 > `59-file-audit.sh`, `60-integrity.sh`). Tag MITRE via `lookups/mitre-attack.csv`.
 
+## Correctifs du 22/11/2026
+
+Détections corrigées par le chantier `correctifs-detections` (détail, mesures et outil de
+mise à jour de la production : [VALIDATION-DETECTIONS.md](VALIDATION-DETECTIONS.md#correctifs-de-novembre-2026)) :
+jokers rendus insensibles à la casse (RAT/RMM T1219, T1203, T1204.002, T1518.001, T1547.001,
+T1555.004, T1572) ; IP malveillante (Tor / Spamhaus) ; SEAL HYP-002 rendue autonome ; SEAL
+ZON-001 désactivée tant que la table des zones est vide ; C2 connu, domaine malveillant,
+comptes exposés, fuite GitHub et mention ransomware rattachés à leurs flux.
+
 ## Répartition
 
 | Priorité | Nombre | Tier mail | Tier Teams |
@@ -79,13 +88,13 @@
 
 | Règle | Prio | Tier | Logique | MITRE |
 |-------|------|------|---------|-------|
-| IP malveillante (Tor / Spamhaus) | P3 | T | threat-intel lookup sur IP publique | T1071 |
+| IP malveillante (Tor / Spamhaus) | P3 | T | hôte interne vers destination listée Tor/Spamhaus, session autorisée (`accept`, `start`, `close`, `timeout`, `server-rst`, `client-rst`) ; entrant exclu (correctif 22/11/2026) | T1071 |
 | FortiGate : virus / IPS | P3 | T | UTM (virus/ips/attack) | — |
 | Service exposé sur Internet (port à risque) | P3 | T | `exposition_internet` (WAN→port risqué accepté) | T1190 |
 | Force brute portail VPN (≥30 échecs / IP / h) | P2 | T | `subtype:vpn status:failure` → **SOAR** | T1110 |
 | VPN monté depuis l'étranger | P3 | T | tunnel `remip` hors FR | T1133 |
 | Scan réseau interne (reconnaissance / lateral) | P2 | T | `ndr_scan` / `network_scan` | T1046 |
-| SOAR : IP bloquée automatiquement | P3 | T | action `omni-soar` (telemetry) | — |
+| SOAR : IP bloquée automatiquement | P3 | — | action `omni-soar` (traçabilité, non alertant : le déclencheur a déjà notifié) | — |
 | FortiGate : balayage IKE (≥10 échecs phase 1 / IP / 6 h) → SOAR en simulation | P2 | T | négociation IKE sans tunnel (`vpntunnel:N/A`) groupée par `remip` ; source `objets-graylog/definitions/fortigate-balayage-ike.json` (script 26) | T1595 / T1133 |
 
 ## 4. Cloud Microsoft 365 / Entra (A.5.23)

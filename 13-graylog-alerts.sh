@@ -567,8 +567,14 @@ ensure_event "OMNI - Force brute portail VPN (>=30 échecs / IP / h)" 2 \
   'subtype:vpn AND action:ssl\-login\-fail' "[\"${ST_FORTI}\"]" \
   '["remip"]' "${COUNT_SERIES}" "$(count_ge 30)" 60 15
 
+# Sortant uniquement (147ed8d) : hote interne -> destination listee Tor/Spamhaus.
+# Correctif 11/2026 : FortiGate journalise une session AUTORISEE en accept/start puis
+# close, timeout, server-rst ou client-rst ; action:accept seul manquait les fins de
+# session (6 sessions sortantes autorisees vers un hebergeur listé du 26/10 au 02/11).
+# dest_ip_threat_indicated:true : c'est la destination qui est listee (la recherche
+# threat-intel n'interroge que les IP publiques, src_ip_reserved_ip exclut l'entrant).
 ensure_event "OMNI - IP malveillante (Tor / Spamhaus)" 3 \
-  'alert_tag:threat_intel AND action:accept AND src_ip_reserved_ip:true' "[\"${ST_FORTI}\"]" \
+  'alert_tag:threat_intel AND src_ip_reserved_ip:true AND dest_ip_threat_indicated:true AND action:(accept OR start OR close OR timeout OR server\-rst OR client\-rst)' "[\"${ST_FORTI}\"]" \
   '[]' '[]' "${NOCOND}" 5 1
 
 # GeoIP s'execute APRES les pipelines -> detection par requete (pas par tag)

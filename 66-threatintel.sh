@@ -309,13 +309,17 @@ install -m 644 "$CSV" /etc/graylog/lookup/mitre-attack.csv; chown root:graylog /
 ok "MITRE c2_ioc / malware_domain"
 NMAIL="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Mail equipe IT")|.id')"
 NTEAMS="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Teams SOC")|.id')"
+# Flux : ceux auxquels le pipeline « OMNI - Threat Intel IOC » est connecte (boucle
+# ci-dessus) ; seuls leurs messages peuvent porter c2_ioc / malware_domain. Avant 11/2026
+# la definition etait creee SANS flux (recherche sur tous les index).
+TI_STREAMS="$(for ST in "OMNI - FortiGate" "OMNI - Sysmon" "OMNI - Windows autres" "OMNI - BunkerWeb" "OMNI - M365"; do
+  get_stream_id "$ST"; done | jq -R 'select(length>0)' | jq -sc .)"
 mk_ti_alert() {  # titre query
-  local T="$1" Q="$2" SID
-  SID="$(get_stream_id 'OMNI - FortiGate')"
+  local T="$1" Q="$2"
   api_get "/events/definitions?per_page=300" | jq -e --arg t "$T" '.event_definitions[]|select(.title==$t)' >/dev/null && { skip "alerte '$T' existe"; return; }
   local NF; NF="$(jq -n --arg m "$NMAIL" --arg tm "$NTEAMS" '[{notification_id:$m,notification_parameters:null}]+(if $tm=="" or $tm=="null" then [] else [{notification_id:$tm,notification_parameters:null}] end)')"
-  jq -n --arg t "$T" --arg q "$Q" --argjson n "$NF" '{title:$t,description:"Threat intel abuse.ch (66-threatintel.sh)",priority:3,alert:true,
-    config:{type:"aggregation-v1",query:$q,query_parameters:[],streams:[],group_by:[],series:[{id:"count()",type:"count"}],
+  jq -n --arg t "$T" --arg q "$Q" --argjson n "$NF" --argjson st "$TI_STREAMS" '{title:$t,description:"Threat intel abuse.ch (66-threatintel.sh)",priority:3,alert:true,
+    config:{type:"aggregation-v1",query:$q,query_parameters:[],streams:$st,group_by:[],series:[{id:"count()",type:"count"}],
       conditions:{expression:{expr:">=",left:{expr:"number-ref",ref:"count()"},right:{expr:"number",value:1}}},
       search_within_ms:300000,execute_every_ms:300000,use_cron_scheduling:false,event_limit:50},
     field_spec:{},key_spec:[],notification_settings:{grace_period_ms:3600000,backlog_size:10},notifications:$n}' \

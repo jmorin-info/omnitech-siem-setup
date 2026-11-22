@@ -1,0 +1,108 @@
+{
+  "titre": "OMNI - SEAL SLA-001 - Alarme CRITIQUE non traitee au-dela du SLA",
+  "critique": true,
+  "mitre": "A.8.16",
+  "justification": "Alarme de sûreté physique critique restée ouverte au-delà du SLA (marqueur émis par oms-seal-sla). Le poller marque ses émissions de test par le champ GELF _TEST_SIEM (SEAL_SLA_INCLUDE_TEST=1), indexé TEST_SIEM : l'exclusion doit tenir.",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "event_domain:alarm AND alert_tag:seal_sla_breach AND sla_class:critical AND NOT _exists_:TEST_SIEM",
+    "streams": [
+      "OMNI - SEAL Alarmes"
+    ],
+    "group_by": [
+      "seal_site",
+      "EVEN_GROUP_ID"
+    ],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 1.0
+        }
+      }
+    },
+    "search_within_ms": 120000,
+    "execute_every_ms": 120000
+  },
+  "cas": [
+    {
+      "nom": "marqueur de brèche critique",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "bx-seal-omega",
+            "4242"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - SEAL Alarmes",
+          "age_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "alarm",
+            "alert_tag": "seal_sla_breach",
+            "sla_class": "critical",
+            "seal_site": "bx-seal-omega",
+            "EVEN_GROUP_ID": "4242"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "marqueur émis en mode test du poller (TEST_SIEM)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - SEAL Alarmes",
+          "age_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "alarm",
+            "alert_tag": "seal_sla_breach",
+            "sla_class": "critical",
+            "seal_site": "bx-seal-omega",
+            "EVEN_GROUP_ID": "4242",
+            "TEST_SIEM": 1
+          }
+        }
+      ]
+    },
+    {
+      "nom": "brèche de classe high (relève de SLA-002)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - SEAL Alarmes",
+          "age_s": 30,
+          "champs": {
+            "event_source": "seal",
+            "event_domain": "alarm",
+            "alert_tag": "seal_sla_breach",
+            "sla_class": "high",
+            "seal_site": "bx-seal-omega",
+            "EVEN_GROUP_ID": "4242"
+          }
+        }
+      ]
+    }
+  ]
+}

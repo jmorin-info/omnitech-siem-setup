@@ -559,3 +559,59 @@ def test_replay_compare_evaluateur_et_opensearch():
     res = dv.replay(FIXTURES, faux, maintenant=MAINTENANT, journal=lambda *_: None)
     assert res and all(x["ok"] for x in res), [x for x in res if not x["ok"]]
     assert faux.crees == {}
+
+
+# ----------------------------------------------------------------- correctifs de novembre 2026
+ANCIENNES_REQUETES = {
+    # fixture : requête de production du 22/11/2026, avant correctif
+    "OMNI - Logiciel d'acces distant": (
+        'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (winlogbeat_winlog_event_data_OriginalFileName:'
+        '("AnyDesk.exe" OR "RustDesk.exe" OR "ngrok.exe") OR winlogbeat_winlog_event_data_Image:(*anydesk* OR '
+        '*screenconnect* OR *splashtop* OR *atera* OR *rustdesk* OR *gotoassist* OR *remoteutilities* OR *zohoassist* '
+        'OR *action1* OR *pulseway* OR *quickassist*)) AND NOT winlogbeat_winlog_event_data_Image:*ninjarmm* '
+        'AND NOT source:bx\\-hl\\-*'),
+    "OMNI - IP malveillante (Tor": "alert_tag:threat_intel AND action:accept AND src_ip_reserved_ip:true",
+    "OMNI - SEAL HYP-002": "event_domain:hypervisor_audit AND alert_tag:seal_bf_then_success",
+}
+
+
+@pytest.mark.parametrize("debut,ancienne", ANCIENNES_REQUETES.items(), ids=list(ANCIENNES_REQUETES))
+def test_fixtures_novembre_echouent_sur_l_ancienne_requete(debut, ancienne):
+    """Les fixtures des détections corrigées prouvent le correctif : l'ancienne requête échoue."""
+    fx = copy.deepcopy(_fx(debut))
+    fx["definition"]["query"] = ancienne
+    res = dv.executer_fixtures([fx], None, MAINTENANT)[0]
+    assert not all(c["ok"] for c in res["cas"])
+
+
+def test_regex_a_classes_insensible_a_la_casse_et_joker_signale():
+    arbre = dv.analyser("img:(/.*[aA][nN][yY][dD][eE][sS][kK].*/ OR /.*[qQ][uU][iI][cC][kK].*/)")
+    assert dv.correspond(arbre, {"img": "C:\\Program Files (x86)\\AnyDesk\\AnyDesk.exe"})
+    assert dv.correspond(arbre, {"img": "c:\\outils\\anydesk.exe"})
+    assert not dv.correspond(arbre, {"img": "C:\\Windows\\notepad.exe"})
+    res = _valider([
+        _definition("d1", "OMNI - Casse mixte", "alert_tag:canary AND winlogbeat_winlog_event_data_Image:*WinRAR.exe"),
+        _definition("d2", "OMNI - Regex", "alert_tag:canary AND winlogbeat_winlog_event_data_Image:/.*[wW][iI][nN][rR][aA][rR][.][eE][xX][eE]/"),
+    ])
+    p = _par_titre(res)
+    assert any("sensible à la casse" in d.constat for d in p["OMNI - Casse mixte"].defauts)
+    assert not any("sensible à la casse" in d.constat for d in p["OMNI - Regex"].defauts)
+
+
+def test_champ_emis_par_un_robot_gelf_reconnu_comme_producteur(tmp_path):
+    (tmp_path / "robot.py").write_text('payload["_TEST_SIEM"] = 1\nmsg = {"_autre_champ": 2}\n', encoding="utf-8")
+    inv = _inventaire([_definition("d1", "OMNI - Exclusion test", "alert_tag:canary AND NOT _exists_:TEST_SIEM"),
+                       _definition("d2", "OMNI - Lecture seule", "alert_tag:canary AND NOT _exists_:lu_seulement")])
+    res = dv.valider(inv, FauxOpenSearch(_index_win()), controles={"statique"}, fixtures=[], exceptions={},
+                     depot=tmp_path)
+    p = _par_titre(res)
+    assert any("robot GELF" in d.constat for d in p["OMNI - Exclusion test"].defauts)
+    assert any("aucun producteur connu" in d.constat for d in p["OMNI - Lecture seule"].defauts)
+
+
+def test_fichier_d_exceptions_livre_est_valide_et_motive():
+    doc = json.loads(dv.EXCEPTIONS_PAR_DEFAUT.read_text(encoding="utf-8"))
+    for e in doc["exceptions"]:
+        assert e["titre"].startswith("OMNI - ") and len(e["motif"]) > 40
+        assert set(e.get("ignorer", [])) <= {"notifications", "flux", "planification", "champs", "producteur",
+                                             "requete", "inventaire", "vivacite"}
