@@ -12,22 +12,24 @@
 #   migration a supprime des index a ~30 jours au lieu de la retention demandee
 #   (incident 09/2026, retour arriere : tools/ponctuel/revert-index-rotation-legacy.sh).
 #   Ce script ne fait plus cette migration. Desormais :
-#     - il ne modifie QUE les reglages des index sets (rotation temporelle
-#       heritee et nombre d'index conserves), qui s'appliquent aux index futurs ;
+#     - il ne modifie QUE le nombre d'index conserves d'un index set deja en
+#       rotation temporelle heritee, sans changer sa periode ni sa strategie ;
 #     - il ne supprime jamais d'index, n'appelle jamais DELETE, ne reindexe pas ;
-#     - il ne reduit jamais une retention : si la retention demandee est plus
-#       courte que l'existant, il le signale explicitement et laisse le reglage
-#       en place (une reduction se decide et s'applique a la main) ;
+#     - il ne reduit jamais le nombre d'index conserves. Une reduction ou un
+#       changement de rotation demande une migration distincte avec analyse
+#       des index existants ; aucune migration n'est realisee ici ;
 #     - il refuse tout reglage dont le nombre d'index conserves serait inferieur
 #       au nombre d'index deja presents (Graylog supprimerait les plus anciens
 #       au passage suivant de la retention) ;
 #     - il refuse d'agir sur un index set dont l'etat ne peut pas etre lu
 #       (OpenSearch injoignable, rotation non temporelle sans duree connue).
 #
-#   Retention effective = nombre d'index conserves x periode de rotation
+#   Estimation affichee = nombre d'index conserves x periode de rotation
 #   (P1D = 1 jour, P1W = 7 jours, P1M = 30 jours, P1Y = 365 jours). Le nombre
-#   d'index cible est arrondi au superieur : la retention obtenue est toujours
-#   superieure ou egale a la duree demandee.
+#   d'index cible est arrondi au superieur. P1M/P1Y sont calendaires et la
+#   rotation peut etre anticipee : cette estimation n'est pas une garantie
+#   d'age minimal. La garantie ici est de ne pas avancer la suppression par
+#   rapport aux reglages existants (periode conservee, compteur non reduit).
 #
 #   Le routage des streams et la sante des inputs sont CONTROLES en lecture
 #   seule : un ecart est signale, jamais corrige ici.
@@ -36,7 +38,8 @@
 #     ./83-retention-consolidee.sh            plan (lecture seule, defaut)
 #     ./83-retention-consolidee.sh --apply    applique les seuls changements surs
 #   Code retour : 0 plan sans reserve ; 3 au moins un index set ecarte (retention
-#   plus courte que l'existant ou refus), rien d'ecrit pour ceux-la ; 1 erreur.
+#   plus courte que l'existant ou refus), rien d'ecrit pour ceux-la ; 1 erreur
+#   de lecture ou d'ecriture (arret, des modifications precedentes sont possibles).
 #   Idempotent.
 # =============================================================================
 set -uo pipefail
@@ -110,6 +113,15 @@ decide() {
   fi
   keep=$(( (cible + pd - 1) / pd ))
   jours=$(( keep * pd ))
+  if [[ -z "$pcur" || "$pcur" != "$pcible" ]]; then
+    echo "REFUS|${keep}|${jours}|changement de periode ou de strategie : migration distincte requise"; return
+  fi
+  if [[ ! "$kcur" =~ ^[1-9][0-9]*$ ]]; then
+    echo "REFUS|${keep}|${jours}|nombre d'index conserves actuel invalide"; return
+  fi
+  if (( keep < kcur )); then
+    echo "PLUS_COURT|${keep}|${jours}|compteur demande (${keep}) inferieur a l'existant (${kcur}) : aucune reduction"; return
+  fi
   if [[ "$pcur" == "$pcible" && "$kcur" == "$keep" ]]; then
     echo "CONFORME|${keep}|${jours}|deja conforme"; return
   fi
@@ -128,19 +140,10 @@ decide() {
   echo "APPLIQUER|${keep}|${jours}|retention ${jcur} j -> ${jours} j"
 }
 
-# set_body JSON_INDEX_SET PERIODE CONSERVES -> corps du PUT (rotation heritee).
-# Seules la rotation et la retention changent ; data_tiering est desactive car le
-# mode hot_only est celui qui a supprime des index prematurement (09/2026).
+# set_body JSON_INDEX_SET PERIODE CONSERVES -> corps du PUT.
+# La strategie et sa configuration sont conservees, seul le compteur augmente.
 set_body() {
-  jq --arg period "$2" --argjson keep "$3" --arg rot "$TIMEBASED" --arg ret "$DELETION" '
-    .use_legacy_rotation = true
-    | .rotation_strategy_class = $rot
-    | .rotation_strategy = {type: ($rot + "Config"), rotation_period: $period,
-                            max_rotation_period: (.rotation_strategy.max_rotation_period // null),
-                            rotate_empty_index_set: (.rotation_strategy.rotate_empty_index_set // false)}
-    | .retention_strategy_class = $ret
-    | .retention_strategy = {type: ($ret + "Config"), max_number_of_indices: $keep}
-    | .data_tiering = null' <<<"$1"
+  jq --argjson keep "$3" '.retention_strategy.max_number_of_indices = $keep' <<<"$1"
 }
 
 usage() { sed -n '3,41p' "$0" | sed 's/^# \{0,1\}//'; }
@@ -164,7 +167,7 @@ main() {
     die "root requis pour --apply"
   fi
   [[ -n "$ENV_APPLY" && $APPLY != 1 ]] && warn "la variable APPLY n'est plus reconnue : seule l'option --apply ecrit"
-  require_api
+  require_api || return 1
   local OS="${OS_URL:-http://127.0.0.1:9200}"
 
   echo "=============================================================================="
@@ -172,12 +175,12 @@ main() {
   echo "=============================================================================="
 
   local SETS
-  SETS="$(api_get '/system/indices/index_sets?skip=0&limit=200')"
-  jq -e '.index_sets' >/dev/null 2>&1 <<<"$SETS" || die "liste des index sets illisible"
+  SETS="$(api_get '/system/indices/index_sets?skip=0&limit=200')" || die "lecture des index sets en echec"
+  jq -e '.index_sets | type == "array"' >/dev/null 2>&1 <<<"$SETS" || die "liste des index sets illisible"
 
-  echo "==> [1/4] Retention et rotation des index sets (s'appliquent aux index futurs)"
+  echo "==> [1/4] Augmentation des compteurs de retention (rotation et index existants conserves)"
   printf "    %-18s %-6s %-14s %-14s %-6s %s\n" PREFIXE CIBLE ACTUEL "CIBLE REGLEE" INDEX DECISION
-  local PREFIX ID JSET PCUR KCUR JCUR NB PCIBLE LMAX LIST RES DEC KEEP JOURS MOTIF REP pd P
+  local PREFIX ID JSET PCUR KCUR JCUR NB PCIBLE LIST RES DEC KEEP JOURS MOTIF REP pd P
   local N_APPLY=0 N_REFUS=0 N_COURT=0
   local -a A_APPLY=()
   for PREFIX in $(printf '%s\n' "${!PLAN[@]}" | sort); do
@@ -189,14 +192,12 @@ main() {
     ID="$(jq -r '.id' <<<"$JSET")"
     PCUR=""; KCUR=""; JCUR="?"
     if [[ "$(jq -r '.rotation_strategy_class // ""' <<<"$JSET")" == "$TIMEBASED" \
-       && "$(jq -r '.retention_strategy_class // ""' <<<"$JSET")" == "$DELETION" ]]; then
+       && "$(jq -r '.retention_strategy_class // ""' <<<"$JSET")" == "$DELETION" \
+       && "$(jq -r '.use_legacy_rotation' <<<"$JSET")" == true \
+       && "$(jq -r '.data_tiering' <<<"$JSET")" == null ]]; then
       PCUR="$(jq -r '.rotation_strategy.rotation_period // ""' <<<"$JSET")"
       KCUR="$(jq -r '.retention_strategy.max_number_of_indices // ""' <<<"$JSET")"
       if pd="$(period_days "$PCUR")" && [[ "$KCUR" =~ ^[0-9]+$ ]]; then JCUR=$(( KCUR * pd )); fi
-    else
-      # rotation non temporelle : duree connue seulement si index_lifetime_max = PnD
-      LMAX="$(jq -r '(.data_tiering.index_lifetime_max // .rotation_strategy.index_lifetime_max // "")' <<<"$JSET")"
-      if [[ "$LMAX" =~ ^P([0-9]+)D$ ]]; then JCUR="${BASH_REMATCH[1]}"; fi
     fi
     PCIBLE="${ROTATION[$PREFIX]:-${PCUR:-P1D}}"
     if LIST="$(curl -sf "${OS}/_cat/indices/${PREFIX}_*?h=index" 2>/dev/null)"; then
@@ -216,22 +217,29 @@ main() {
   done
   echo "    ------------------------------------------------------------------"
   echo "    A appliquer : ${N_APPLY} ; plus courte que l'existant (non reduite) : ${N_COURT} ; refus : ${N_REFUS}"
-  echo "    Aucun index existant n'est supprime, reduit ou reindexe par ce script."
+  echo "    Rotation inchangee et compteurs jamais reduits ; aucun appel de suppression ou reindexation."
 
   if (( N_APPLY > 0 )); then
     if [[ $APPLY != 1 ]]; then
       echo; warn "PLAN : aucune ecriture. Pour appliquer : ./83-retention-consolidee.sh --apply"
     else
       echo; echo "    --apply : mise a jour des seuls index sets marques APPLIQUER"
-      local ITEM I PER K
+      local ITEM I PER K CURRENT BODY
       for ITEM in "${A_APPLY[@]}"; do
         IFS='|' read -r P I PER K <<<"$ITEM"
         JSET="$(jq -c --arg p "$P" '[.index_sets[]|select(.index_prefix==$p)][0]' <<<"$SETS")"
-        REP="$(set_body "$JSET" "$PER" "$K" | api_put "/system/indices/index_sets/${I}")"
-        if jq -e '.id' >/dev/null 2>&1 <<<"$REP"; then
+        CURRENT="$(api_get "/system/indices/index_sets/${I}")" || { warn "${P} : relecture en echec, arret"; return 1; }
+        if [[ "$(jq -Sc . <<<"$CURRENT")" != "$(jq -Sc . <<<"$JSET")" ]]; then
+          warn "${P} : configuration modifiee depuis le plan, arret"; return 1
+        fi
+        BODY="$(set_body "$CURRENT" "$PER" "$K")" || return 1
+        if ! REP="$(api_put "/system/indices/index_sets/${I}" <<<"$BODY")"; then
+          warn "${P} : ecriture en echec, arret"; return 1
+        fi
+        if jq -e --arg id "$I" '.id == $id' >/dev/null 2>&1 <<<"$REP"; then
           ok "${P} -> rotation ${PER}, ${K} index conserves"
         else
-          warn "${P} : echec de la mise a jour -> $(head -c 200 <<<"$REP")"
+          warn "${P} : confirmation de la mise a jour invalide, arret"; return 1
         fi
       done
     fi

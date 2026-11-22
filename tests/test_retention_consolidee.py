@@ -27,12 +27,25 @@ FAUSSE_LIB = r'''
 api_get() {
   echo "GET $1" >> "$CALLS_LOG"
   case "$1" in
-    /system/indices/index_sets*) cat "$FIX_DIR/sets.json" ;;
+    /system/indices/index_sets\?*) cat "$FIX_DIR/sets.json" ;;
+    /system/indices/index_sets/*)
+      [[ ! -f "$FIX_DIR/get-fails" ]] || return 22
+      jq -c --arg id "${1##*/}" '.index_sets[]|select(.id==$id)' "$FIX_DIR/sets.json" \
+        | if [[ -f "$FIX_DIR/concurrent-change" ]]; then jq '.retention_strategy.max_number_of_indices += 1'; else cat; fi
+      ;;
     /system/inputstates) echo '{"states":[]}' ;;
     *) echo '{}' ;;
   esac
 }
-api_put()  { echo "PUT $1 $(jq -c . )" >> "$CALLS_LOG"; echo '{"id":"ok"}'; }
+api_put() {
+  echo "PUT $1 $(jq -c . )" >> "$CALLS_LOG"
+  [[ ! -f "$FIX_DIR/put-fails" ]] || return 22
+  if [[ -f "$FIX_DIR/put-invalid" ]]; then
+    echo '{"error":"private-response-body"}'
+  else
+    jq -cn --arg id "${1##*/}" '{id:$id}'
+  fi
+}
 api_post() { echo "POST $1" >> "$CALLS_LOG"; cat >/dev/null; echo '{}'; }
 api_del()  { echo "DELETE $1" >> "$CALLS_LOG"; echo '{}'; }
 require_api() { :; }
@@ -133,7 +146,8 @@ def test_period_days():
     ("90 P1D P1D 60 60 79", "APPLIQUER", "90"),
     ("90 P1M P1M 4 120 1", "PLUS_COURT", "3"),
     ("180 P1M P1D 100 100 100", "REFUS", "6"),         # changement de rotation : 6 < 100 index existants
-    ("180 P1D '' '' 180 200", "REFUS", "180"),          # 200 index existants > 180 conservés
+    ("180 P1D '' '' 180 200", "REFUS", "180"),          # stratégie différente : pas de migration
+    ("180 P1M P1D 180 180 6", "REFUS", "6"),          # future rotation ne doit pas purger les index quotidiens
     ("180 P1D P1D 90 90 '?'", "REFUS", "180"),          # OpenSearch illisible
     ("180 P1D '' '' '?' 3", "REFUS", "180"),            # rétention actuelle inconnue
     ("180 PT1H P1D 90 90 3", "REFUS", "-"),
@@ -182,6 +196,53 @@ def test_apply_ne_touche_que_les_changements_surs(banc):
     assert m365["retention_strategy"]["max_number_of_indices"] == 13
     sysmon = json.loads(next(c for c in puts if "sysmon" in c).split(" ", 2)[2])
     assert sysmon["retention_strategy"]["max_number_of_indices"] == 90
+
+
+def test_daily_to_monthly_with_few_indices_is_refused_before_first_new_rotation(banc):
+    # Le garde précédent acceptait ce cas car 6 conservés == 6 présents.
+    # Au prochain index mensuel, Graylog supprimait un index quotidien récent.
+    entry = index_set("omni-eset", 180, "P1D")
+    (banc.fix / "sets.json").write_text(json.dumps({"index_sets": [entry]}))
+    (banc.fix / "counts/omni-eset").write_text("6")
+    result, calls = banc("--apply")
+    assert result.returncode == 3
+    assert "changement de periode ou de strategie" in result.stdout
+    assert not any(c.startswith("PUT") for c in calls)
+
+
+@pytest.mark.parametrize("field,value", [("use_legacy_rotation", False), ("data_tiering", {"type": "hot_only"})])
+def test_strategy_flags_are_not_migrated(banc, field, value):
+    entry = index_set("omni-sysmon", 60, "P1D")
+    entry[field] = value
+    (banc.fix / "sets.json").write_text(json.dumps({"index_sets": [entry]}))
+    result, calls = banc("--apply")
+    assert result.returncode == 3
+    assert not any(c.startswith("PUT") for c in calls)
+
+
+def test_increase_preserves_every_setting_except_retention_count(banc):
+    entry = index_set("omni-sysmon", 60, "P1D")
+    entry["rotation_strategy"].update(rotate_empty_index_set=True, max_rotation_period="P2D")
+    entry["description"] = "local setting"
+    (banc.fix / "sets.json").write_text(json.dumps({"index_sets": [entry]}))
+    result, calls = banc("--apply")
+    assert result.returncode == 0
+    body = json.loads(next(c for c in calls if c.startswith("PUT")).split(" ", 2)[2])
+    entry["retention_strategy"]["max_number_of_indices"] = 90
+    assert body == entry
+
+
+@pytest.mark.parametrize("failure", ["put-fails", "put-invalid", "get-fails", "concurrent-change"])
+def test_failed_or_stale_update_returns_error_and_stops(banc, failure):
+    entries = [index_set("omni-m365", 4, "P1M"), index_set("omni-sysmon", 60, "P1D")]
+    (banc.fix / "sets.json").write_text(json.dumps({"index_sets": entries}))
+    (banc.fix / failure).write_text("1")
+    result, calls = banc("--apply")
+    assert result.returncode == 1
+    assert "arret" in result.stdout
+    puts = [c for c in calls if c.startswith("PUT")]
+    assert len(puts) == (1 if failure.startswith("put-") else 0)
+    assert "private-response-body" not in result.stdout + result.stderr
 
 
 def test_opensearch_injoignable_aucune_ecriture(banc):
