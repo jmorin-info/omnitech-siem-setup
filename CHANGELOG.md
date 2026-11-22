@@ -10,6 +10,16 @@ publie pas de versions numérotées : chaque livraison est identifiée par sa da
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
+## [Non publié] - Chantier exploitation du 22/11/2026
+
+### Ajouté
+
+- `tools/migrer-depot-snapshots.sh` : relocalisation du dépôt de snapshots OpenSearch de `/home` (`graylog_fs`) vers `/data` (`graylog_fs_data`) ; plan en lecture seule par défaut, `--apply` (ancien chemin conservé dans `path.repo`, redémarrage contrôlé avec santé avant et après, enregistrement et vérification du dépôt, bascule de `/etc/oms-snap-siem.conf`, premier snapshot vérifié), `--rollback`, et `--retirer-ancien` refusé avant 3 snapshots réussis. Tests hors ligne `tests/test_migration_snapshots.py`.
+
+### Modifié
+
+- `oms-snap-siem` lit le dépôt et son emplacement dans `/etc/oms-snap-siem.conf` (`DEPOT`, `DEPOT_CHEMIN`, `LIBRE_ARRET_PCT`) au lieu de `graylog_fs` et `/home` codés en dur ; `omni-drift-check` (script 29 et miroir) et `omni-update-status.py` suivent le même dépôt.
+
 ## [Non publié] - Décisions d'exploitation du 22/11/2026
 
 ### Modifié

@@ -6,7 +6,9 @@
 # Pourquoi selectif : 3,6 To d'index pour ~760 Go libres sur /home (disque physique distinct de /data).
 # L'ancien siem-backup.timer (snapshot de TOUT) a echoue le 14/08/2026 et est desactive : il n'est pas reactive.
 #
-# Depot : graylog_fs (/home/siem-backup/opensearch-snapshots, deja declare dans path.repo).
+# Depot : DEPOT (defaut graylog_fs, /home/siem-backup/opensearch-snapshots) ; DEPOT_CHEMIN = son emplacement,
+# dont le systeme de fichiers sert aux seuils de place libre. Relocalisation vers /data :
+# tools/migrer-depot-snapshots.sh (bascule DEPOT=graylog_fs_data dans /etc/oms-snap-siem.conf).
 # Snapshots nommes oms-sel-AAAAMMJJ-HHMM ; la rotation ne supprime QUE ces snapshots-la (via l'API, jamais via find).
 # Selection : /etc/oms-snap-siem.conf (prefixe:jours ; 0 = tous les index du prefixe). Restauration toujours SANS alias
 # (include_aliases=false) pour ne jamais deplacer un deflector Graylog.
@@ -18,16 +20,20 @@
 set -u
 export LANG=C.UTF-8
 OS=http://127.0.0.1:9200
-REPO=graylog_fs
-CONF=/etc/oms-snap-siem.conf
-JOURNAL=/var/log/oms-snap-siem.log
-ETAT=/var/lib/oms-snap-siem; mkdir -p "$ETAT"
+# Emplacements surchargeables pour les tests hors ligne uniquement.
+CONF="${OMS_SNAP_CONF:-/etc/oms-snap-siem.conf}"
+JOURNAL="${OMS_SNAP_JOURNAL:-/var/log/oms-snap-siem.log}"
+ETAT="${OMS_SNAP_ETAT:-/var/lib/oms-snap-siem}"; mkdir -p "$ETAT"
 MODE="${1:-normal}"
 # valeurs par defaut, surchargees par $CONF
+DEPOT=graylog_fs
+DEPOT_CHEMIN=/home/siem-backup/opensearch-snapshots
 GARDER=3
-LIBRE_MIN_PCT=15
+LIBRE_MIN_PCT=15     # en dessous : snapshot non lance
+LIBRE_ARRET_PCT=5    # en dessous pendant le snapshot : snapshot annule
 SELECTION="omni-winsec:21 omni-fortigate:7 omni-vsphere:14 omni-m365:0 omni-interne:0 omni-eset:0 omni-seal-access:0 omni-seal-alarm:0 omni-seal-audit:0 omni-fortiems:0 omni-fortimanager:0 omni-fortidhcp:0 omni-linux:0 omni-vaultwarden:0 omni-cert:0 omni-aruba:0 omni-bunkerweb:0 gl-events:0 gl-system-events:0"
 [ -f "$CONF" ] && . "$CONF"
+REPO="$DEPOT"
 # destinataire des alertes : le meme que la mise a jour hebdomadaire (pas de second endroit a maintenir)
 MAIL_A=$(grep -oE '^MAIL_A="[^"]+"' /usr/local/sbin/oms-maj-siem 2>/dev/null | cut -d'"' -f2)
 MAIL_DE="no-reply@omnitech-security.fr"; SMTP="smtp://smtp-internal.omnitech-security.fr:25"
@@ -54,7 +60,7 @@ alerte(){ # $1 objet, $2 texte
   curl -s --max-time 30 --url "$SMTP" --mail-from "$MAIL_DE" --mail-rcpt "$MAIL_A" --upload-file "$f" >/dev/null || log "envoi du mail impossible"
   rm -f "$f"
 }
-libre_pct(){ df --output=pcent /home | tail -1 | tr -dc 0-9 | awk '{print 100-$1}'; }
+libre_pct(){ df --output=pcent "$DEPOT_CHEMIN" | tail -1 | tr -dc 0-9 | awk '{print 100-$1}'; }
 
 selection_index(){ # affiche la liste des index retenus (un par ligne)
   local maintenant_ms; maintenant_ms=$(( $(date +%s) * 1000 ))
@@ -68,7 +74,7 @@ selection_index(){ # affiche la liste des index retenus (un par ligne)
 
 if [ "$MODE" = "--etat" ]; then
   curl -s "$OS/_snapshot/$REPO/_all" | jq -r '.snapshots[] | [.snapshot, .state, (.indices|length), .start_time, ((.duration_in_millis/60000)|floor|tostring)+" min", (.shards.failed|tostring)+" echec(s)"] | @tsv'
-  echo "/home libre : $(libre_pct) %"; exit 0
+  echo "$DEPOT_CHEMIN libre : $(libre_pct) %"; exit 0
 fi
 
 if [ "$MODE" = "--test-restauration" ]; then
@@ -104,7 +110,7 @@ exec 9>/run/oms-snap-siem.lock; flock -n 9 || { log "deja en cours"; exit 0; }
 LISTE=$(selection_index); NB=$(echo "$LISTE" | grep -c .)
 TAILLE=$(for i in $LISTE; do curl -s "$OS/_cat/indices/$i?h=store.size&bytes=b"; done | awk '{s+=$1} END{printf "%.0f", s/1073741824}')
 if [ "$MODE" = "--simuler" ]; then
-  echo "$NB index retenus, ~${TAILLE} Go (taille brute, le depot deduplique les segments deja sauvegardes) ; /home libre $(libre_pct) %"
+  echo "$NB index retenus, ~${TAILLE} Go (taille brute, le depot deduplique les segments deja sauvegardes) ; depot $REPO, $DEPOT_CHEMIN libre $(libre_pct) %"
   for e in $SELECTION; do p=${e%%:*}; printf '  %-20s %s index\n' "$p" "$(echo "$LISTE" | grep -cE "^${p}_[0-9]+$")"; done
   exit 0
 fi
@@ -113,7 +119,7 @@ ST=$(curl -s "$OS/_cluster/health" | jq -r .status)
 [ "$ST" = red ] && { alerte "snapshot annule" "OpenSearch est rouge"; exit 1; }
 curl -s "$OS/_snapshot/$REPO" | grep -q "\"$REPO\"" || { alerte "snapshot annule" "depot $REPO absent (voir /opt/omni-siem/repository/08-backup.sh etape 1)"; exit 1; }
 [ "$(curl -s "$OS/_snapshot/_status" | jq '.snapshots|length')" = 0 ] || { log "un snapshot est deja en cours : abandon"; exit 0; }
-[ "$(libre_pct)" -ge "$LIBRE_MIN_PCT" ] || { alerte "snapshot annule" "/home n'a plus que $(libre_pct) % libres (minimum $LIBRE_MIN_PCT %)"; exit 1; }
+[ "$(libre_pct)" -ge "$LIBRE_MIN_PCT" ] || { alerte "snapshot annule" "$DEPOT_CHEMIN n'a plus que $(libre_pct) % libres (minimum $LIBRE_MIN_PCT %)"; exit 1; }
 NOM="oms-sel-$(date +%Y%m%d-%H%M)"
 CORPS=$(jq -n --arg i "$(echo $LISTE | tr ' ' ',')" '{indices:$i, ignore_unavailable:true, include_global_state:false, partial:false,
           metadata:{auteur:"oms-snap-siem", motif:"sauvegarde selective quotidienne OMNITECH"}}')
@@ -125,13 +131,13 @@ while [ "$(date +%s)" -lt "$FIN" ]; do
   sleep 60
   ETATS=$(curl -s "$OS/_snapshot/$REPO/$NOM" | jq -r '.snapshots[0].state // "INCONNU"')
   [ "$ETATS" = IN_PROGRESS ] || break
-  [ "$(libre_pct)" -lt 5 ] && { curl -s -X DELETE "$OS/_snapshot/$REPO/$NOM" >/dev/null; alerte "snapshot interrompu" "/home sous 5 % libres : $NOM annule"; exit 1; }
+  [ "$(libre_pct)" -lt "$LIBRE_ARRET_PCT" ] && { curl -s -X DELETE "$OS/_snapshot/$REPO/$NOM" >/dev/null; alerte "snapshot interrompu" "$DEPOT_CHEMIN sous $LIBRE_ARRET_PCT % libres : $NOM annule"; exit 1; }
 done
 INFO=$(curl -s "$OS/_snapshot/$REPO/$NOM" | jq -r '.snapshots[0] | "\(.state) \(.shards.successful)/\(.shards.total) shards, \(.shards.failed) echec(s), \((.duration_in_millis/60000)|floor) min"')
 if [ "$ETATS" != SUCCESS ]; then alerte "snapshot $NOM en echec" "$INFO"; exit 1; fi
-log "snapshot $NOM : $INFO ; /home libre $(libre_pct) %"
+log "snapshot $NOM : $INFO ; depot $REPO, $DEPOT_CHEMIN libre $(libre_pct) %"
 date +%s > "$ETAT/dernier-snapshot-ok"
-gelf ok "oms-snap-siem snapshot $NOM : $INFO ; /home libre $(libre_pct) %"
+gelf ok "oms-snap-siem snapshot $NOM (depot $REPO) : $INFO ; $DEPOT_CHEMIN libre $(libre_pct) %"
 # ---------------- rotation (uniquement oms-sel-*, uniquement apres un succes) ----------------
 for S in $(curl -s "$OS/_snapshot/$REPO/_all" | jq -r --argjson g "$GARDER" '[.snapshots[] | select(.snapshot|startswith("oms-sel-"))] | sort_by(.start_time_in_millis) | if length > $g then .[0:(length-$g)] else [] end | .[] | .snapshot'); do
   curl -s -X DELETE "$OS/_snapshot/$REPO/$S" >/dev/null && log "rotation : $S supprime (on garde les $GARDER derniers)"

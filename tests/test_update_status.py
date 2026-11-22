@@ -175,6 +175,19 @@ def test_health_layer_requires_recent_verified_backup(repo):
     assert items["mongodump natif (08-backup.sh)"]["status"] == "attention"
 
 
+def test_snapshot_check_follows_repository_configured_for_oms_snap_siem(repo):
+    fake = healthy(repo)
+    fake.put("/etc/oms-snap-siem.conf", "GARDER=3\nDEPOT=graylog_fs_data\n")
+    items = {i["name"]: i for i in status.collect_health(fake, repo)["items"]}
+    assert items["snapshot OpenSearch"]["status"] == "inconnu"
+    assert "graylog_fs_data" in items["snapshot OpenSearch"]["detail"]
+    fake.http[OPENSEARCH + "/_cat/snapshots/graylog_fs_data?format=json"] = (200, json.dumps(
+        [{"id": "oms-sel-2", "status": "SUCCESS", "end_epoch": str(int(NOW - 3600))}]))
+    items = {i["name"]: i for i in status.collect_health(fake, repo)["items"]}
+    assert items["snapshot OpenSearch"]["status"] == "ok"
+    assert "dépôt graylog_fs_data" in items["snapshot OpenSearch"]["detail"]
+
+
 def test_content_layer_reads_catalogue_and_manifest_drift(tmp_path):
     fake = FakeSystem()
     source = tmp_path

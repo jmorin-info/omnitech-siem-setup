@@ -320,6 +320,20 @@ def collect_content(system, source, graylog=None):
     return layer("content", items, f"{len(modules)} module(s) au catalogue")
 
 
+SNAPSHOT_CONF = "/etc/oms-snap-siem.conf"
+
+
+def snapshot_repository(system):
+    """Repository written by oms-snap-siem (DEPOT in /etc/oms-snap-siem.conf, graylog_fs by default;
+    graylog_fs_data after tools/migrer-depot-snapshots.sh)."""
+    for line in (system.read(SNAPSHOT_CONF) or "").splitlines():
+        if line.startswith("DEPOT="):
+            value = line.split("=", 1)[1].strip().strip('"')
+            if re.fullmatch(r"[a-z0-9_-]{1,64}", value):
+                return value
+    return "graylog_fs"
+
+
 # Lookup CSV files written by omni-ti-feeds (deploye/sbin/omni-ti-feeds, daily). The
 # robot keeps the previous file when a source returns nothing, so a dead feed shows
 # up as a stale file rather than an empty one.
@@ -398,7 +412,8 @@ def collect_health(system, source, repository=None):
                           age_hours=round(hours, 1)))
     else:
         items.append(item("sauvegarde de configuration vérifiée", "action", "aucune archive " + CONFIG_BACKUP_GLOB))
-    status, body = system.http_get(OPENSEARCH + "/_cat/snapshots/graylog_fs?format=json", timeout=20)
+    repository = snapshot_repository(system)
+    status, body = system.http_get(OPENSEARCH + f"/_cat/snapshots/{repository}?format=json", timeout=20)
     snapshots = json_or_none(body) if status == 200 else None
     if isinstance(snapshots, list):
         success = [s for s in snapshots if s.get("status") == "SUCCESS"]
@@ -406,11 +421,11 @@ def collect_health(system, source, repository=None):
             last = max(success, key=lambda s: int(s.get("end_epoch", 0)))
             hours = (system.now() - int(last.get("end_epoch", 0))) / 3600
             items.append(item("snapshot OpenSearch", "ok" if hours <= 26 else "attention",
-                              f"{last.get('id')} il y a {hours:.1f} h (dépôt graylog_fs)"))
+                              f"{last.get('id')} il y a {hours:.1f} h (dépôt {repository})"))
         else:
-            items.append(item("snapshot OpenSearch", "attention", "aucun snapshot SUCCESS dans graylog_fs"))
+            items.append(item("snapshot OpenSearch", "attention", f"aucun snapshot SUCCESS dans {repository}"))
     else:
-        items.append(item("snapshot OpenSearch", "inconnu", "dépôt graylog_fs non consultable"))
+        items.append(item("snapshot OpenSearch", "inconnu", f"dépôt {repository} non consultable"))
     dumps = [(system.mtime(p), p) for p in system.glob(str(Path(backup_dir) / "mongo" / "graylog-mongo-*.archive.gz"))]
     dumps = [d for d in dumps if d[0]]
     if dumps:
