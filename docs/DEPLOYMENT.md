@@ -158,7 +158,7 @@ sudo bash tools/migrer-chemin-canonique.sh --apply
 `--apply` : archive l'ancienne copie, `/etc/systemd/system` et `/etc/nginx` dans
 `/var/backups/omni-siem` ; ajoute `MITRE_LOOKUP` à `/etc/default/omni-mobile` s'il
 manque ; construit et vérifie les venvs **avant tout repointage** ; pose les drop-ins
-`50-depot-reference.conf` **une transaction par service** (oms-graph,
+`50-depot-reference.conf` **une transaction par service** (omni-iso-evidence, oms-graph,
 oms-graph-respond, oms-ml-anomaly, oms-ml-fp, oms-xdr, omni-backup-config,
 omni-disk-guard, omni-mobile-api), avec arrêt au premier échec ; déploie les robots ;
 remet les unités en 0644 ; lance le contrôle de santé. Les services `oneshot`
@@ -167,12 +167,39 @@ repointés ne sont pas démarrés : les tester avec `systemctl start <service>` 
 
 Non traité automatiquement :
 
-- `omni-iso-evidence` reste sur l'ancienne copie : il écrit `docs/EVIDENCE-AUDIT-*`
-  dans son répertoire de travail ; un répertoire de sortie dédié est à décider.
-- Après 24 h sans incident (étape 4 du plan) :
-  `mv /root/omnitech-siem-setup /root/omnitech-siem-setup.retire-$(date +%Y%m%d) && ln -s /opt/omni-siem/repository /root/omnitech-siem-setup`.
-  Ne retirer l'ancienne copie qu'après correction d'`OMS_GRAPH_DIR` dans le backend.
-- Après 7 jours : retrait des copies obsolètes (étape 5 du rapport de cohérence).
+- `omni-iso-evidence`, ajouté après la migration du 22/11/2026, se repointe seul :
+  `sudo python3 tools/omni-deploy.py deploy systemd --filtre '/etc/systemd/system/omni-iso-evidence.service.d/*' --apply`
+  (le drop-in `50-depot-reference.conf` et le `hardening.conf` aligné sont dans la même
+  transaction). Le service écrit alors uniquement dans
+  `/opt/omni-siem/repository/docs/archives/preuves-iso` (`ReadWritePaths` limité à `/var/lib`
+  et à ce dossier) ; chaque dossier mensuel y apparaît comme fichier non suivi du clone, à
+  commiter depuis un poste de travail si on veut le versionner. Test : `systemctl start
+  omni-iso-evidence.service` puis `journalctl -u omni-iso-evidence.service`.
+- Étape 4 du plan, au plus tôt le 23/11/2026 à 10:00, après la pose du drop-in
+  d'`omni-iso-evidence` : renommage de l'ancienne copie et lien symbolique vers le dépôt
+  canonique, par `tools/retirer-ancienne-copie.sh` (à lancer depuis le dépôt canonique,
+  jamais depuis l'ancienne copie) :
+
+  ```bash
+  cd /opt/omni-siem/repository
+  bash tools/retirer-ancienne-copie.sh               # plan, lecture seule
+  sudo bash tools/retirer-ancienne-copie.sh --apply  # mv vers .retire-AAAAMMJJ puis ln -s
+  sudo bash tools/retirer-ancienne-copie.sh --rollback
+  ```
+
+  Contrôles bloquants : date ; aucune unité systemd dont la configuration **effective**
+  (`systemctl show` : `ExecStart*`, `WorkingDirectory`, `EnvironmentFiles`,
+  `ReadWritePaths`...) utilise l'ancienne copie, une unité de base repointée par son drop-in
+  n'étant pas bloquante ; aucune tâche cron ; aucun processus (répertoire courant,
+  exécutable, ligne de commande, fichiers ouverts, bibliothèques chargées) ; `00-vars.env`
+  identique dans les deux copies (comparé sans affichage). Le plan liste aussi les fichiers
+  de secrets en clair de l'ancienne copie (chemin, taille, droits) ; `--apply` en garde la
+  liste dans `/var/lib/omni-retrait-ancienne-copie/secrets-a-supprimer.txt`. Relevé du
+  22/11/2026 : seul `omni-iso-evidence` bloque encore ; secrets en clair `00-vars.env`
+  (0600) et `SECRETS.md` (0644).
+- Après 7 jours (étape 5 du rapport de cohérence) : suppression de la copie retirée,
+  en commençant par `shred -u` sur les fichiers de secrets listés, puis retrait des autres
+  copies obsolètes. Non automatisé.
 
 ## 7. Intégration continue
 

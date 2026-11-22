@@ -9,7 +9,9 @@
 #       hebdomadaire oms-maj-siem (deploye/sbin/oms-maj-siem, regle retenue par
 #       l'administrateur le 22/11/2026) :
 #         * oms-maj-siem.timer : dimanche 04:30 (+ 0 a 10 min aleatoires),
-#           Persistent=false (pas de rattrapage si la machine est arretee) ;
+#           Persistent=false (pas de rattrapage si la machine est arretee ;
+#           regle confirmee le 22/11/2026 : un rattrapage au demarrage ferait une
+#           maj + un redemarrage a heure imprevue, cf. docs/UPDATES.md) ;
 #         * redemarrage seulement si /var/run/reboot-required existe a la fin du
 #           passage (paquet installe le jour meme OU correctif unattended-upgrades
 #           de la semaine), apres les controles prealables et la sauvegarde ;

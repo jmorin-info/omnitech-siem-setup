@@ -75,6 +75,12 @@ Chaque section référence le ou les contrôles de l'Annexe A qu'elle atteste.
 EOF
 ok "dossier de preuves genere : ${OUT}"
 
+# Lancement par le timer (systemd fournit INVOCATION_ID) : /etc est en lecture seule
+# (ProtectSystem=strict) et l'unite est geree par le depot (deploye/systemd) -> on s'arrete ici.
+if [[ -n "${INVOCATION_ID:-}" ]]; then
+  echo "=== 68 termine (service). Preuves : ${OUT} ==="
+  exit 0
+fi
 # Timer mensuel (1er du mois 07:00)
 cat > /etc/systemd/system/omni-iso-evidence.service <<EOF2
 [Unit]

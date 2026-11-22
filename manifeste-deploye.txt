@@ -11,6 +11,7 @@
 /etc/nginx/snippets/omni-sec-headers-soc.conf	deploye/nginx/omni-sec-headers-soc.conf
 /etc/nginx/snippets/omni-sec-headers.conf	deploye/nginx/omni-sec-headers.conf
 /etc/oms-snap-siem.conf	deploye/etc/oms-snap-siem.conf
+/etc/systemd/system/logstash.service.d/50-attente-graylog.conf	deploye/systemd/logstash.service.d/50-attente-graylog.conf
 /etc/systemd/system/omni-alert-digest.service	deploye/systemd/omni-alert-digest.service
 /etc/systemd/system/omni-alert-digest.timer	deploye/systemd/omni-alert-digest.timer
 /etc/systemd/system/omni-alert-lot.service	deploye/systemd/omni-alert-lot.service
@@ -53,6 +54,7 @@
 /etc/systemd/system/omni-integrity.service.d/hardening.conf	deploye/systemd/omni-integrity.service.d/hardening.conf
 /etc/systemd/system/omni-integrity.timer	deploye/systemd/omni-integrity.timer
 /etc/systemd/system/omni-iso-evidence.service	deploye/systemd/omni-iso-evidence.service
+/etc/systemd/system/omni-iso-evidence.service.d/50-depot-reference.conf	deploye/systemd/omni-iso-evidence.service.d/50-depot-reference.conf
 /etc/systemd/system/omni-iso-evidence.service.d/hardening.conf	deploye/systemd/omni-iso-evidence.service.d/hardening.conf
 /etc/systemd/system/omni-iso-evidence.timer	deploye/systemd/omni-iso-evidence.timer
 /etc/systemd/system/omni-ldap-recon.service	deploye/systemd/omni-ldap-recon.service

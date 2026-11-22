@@ -21,6 +21,30 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 - Dossiers de la console (`update_case`) : historique daté (`history`) des changements de statut, d'assignation et de qualification, et horodatage de clôture (`closed_ts`), pour mesurer le MTTR. Ajout seul, champs ignorés par l'affichage.
 
+## [Non publié] - Chantier exploitation du 22/11/2026
+
+### Ajouté
+
+- `tools/migrer-depot-snapshots.sh` : relocalisation du dépôt de snapshots OpenSearch de `/home` (`graylog_fs`) vers `/data` (`graylog_fs_data`) ; plan en lecture seule par défaut, `--apply` (ancien chemin conservé dans `path.repo`, redémarrage contrôlé avec santé avant et après, enregistrement et vérification du dépôt, bascule de `/etc/oms-snap-siem.conf`, premier snapshot vérifié), `--rollback`, et `--retirer-ancien` refusé avant 3 snapshots réussis. Tests hors ligne `tests/test_migration_snapshots.py`.
+
+- Drop-in `deploye/systemd/omni-iso-evidence.service.d/50-depot-reference.conf` : `omni-iso-evidence` exécute `68-iso-evidence.sh` du dépôt canonique et n'écrit que dans `/var/lib` et `docs/archives/preuves-iso` ; `hardening.conf` (lu après le drop-in) et `27-harden-services.sh` portent la même liste. Le service est ajouté à `tools/migrer-chemin-canonique.sh` et au manifeste ; `68-iso-evidence.sh` ne réécrit plus l'unité quand il tourne sous systemd.
+
+- `tools/maj-cert-orchestrator-prod.sh` (plan, `--apply`) : met à jour par PUT idempotent les 5 règles `omni-cert-*` déjà créées en production et aligne l'index set `omni-cert` sur `P1M` x 3, sans création ni suppression. Tests `tests/test_cert_orchestrator.py`.
+
+- `tools/retirer-ancienne-copie.sh` (plan, `--apply`, `--rollback`) : étape 4 du plan de cohérence, renommage de `/root/omnitech-siem-setup` et lien vers le dépôt canonique, après contrôle de la date, des unités systemd (configuration effective), des tâches cron, des processus et de l'identité des `00-vars.env` ; liste des secrets en clair pour l'étape 5. Tests `tests/test_retrait_ancienne_copie.py`.
+
+### Modifié
+
+- `oms-snap-siem` lit le dépôt et son emplacement dans `/etc/oms-snap-siem.conf` (`DEPOT`, `DEPOT_CHEMIN`, `LIBRE_ARRET_PCT`) au lieu de `graylog_fs` et `/home` codés en dur ; `omni-drift-check` (script 29 et miroir) et `omni-update-status.py` suivent le même dépôt.
+- `21-alert-hygiene.sh` ne crée plus « OMNI - Sauvegarde quotidienne SIEM absente (>26h) » (liée à `siem-backup.timer`, arrêté en août 2026) et ne la re-pointe plus : ce PUT `?schedule=true` l'aurait réactivée après sa désactivation. Il crée à la place « OMNI - Snapshot OpenSearch absent (>26h) » (`backup_daily_ok` émis par `oms-snap-siem`) et signale l'ancienne définition si elle est encore active, sans la modifier.
+- `oms-maj-siem.timer` : `Persistent=false` confirmé et justifié (`docs/UPDATES.md`, en-tête de `62-auto-security-updates.sh`) : avec le redémarrage automatique conservé, un rattrapage au démarrage ferait une mise à jour suivie d'un redémarrage à une heure imprévue ; les correctifs de sécurité quotidiens d'`unattended-upgrades` ne dépendent pas de ce timer.
+- Cert Orchestrator (`99-cert-orchestrator.sh`) : source renommée `cert_orchestrator` (`cert_parc` reste la source PKI Windows de bx-pki2022, 5 035 messages en production) ; index set créé directement en rotation `P1M` x 3, cohérent avec le script 83 et la politique de rétention, au lieu de `P1D` x 90 copié du modèle ; seuil watchdog dédié dans le modèle de `74-source-watchdog.sh` ; documentation des sources et de la rétention.
+
+### Corrigé
+
+- Logstash : drop-in `deploye/systemd/logstash.service.d/50-attente-graylog.conf` (ordre après `graylog-server`, attente bornée de l'input GELF TCP 12202) ; cause des 4 relances du 17/11/2026 : sortie GELF de la collecte SEAL refusée (`ECONNREFUSED`) tant que Graylog n'écoutait pas.
+- `omni-ti-feeds` (miroir `deploye/sbin` et script 66) : URLhaus a fermé ses exports publics (HTTP 410 depuis le 21/10/2026, 553 domaines figés) ; le robot utilise l'API authentifiée avec la clé abuse.ch (`ABUSECH_AUTH_KEY`, ou `THREATFOX_AUTH_KEY`) et dit explicitement pourquoi il ignore la source sans clé. Tests `tests/test_ti_feeds.py`.
+
 ## [Non publié] - Décisions d'exploitation du 22/11/2026
 
 ### Modifié

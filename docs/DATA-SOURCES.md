@@ -24,7 +24,8 @@ and watched for silence by the source-freshness watchdog.
 | NinjaOne (inventory) | — | `inventory` | Asset inventory |
 | Veeam | Winlogbeat — "Veeam Backup" channel | `veeam` | Backup job success / warning / failure |
 | ADCS | — | `adcs` | Certificate-services abuse (ESC1–ESC8) |
-| Certificate parc | GELF UDP (12201) | `cert_parc` | Certificate-orchestrator inventory &amp; expiry |
+| Certificate parc (PKI) | Winlogbeat — "OMNI-Certificats" channel (bx-pki2022) | `cert_parc` | Certificate inventory &amp; expiry (Get-OmniCertExpiry) |
+| Cert Orchestrator | GELF UDP (12201) | `cert_orchestrator` | Certificate renewal/request orchestrator (BX-IT-CERT-VM), errors |
 | Windows DNS | Winlogbeat — DNSServer/Audit | `dns` | DNS record changes, cache flush, sensitive zones |
 | **SEAL** (physical) | GELF TCP (12202) | `seal` | Badge access, doors, alarms, intrusion, dead-man switches |
 
