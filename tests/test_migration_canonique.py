@@ -33,7 +33,8 @@ def snapshot(path: Path):
 
 def test_plan_reports_env_copy_and_changes_nothing(tmp_path):
     git_repo(tmp_path / "canon", {"omni_deploy/engine.py": "", "mobile/requirements.txt": "pywebpush\n",
-                                  "lib-platform.sh": (ROOT / "lib-platform.sh").read_text()})
+                                  "lib-platform.sh": (ROOT / "lib-platform.sh").read_text(),
+                                  "docs/archives/preuves-iso/EVIDENCE-AUDIT-2026-11-01.md": "x\n"})
     git_repo(tmp_path / "ancien", {"README": "x"})
     (tmp_path / "ancien/00-vars.env").write_text("SECRET_DE_TEST=valeur\n")
     before = snapshot(tmp_path)
@@ -89,3 +90,23 @@ def test_missing_api_normalisation_blocks_disk_guard_repointing(tmp_path):
                                   "lib-platform.sh": 'API="${API%/}"\n'})
     result = run(tmp_path)
     assert result.returncode == 2 and "ne normalise pas /api" in result.stdout
+
+
+def test_missing_evidence_directory_blocks_iso_evidence_repointing(tmp_path):
+    git_repo(tmp_path / "canon", {"omni_deploy/engine.py": "", "mobile/requirements.txt": "pywebpush\n",
+                                  "lib-platform.sh": (ROOT / "lib-platform.sh").read_text()})
+    result = run(tmp_path)
+    assert result.returncode == 2 and "docs/archives/preuves-iso absent" in result.stdout
+    assert "omni-iso-evidence" in SCRIPT.read_text().split("for service in", 1)[1].split(";", 1)[0]
+
+
+def test_iso_evidence_dropin_points_to_canonical_repository_only():
+    dropin = (ROOT / "deploye/systemd/omni-iso-evidence.service.d/50-depot-reference.conf").read_text()
+    hardening = (ROOT / "deploye/systemd/omni-iso-evidence.service.d/hardening.conf").read_text()
+    assert "WorkingDirectory=/opt/omni-siem/repository\n" in dropin
+    assert "ExecStart=\nExecStart=/bin/bash /opt/omni-siem/repository/68-iso-evidence.sh\n" in dropin
+    expected = "ReadWritePaths=/var/lib /opt/omni-siem/repository/docs/archives/preuves-iso\n"
+    assert "ReadWritePaths=\n" + expected in dropin
+    # hardening.conf est lu après le drop-in : il doit porter la même liste, sans l'ancienne copie.
+    assert expected in hardening and "/root/" not in hardening
+    assert (ROOT / "docs/archives/preuves-iso").is_dir()

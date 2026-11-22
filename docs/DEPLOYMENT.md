@@ -158,7 +158,7 @@ sudo bash tools/migrer-chemin-canonique.sh --apply
 `--apply` : archive l'ancienne copie, `/etc/systemd/system` et `/etc/nginx` dans
 `/var/backups/omni-siem` ; ajoute `MITRE_LOOKUP` à `/etc/default/omni-mobile` s'il
 manque ; construit et vérifie les venvs **avant tout repointage** ; pose les drop-ins
-`50-depot-reference.conf` **une transaction par service** (oms-graph,
+`50-depot-reference.conf` **une transaction par service** (omni-iso-evidence, oms-graph,
 oms-graph-respond, oms-ml-anomaly, oms-ml-fp, oms-xdr, omni-backup-config,
 omni-disk-guard, omni-mobile-api), avec arrêt au premier échec ; déploie les robots ;
 remet les unités en 0644 ; lance le contrôle de santé. Les services `oneshot`
@@ -167,8 +167,14 @@ repointés ne sont pas démarrés : les tester avec `systemctl start <service>` 
 
 Non traité automatiquement :
 
-- `omni-iso-evidence` reste sur l'ancienne copie : il écrit `docs/EVIDENCE-AUDIT-*`
-  dans son répertoire de travail ; un répertoire de sortie dédié est à décider.
+- `omni-iso-evidence`, ajouté après la migration du 22/11/2026, se repointe seul :
+  `sudo python3 tools/omni-deploy.py deploy systemd --filtre '/etc/systemd/system/omni-iso-evidence.service.d/*' --apply`
+  (le drop-in `50-depot-reference.conf` et le `hardening.conf` aligné sont dans la même
+  transaction). Le service écrit alors uniquement dans
+  `/opt/omni-siem/repository/docs/archives/preuves-iso` (`ReadWritePaths` limité à `/var/lib`
+  et à ce dossier) ; chaque dossier mensuel y apparaît comme fichier non suivi du clone, à
+  commiter depuis un poste de travail si on veut le versionner. Test : `systemctl start
+  omni-iso-evidence.service` puis `journalctl -u omni-iso-evidence.service`.
 - Après 24 h sans incident (étape 4 du plan) :
   `mv /root/omnitech-siem-setup /root/omnitech-siem-setup.retire-$(date +%Y%m%d) && ln -s /opt/omni-siem/repository /root/omnitech-siem-setup`.
   Ne retirer l'ancienne copie qu'après correction d'`OMS_GRAPH_DIR` dans le backend.

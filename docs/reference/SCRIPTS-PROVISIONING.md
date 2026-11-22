@@ -118,7 +118,7 @@ paquets installés.
 | 65 | `65-mobile-pwa.sh` | Première version de la PWA mobile et de son backend | oui | 04, 05, 12, 13 | `omni-mobile-api.service` actif | optionnel (publication reprise par 71) |
 | 66 | `66-threatintel.sh` | Flux IOC abuse.ch (Feodo, URLhaus) en tables de correspondance | oui | 11, 12, 37 | pipeline « OMNI - Threat Intel IOC », `omni-ti-feeds.timer` | optionnel |
 | 67 | `67-detection-coverage.sh` | Détections ciblées sur les lacunes ATT&CK (inspirées Sigma) | oui | 12, 37 | pipeline « OMNI - Couverture ATT&CK etendue » | optionnel |
-| 68 | `68-iso-evidence.sh` | Dossier de preuves ISO 27001 mensuel | oui | API, OpenSearch | `omni-iso-evidence.timer` (appelle le script de la copie `/root`) | optionnel |
+| 68 | `68-iso-evidence.sh` | Dossier de preuves ISO 27001 mensuel | oui | API, OpenSearch | `omni-iso-evidence.timer` (drop-in `50-depot-reference.conf` : script du dépôt canonique, écriture limitée à `docs/archives/preuves-iso`) | optionnel |
 | 69 | `69-ad-response.sh` | Actionneur de désactivation de compte AD (LDAPS, garde-fous) | oui | compte de service | `omni-ad-disable` présent | optionnel |
 | 70 | `70-leak-github.sh` | Surveillance de fuites sur GitHub | oui | jeton GitHub | `omni-leak-github.timer` | optionnel |
 | 71 | `71-soc-console.sh` | Console SOC complète, backend et routes nginx | non déclaré (préserve la configuration) | 05 | `/var/www/siem-soc` publié | socle |
@@ -292,8 +292,9 @@ tant que les contraintes ci-dessous ne sont pas levées.
 
 - Trois unités systemd de production appellent des scripts par leur chemin :
   `omni-backup-config.service` (30), `omni-disk-guard.service` (32) et
-  `omni-iso-evidence.service` (68), toutes vers la copie
-  `/root/omnitech-siem-setup`. Elles doivent être mises à jour dans la même
+  `omni-iso-evidence.service` (68) : unités de base vers la copie
+  `/root/omnitech-siem-setup`, repointées vers le dépôt canonique par leurs drop-ins
+  `50-depot-reference.conf`. Unités et drop-ins doivent être mis à jour dans la même
   livraison.
 - `tools/install-platform.py` (liste des phases), `manager/inventory.py`
   (classement par préfixe) et les tests associés citent les noms actuels.

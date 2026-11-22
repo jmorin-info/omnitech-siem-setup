@@ -16,6 +16,8 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 - `tools/migrer-depot-snapshots.sh` : relocalisation du dépôt de snapshots OpenSearch de `/home` (`graylog_fs`) vers `/data` (`graylog_fs_data`) ; plan en lecture seule par défaut, `--apply` (ancien chemin conservé dans `path.repo`, redémarrage contrôlé avec santé avant et après, enregistrement et vérification du dépôt, bascule de `/etc/oms-snap-siem.conf`, premier snapshot vérifié), `--rollback`, et `--retirer-ancien` refusé avant 3 snapshots réussis. Tests hors ligne `tests/test_migration_snapshots.py`.
 
+- Drop-in `deploye/systemd/omni-iso-evidence.service.d/50-depot-reference.conf` : `omni-iso-evidence` exécute `68-iso-evidence.sh` du dépôt canonique et n'écrit que dans `/var/lib` et `docs/archives/preuves-iso` ; `hardening.conf` (lu après le drop-in) et `27-harden-services.sh` portent la même liste. Le service est ajouté à `tools/migrer-chemin-canonique.sh` et au manifeste ; `68-iso-evidence.sh` ne réécrit plus l'unité quand il tourne sous systemd.
+
 ### Modifié
 
 - `oms-snap-siem` lit le dépôt et son emplacement dans `/etc/oms-snap-siem.conf` (`DEPOT`, `DEPOT_CHEMIN`, `LIBRE_ARRET_PCT`) au lieu de `graylog_fs` et `/home` codés en dur ; `omni-drift-check` (script 29 et miroir) et `omni-update-status.py` suivent le même dépôt.
