@@ -133,7 +133,7 @@ paquets installés.
 | 80 | `80-detection-extra2.sh` | Détecteurs ATT&CK haute fidélité (Defender, etc.) | oui | 12, 37, 13 | pipeline « OMNI - Detections extra2 » | optionnel |
 | 81 | `81-fp-allowlist.sh` | Liste d'autorisation des motifs bénins (étape 25) | oui | 12, 37 | pipeline « OMNI - Allowlist FP » | optionnel |
 | 82 | `82-graylog-analytics-dashboard.sh` | Tableau de bord « OMNI - Analytics » | oui | 21 | tableau de bord « OMNI - Analytics » | optionnel |
-| 83 | `83-retention-consolidee.sh` | Source unique des rétentions : réglages de rotation et de rétention des jeux d'index (index futurs) | oui (plan par défaut, `--apply` pour écrire) | 10, 52, 55, 63, 79 | jeux `omni-*` en rotation héritée (P1D ou P1M), sans hiérarchisation | actif (révisé le 22/11/2026, voir note) |
+| 83 | `83-retention-consolidee.sh` | Augmentation du nombre d'index conservés, sans changement de période ni de stratégie | oui (plan par défaut, `--apply` pour écrire) | 10, 52, 55, 63, 79 | jeux `omni-*` en rotation héritée (P1D ou P1M), sans hiérarchisation | actif (révisé le 22/11/2026, voir note) |
 | 84 | `84-dashboards-triage-site.sh` | Tableau de bord « OMNI - Triage & Multi-site » | oui | 82, 97-multisite-soar | tableau de bord présent | optionnel |
 | 84 | `84-kerberoast-dedup.sh` | Consolidation des alertes Kerberos (anti-doublon) | oui (simulation par défaut) | 13 | n.v. | ponctuel |
 | 85 | `85-detection-extra3.sh` | Neuf détecteurs Sysmon haute fidélité | oui | 12, 37, 13 | pipeline « OMNI - Detections extra3 » | optionnel |
@@ -153,7 +153,7 @@ paquets installés.
 | 97 | `97-enrich-alerts.sh` | Enrichit le contenu des alertes (regroupement, champs) | oui | API | n.v. | ponctuel |
 | 97 | `97-multisite-soar.sh` | Dimension site FortiGate (BDX/IV/LC) et alimentation SOAR WAF | oui | 36, 12, 93 | table `omni-fortigate-site` | optionnel |
 | 98 | `98-index-templates.sh` | Bridage du mapping des index à fort volume | oui | OpenSearch | gabarit non posé (préfixes vides par choix documenté) | outil (non appliqué) |
-| 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré | 06 | input absent, jeu d'index retiré | **obsolète** (serveur décommissionné) |
+| 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré, sans mode plan | 06 | Réinstallé le 22/11/2026 selon le compte rendu opérateur : entrée, jeu d'index, stream, pipeline et alerte ; réception des journaux de la source encore à valider | optionnel ; ne pas relancer pour une mise à jour de code |
 
 Les numéros 20 et 23 à 25 ne sont pas attribués. Les scripts 15, 22, 31 et 44,
 retirés, sont archivés sous [`tools/ponctuel/`](../../tools/ponctuel/README.md#scripts-retirés)
@@ -248,7 +248,7 @@ désigne une opération.
 | optionnel | 78 | extensions activées sur l'installation de référence |
 | ponctuel | 6 | 40-purge-logs, 53, 54, 79, 84-kerberoast-dedup, 97-enrich-alerts |
 | outil | 2 | 57, 98 |
-| obsolète | 4 | 22, 31, 44, 99 |
+| obsolète | 3 | 22, 31, 44 |
 | à arbitrer | 1 | 83 (voir la note ci-dessus) |
 
 Le décompte « optionnel » inclut 41 (partiellement remplacé) et 15 (recouvre 34).
@@ -281,7 +281,7 @@ tant que les contraintes ci-dessous ne sont pas levées.
    79, 84-kerberoast-dedup et 97-enrich-alerts rejoignent `tools/ponctuel/`
    (ou un dossier `maintenance/` pour les purges, qui restent des procédures
    manuelles documentées).
-4. **Les scripts obsolètes sont retirés** (22, 31, 44, 99), leur historique
+4. **Les scripts obsolètes sont retirés** (22, 31, 44), leur historique
    restant dans Git ; 98 rejoint `tools/` comme outil.
 5. **L'ordre est décrit par un manifeste** (par exemple
    `provisioning/plan.yaml` : identifiant, script, dépendances, idempotence,
