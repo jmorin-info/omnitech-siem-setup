@@ -1,8 +1,33 @@
 #!/usr/bin/env bash
 # 49-enrich-lots.sh - Enrichissements lots 1+2 (multi-agent) : regles pipeline + lookups + MITRE.
 # Idempotent. Prerequis 12+37. Relance 14+13. (widgets/alertes/couleurs dans 14/13.)
+# REGLES VERSIONNEES : la source du pipeline 'OMNI - Exposition reseau' ecrite en
+# fin de script inclut les regles d'objets-graylog/raccordements.txt destinees a
+# ce pipeline (sources .rule uniques, lib-regles-versionnees.sh). Meme source que
+# 49-expo-port-class.sh (tests/test_pipelines_versionnes.py).
+# --source-pipeline : affiche cette source complete et s'arrete (hors ligne :
+# ni 00-vars.env, ni appel API, ni ecriture).
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
+source ./lib-regles-versionnees.sh || exit 2
+source_pipeline_expo() {
+  inclure_regles_versionnees "OMNI - Exposition reseau" <<'EOF'
+pipeline "OMNI - Exposition reseau"
+stage 14 match either
+rule "omni-forti-14-privflags"
+stage 15 match either
+rule "omni-forti-15-port-class"
+rule "omni-forti-15-dir-interne"
+rule "omni-forti-15-dir-sortant"
+rule "omni-forti-15-dir-entrant"
+rule "omni-forti-15-dir-transit"
+stage 16 match either
+rule "omni-forti-16-expo-internet"
+end
+EOF
+}
+if [[ "${1:-}" == "--source-pipeline" ]]; then source_pipeline_expo; exit $?; fi
+
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "root requis."
@@ -255,11 +280,12 @@ chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true
 # ---- Usage de credentials explicites (4648 - RunAs / mouveme ----
 # === Regle stage 10 : usage de credentials explicites (4648 RunAs / lateral) ===
 # A coller dans un script 47-style (apres source 00-vars.env + lib-graylog.sh).
-# Modelee EXACTEMENT sur 47-detections-extra.sh (heredoc EOF non-quote, $ et \\ echappes).
+# Heredoc CITE (<<'EOF') : $message et \\ sont transmis tels quels a Graylog (le heredoc non
+# cite d origine laissait bash developper $message en chaine vide).
 # Restreinte au SUJET non-machine (sinon ~4.5k/j de bruit ADSync/DC, cf. proof).
 # NE TOUCHE PAS event_action (deja pose par la normalisation stage 0).
 WD="winlogbeat_winlog_event_data"
-ensure_rule "omni-extra-10-explicit-cred" <<EOF
+ensure_rule "omni-extra-10-explicit-cred" <<'EOF'
 rule "omni-extra-10-explicit-cred"
 when
   to_string($message.event_source) == "windows_security"
@@ -540,7 +566,7 @@ echo OK 48-m365-fail-codes.sh
 # Idempotent. Prerequis : 12 (streams/pipelines FortiGate). Relance 14 ensuite.
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "a lancer en root."
@@ -735,21 +761,11 @@ if [[ -f "${CSV37}" ]]; then
 fi
 
 echo "==> [4/4] Pipeline 'OMNI - Exposition reseau' (stages 15/16) + connexion FortiGate"
-PL_EXPO="$(ensure_pipeline "OMNI - Exposition reseau" <<'EOF'
-pipeline "OMNI - Exposition reseau"
-stage 14 match either
-rule "omni-forti-14-privflags"
-stage 15 match either
-rule "omni-forti-15-port-class"
-rule "omni-forti-15-dir-interne"
-rule "omni-forti-15-dir-sortant"
-rule "omni-forti-15-dir-entrant"
-rule "omni-forti-15-dir-transit"
-stage 16 match either
-rule "omni-forti-16-expo-internet"
-end
-EOF
-)"
+# Source definie en tete (source_pipeline_expo) : regles 49 + regles versionnees.
+SRC_EXPO="$(source_pipeline_expo)" || die "source du pipeline OMNI - Exposition reseau : inventaire des regles versionnees illisible"
+# Les regles versionnees doivent exister avant d'ecrire un pipeline qui les cite.
+ensure_regles_versionnees "OMNI - Exposition reseau" || die "regles versionnees incompletes : pipeline OMNI - Exposition reseau non modifie"
+PL_EXPO="$(ensure_pipeline "OMNI - Exposition reseau" <<< "${SRC_EXPO}")"
 SID="$(get_stream_id 'OMNI - FortiGate')"
 [[ -n "${SID}" ]] && connect_pipeline "${SID}" "${PL_EXPO}" || warn "stream absent: OMNI - FortiGate"
 

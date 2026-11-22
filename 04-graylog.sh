@@ -99,7 +99,7 @@ grep GRAYLOG_SERVER_JAVA_OPTS /etc/default/graylog-server | head -1
 echo "==> [5/5] Demarrage et attente de l'API (1er demarrage = migrations, patience)"
 systemctl enable --now graylog-server
 OK=0
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   if curl -s http://127.0.0.1:9000/api/system/lbstatus | grep -q ALIVE; then OK=1; break; fi
   sleep 5
 done

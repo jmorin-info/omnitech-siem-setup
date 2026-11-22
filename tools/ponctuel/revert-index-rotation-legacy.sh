@@ -22,7 +22,7 @@
 #   DRY-RUN par defaut. Appliquer : APPLY=1 tools/ponctuel/revert-index-rotation-legacy.sh
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." || exit 1
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "root requis"

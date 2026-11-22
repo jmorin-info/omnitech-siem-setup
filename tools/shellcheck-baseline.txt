@@ -1,7 +1,7 @@
 # Constats ShellCheck connus, acceptés explicitement : <fichier> <code> <justification>.
 # Tout nouveau constat hors de cette liste fait échouer la CI (tools/ci-lint.sh).
-lib-graylog.sh SC2148 bibliothèque sourcée par les scripts bash, sans shebang par construction
 30-backup-config.sh SC2046 argument optionnel (en-tête LUKS) volontairement non cité : vide si absent
-docker/console-entrypoint.sh SC2163 export indirect voulu du nom de variable passé en paramètre
 seal/logstash/keystore-setup.sh SC1011 faux positif : apostrophe littérale dans "${VAR:?message}", bash -n valide
-49-enrich-lots.sh SC2154 DÉFAUT RÉEL non corrigé ici : $message non échappé dans un heredoc non cité (règle omni-extra-10), à traiter par le chantier détection
+lib-platform.sh SC2034 variables positionnées pour les scripts qui sourcent la bibliothèque (OMNI_OS, OMNI_MONGO_*...)
+deploye/sbin/oms-maj-siem SC2034 miroir du code déployé en production, non modifié ici (compteur de boucle)
+deploye/sbin/oms-snap-siem SC2034 miroir du code déployé en production, non modifié ici (variable de boucle)

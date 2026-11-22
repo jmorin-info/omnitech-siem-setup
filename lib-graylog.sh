@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # ==============================================================================
 # lib-graylog.sh - Helpers communs aux scripts 10-14 (provisioning API Graylog)
 # A sourcer APRES 00-vars.env. Ne s'execute pas seul.

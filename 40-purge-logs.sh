@@ -45,7 +45,7 @@ mongosh "${MONGO_URI}" --quiet --eval 'db.index_failures.deleteMany({}); print("
 echo "==> [5/6] Redemarrage de Graylog (recreation des index vides)"
 systemctl start graylog-server
 printf "  attente du demarrage"
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   if curl -s -o /dev/null -w '%{http_code}' --cacert /etc/graylog/certs/omnitech-rootca.crt \
        -u "admin:${GRAYLOG_ADMIN_PASS}" "https://${SIEM_FQDN}:9000/api/system/lbstatus" | grep -q 200; then
     echo " OK"; break

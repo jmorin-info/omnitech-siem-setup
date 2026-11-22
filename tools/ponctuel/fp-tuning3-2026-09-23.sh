@@ -15,7 +15,7 @@
 #   DRY-RUN par defaut. Appliquer : APPLY=1 tools/ponctuel/fp-tuning3-2026-09-23.sh
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." || exit 1
 source ./00-vars.env
 source ./lib-graylog.sh
 require_api

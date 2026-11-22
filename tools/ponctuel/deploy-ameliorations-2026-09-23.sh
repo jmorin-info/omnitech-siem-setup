@@ -12,7 +12,7 @@
 #   Idempotent. Journalise ce qui change.
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." || exit 1
 [[ $EUID -eq 0 ]] || { echo "root requis"; exit 1; }
 
 echo "==> [1/3] Service de triage"

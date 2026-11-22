@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Test des règles OMNI v3 via le simulateur de pipeline Graylog (messages synthétiques, rien n'est indexé).
-import json, sys, importlib.util
+import sys, importlib.util
 spec = importlib.util.spec_from_file_location("b", "/root/omni-v3/v3_build.py"); b = importlib.util.module_from_spec(spec)
 sys.argv = ["x", "--test"]; spec.loader.exec_module(b)
 sid = b.streams_ids()

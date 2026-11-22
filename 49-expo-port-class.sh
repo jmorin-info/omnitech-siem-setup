@@ -19,9 +19,45 @@
 #       donc PAS sur reserved_ip pour la direction ; les roles d'interface (wan/lan)
 #       sont le signal fiable. reserved_ip sert seulement de garde-fou secondaire.
 # Idempotent. Prerequis : 12 (streams/pipelines FortiGate). Relance 14 ensuite.
+# REGLES VERSIONNEES : la source du pipeline ecrite ici inclut aussi les regles
+# d'objets-graylog/raccordements.txt destinees a ce pipeline (sources .rule
+# uniques, lues par lib-regles-versionnees.sh) ; les absentes sont creees, les
+# presentes ne sont jamais modifiees. Un rejeu ne les retire donc plus.
+# --source-pipeline : affiche la source complete du pipeline et s'arrete
+# (hors ligne : ni 00-vars.env, ni appel API, ni ecriture).
 # =============================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
+source ./lib-regles-versionnees.sh
+
+# Pipeline 'OMNI - Exposition reseau' (stages 14/15/16, + regles versionnees).
+# NB : la version de reference du pipeline (stage 14 privflags + 4 regles de
+# direction src/dst, anti-HALT) est portee par 49-enrich-lots.sh, qui s'execute
+# AVANT ce script (ordre alphabetique) et y definit privflags + dir-interne/
+# sortant/entrant/transit. On reprend ICI la MEME definition pour qu'un redeploy
+# de ce script ne reintroduise pas l'ancienne version (stages 15/16 sans privflags,
+# qui cassait les regles de direction). L'ancienne regle if/else omni-forti-15-net-
+# direction n'est plus referencee (orpheline, inoffensive).
+# Les deux scripts doivent produire la meme source (tests/test_pipelines_versionnes.py).
+PIPELINE_TITRE="OMNI - Exposition reseau"
+source_pipeline() {
+  inclure_regles_versionnees "${PIPELINE_TITRE}" <<'EOF'
+pipeline "OMNI - Exposition reseau"
+stage 14 match either
+rule "omni-forti-14-privflags"
+stage 15 match either
+rule "omni-forti-15-port-class"
+rule "omni-forti-15-dir-interne"
+rule "omni-forti-15-dir-sortant"
+rule "omni-forti-15-dir-entrant"
+rule "omni-forti-15-dir-transit"
+stage 16 match either
+rule "omni-forti-16-expo-internet"
+end
+EOF
+}
+if [[ "${1:-}" == "--source-pipeline" ]]; then source_pipeline; exit $?; fi
+
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "a lancer en root."
@@ -170,28 +206,11 @@ if [[ -f "${CSV37}" ]]; then
 fi
 
 echo "==> [4/4] Pipeline 'OMNI - Exposition reseau' (stages 14/15/16) + connexion FortiGate"
-# NB : la version de reference du pipeline (stage 14 privflags + 4 regles de
-# direction src/dst, anti-HALT) est portee par 49-enrich-lots.sh, qui s'execute
-# AVANT ce script (ordre alphabetique) et y definit privflags + dir-interne/
-# sortant/entrant/transit. On reprend ICI la MEME definition pour qu'un redeploy
-# de ce script ne reintroduise pas l'ancienne version (stages 15/16 sans privflags,
-# qui cassait les regles de direction). L'ancienne regle if/else omni-forti-15-net-
-# direction n'est plus referencee (orpheline, inoffensive).
-PL_EXPO="$(ensure_pipeline "OMNI - Exposition reseau" <<'EOF'
-pipeline "OMNI - Exposition reseau"
-stage 14 match either
-rule "omni-forti-14-privflags"
-stage 15 match either
-rule "omni-forti-15-port-class"
-rule "omni-forti-15-dir-interne"
-rule "omni-forti-15-dir-sortant"
-rule "omni-forti-15-dir-entrant"
-rule "omni-forti-15-dir-transit"
-stage 16 match either
-rule "omni-forti-16-expo-internet"
-end
-EOF
-)"
+# Source definie en tete (source_pipeline) : regles 49 + regles versionnees.
+SRC_EXPO="$(source_pipeline)" || die "source du pipeline ${PIPELINE_TITRE} : inventaire des regles versionnees illisible"
+# Les regles versionnees doivent exister avant d'ecrire un pipeline qui les cite.
+ensure_regles_versionnees "${PIPELINE_TITRE}" || die "regles versionnees incompletes : pipeline ${PIPELINE_TITRE} non modifie"
+PL_EXPO="$(ensure_pipeline "${PIPELINE_TITRE}" <<< "${SRC_EXPO}")"
 SID="$(get_stream_id 'OMNI - FortiGate')"
 [[ -n "${SID}" ]] && connect_pipeline "${SID}" "${PL_EXPO}" || warn "stream absent: OMNI - FortiGate"
 

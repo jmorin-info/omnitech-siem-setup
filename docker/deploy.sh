@@ -66,7 +66,7 @@ PY
     [[ -d "$TMP/mongodump/graylog" ]] || { echo "[KO] dump Mongo Graylog absent de l'archive."; exit 1; }
     echo "==> [2/5] Demarrage de MongoDB"
     $DC up -d mongodb
-    for i in $(seq 1 30); do $DC exec -T mongodb mongosh --quiet --eval "db.adminCommand('ping')" >/dev/null 2>&1 && break; sleep 2; done
+    for _ in $(seq 1 30); do $DC exec -T mongodb mongosh --quiet --eval "db.adminCommand('ping')" >/dev/null 2>&1 && break; sleep 2; done
     echo "==> [3/5] mongorestore de la conf Graylog (--drop)"
     $DC stop graylog console nginx
     MID="$($DC ps -q mongodb)"

@@ -28,7 +28,6 @@ import json
 import os
 import socket
 import ssl
-import subprocess
 import sys
 import urllib.request
 from datetime import datetime, timezone
