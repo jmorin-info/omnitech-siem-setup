@@ -132,7 +132,7 @@ paquets installés.
 | 80 | `80-detection-extra2.sh` | Détecteurs ATT&CK haute fidélité (Defender, etc.) | oui | 12, 37, 13 | pipeline « OMNI - Detections extra2 » | optionnel |
 | 81 | `81-fp-allowlist.sh` | Liste d'autorisation des motifs bénins (étape 25) | oui | 12, 37 | pipeline « OMNI - Allowlist FP » | optionnel |
 | 82 | `82-graylog-analytics-dashboard.sh` | Tableau de bord « OMNI - Analytics » | oui | 21 | tableau de bord « OMNI - Analytics » | optionnel |
-| 83 | `83-retention-consolidee.sh` | Source unique des rétentions et migration de rotation | oui | 31, 41 | rotation **annulée** par `tools/ponctuel/revert-index-rotation-legacy.sh` (jeux `omni-*` en rotation héritée) | **à ne pas relancer en l'état** (voir note) |
+| 83 | `83-retention-consolidee.sh` | Source unique des rétentions : réglages de rotation et de rétention des jeux d'index (index futurs) | oui (plan par défaut, `--apply` pour écrire) | 10, 52, 55, 63, 79 | jeux `omni-*` en rotation héritée (P1D ou P1M), sans hiérarchisation | actif (révisé le 22/11/2026, voir note) |
 | 84 | `84-dashboards-triage-site.sh` | Tableau de bord « OMNI - Triage & Multi-site » | oui | 82, 97-multisite-soar | tableau de bord présent | optionnel |
 | 84 | `84-kerberoast-dedup.sh` | Consolidation des alertes Kerberos (anti-doublon) | oui (simulation par défaut) | 13 | n.v. | ponctuel |
 | 85 | `85-detection-extra3.sh` | Neuf détecteurs Sysmon haute fidélité | oui | 12, 37, 13 | pipeline « OMNI - Detections extra3 » | optionnel |
@@ -158,15 +158,43 @@ Les numéros 20 et 23 à 26 ne sont pas attribués.
 
 ### Note sur le script 83
 
-`83-retention-consolidee.sh` migre les jeux d'index vers la rotation
-`TimeBasedSizeOptimizing` avec hiérarchisation. Sur la version de Graylog
-alors en service, cette migration a provoqué des suppressions prématurées
-d'index (incident de septembre 2026). Le retour arrière
-`tools/ponctuel/revert-index-rotation-legacy.sh` a été appliqué : tous les
-jeux `omni-*` sont aujourd'hui en rotation héritée quotidienne, sans
-hiérarchisation (constaté le 21/11/2026). Relancer 83 tel quel referait la
-migration annulée. Une décision est nécessaire : corriger 83 pour qu'il
-n'applique plus que les durées de rétention, ou le déclarer obsolète.
+Jusqu'au 21/11/2026, `83-retention-consolidee.sh` migrait les jeux d'index vers
+la rotation `TimeBasedSizeOptimizing` avec hiérarchisation (`data_tiering`
+`hot_only`). Sur la version de Graylog alors en service, cette migration a
+supprimé des index à environ 30 jours au lieu de la rétention demandée
+(incident de septembre 2026) ; le retour arrière
+`tools/ponctuel/revert-index-rotation-legacy.sh` a été appliqué.
+
+Révision du 22/11/2026 (décision de l'administrateur) : le script ne fait plus
+cette migration. Il ne modifie que les réglages des jeux d'index (rotation
+temporelle héritée et nombre d'index conservés), qui s'appliquent aux index
+futurs, et :
+
+- affiche le plan par défaut et n'écrit qu'avec `--apply` (la variable `APPLY=1`
+  n'est plus reconnue) ;
+- ne supprime, ne réduit ni ne réindexe aucun index existant et n'émet aucun
+  appel `DELETE` ;
+- ne réduit jamais une rétention : si la durée demandée est plus courte que la
+  rétention effective en place (nombre d'index × période de rotation), il
+  l'affiche en avertissement « ATTENTION » et laisse le réglage inchangé ;
+- refuse un réglage qui conserverait moins d'index qu'il n'en existe (Graylog
+  supprimerait les plus anciens), par exemple un passage de P1D à P1M, et
+  refuse d'agir si OpenSearch ne permet pas de compter les index ;
+- se contente de signaler un écart de routage des streams (plus de correction
+  automatique).
+
+Code retour 3 si au moins un jeu d'index est écarté. Tests hors ligne :
+`tests/test_retention_consolidee.py`.
+
+Relevé du 22/11/2026 (API Graylog en GET) : six jeux sont en rotation
+quotidienne (`omni-winsec`, `omni-winother`, `omni-sysmon`, `omni-vsphere`,
+`omni-fortigate`, `omni-bunkerweb`) et les autres en rotation mensuelle avec
+4 index conservés (5 pour `omni-seal-audit`), soit une rétention effective
+d'environ 120 jours. Pour `omni-m365`, `omni-eset`, `omni-seal-*`, elle est
+inférieure à la [politique de rétention](../securite-conformite/POLITIQUE-RETENTION.md) :
+le plan du script propose de l'allonger (impact disque à évaluer avant
+`--apply`). Pour les jeux à 90 jours, la rétention en place est plus longue que
+la politique : le script le signale et ne la réduit pas.
 
 ## Autres scripts de la racine
 

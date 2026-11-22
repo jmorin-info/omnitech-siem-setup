@@ -10,8 +10,15 @@ stockage disponible.
 ## Durées de conservation (en ligne, consultable)
 
 Chaque source dispose d'un **index set dédié** (préfixe `omni-*`) avec rotation
-journalière (`P1D`) et rétention exprimée en nombre d'index (1 index = 1 jour).
+temporelle et rétention exprimée en nombre d'index : rétention effective =
+nombre d'index × période de rotation (quotidienne `P1D` pour les sources à fort
+volume, mensuelle `P1M` pour les sources peu volumineuses, relevé du 22/11/2026).
 La rétention « supprime » (delete) les index une fois la fenêtre dépassée.
+Les réglages sont portés par `83-retention-consolidee.sh`, qui ne s'applique
+qu'aux index futurs, ne réduit jamais une rétention en place et ne supprime
+aucun index (voir
+[la note sur le script 83](../reference/SCRIPTS-PROVISIONING.md#note-sur-le-script-83),
+qui signale aussi les jeux dont la rétention en place diffère de ce tableau).
 
 | Source                          | Index set        | Durée  | Justification                                                            |
 |---------------------------------|------------------|--------|-------------------------------------------------------------------------|
