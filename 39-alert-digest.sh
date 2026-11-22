@@ -2,8 +2,10 @@
 # =============================================================================
 # 39-alert-digest.sh - Recapitulatif periodique des alertes RETENUES (non-FP).
 #   Installe /usr/local/sbin/omni-alert-digest + l'unite et la minuterie systemd.
-#   Cadence : LUNDI et JEUDI a 08h00 (demande RSSI 23/09/2026). La fenetre est
-#   calculee par le script depuis le precedent envoi (lundi = 96 h, jeudi = 72 h)
+#   Cadence : du LUNDI au VENDREDI a 08h00, identique a la minuterie en production
+#   (OnCalendar=Mon..Fri *-*-* 08:00:00, relevee le 22/11/2026 ; la demande RSSI
+#   initiale du 23/09/2026 etait lundi et jeudi). La fenetre est calculee par le
+#   script (window_hours) : lundi = 72 h (depuis vendredi 08h00), autres jours = 24 h
 #   -> aucune alerte comptee deux fois, aucun trou entre deux envois.
 #   Source : decisions du triage reinjectees (event_source=alert_triage,
 #   triage_decision=mail) : seules les alertes JUGEES PERTINENTES y figurent.
@@ -36,10 +38,10 @@ UNIT
 
 cat > /etc/systemd/system/omni-alert-digest.timer <<'UNIT'
 [Unit]
-Description=OMNI SIEM - Recapitulatif des alertes (lundi et jeudi 08h00)
+Description=OMNI SIEM - Recapitulatif des alertes (du lundi au vendredi 08h00)
 
 [Timer]
-OnCalendar=Mon,Thu *-*-* 08:00:00
+OnCalendar=Mon..Fri *-*-* 08:00:00
 Persistent=true
 RandomizedDelaySec=120
 

@@ -78,7 +78,7 @@ paquets installés.
 |---|---|---|---|---|---|---|
 | 38 | `38-alert-triage.sh` | Triage des alertes (règles déterministes et couche LLM sur la zone grise) | oui | 13, 36 | `omni-alert-triage.service` actif | optionnel (proposé par l'installateur) |
 | 38 | `38-vuln-scan.sh` | Vulnérabilités : catalogue CISA KEV et ancienneté des correctifs | oui | 12, 21 | `omni-vuln-scan.timer` | optionnel |
-| 39 | `39-alert-digest.sh` | Récapitulatif des alertes retenues (l'en-tête indique lundi et jeudi 08:00) | oui | 38-alert-triage | `omni-alert-digest.timer`, réglée en production du lundi au vendredi à 08:00 (écart avec le script) | optionnel |
+| 39 | `39-alert-digest.sh` | Récapitulatif des alertes retenues, du lundi au vendredi à 08:00 | oui | 38-alert-triage | `omni-alert-digest.timer` (`OnCalendar=Mon..Fri *-*-* 08:00:00`, identique au script) | optionnel |
 | 39 | `39-collect-health.sh` | Supervision de la collecte (couverture, silence par hôte) | oui | 12, 21 | `omni-collect-health.timer` | optionnel |
 | 40 | `40-purge-logs.sh` | Purge du contenu des index de journaux, configuration conservée | **non (destructif)** | 30 (sauvegarde préalable) | sans objet | ponctuel, manuel uniquement |
 | 40 | `40-ueba-ndr.sh` | UEBA/NDR : volume, voyage impossible, beaconing, score d'entité | oui | 12, 21, 37 | minuteries `omni-ueba-*`, `omni-ndr-beacon` | optionnel |
