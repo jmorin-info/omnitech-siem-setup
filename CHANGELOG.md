@@ -21,6 +21,18 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Ajouté
 
+- `26-graylog-objets-manuels.sh` : versionne les objets Graylog créés à la main en
+  production (audit de cohérence du 21/11/2026, écarts G2 et G3). Sont concernées les
+  définitions « balayage IKE », « scan applicatif WAF (404) » et « lecture d'un mot de
+  passe LAPS », ainsi que les règles `omni-v3-laps-lecture`, `omni-v3-laps-lecture-it`
+  et les 15 règles `omni-fp-26-*`, avec leur raccordement aux pipelines. Sources :
+  `objets-graylog/` (flux et notifications désignés par titre) et
+  `tools/alertes-v2/regles/`. Le script affiche un plan en lecture seule par défaut ;
+  `--apply` crée seulement les objets absents. Un objet présent n'est jamais modifié et
+  un écart éventuel est signalé. Test hors ligne : `tests/test_graylog_objets_manuels.py`.
+- À relancer après `49-expo-port-class.sh`, `49-enrich-lots.sh`, `81-fp-allowlist.sh`
+  et `tools/omni-v3/v3_build.py`. Ces scripts réécrivent la source complète de leur
+  pipeline et en retirent les règles raccordées par le script 26.
 - Fiche de l'incident du 21/11/2026 (tests de la console écrits en production, message de test `soc_admin` conservé dans Graylog) : `docs/archives/INCIDENT-CONSOLE-2026-11-21.md`.
 
 ### Supprimé

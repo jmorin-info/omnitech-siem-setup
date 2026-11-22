@@ -1,0 +1,16 @@
+rule "omni-fp-26-expo-ztna-vaultwarden"
+// D5 (qualification 11/11/2026) : 13 incidents CR_EXPOSED_SERVICE = accès ZTNA des PC sous EMS vers Vaultwarden
+// (WAN1 -> 10.33.50.102:8080, politique FortiGate #3 « _ZTNA_Apps_PC_EMS »), 214 000 sessions / 7 j, publication voulue.
+// Signature EXACTE : IP + port + politique #3. Tout autre service exposé continue d'alerter.
+when
+  to_string($message.alert_tag) == "exposition_internet"
+  AND to_string($message.dest_ip) == "10.33.50.102"
+  AND to_string($message.dest_port) == "8080"
+  AND to_string($message.policyid) == "3"
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "expo_ztna_ems_vaultwarden");
+  set_field("fp_allowlist_reason", "exposition_internet: ZTNA EMS vers Vaultwarden (FG #3) - publication voulue, qualification 11/11/2026");
+  set_field("expo_internet", "ztna");
+  remove_single_field("alert_tag");
+end

@@ -1,0 +1,15 @@
+rule "omni-fp-26-lsass-ninjaone-metering"
+// D5 (qualification 11/11/2026) : 100 % des incidents CR_LSASS_THEFT / CR_CREDDUMP_PERSIST venaient de
+// njbinarymetering.exe (agent NinjaOne, inventaire logiciel) avec le masque 0x1410 (QUERY_LIMITED_INFORMATION|VM_READ).
+// Signature EXACTE : binaire signé à son chemin d'installation + masque 0x1410. Tout autre processus, tout autre masque
+// (dont 0x1010 / 0x1fffff typiques de mimikatz) ou une copie hors Program Files continue d'alerter en CRITIQUE.
+when
+  to_string($message.alert_tag) == "lsass_access"
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == "c:\\program files (x86)\\ninjaone\\njbinarymetering.exe"
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_GrantedAccess)) == "0x1410"
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "lsass_ninjaone_metering");
+  set_field("fp_allowlist_reason", "lsass_access: agent NinjaOne njbinarymetering.exe en lecture limitee 0x1410 - qualification incidents 11/11/2026");
+  remove_single_field("alert_tag");
+end

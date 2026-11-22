@@ -207,7 +207,7 @@ sont connues et suivies dans la [feuille de route](docs/ROADMAP.md) :
   sélectifs (fenêtres récentes des gros index).
 - **Réponse sur les comptes et les postes non armée** : désactivation de
   compte AD et isolement de poste restent en recommandation (simulation).
-- **Dette d'organisation** : 101 scripts numérotés (quatre scripts retirés archivés sous `tools/ponctuel/`), dont neuf préfixes en
+- **Dette d'organisation** : 102 scripts numérotés (quatre scripts retirés archivés sous `tools/ponctuel/`), dont neuf préfixes en
   double, quelques scripts obsolètes, et plusieurs services qui s'exécutent
   encore depuis une ancienne copie du dépôt sur le serveur.
 

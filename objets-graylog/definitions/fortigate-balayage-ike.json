@@ -1,0 +1,77 @@
+{
+  "title": "OMNI - FortiGate : balayage IKE (>=10 échecs phase 1 / IP / 6h) -> SOAR",
+  "description": "12/11/2026 (go jmorin). IP externe qui tente des négociations IKE sans tunnel correspondant (vpntunnel N/A : « peer SA proposal not match local policy » ou échec de phase 1 entrante) sur BX, IV ou Lançon = balayage VPN (T1595/T1133). Les tunnels connus (partenaires, sites, VPN des collaborateurs) ne sont jamais N/A. Le SOAR reçoit l'alerte en SIMULATION (SOAR_DETECTIONS_SIMULATION, aucun blocage) jusqu'à validation par jmorin ; garde-fous omni-soar habituels (exclusions 90 j, sites, partenaires, seuils). Simulation 30 j : 28 IP auraient été bloquées.",
+  "priority": 2,
+  "alert": true,
+  "flux_par_titre": [
+    "OMNI - FortiGate"
+  ],
+  "notifications_par_titre": [
+    "OMNI - SOAR auto-block"
+  ],
+  "config": {
+    "type": "aggregation-v1",
+    "query": "subtype:vpn AND action:negotiate AND vpntunnel:\"N/A\" AND ((logdesc:\"IPsec phase 1 error\" AND status:negotiate_error) OR (init:remote AND status:failure AND logdesc:\"Progress IPsec phase 1\")) AND _exists_:remip",
+    "query_parameters": [],
+    "filters": [],
+    "streams": [],
+    "stream_categories": [],
+    "group_by": [
+      "remip"
+    ],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 10.0
+        }
+      }
+    },
+    "search_within_ms": 21600000,
+    "execute_every_ms": 600000,
+    "use_cron_scheduling": false,
+    "cron_expression": null,
+    "cron_timezone": null,
+    "event_limit": 100
+  },
+  "field_spec": {
+    "remip": {
+      "data_type": "string",
+      "providers": [
+        {
+          "type": "template-v1",
+          "template": "${source.remip}",
+          "require_values": false,
+          "exclude_empty_fields": false
+        }
+      ]
+    }
+  },
+  "key_spec": [
+    "remip"
+  ],
+  "notification_settings": {
+    "grace_period_ms": 1800000,
+    "backlog_size": 20
+  },
+  "storage": [
+    {
+      "type": "persist-to-streams-v1",
+      "streams": [
+        "000000000000000000000002"
+      ]
+    }
+  ]
+}

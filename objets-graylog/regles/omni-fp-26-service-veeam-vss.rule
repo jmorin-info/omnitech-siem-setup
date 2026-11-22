@@ -1,0 +1,15 @@
+rule "omni-fp-26-service-veeam-vss"
+// D5 (qualification 11/11/2026) : 654 installations de service / 30 j = VeeamVssSupport (VeeamGuestHelper.exe) posé par
+// gMSA-VeeamAware$ / gMSA-VeeamT0$ à chaque sauvegarde applicative ; lues comme « persistance » (CR_RISKY_USER_ENDPOINT_THREAT).
+// Signature EXACTE : nom de service + binaire + compte gMSA Veeam. Tout autre service ou compte = alerte inchangée.
+when
+  to_string($message.alert_tag) == "service_install"
+  AND to_string($message.winlogbeat_winlog_event_data_ServiceName) == "VeeamVssSupport"
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_ServiceFileName)) == "c:\\windows\\veeamvsssupport\\veeamguesthelper.exe"
+  AND (to_string($message.winlogbeat_winlog_event_data_SubjectUserName) == "gMSA-VeeamAware$" OR to_string($message.winlogbeat_winlog_event_data_SubjectUserName) == "gMSA-VeeamT0$")
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "service_veeam_vss");
+  set_field("fp_allowlist_reason", "service_install: VeeamVssSupport par gMSA Veeam (traitement invite) - qualification incidents 11/11/2026");
+  remove_single_field("alert_tag");
+end

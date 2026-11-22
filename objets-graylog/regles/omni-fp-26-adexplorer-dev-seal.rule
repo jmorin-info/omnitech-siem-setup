@@ -1,0 +1,17 @@
+rule "omni-fp-26-adexplorer-dev-seal"
+// U6 (jmorin 11/11/2026, « outil utilisé par les devs ») : ADExplorer (Sysinternals) lancé par bailloud depuis son
+// %TEMP% sur BX-DEV-DELL-PC, avec des identifiants explicites vers le labo seal.dev (64 évts / 30 j, seul cas vu).
+// Signature EXACTE : autre compte, autre poste, autre cible que *.seal.dev ou autre chemin = alerte inchangée.
+when
+  to_string($message.alert_tag) == "explicit_cred_use"
+  AND lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) == "bailloud"
+  AND starts_with(to_string($message.host), "BX-DEV-DELL-PC", true)
+  AND starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ProcessName)), "c:\\users\\bailloud\\appdata\\local\\temp\\")
+  AND (ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ProcessName)), "\\adexplorer.exe") OR ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ProcessName)), "\\adexplorer64.exe"))
+  AND ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_TargetServerName)), ".seal.dev")
+then
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "adexplorer_dev_seal");
+  set_field("fp_allowlist_reason", "explicit_cred_use: ADExplorer de bailloud (BX-DEV-DELL-PC) vers le labo seal.dev - decision jmorin 11/11/2026 (U6)");
+  remove_single_field("alert_tag");
+end

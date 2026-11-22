@@ -1,0 +1,16 @@
+rule "omni-v3-laps-lecture"
+// D8 (jmorin 11/11/2026) : 4662 sur un attribut LAPS (msLAPS-Password / -EncryptedPassword / -EncryptedDSRMPassword /
+// ms-Mcs-AdmPwd). Les lectures génériques d'un objet ordinateur citent ~424 attributs (tous les utilisateurs, sans accès
+// réel au secret) : on ne retient que les listes courtes (<= 400 caractères), signe d'une lecture ciblée du mot de passe.
+when
+  to_string($message.event_id) == "4662"
+  AND regex("(?i)(fb67b5bd-ef3d-4d01-ba85-0ab2f0ed97dd|b3f5799a-a3a6-433b-8d41-0c79fe58fa71|eaf88f9d-c28c-4f8a-992d-2b1f089f66f8|2716a678-16f9-46d4-9a00-b3cc5c55977c)", to_string($message.winlogbeat_winlog_event_data_Properties)).matches == true
+  AND regex("(?s)^.{1,400}$", to_string($message.winlogbeat_winlog_event_data_Properties)).matches == true
+  AND NOT ends_with(to_string($message.winlogbeat_winlog_event_data_SubjectUserName), "$")
+then
+  set_field("v3_tag", "laps_lecture");
+  set_field("v3_severite", "ELEVE");
+  set_field("v3_mitre", "T1555");
+  set_field("v3_src", to_string($message.winlogbeat_winlog_event_data_SubjectUserName));
+  set_field("v3_cible", to_string($message.winlogbeat_winlog_event_data_ObjectName));
+end
