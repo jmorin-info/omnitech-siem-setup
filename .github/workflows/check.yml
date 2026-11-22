@@ -53,4 +53,8 @@ jobs:
       - name: Manifeste des composants déployés
         run: python tools/check-manifest.py
       - name: Plan de déploiement complet en racine factice
-        run: python tools/omni-deploy.py --root "$RUNNER_TEMP/racine" --home "$PWD" deploy all
+        run: |
+          # SEAL SLA est installé séparément sur l'instance de référence.
+          # Simuler uniquement sa présence dans la racine de test ; aucun service lancé.
+          install -Dm755 /dev/null "$RUNNER_TEMP/racine/opt/oms-seal-sla/.venv/bin/python"
+          python tools/omni-deploy.py --root "$RUNNER_TEMP/racine" --home "$PWD" deploy all

@@ -287,6 +287,10 @@ def test_lock_prevents_concurrent_runs(source, tmp_path):
 
 def test_real_repository_plan_in_fake_root_covers_console_assets(tmp_path):
     deployer = Deployer(ROOT, home=ROOT, root=tmp_path / "root", runner=FakeRunner())
+    # SEAL SLA has a separate runtime, outside the canonical repository.
+    missing = deployer.plan(["all"])
+    assert missing["blockers"] == ["oms-seal-sla.service : exécutable /opt/oms-seal-sla/.venv/bin/python absent"]
+    write(tmp_path / "root/opt/oms-seal-sla/.venv/bin/python", "", 0o755)
     plan = deployer.plan(["all"])
     assert not plan["blockers"], plan["blockers"]
     console = [item for item in plan["files"] if item["component"] == "console"]

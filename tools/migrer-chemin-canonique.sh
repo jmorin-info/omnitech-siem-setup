@@ -94,7 +94,9 @@ fi
 
 echo "[6] Plan de déploiement délégué à omni-deploy"
 if [[ -f "$CANON/tools/omni-deploy.py" ]]; then
-  OMNI_SIEM_HOME="$CANON" python3 "$CANON/tools/omni-deploy.py" --home "$CANON" deploy all | sed 's/^/    /' || true
+  if ! OMNI_SIEM_HOME="$CANON" python3 "$CANON/tools/omni-deploy.py" --home "$CANON" deploy all | sed 's/^/    /'; then
+    bloc "le plan de déploiement a échoué : corriger ses blocages avant toute migration"
+  fi
 fi
 
 echo

@@ -67,6 +67,23 @@ def test_unknown_option_is_refused(tmp_path):
     assert run(tmp_path, "--force").returncode == 2
 
 
+def test_delegated_plan_failure_blocks_before_archives_or_configuration_writes(tmp_path):
+    git_repo(tmp_path / "canon", {
+        "omni_deploy/engine.py": "", "mobile/requirements.txt": "pywebpush\n",
+        "lib-platform.sh": (ROOT / "lib-platform.sh").read_text(),
+        "tools/omni-deploy.py": "import sys\nprint('missing runtime')\nsys.exit(2)\n",
+    })
+    git_repo(tmp_path / "ancien", {"00-vars.env": "PRIVATE_TEST_SETTING=preserved\n"})
+    before = snapshot(tmp_path)
+    for args in ((), ("--apply",)):
+        result = run(tmp_path, *args)
+        assert result.returncode == 2
+        assert "le plan de déploiement a échoué" in result.stdout
+        assert snapshot(tmp_path) == before
+        assert not (tmp_path / "archives").exists()
+        assert not (tmp_path / "canon/00-vars.env").exists()
+
+
 def test_missing_api_normalisation_blocks_disk_guard_repointing(tmp_path):
     git_repo(tmp_path / "canon", {"omni_deploy/engine.py": "", "mobile/requirements.txt": "pywebpush\n",
                                   "lib-platform.sh": 'API="${API%/}"\n'})

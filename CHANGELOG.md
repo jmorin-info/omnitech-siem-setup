@@ -51,6 +51,8 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Corrigé
 
+- La migration refuse un plan de déploiement en échec avant toute archive, copie de configuration ou bascule de service.
+- Le plan CI utilise un runtime SEAL fictif dans sa racine isolée, sans assouplir le contrôle des exécutables réels.
 - Reprise limitée aux collisions de métriques du seul input appartenant au nouveau module ; les erreurs de port, de configuration et les entrées existantes restent inchangées.
 - Huit tentatives maximum, couvrant les sept jauges du transport Graylog 7.2.2, avec attente de l'arrêt complet entre les tentatives.
 - Recette Ubuntu 26.04 du correctif réussie : trois modules, dix messages normalisés et routés, dix-huit recherches de widgets et sauvegarde réelle.
