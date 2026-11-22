@@ -80,6 +80,10 @@ Contrôler également l'état de l'input dans **System > Inputs**. Par l'API, le
 gestionnaire attend l'arrêt complet puis le démarrage stable du seul input qu'il
 vient de créer, pour éviter les relances concurrentes de Graylog pendant l'ajout
 des champs statiques. Il ne redémarre pas les inputs d'une installation existante.
+Si Graylog conserve une métrique de workers d'un lancement concurrent, la reprise
+est limitée à huit tentatives sur ce même input neuf. Une erreur de port occupé,
+de configuration ou de permissions reste un échec ; aucune métrique ou entrée
+d'un autre input n'est supprimée.
 
 ## Préparer et installer via l'API
 
