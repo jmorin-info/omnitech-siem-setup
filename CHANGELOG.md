@@ -10,6 +10,21 @@ publie pas de versions numérotées : chaque livraison est identifiée par sa da
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
+## [Non publié] - Restauration complète chronométrée et objectifs RTO/RPO (22/11/2026)
+
+### Ajouté
+
+- `tools/omni-restore-drill.py` : exercice de restauration complète sur VM isolée (socle, archive de configuration déchiffrée avec une clé fournie à l'exécution, MongoDB, snapshots OpenSearch en dépôt lecture seule avec `include_aliases=false`, démarrage de Graylog, contrôles de réception), étapes chronométrées, rapport JSON et Markdown avec RTO mesuré et RPO déduit de l'âge des sauvegardes. Garde anti-production avant toute écriture : nom d'hôte, adresse, nœud OpenSearch, volume d'index préexistant, variable `OMNI_RESTORE_DRILL_ISOLATED=1`. Courriel Graylog désactivé, robots et unités systemd jamais réappliqués. Sous-commandes `plan`, `analyser`, et pour le banc VM `jeu-factice` et `sinistre-factice`.
+- `tools/omni-backup-inventory.py` : mesure en lecture seule (GET OpenSearch, liste des archives, journal d'`oms-snap-siem`, `systemctl show`) de l'âge, de la fréquence, de la taille des sauvegardes, de la couverture des index et du débit, avec estimation du RTO ; inventaire des index pour l'exercice.
+- `docs/exploitation/RESTAURATION-COMPLETE.md` : couverture des sauvegardes, intrants mesurés le 22/11/2026, objectifs RTO/RPO proposés, procédure d'exercice, constats sur les sauvegardes.
+- Banc VM : étape facultative `restore_drill` de `tools/test-ubuntu-vm.sh` (variable `OMNI_VM_RESTORE_DRILL=1`, option manuelle `restore_drill` du flux `ubuntu-vm.yml`), sur données factices générées dans la VM.
+- Tests hors ligne `tests/test_restore_drill.py` et `tests/test_backup_inventory.py`.
+
+### Modifié
+
+- `RESTORE.md` : chemin réel du partage SMB et rétention locale de 3 jours, restauration de l'historique couvert par les snapshots (§4 bis), recréation de `/etc/mongod.keyfile` absent de l'archive, dernière ligne `mongodb_uri` retenue, en-tête LUKS absent de l'archive.
+- PRA : objectifs RTO/RPO révisés sur mesures (à valider par le RSSI), versions de référence, checklist de réception chiffrée, fréquence des exercices, journal des tests.
+
 ## [Non publié] - Décisions d'exploitation du 22/11/2026
 
 ### Modifié

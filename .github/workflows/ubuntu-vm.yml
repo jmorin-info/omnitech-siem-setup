@@ -1,6 +1,11 @@
 name: Ubuntu 26.04 fresh VM
 on:
   workflow_dispatch:
+    inputs:
+      restore_drill:
+        description: 'Ajouter l''exercice de restauration complète (sauvegardes factices, sinistre simulé)'
+        type: boolean
+        default: false
   push:
     branches: [main, fix/ubuntu2604-validation]
     paths:
@@ -11,6 +16,7 @@ on:
       - 'tools/test-integration-vm.py'
       - 'tools/mongo-restore-test.py'
       - 'tools/omni-mongo-restore-test.sh'
+      - 'tools/omni-restore-drill.py'
       - 'deploye/sbin/omni-mongo-backup'
       - 'omni_integrations/**'
       - 'integrations/**'
@@ -34,7 +40,7 @@ concurrency:
 jobs:
   fresh-install:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: ${{ inputs.restore_drill && 75 || 45 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,6 +53,8 @@ jobs:
           test -c /dev/kvm
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
       - name: Install and verify in a fresh Ubuntu 26.04 VM
+        env:
+          OMNI_VM_RESTORE_DRILL: ${{ inputs.restore_drill && '1' || '0' }}
         run: bash tools/test-ubuntu-vm.sh
       - name: Upload sanitized acceptance report
         if: always()
