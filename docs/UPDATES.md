@@ -570,8 +570,10 @@ dans `tmux`.
 État constaté le 21/11/2026 :
 
 - `omni-backup-config` (`30-backup-config.sh`, 03:15) : `mongodump`, configurations,
-  en-tête LUKS, archive chiffrée vérifiée (déchiffrement, lecture, présence des collections
-  critiques) puis copiée sur le partage ; dernier passage en succès le 21/11/2026 à 03:21.
+  en-tête LUKS (en fait absent de l'archive jusqu'à la correction du 22/11/2026, voir
+  `docs/exploitation/RESTAURATION-COMPLETE.md` §7), archive chiffrée vérifiée (déchiffrement,
+  lecture, présence des collections critiques) puis copiée sur le partage ; dernier passage
+  en succès le 21/11/2026 à 03:21.
 - `oms-snap-siem` (01:30) : snapshot OpenSearch sélectif ; `oms-snap-siem-test` (mercredi
   11:00) restaure un index dans un index temporaire et compare le nombre de documents
   (dernier test OK le 18/11/2026).
