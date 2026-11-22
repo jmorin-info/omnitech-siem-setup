@@ -1,0 +1,12 @@
+rule "omni-v3-laps-lecture-it"
+// D8 : lecture LAPS par un compte d'administration IT (adm-*) = usage légitime (LAPS UI, Get-LapsADPassword).
+// Tracée (fp_signature), sans alerte. Tout autre compte = alerte ÉLEVÉ.
+when
+  to_string($message.v3_tag) == "laps_lecture"
+  AND starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)), "adm-")
+then
+  set_field("v3_tag", "laps_lecture_it");
+  set_field("fp_allowlist", true);
+  set_field("fp_signature", "laps_lecture_admin_it");
+  set_field("fp_allowlist_reason", "Lecture LAPS par un compte adm-* (equipe IT) - decision jmorin 11/11/2026 (D8)");
+end
