@@ -10,6 +10,23 @@ publie pas de versions numérotées : chaque livraison est identifiée par sa da
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
+## [Non publié] - Décisions d'exploitation du 22/11/2026
+
+### Modifié
+
+- `83-retention-consolidee.sh` ne modifie plus que les réglages des jeux d'index (rotation temporelle héritée, nombre d'index conservés) appliqués aux index futurs : plan par défaut, écriture seulement avec `--apply`, aucune suppression ni réduction d'index existants, aucune réduction de rétention (avertissement explicite), refus si moins d'index conservés que d'index présents ; le routage des streams n'est plus que contrôlé. Tests hors ligne `tests/test_retention_consolidee.py`.
+- Redémarrage automatique : la règle retenue est de conserver celui d'`oms-maj-siem` (dimanche 04:30, seulement si `/var/run/reboot-required` existe après contrôles et sauvegarde). `62-auto-security-updates.sh`, le commentaire de `52omni-siem.conf` (script et miroir `deploye/apt`), `docs/UPDATES.md`, le guide d'exploitation et l'inventaire des scripts décrivent ce comportement ; `unattended-upgrades` ne redémarre toujours jamais.
+- `39-alert-digest.sh` installe la minuterie du récapitulatif d'alertes du lundi au vendredi à 08:00 (`OnCalendar=Mon..Fri *-*-* 08:00:00`), comme en production.
+- Politique de rétention : la rétention effective s'exprime en nombre d'index × période de rotation (P1D ou P1M selon les sources).
+
+### Ajouté
+
+- Fiche de l'incident du 21/11/2026 (tests de la console écrits en production, message de test `soc_admin` conservé dans Graylog) : `docs/archives/INCIDENT-CONSOLE-2026-11-21.md`.
+
+### Supprimé
+
+- Scripts retirés archivés sous `tools/ponctuel/` sans changement de nom : `15-rapport-hebdo.sh` (doublon de `34-weekly-report.sh`), `22-alert-routing.sh`, `31-retention-iso.sh`, `44-incidents.sh`, `sync-deploye.sh`. Aucun appel actif trouvé en production ni dans le dépôt.
+
 ## [2026-11-22] - Administration, déploiement et maintenance
 
 ### Ajouté
