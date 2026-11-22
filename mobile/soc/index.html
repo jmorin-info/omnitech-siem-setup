@@ -80,6 +80,15 @@
 
   main{grid-column:2;overflow-y:auto;padding:22px 24px 40px}
   .page{display:none;animation:fade .35s ease}.page.on{display:block}
+  /* page Indicateurs (app-kpi.js) */
+  .kpi-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:14px}
+  .kpi-period{display:flex;gap:6px;margin-left:auto}.kpi-period .on{border-color:var(--cy);color:var(--cy)}
+  .kpi-card,.kpi-grid{margin-top:16px}.kpi-note{font-size:12px;margin:4px 0 10px}
+  .kpi-tblwrap{overflow-x:auto;margin-bottom:10px}
+  .kpi-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  .kpi-tbl th,.kpi-tbl td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--bd)}
+  .kpi-tbl th{color:var(--mut);font-weight:600}.kpi-tbl .num{text-align:right;white-space:nowrap}
+  .kpi-gaps{margin:4px 0 8px 18px;font-size:13px;line-height:1.5}
   @keyframes fade{from{opacity:0;transform:translateY(6px)}}
 
   .grid{display:grid;gap:16px}
@@ -784,6 +793,7 @@
       <a class="on" data-p="overview"><span class="ic"><svg class="svi"><use href="#i-grid"></use></svg></span><span data-i18n="nav_overview">Vue d'ensemble</span></a>
       <a data-p="incidents"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span><span data-i18n="nav_incidents">Incidents</span></a>
       <a data-p="detections"><span class="ic"><svg class="svi"><use href="#i-target"></use></svg></span><span data-i18n="nav_detections">Détections</span></a>
+      <a data-p="kpi"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span><span>Indicateurs</span></a>
       <a data-p="entities"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span><span data-i18n="nav_entities">Entités</span></a>
       <a data-p="attack"><span class="ic"><svg class="svi"><use href="#i-matrix"></use></svg></span><span data-i18n="nav_attack">ATT&CK</span></a>
       <a data-p="graph"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span><span data-i18n="nav_graph">Graphe d'attaque</span></a>
@@ -944,6 +954,9 @@
         <div class="card"><h3><svg class="svi"><use href="#i-pulse"></use></svg> <span>Dernières décisions du SOAR</span><span class="tag">blocages, déblocages, exclusions</span></h3><div class="feed" id="shist"></div></div>
       </div>
     </section>
+    <section class="page" id="p-kpi" aria-label="Indicateurs SOC">
+      <div id="kpiRoot"></div>
+    </section>
     <section class="page" id="p-ops">
       <div id="ostatus"></div>
       <div class="opsgrid" id="oitems"></div>
@@ -1005,5 +1018,6 @@
 <script src="/soc/app-v3.js?v=2026112101"></script><script src="/soc/app-handlers.js?v=2026112101"></script>
 <script src="/soc/app-professional.js?v=2026112101"></script>
 <script src="/soc/app-admin.js?v=2026112101"></script>
+<script src="/soc/app-kpi.js?v=2026112201"></script>
 </body>
 </html>
