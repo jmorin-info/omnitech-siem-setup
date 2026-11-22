@@ -13,7 +13,7 @@
     incidents:["/cases"],detections:["/detections"],entities:["/entities","/watchlist","/entity-search"],
     attack:["/attack-matrix"],graph:["/graph"],twin:["/attack-graph"],ems:["/fortiems"],
     network:["/network"],deploy:["/deploy"],globe:["/geo-flows"],leaks:["/leaks2"],
-    health:["/health"],soar:["/soar"],ops:["/siem-ops"],admin:["/admin/me"],report:["/report"],playbooks:["/guidance"]
+    health:["/health"],soar:["/soar"],kpi:["/soc-kpi"],ops:["/siem-ops"],admin:["/admin/me"],report:["/report"],playbooks:["/guidance"]
   };
   function node(tag, className, value) {
     var el = document.createElement(tag);
@@ -36,7 +36,7 @@
     if (input) input.focus();
   }
   var groups = [
-    {fr:"Pilotage", en:"Monitoring", pages:["overview", "incidents", "detections"]},
+    {fr:"Pilotage", en:"Monitoring", pages:["overview", "incidents", "detections", "kpi"]},
     {fr:"Investigation", en:"Investigation", pages:["entities", "attack", "graph", "twin", "playbooks"]},
     {fr:"Visibilité", en:"Visibility", pages:["ems", "network", "globe", "leaks"]},
     {fr:"Administration", en:"Operations", pages:["health", "soar", "ops", "admin", "deploy", "report"]}

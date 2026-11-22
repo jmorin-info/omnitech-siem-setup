@@ -60,6 +60,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 |---|---|
 | [Procédure de gestion des incidents](exploitation/PROCEDURE-INCIDENT.md) | Détection, évaluation, réponse, clôture |
 | [Playbooks SOAR](exploitation/SOAR-PLAYBOOKS.md) | Réponse automatisée, garde-fous, déblocage |
+| [Indicateurs SOC](exploitation/INDICATEURS-SOC.md) | Volume d'alertes, MTTD, MTTR, faux positifs, couverture ATT&CK : définitions, outil, page de la console, lacunes |
 | [Détection avancée et réponse automatisée](exploitation/REPONSE-AUTOMATISEE.md) | Compte canari AD et SOAR |
 | [Restauration depuis une sauvegarde](exploitation/RESTORE.md) | Restauration complète de la configuration |
 | [Plan de reconstruction (PRA)](exploitation/PRA-RECONSTRUCTION-SIEM.md) | RTO/RPO, scénarios, validation, journal des tests |

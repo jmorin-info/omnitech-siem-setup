@@ -10,6 +10,17 @@ publie pas de versions numérotées : chaque livraison est identifiée par sa da
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
+## [Non publié] - Indicateurs SOC (22/11/2026)
+
+### Ajouté
+
+- `tools/omni-soc-kpi.py` : indicateurs SOC calculés en lecture seule (OpenSearch `_search`, API Graylog en GET, fichiers d'état) sur une période paramétrable, sortie JSON et Markdown avec médiane et p90 : volume d'alertes par sévérité, source et détection ; MTTD exact pour les détections unitaires et encadré pour les agrégations ; prise en charge et clôture des dossiers, délai alerte vers blocage SOAR, journal d'audit ; faux positifs du triage ; couverture ATT&CK des définitions actives. Les données absentes sont listées dans « lacunes ». Documentation `docs/exploitation/INDICATEURS-SOC.md`, tests `tests/test_soc_kpi.py`.
+- Console SOC : page « Indicateurs » (`mobile/soc/app-kpi.js`) et point d'API `GET /m/api/soc-kpi?days=N` réservé aux rôles analyste et administrateur, calcul partagé avec l'outil, cache de 10 minutes.
+
+### Modifié
+
+- Dossiers de la console (`update_case`) : historique daté (`history`) des changements de statut, d'assignation et de qualification, et horodatage de clôture (`closed_ts`), pour mesurer le MTTR. Ajout seul, champs ignorés par l'affichage.
+
 ## [Non publié] - Décisions d'exploitation du 22/11/2026
 
 ### Modifié
