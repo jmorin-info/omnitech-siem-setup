@@ -20,6 +20,8 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 - `tools/maj-cert-orchestrator-prod.sh` (plan, `--apply`) : met à jour par PUT idempotent les 5 règles `omni-cert-*` déjà créées en production et aligne l'index set `omni-cert` sur `P1M` x 3, sans création ni suppression. Tests `tests/test_cert_orchestrator.py`.
 
+- `tools/retirer-ancienne-copie.sh` (plan, `--apply`, `--rollback`) : étape 4 du plan de cohérence, renommage de `/root/omnitech-siem-setup` et lien vers le dépôt canonique, après contrôle de la date, des unités systemd (configuration effective), des tâches cron, des processus et de l'identité des `00-vars.env` ; liste des secrets en clair pour l'étape 5. Tests `tests/test_retrait_ancienne_copie.py`.
+
 ### Modifié
 
 - `oms-snap-siem` lit le dépôt et son emplacement dans `/etc/oms-snap-siem.conf` (`DEPOT`, `DEPOT_CHEMIN`, `LIBRE_ARRET_PCT`) au lieu de `graylog_fs` et `/home` codés en dur ; `omni-drift-check` (script 29 et miroir) et `omni-update-status.py` suivent le même dépôt.

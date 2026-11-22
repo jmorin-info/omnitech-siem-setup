@@ -142,6 +142,6 @@ cat <<EOF
 Migration appliquée. Transactions : ${DEPLOY[*]} history
 L'ancienne copie $ANCIEN est conservée pour le retour arrière.
 Étape 4, après un cycle complet de timers (24 h) sans incident, NON exécutée ici :
-  mv $ANCIEN $ANCIEN.retire-\$(date +%Y%m%d) && ln -s $CANON $ANCIEN
+  bash tools/retirer-ancienne-copie.sh   (plan, puis --apply : contrôles, mv et lien symbolique)
 Étape 5, après 7 jours sans incident : retrait des copies obsolètes (voir docs/DEPLOYMENT.md).
 EOF

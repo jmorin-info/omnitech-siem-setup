@@ -175,10 +175,31 @@ Non traité automatiquement :
   et à ce dossier) ; chaque dossier mensuel y apparaît comme fichier non suivi du clone, à
   commiter depuis un poste de travail si on veut le versionner. Test : `systemctl start
   omni-iso-evidence.service` puis `journalctl -u omni-iso-evidence.service`.
-- Après 24 h sans incident (étape 4 du plan) :
-  `mv /root/omnitech-siem-setup /root/omnitech-siem-setup.retire-$(date +%Y%m%d) && ln -s /opt/omni-siem/repository /root/omnitech-siem-setup`.
-  Ne retirer l'ancienne copie qu'après correction d'`OMS_GRAPH_DIR` dans le backend.
-- Après 7 jours : retrait des copies obsolètes (étape 5 du rapport de cohérence).
+- Étape 4 du plan, au plus tôt le 23/11/2026 à 10:00, après la pose du drop-in
+  d'`omni-iso-evidence` : renommage de l'ancienne copie et lien symbolique vers le dépôt
+  canonique, par `tools/retirer-ancienne-copie.sh` (à lancer depuis le dépôt canonique,
+  jamais depuis l'ancienne copie) :
+
+  ```bash
+  cd /opt/omni-siem/repository
+  bash tools/retirer-ancienne-copie.sh               # plan, lecture seule
+  sudo bash tools/retirer-ancienne-copie.sh --apply  # mv vers .retire-AAAAMMJJ puis ln -s
+  sudo bash tools/retirer-ancienne-copie.sh --rollback
+  ```
+
+  Contrôles bloquants : date ; aucune unité systemd dont la configuration **effective**
+  (`systemctl show` : `ExecStart*`, `WorkingDirectory`, `EnvironmentFiles`,
+  `ReadWritePaths`...) utilise l'ancienne copie, une unité de base repointée par son drop-in
+  n'étant pas bloquante ; aucune tâche cron ; aucun processus (répertoire courant,
+  exécutable, ligne de commande, fichiers ouverts, bibliothèques chargées) ; `00-vars.env`
+  identique dans les deux copies (comparé sans affichage). Le plan liste aussi les fichiers
+  de secrets en clair de l'ancienne copie (chemin, taille, droits) ; `--apply` en garde la
+  liste dans `/var/lib/omni-retrait-ancienne-copie/secrets-a-supprimer.txt`. Relevé du
+  22/11/2026 : seul `omni-iso-evidence` bloque encore ; secrets en clair `00-vars.env`
+  (0600) et `SECRETS.md` (0644).
+- Après 7 jours (étape 5 du rapport de cohérence) : suppression de la copie retirée,
+  en commençant par `shred -u` sur les fichiers de secrets listés, puis retrait des autres
+  copies obsolètes. Non automatisé.
 
 ## 7. Intégration continue
 
