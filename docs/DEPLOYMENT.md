@@ -22,17 +22,19 @@ Le code s'exécute depuis **un seul** clone Git : `/opt/omni-siem/repository`
 
 **Différence avec l'installation historique** : la production de référence exécute
 encore une partie de son code depuis `/root/omnitech-siem-setup` (9 unités, 25 robots,
-venvs). Le dépôt ne contient plus ce chemin, sauf dans les unités de base recopiées
-de la production, neutralisées par des drop-ins `50-depot-reference.conf`, et dans
-`mobile/omni-mobile-api.py` (`OMS_GRAPH_DIR`, valeur par défaut de `MITRE_LOOKUP`),
-à corriger par le chantier console. La migration est décrite en section 6.
+venvs). Certaines unités de base conservent leurs chemins historiques ; les
+drop-ins `50-depot-reference.conf` définissent leur nouvel emplacement après
+déploiement. Le backend versionné utilise désormais `OMNI_REPO_DIR` pour ses
+chemins de données. Tant que l'ancien backend reste en service, ses chemins
+restent ceux de l'installation historique. La migration est décrite en section 6.
 
 ## 1. Installation neuve
 
 ```bash
 sudo git clone https://github.com/jmorin-info/omnitech-siem-setup.git /opt/omni-siem/repository
 cd /opt/omni-siem/repository
-cp 00-vars.env.example 00-vars.env && chmod 600 00-vars.env   # puis renseigner le site
+sudo install -m 600 00-vars.env.example 00-vars.env
+sudo nano 00-vars.env   # renseigner le site avant de continuer
 sudo bash install.sh --generate-secrets
 sudo bash install.sh --plan
 sudo bash install.sh --apply

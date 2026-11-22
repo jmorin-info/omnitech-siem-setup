@@ -33,7 +33,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 | [Installation et périmètre du socle](INSTALLATION.md) | Prérequis, phases, composants installés, contrôles de réception |
 | [Installation Ubuntu ligne par ligne](UBUNTU-DEMARRAGE.md) | Parcours pas à pas sur une machine neuve |
 | [Qualification Ubuntu 26.04](QUALIFICATION-UBUNTU2604.md) | Recette sur VM isolée et rapports |
-| [Déploiement](DEPLOYMENT.md) | Vue d'ensemble installation, mises à jour, reprise (en anglais) |
+| [Déploiement](DEPLOYMENT.md) | Vue d'ensemble installation, mises à jour, reprise |
 | [Interface d'administration SSH](INTERFACE-ADMINISTRATION.md) | Gestionnaire en terminal : configuration, installation, modules |
 | [Console SOC : déploiement et diagnostic](CONSOLE-DEPLOIEMENT.md) | Publication de `/soc/`, erreurs 404 et 502 |
 | [Modules WatchGuard, UniFi, Palo Alto](INTEGRATIONS-MODULAIRES.md) | Content Packs, tableaux de bord, limites de formats |

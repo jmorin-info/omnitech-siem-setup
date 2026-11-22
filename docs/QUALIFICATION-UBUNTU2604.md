@@ -4,7 +4,13 @@ Ubuntu 26.04 demande `--experimental-ubuntu-2604`. Cette option conserve les
 versions épinglées et les contrôles réels ; elle ne constitue pas un engagement
 de support des éditeurs. Voir [le parcours opérateur](UBUNTU-DEMARRAGE.md).
 
-## Résultat constaté le 21 novembre 2026
+## Résultats constatés les 21 et 22 novembre 2026
+
+La [recette de la branche intégrée 45003494162](https://github.com/jmorin-info/omnitech-siem-setup/actions/runs/45003494162)
+a également réussi le 22 novembre sur `d570a09607f447c5dc855b6875e8b8dd944ef320` :
+25 contrôles du socle, trois modules, dix messages, dix-huit recherches de widgets,
+session console HTTPS et sauvegarde réelle. Elle couvre le backend et les chemins
+de la livraison intégrée ; elle n'effectue aucune migration sur la production.
 
 La [recette 44910053654, tentative 2](https://github.com/jmorin-info/omnitech-siem-setup/actions/runs/44910053654/attempts/2)
 a réussi sur le commit `ee4263fc6bb8a744589e280552ea42cb66e259b1`, avec la
