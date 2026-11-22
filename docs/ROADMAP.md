@@ -13,7 +13,7 @@ Chaque élément est classé :
 - **En cours** : amorcé mais incomplet, ou en observation ;
 - **À faire** : non commencé.
 
-État au 21/11/2026. Mettre à jour ce document à chaque livraison concernée
+État au 22/11/2026. Mettre à jour ce document à chaque livraison concernée
 et consigner le changement dans le [journal des modifications](../CHANGELOG.md).
 
 ## 1. Validation continue des détections
@@ -44,11 +44,11 @@ nombre de règles.
 | Fait | Blocage local des secrets et des mentions d'outillage avant commit | `scan-depot.sh --installer` |
 | Fait | Mises à jour du code à révision figée, avec sauvegarde et retour arrière ; tests de l'outil | [UPDATES.md](UPDATES.md), `tests/test_updater.py` |
 | Fait | Contrôle des liens internes de la documentation dans les tests | `tools/check-doc-links.py` |
-| À faire | Analyse statique dans l'intégration continue : ShellCheck (scripts Bash), Ruff (Python) | |
-| À faire | Détection de secrets côté serveur (intégration continue), en complément du crochet local | |
-| À faire | Test de non-régression de la récupération Git (`git fetch`) de l'outil de mise à jour dans des conditions dégradées | |
+| Fait | Analyse statique dans l'intégration continue : ShellCheck (scripts Bash), Ruff (Python) | `tools/ci-lint.sh`, `.github/workflows/check.yml` |
+| Fait | Détection de secrets côté serveur (intégration continue), en complément du crochet local | `scan-depot.sh --arbre`, `.github/workflows/check.yml` |
+| Fait | Tests de non-régression de la récupération Git (`git fetch`) de l'outil de mise à jour dans des conditions dégradées | `tests/test_updater_fetch.py` |
 | À faire | Manifeste d'ordre d'exécution des scripts de provisioning et renumérotation par domaine | [SCRIPTS-PROVISIONING.md](reference/SCRIPTS-PROVISIONING.md#plan-de-renumérotation-et-de-regroupement-proposition-non-appliquée) |
-| À faire | Faire tourner tous les services depuis un emplacement unique et versionné : plusieurs unités pointent encore vers une ancienne copie du dépôt sous `/root` | |
+| En cours | Migration vers un emplacement unique : outil et drop-ins disponibles, bascule des services de production encore à effectuer | `tools/migrer-chemin-canonique.sh`, [audit de cohérence](AUDIT-COHERENCE-2026-11-21.md) |
 
 ## 3. Réponse automatisée sûre
 

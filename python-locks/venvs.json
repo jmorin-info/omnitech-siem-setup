@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "comment": "Venvs Python des services. venv_candidates : le premier chemin existant est audité ({source} = racine du dépôt installé). Les chemins /root/omnitech-siem-setup sont ceux de la production au 21/11/2026 ; aucun venv n'existe sous /opt/omni-siem/repository. mobile n'a pas de requirements.txt dans le dépôt : sa dépendance directe (pywebpush, 65-mobile-pwa.sh) est déclarée dans « direct ».",
+  "comment": "Venvs Python des services. venv_candidates : le premier chemin existant est audité ({source} = racine du dépôt installé). Les chemins historiques reflètent le relevé du 21/11/2026 ; vérifier le chemin retourné après une migration. mobile/requirements.txt décrit le runtime console ; les outils de tests navigateur du relevé historique sont ignorés.",
   "venvs": [
     {
       "id": "mobile",
       "description": "Backend de la console SOC (omni-mobile-api)",
-      "requirements": null,
-      "direct": ["pywebpush"],
+      "requirements": "mobile/requirements.txt",
+      "direct": [],
       "lock": "python-locks/mobile.txt",
       "venv_candidates": ["/opt/omni-siem/console/.venv", "/root/omnitech-siem-setup/mobile/.venv", "{source}/mobile/.venv"],
-      "ignore": []
+      "ignore": ["playwright", "pyee", "greenlet"]
     },
     {
       "id": "oms-xdr",

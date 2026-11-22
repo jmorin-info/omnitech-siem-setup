@@ -93,6 +93,25 @@ def test_repository_inventory_and_locks_are_consistent():
                 assert name in pins, (entry["id"], name)
 
 
+def test_mobile_runtime_audit_uses_its_requirements_without_browser_tools():
+    inventory = json.loads((ROOT / "python-locks/venvs.json").read_text())
+    entry = next(e for e in inventory["venvs"] if e["id"] == "mobile")
+    assert entry["requirements"] == "mobile/requirements.txt"
+    entry = {**entry, "venv_candidates": ["/runtime/.venv"]}
+    lock = (ROOT / entry["lock"]).read_text()
+    packages = {n: v for n, v in pydeps.parse_lock(lock).items() if n not in entry["ignore"]}
+    assert not {"playwright", "pyee", "greenlet"}.intersection(packages)
+    fake = FakeSystem().put("/src/" + entry["lock"], lock)
+    fake.put("/src/" + entry["requirements"], (ROOT / entry["requirements"]).read_text())
+    fake.put("/runtime/.venv/bin/python", "")
+    fake.on(["/runtime/.venv/bin/python", "--version"], "Python 3.13.5\n")
+    fake.on(["/runtime/.venv/bin/python", "-m", "pip", "list", "--format=json", "--disable-pip-version-check", "--no-input"],
+            json.dumps([{"name": n, "version": v} for n, v in packages.items()]))
+    result = pydeps.audit_venv(entry, "/src", fake)
+    assert result["status"] == "ok", result
+    assert not result["unpinned_requirements"]
+
+
 @pytest.mark.parametrize("bad", [{"schema_version": 2, "venvs": []}, {"schema_version": 1, "venvs": [{"id": "A"}]},
                                  {"schema_version": 1, "venvs": [{"id": "a"}, {"id": "a"}]}])
 def test_invalid_inventory_is_rejected(bad):

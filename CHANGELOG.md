@@ -10,10 +10,13 @@ publie pas de versions numérotées : chaque livraison est identifiée par sa da
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
-## [Non publié]
+## [2026-11-22] - Administration, déploiement et maintenance
 
 ### Ajouté
 
+- Espace Administration de la console : simulation, autorisations, double validation et audit. Son exécuteur et les accès réseau demandent une configuration propre au site ; publier le code ne les active pas en production.
+- Déploiement transactionnel des composants maison, contrôle de santé et migration préparée vers le dépôt canonique, avec sauvegardes et retours arrière.
+- Inventaire unifié des mises à jour système, pile SIEM et dépendances Python ; procédures distinctes des mises à jour de code.
 - Contrôle automatique des liens internes de la documentation
   (`tools/check-doc-links.py`), exécuté par `run-tests.sh`.
 - Index unique de la documentation `docs/README.md`, organisé par parcours.
@@ -47,10 +50,9 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
   `docs/00-INDEX.md` et `docs/DEMARRER.md` deviennent des redirections.
 - Émojis retirés de la documentation.
 
-## [2026-11-22] - Fiabilité du démarrage des modules
-
 ### Corrigé
 
+- Inventaire Python de la console aligné sur `mobile/requirements.txt`, sans imposer les outils de tests navigateur au runtime ; procédure et feuille de route actualisées.
 - La migration refuse un plan de déploiement en échec avant toute archive, copie de configuration ou bascule de service.
 - Le plan CI utilise un runtime SEAL fictif dans sa racine isolée, sans assouplir le contrôle des exécutables réels.
 - Reprise limitée aux collisions de métriques du seul input appartenant au nouveau module ; les erreurs de port, de configuration et les entrées existantes restent inchangées.

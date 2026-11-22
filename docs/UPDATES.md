@@ -442,11 +442,13 @@ série à la fois, `featureCompatibilityVersion`) en procédure manuelle.
 `oms-graph`, `oms-ml`, et `oms-seal-sla` (facultatif). Pour chacun : le fichier de
 dépendances directes s'il existe, le fichier de verrouillage `python-locks/<id>.txt`
 (versions exactes relevées le 21/11/2026 dans les venvs de production) et les chemins
-candidats du venv (le premier existant est audité ; en production ils sont sous
-`/root/omnitech-siem-setup/<composant>/.venv` et `/opt/oms-seal-sla/.venv` ; aucun venv
-n'existe sous `/opt/omni-siem/repository`). La console n'a pas de `mobile/requirements.txt` :
-sa dépendance directe `pywebpush` (installée par `65-mobile-pwa.sh`) est déclarée dans
-l'inventaire (champ `direct`) et contrôlée dans le verrouillage.
+candidats du venv (le premier existant est audité). Les chemins historiques
+proviennent du relevé du 21/11/2026 ; après une migration, vérifier que le champ
+`venv` retourné désigne bien l'environnement à examiner. L'audit ne déduit pas
+le processus actif à partir de systemd.
+La console utilise `mobile/requirements.txt`, partagé avec le déploiement.
+Playwright et ses dépendances de tests `pyee` et `greenlet`, présents dans le
+relevé historique, sont exclus de l'audit du runtime console.
 
 ```bash
 python3 tools/omni-pydeps.py audit                 # écarts venv / verrouillage
