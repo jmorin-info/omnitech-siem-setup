@@ -1,0 +1,141 @@
+{
+  "titre": "OMNI - Connexion compte admin (adm-*) hors heures ouvrées",
+  "critique": true,
+  "mitre": "T1078.002",
+  "justification": "Usage d'un compte d'administration hors heures ouvrées : requête la plus complexe (échappements, deux flux, deux sources).",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "(user:adm\\-* OR user:ADM\\-* OR user:*\\\\adm\\-* OR user:*\\\\ADM\\-*) AND off_hours:oui AND ((event_id:4624 AND NOT logon_type_label:batch AND NOT logon_type_label:service AND NOT logon_type_label:network) OR (m365_type:signin AND event_action:connexion_reussie))",
+    "streams": [
+      "OMNI - M365",
+      "OMNI - Windows Security"
+    ],
+    "group_by": [
+      "user"
+    ],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 1.0
+        }
+      }
+    },
+    "search_within_ms": 3600000,
+    "execute_every_ms": 3600000
+  },
+  "cas": [
+    {
+      "nom": "ouverture de session interactive adm- hors heures",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "OMNITECH\\adm-jdupont"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "user": "OMNITECH\\adm-jdupont",
+            "off_hours": "oui",
+            "event_id": "4624",
+            "logon_type_label": "interactive"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "connexion M365 réussie adm- hors heures",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "adm-jdupont"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - M365",
+          "age_s": 60,
+          "champs": {
+            "user": "adm-jdupont",
+            "off_hours": "oui",
+            "m365_type": "signin",
+            "event_action": "connexion_reussie"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "ouverture de session réseau (exclue)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "user": "adm-jdupont",
+            "off_hours": "oui",
+            "event_id": "4624",
+            "logon_type_label": "network"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "compte non admin",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "user": "jdupont",
+            "off_hours": "oui",
+            "event_id": "4624",
+            "logon_type_label": "interactive"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "pendant les heures ouvrées",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "user": "adm-jdupont",
+            "off_hours": "non",
+            "event_id": "4624",
+            "logon_type_label": "interactive"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -27,6 +27,8 @@
 /etc/systemd/system/omni-collect-health.service	deploye/systemd/omni-collect-health.service
 /etc/systemd/system/omni-collect-health.service.d/hardening.conf	deploye/systemd/omni-collect-health.service.d/hardening.conf
 /etc/systemd/system/omni-collect-health.timer	deploye/systemd/omni-collect-health.timer
+/etc/systemd/system/omni-detection-validate.service	deploye/systemd/omni-detection-validate.service
+/etc/systemd/system/omni-detection-validate.timer	deploye/systemd/omni-detection-validate.timer
 /etc/systemd/system/omni-disk-guard.service	deploye/systemd/omni-disk-guard.service
 /etc/systemd/system/omni-disk-guard.service.d/50-depot-reference.conf	deploye/systemd/omni-disk-guard.service.d/50-depot-reference.conf
 /etc/systemd/system/omni-disk-guard.service.d/hardening.conf	deploye/systemd/omni-disk-guard.service.d/hardening.conf

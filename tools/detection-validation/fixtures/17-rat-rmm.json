@@ -1,0 +1,123 @@
+{
+  "titre": "OMNI - Logiciel d'acces distant non autorise (RAT/RMM) - T1219",
+  "critique": true,
+  "mitre": "T1219",
+  "justification": "Outil d'accès distant non autorisé (constaté en production sur bx-hl-gbe-pc2) ; exclusions par hôte et par agent RMM légitime.",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (winlogbeat_winlog_event_data_OriginalFileName:(\"AnyDesk.exe\" OR \"RustDesk.exe\" OR \"ngrok.exe\") OR winlogbeat_winlog_event_data_Image:(*anydesk* OR *screenconnect* OR *splashtop* OR *atera* OR *rustdesk* OR *gotoassist* OR *remoteutilities* OR *zohoassist* OR *action1* OR *pulseway* OR *quickassist*)) AND NOT winlogbeat_winlog_event_data_Image:*ninjarmm* AND NOT source:bx\\-hl\\-*",
+    "streams": [
+      "OMNI - Sysmon"
+    ],
+    "group_by": [
+      "source"
+    ],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 1.0
+        }
+      }
+    },
+    "search_within_ms": 600000,
+    "execute_every_ms": 300000
+  },
+  "cas": [
+    {
+      "nom": "AnyDesk lancé (OriginalFileName)",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "BX-PC-07"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_OriginalFileName": "AnyDesk.exe",
+            "winlogbeat_winlog_event_data_Image": "C:\\Users\\x\\Downloads\\AnyDesk.exe",
+            "source": "BX-PC-07"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "chemin en minuscules (rustdesk)",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "BX-PC-08"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_Image": "c:\\program files\\rustdesk\\rustdesk.exe",
+            "source": "BX-PC-08"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "hôte exclu bx-hl-*",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_OriginalFileName": "AnyDesk.exe",
+            "source": "bx-hl-gbe-pc2"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "agent NinjaRMM légitime",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_Image": "c:\\programdata\\ninjarmm\\anydesk\\ninjarmm-anydesk.exe",
+            "source": "BX-PC-09"
+          }
+        }
+      ]
+    }
+  ]
+}

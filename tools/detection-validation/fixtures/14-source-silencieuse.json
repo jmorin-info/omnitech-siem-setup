@@ -1,0 +1,82 @@
+{
+  "titre": "OMNI - Source de collecte silencieuse (SIEM aveugle)",
+  "critique": true,
+  "mitre": "T1562.006",
+  "justification": "Le SIEM aveugle est le pire scénario : définition sans flux (tous les index de messages).",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "alert_tag:source_silent",
+    "streams": [],
+    "group_by": [],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 1.0
+        }
+      }
+    },
+    "search_within_ms": 1800000,
+    "execute_every_ms": 1800000
+  },
+  "cas": [
+    {
+      "nom": "étiquette émise par le chien de garde sur le flux Interne",
+      "attendu": {
+        "evenements": 1
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Interne SIEM",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "source_silent",
+            "event_source": "siem_health"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "étiquette sur n'importe quel flux",
+      "attendu": {
+        "evenements": 1
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "source_silent"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "hors fenêtre de 30 min",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Interne SIEM",
+          "age_s": 2400,
+          "champs": {
+            "alert_tag": "source_silent"
+          }
+        }
+      ]
+    }
+  ]
+}
