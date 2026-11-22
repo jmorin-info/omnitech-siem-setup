@@ -62,6 +62,8 @@ def lab(tmp_path):
     settings = {'password': password}
     config = tmp_path / 'vars.env'
     config.write_text('MONGO_ADMIN_PASS=' + shlex.quote(password) + '\nBACKUP_DIR=' + shlex.quote(str(tmp_path / 'backups')) + '\n')
+    backup_script = tmp_path / 'backup.sh'
+    backup_script.write_text((ROOT / 'deploye/sbin/omni-mongo-backup').read_text())
     dest = tmp_path / 'backups/mongo'
     dest.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix='omni-mongo-test-') as compact:
@@ -71,7 +73,7 @@ def lab(tmp_path):
         def run(kind, **changes):
             (bin_dir / 'scenario.json').write_text(json.dumps({**settings, **changes}))
             if kind == 'backup':
-                argv = ['bash', str(ROOT / 'deploye/sbin/omni-mongo-backup')]
+                argv = ['bash', str(backup_script)]
             else:
                 archive = dest / 'graylog-mongo-20261122-0240.archive.gz'
                 archive.write_bytes(gzip.compress(b'fixture'))

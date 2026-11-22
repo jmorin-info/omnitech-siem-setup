@@ -169,24 +169,28 @@ supprimé des index à environ 30 jours au lieu de la rétention demandée
 `tools/ponctuel/revert-index-rotation-legacy.sh` a été appliqué.
 
 Révision du 22/11/2026 (décision de l'administrateur) : le script ne fait plus
-cette migration. Il ne modifie que les réglages des jeux d'index (rotation
-temporelle héritée et nombre d'index conservés), qui s'appliquent aux index
-futurs, et :
+cette migration. Il peut uniquement augmenter le nombre d'index conservés,
+sans modifier la stratégie ni la période de rotation existantes, et :
 
 - affiche le plan par défaut et n'écrit qu'avec `--apply` (la variable `APPLY=1`
   n'est plus reconnue) ;
 - ne supprime, ne réduit ni ne réindexe aucun index existant et n'émet aucun
   appel `DELETE` ;
-- ne réduit jamais une rétention : si la durée demandée est plus courte que la
-  rétention effective en place (nombre d'index × période de rotation), il
-  l'affiche en avertissement « ATTENTION » et laisse le réglage inchangé ;
+- ne réduit jamais le compteur de rétention et refuse tout changement de
+  période, même si le nombre d'index présents semble compatible : le premier
+  index créé après une telle migration pourrait supprimer des index récents ;
 - refuse un réglage qui conserverait moins d'index qu'il n'en existe (Graylog
   supprimerait les plus anciens), par exemple un passage de P1D à P1M, et
   refuse d'agir si OpenSearch ne permet pas de compter les index ;
 - se contente de signaler un écart de routage des streams (plus de correction
   automatique).
 
-Code retour 3 si au moins un jeu d'index est écarté. Tests hors ligne :
+Le produit nombre d'index × période est une estimation ; les mois sont
+calendaires. Une garantie d'âge minimal demande une analyse distincte des
+rotations et de l'âge des index.
+
+Code retour 3 si au moins un jeu d'index est écarté, 1 sur une lecture,
+écriture ou confirmation API en échec (arrêt immédiat). Tests hors ligne :
 `tests/test_retention_consolidee.py`.
 
 Relevé du 22/11/2026 (API Graylog en GET) : six jeux sont en rotation

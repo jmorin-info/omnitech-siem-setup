@@ -196,3 +196,12 @@ def test_dashboard_job_timeout_fails_instead_of_skipping_checks(dashboard_job, m
     monkeypatch.setattr(vm.time, "sleep", lambda _: None)
     result = vm.execute_dashboard(Pending(), view, "watchguard", fixtures)
     assert result["passed"] is False and result["timed_out"] is True
+
+
+def test_dedicated_mongo_qualification_refuses_before_any_command_outside_lab(monkeypatch):
+    monkeypatch.delenv("OMNI_ISOLATED_VM_TEST", raising=False)
+    def forbidden(*args, **kwargs):
+        raise AssertionError("No command is allowed before lab identity validation")
+    monkeypatch.setattr(vm.subprocess, "run", forbidden)
+    with pytest.raises(ValueError, match="OMNI_ISOLATED_VM_TEST"):
+        vm.dedicated_mongo_test()

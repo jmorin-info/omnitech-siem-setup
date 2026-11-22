@@ -49,6 +49,10 @@ in [exploitation/RESTORE.md](exploitation/RESTORE.md); a full rebuild-from-sourc
 Since 22/11/2026 the MongoDB dump runs on its own: `omni-mongo-backup.timer` (02:40, 14-day
 local retention, GELF `backup_mongo_ok`/`backup_mongo_echec` with two Graylog detections). A timed
 restore into an isolated temporary `mongod` is `sudo bash tools/omni-mongo-restore-test.sh`.
+New archives use `omni-mongo-*`; retention preserves inherited `graylog-mongo-*`
+archives and runs only after a verified backup. The restore test binds its child
+to a private Unix socket, stops only that child and compares collection counts.
+Matching counts do not establish matching document contents or a full SIEM recovery.
 OpenSearch data is covered by the selective `oms-snap-siem` snapshots; the historical
 `siem-backup.timer` stays disabled (a full snapshot no longer fits on `/home`).
 

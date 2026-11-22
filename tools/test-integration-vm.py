@@ -7,6 +7,7 @@ import base64
 import datetime as dt
 import importlib.util
 import http.cookiejar
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -245,6 +246,37 @@ def backup_test(config):
     return facts
 
 
+def dedicated_mongo_test():
+    """Qualify real binaries only after rechecking the disposable VM identity."""
+    config = isolated_configuration()
+    directory = Path(config["BACKUP_DIR"]) / "mongo"
+    legacy = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in directory.glob("graylog-mongo-*.archive.gz")}
+    env = {**os.environ, "OMNI_SIEM_HOME": str(ROOT), "OMNI_VARS_FILE": str(ROOT / "00-vars.env"),
+           "RESTORE_TEST_DIR": "/tmp"}
+    backup = subprocess.run(["bash", str(ROOT / "deploye/sbin/omni-mongo-backup")],
+                            env=env, capture_output=True, timeout=420)
+    archives = sorted(directory.glob("omni-mongo-*.archive.gz"), key=lambda p: p.stat().st_mtime_ns)
+    facts = {"backup_success": backup.returncode == 0, "owned_archive": bool(archives),
+             "legacy_archives_preserved": all((directory / name).is_file()
+                 and hashlib.sha256((directory / name).read_bytes()).hexdigest() == digest
+                 for name, digest in legacy.items()), "restore_success": False}
+    if backup.returncode == 0 and archives:
+        restored = subprocess.run(["bash", str(ROOT / "tools/omni-mongo-restore-test.sh"), str(archives[-1])],
+                                  env=env, capture_output=True, timeout=720)
+        proof = json.loads(restored.stdout)
+        facts["restore_success"] = (restored.returncode == 0 and proof.get("passed") is True
+            and proof.get("comparison") == "collection_counts_only"
+            and proof.get("private_unix_socket") is True and proof.get("tcp_listener") is False)
+        facts["collections_restored"] = proof.get("collections_restored", 0)
+        facts["restore_seconds"] = proof.get("restore_seconds", 0)
+        if not facts["restore_success"]:
+            facts["restore_error"] = proof.get("error", "count_comparison_failed")
+    facts["passed"] = all(facts[key] is True for key in (
+        "backup_success", "owned_archive", "legacy_archives_preserved", "restore_success"))
+    return facts
+
+
 def test_module(client, module, report):
     report["stage"] = "install"
     plan = install(client, module, parameters(module), apply=True)
@@ -329,7 +361,8 @@ def main(argv=None):
         report["fixtures_expected"] = sum(item.get("fixtures_expected", 0) for item in report["modules"])
         report["fixtures_received"] = sum(item.get("fixtures_received", 0) for item in report["modules"])
         report["backup"] = backup_test(config)
-        report["passed"] = report["backup"]["passed"] and report["console_login_logout"] and len(report["modules"]) == 3 and report["fixtures_expected"] == 10 and all(
+        report["dedicated_mongo"] = dedicated_mongo_test()
+        report["passed"] = report["dedicated_mongo"]["passed"] and report["backup"]["passed"] and report["console_login_logout"] and len(report["modules"]) == 3 and report["fixtures_expected"] == 10 and all(
             item["passed"] for item in report["modules"])
     except Exception as exc:
         report["error_type"] = type(exc).__name__
