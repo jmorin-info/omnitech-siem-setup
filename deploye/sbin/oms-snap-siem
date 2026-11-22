@@ -39,9 +39,10 @@ MAIL_A=$(grep -oE '^MAIL_A="[^"]+"' /usr/local/sbin/oms-maj-siem 2>/dev/null | c
 MAIL_DE="no-reply@omnitech-security.fr"; SMTP="smtp://smtp-internal.omnitech-security.fr:25"
 
 log(){ echo "$(date '+%F %T') $*" | tee -a "$JOURNAL"; logger -t oms-snap-siem -- "$*"; }
-# Evenements GELF IDENTIQUES a l'ancien siem-backup.sh : les definitions Graylog existantes
-# « OMNI - Sauvegarde quotidienne SIEM absente (>26h) » (event_action:backup_daily_ok) et
-# « ... en echec » (event_action:backup_daily_echec) surveillent ainsi oms-snap-siem sans etre modifiees.
+# Evenements GELF IDENTIQUES a l'ancien siem-backup.sh (+ champ backup_outil=oms-snap-siem) :
+# « OMNI - Sauvegarde quotidienne SIEM en echec » (event_action:backup_daily_echec) et
+# « OMNI - Snapshot OpenSearch absent (>26h) » (backup_daily_ok AND backup_outil:oms-snap-siem),
+# toutes deux creees par 21-alert-hygiene.sh, surveillent oms-snap-siem.
 gelf(){ # gelf <ok|echec> <message>
   local m; m=$(printf '%s' "$2" | tr -d '"\\' | cut -c1-400)
   curl -s -m 10 -X POST "http://127.0.0.1:12201/gelf" -H 'Content-Type: application/json' -d "{
