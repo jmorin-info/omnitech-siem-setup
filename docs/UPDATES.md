@@ -518,8 +518,14 @@ dans `omni-update.py` (`migration_review_required`).
   une source ne renvoie rien, le robot conserve l'ancien fichier : une source morte se voit
   donc à l'âge du fichier, pas à son contenu. La couche signale tout fichier de plus de
   3 jours. Constat du 21/11/2026 : `ti-mal-domain.csv` est figé depuis le 21/10/2026
-  (553 domaines) ; la source URLhaus ne fournit plus de données (HTTP 410 relevé par l'audit
-  de cohérence). Il faut remplacer l'adresse du flux dans `omni-ti-feeds` (chantier détection).
+  (553 domaines) : les exports publics d'URLhaus (`downloads/text_recent`, comme `csv_recent`,
+  `hostfile` et `text_online`) répondent HTTP 410 et l'API URLhaus répond 401 sans clé
+  (vérifié le 22/11/2026). `omni-ti-feeds` interroge désormais l'API authentifiée
+  (`urlhaus-api.abuse.ch/v1/urls/recent/`, 1 000 URL récentes) avec la clé abuse.ch gratuite
+  `ABUSECH_AUTH_KEY` (ou `THREATFOX_AUTH_KEY`, la même clé) de `/etc/default/omni-ti-feeds`,
+  vide en production au 22/11/2026. Sans clé, le robot l'écrit dans son journal et garde
+  l'ancien fichier. Le format de réponse de l'API est repris de sa documentation et testé
+  hors ligne ; il n'a pas été vérifié avec une vraie clé.
 - **Définitions Graylog** (règles de pipeline, alertes, tableaux de bord) : provisionnées par
   les scripts numérotés, idempotents, lancés explicitement ; elles sont sauvegardées
   chaque nuit dans l'archive de configuration. Aucune comparaison automatique dépôt / Graylog

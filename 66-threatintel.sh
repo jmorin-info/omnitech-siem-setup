@@ -4,6 +4,7 @@
 #   Complete le Threat Intel natif (Tor/Spamhaus) par des feeds IOC a jour :
 #     - Feodo Tracker  : IP de C2 (botnets) -> lookup ti-c2-ip
 #     - URLhaus        : domaines de distribution malware -> lookup ti-mal-domain
+#                        (API authentifiee, cle abuse.ch ABUSECH_AUTH_KEY)
 #   Collecteur /usr/local/sbin/omni-ti-feeds (stdlib) -> CSV /etc/graylog/lookup,
 #   timer quotidien. Pipeline "OMNI - Threat Intel IOC" (FortiGate IP + DNS) ->
 #   tags c2_ioc / malware_domain + alertes. MITRE T1071 / T1071.004.
@@ -20,13 +21,21 @@ LOOKUP_DIR=/etc/graylog/lookup
 echo "==> [1/5] Collecteur de feeds /usr/local/sbin/omni-ti-feeds"
 cat > /usr/local/sbin/omni-ti-feeds <<'PYEOF'
 #!/usr/bin/env python3
-"""Telecharge les feeds IOC abuse.ch -> CSV lookups Graylog. Stdlib only."""
+"""Telecharge les feeds IOC abuse.ch -> CSV lookups Graylog. Stdlib only.
+
+Cle abuse.ch (gratuite, compte https://auth.abuse.ch) : ABUSECH_AUTH_KEY, ou a defaut
+THREATFOX_AUTH_KEY (meme cle pour ThreatFox et URLhaus). Sans cle : Feodo seul.
+Une source en erreur ne remplace jamais le CSV existant (contenu precedent conserve)."""
 import csv, io, json, os, urllib.request
 from urllib.parse import urlparse
-LOOKUP = "/etc/graylog/lookup"
+LOOKUP = os.environ.get("OMNI_TI_LOOKUP_DIR", "/etc/graylog/lookup")   # surcharge : tests hors ligne
+URLHAUS_RECENT = "https://urlhaus-api.abuse.ch/v1/urls/recent/limit/1000/"
 
-def fetch(url, timeout=60):
-    req = urllib.request.Request(url, headers={"User-Agent": "omni-siem-ti/1.0"})
+def abusech_key():
+    return (os.environ.get("ABUSECH_AUTH_KEY", "") or os.environ.get("THREATFOX_AUTH_KEY", "")).strip()
+
+def fetch(url, timeout=60, headers=None):
+    req = urllib.request.Request(url, headers={"User-Agent": "omni-siem-ti/1.0", **(headers or {})})
     return urllib.request.urlopen(req, timeout=timeout).read().decode("utf-8", "replace")
 
 def write_csv(path, header, rows):
@@ -56,9 +65,9 @@ def threatfox():
     """ThreatFox (abuse.ch) -> IP C2. Bien plus riche que Feodo (reduit). Cle GRATUITE
     requise (compte auth.abuse.ch) dans THREATFOX_AUTH_KEY ; sans cle = ignore proprement."""
     out = {}
-    key = os.environ.get("THREATFOX_AUTH_KEY", "").strip()
+    key = abusech_key()
     if not key:
-        print("threatfox: pas de cle (THREATFOX_AUTH_KEY) -> ignore (cle gratuite sur auth.abuse.ch)")
+        print("threatfox: pas de cle abuse.ch (ABUSECH_AUTH_KEY) -> ignore (cle gratuite sur auth.abuse.ch)")
         return out
     try:
         req = urllib.request.Request("https://threatfox-api.abuse.ch/api/v1/",
@@ -116,15 +125,25 @@ def _shared_infra(h):
     return any(h == d or h.endswith("." + d) for d in TI_SHARED_INFRA)
 
 def urlhaus():
+    """URLhaus : les exports publics (downloads/text_recent) repondent HTTP 410 depuis le
+    21/10/2026 ; l'API authentifiee (meme cle abuse.ch que ThreatFox) les remplace.
+    Sans cle : source ignoree, le CSV existant est conserve (et vieillit, ce que
+    omni-update-status.py signale au-dela de 3 jours)."""
     out = {}
+    key = abusech_key()
+    if not key:
+        print("urlhaus: pas de cle abuse.ch (ABUSECH_AUTH_KEY) -> ignore, CSV precedent conserve (cle gratuite sur auth.abuse.ch)")
+        return out
     try:
-        txt = fetch("https://urlhaus.abuse.ch/downloads/text_recent/")
+        data = json.loads(fetch(URLHAUS_RECENT, headers={"Auth-Key": key}))
     except Exception as e:
         print("urlhaus KO:", e); return out
+    if data.get("query_status") != "ok":
+        print("urlhaus:", data.get("query_status")); return out
     skipped = 0
-    for line in txt.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+    for entry in (data.get("urls") or []):
+        line = str(entry.get("url") or "").strip()
+        if not line:
             continue
         host = urlparse(line).hostname
         if not (host and "." in host and not host.replace(".", "").isdigit()):
@@ -138,12 +157,16 @@ def urlhaus():
         print(f"urlhaus: {skipped} domaine(s) d'infra partagee exclus (detection -> couche URL, pas DNS)")
     return out
 
-c2 = feodo(); feodo_n = len(c2)
-tfox = threatfox(); c2.update(tfox)   # ThreatFox augmente/complete Feodo
-dom = urlhaus()
-if c2:  write_csv(f"{LOOKUP}/ti-c2-ip.csv", ["ip", "malware"], sorted(c2.items()))
-if dom: write_csv(f"{LOOKUP}/ti-mal-domain.csv", ["domain", "source"], sorted(dom.items()))
-print(f"IOC: {len(c2)} IP C2 (Feodo {feodo_n} + ThreatFox {len(tfox)}), {len(dom)} domaines (URLhaus)")
+def main():
+    c2 = feodo(); feodo_n = len(c2)
+    tfox = threatfox(); c2.update(tfox)   # ThreatFox augmente/complete Feodo
+    dom = urlhaus()
+    if c2:  write_csv(f"{LOOKUP}/ti-c2-ip.csv", ["ip", "malware"], sorted(c2.items()))
+    if dom: write_csv(f"{LOOKUP}/ti-mal-domain.csv", ["domain", "source"], sorted(dom.items()))
+    print(f"IOC: {len(c2)} IP C2 (Feodo {feodo_n} + ThreatFox {len(tfox)}), {len(dom)} domaines (URLhaus)")
+
+if __name__ == "__main__":
+    main()
 PYEOF
 chmod 755 /usr/local/sbin/omni-ti-feeds
 # seed initial (sinon les lookups pointent vers des CSV absents)
@@ -153,10 +176,13 @@ chown root:graylog ${LOOKUP_DIR}/ti-*.csv 2>/dev/null || true
 /usr/local/sbin/omni-ti-feeds && ok "feeds telecharges" || warn "telechargement feeds KO (egress abuse.ch ?)"
 
 echo "==> [2/5] Timer quotidien (refresh 05:15)"
-# Cle GRATUITE ThreatFox (abuse.ch) - vide = ignore ; Feodo + URLhaus marchent sans cle.
+# Cle GRATUITE abuse.ch (ThreatFox + URLhaus) - vide = ignores ; Feodo marche sans cle.
 [[ -f /etc/default/omni-ti-feeds ]] || cat > /etc/default/omni-ti-feeds <<'EOF'
-# Cle GRATUITE ThreatFox (abuse.ch) : compte sur https://auth.abuse.ch puis coller la cle.
-# Vide = ThreatFox ignore proprement (Feodo + URLhaus continuent sans cle).
+# Cle GRATUITE abuse.ch : compte sur https://auth.abuse.ch puis coller la cle.
+# Elle sert a ThreatFox ET a URLhaus (exports publics URLhaus fermes, HTTP 410).
+# Vide = ThreatFox et URLhaus ignores proprement (Feodo continue sans cle).
+# THREATFOX_AUTH_KEY reste lu si ABUSECH_AUTH_KEY est vide (compatibilite).
+ABUSECH_AUTH_KEY=
 THREATFOX_AUTH_KEY=
 EOF
 # 600 : ce fichier recevra une cle API -> root uniquement (aligne sur les autres env).

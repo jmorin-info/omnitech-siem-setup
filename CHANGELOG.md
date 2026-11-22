@@ -25,6 +25,10 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - `oms-snap-siem` lit le dépôt et son emplacement dans `/etc/oms-snap-siem.conf` (`DEPOT`, `DEPOT_CHEMIN`, `LIBRE_ARRET_PCT`) au lieu de `graylog_fs` et `/home` codés en dur ; `omni-drift-check` (script 29 et miroir) et `omni-update-status.py` suivent le même dépôt.
 - Cert Orchestrator (`99-cert-orchestrator.sh`) : source renommée `cert_orchestrator` (`cert_parc` reste la source PKI Windows de bx-pki2022, 5 035 messages en production) ; index set créé directement en rotation `P1M` x 3, cohérent avec le script 83 et la politique de rétention, au lieu de `P1D` x 90 copié du modèle ; seuil watchdog dédié dans le modèle de `74-source-watchdog.sh` ; documentation des sources et de la rétention.
 
+### Corrigé
+
+- `omni-ti-feeds` (miroir `deploye/sbin` et script 66) : URLhaus a fermé ses exports publics (HTTP 410 depuis le 21/10/2026, 553 domaines figés) ; le robot utilise l'API authentifiée avec la clé abuse.ch (`ABUSECH_AUTH_KEY`, ou `THREATFOX_AUTH_KEY`) et dit explicitement pourquoi il ignore la source sans clé. Tests `tests/test_ti_feeds.py`.
+
 ## [Non publié] - Décisions d'exploitation du 22/11/2026
 
 ### Modifié
