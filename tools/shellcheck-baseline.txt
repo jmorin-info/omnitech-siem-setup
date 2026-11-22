@@ -1,6 +1,5 @@
 # Constats ShellCheck connus, acceptés explicitement : <fichier> <code> <justification>.
 # Tout nouveau constat hors de cette liste fait échouer la CI (tools/ci-lint.sh).
-30-backup-config.sh SC2046 argument optionnel (en-tête LUKS) volontairement non cité : vide si absent
 seal/logstash/keystore-setup.sh SC1011 faux positif : apostrophe littérale dans "${VAR:?message}", bash -n valide
 lib-platform.sh SC2034 variables positionnées pour les scripts qui sourcent la bibliothèque (OMNI_OS, OMNI_MONGO_*...)
 deploye/sbin/oms-maj-siem SC2034 miroir du code déployé en production, non modifié ici (compteur de boucle)

@@ -3,7 +3,11 @@ Description=OMNITECH - snapshot OpenSearch selectif quotidien (01:30)
 
 [Timer]
 OnCalendar=*-*-* 01:30:00
-Persistent=false
+# Rattrapage d'une nuit manquee (machine arretee a 01:30) : une sauvegarde manquee
+# doit etre refaite des que possible (snapshot incremental, verrou flock et controle
+# « snapshot deja en cours » dans oms-snap-siem). A l'inverse d'oms-maj-siem.timer
+# (mise a jour avec redemarrage, Persistent=false volontaire), rien n'est redemarre.
+Persistent=true
 
 [Install]
 WantedBy=timers.target
