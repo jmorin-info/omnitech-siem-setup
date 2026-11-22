@@ -1,6 +1,6 @@
 # Scripts de provisioning numérotés : inventaire et statut
 
-Ce document recense les 105 scripts `NN-*.sh` de la racine du dépôt. Ils ne
+Ce document recense les 102 scripts `NN-*.sh` de la racine du dépôt. Ils ne
 sont **ni renommés ni déplacés** : leurs noms sont cités par l'installateur
 (`tools/install-platform.py`), par d'autres scripts, par la documentation et
 par trois unités systemd de production (voir [Contraintes](#contraintes-pour-toute-renumérotation)).
@@ -53,18 +53,19 @@ paquets installés.
 
 | N° | Script | Rôle | Idempotent | Dépendances | Trace en production | Statut |
 |---|---|---|---|---|---|---|
-| 15 | `15-rapport-hebdo.sh` | Rapport hebdomadaire HTML par `cron.weekly` | non déclaré | `00-vars.env` | `/etc/cron.weekly/omni-siem-rapport` présent | optionnel (recouvre 34, à arbitrer) |
+| 15 | `tools/ponctuel/15-rapport-hebdo.sh` | Ancien rapport hebdomadaire HTML par `cron.weekly` | non déclaré | `00-vars.env` | `/etc/cron.weekly/omni-siem-rapport` encore présent au 22/11/2026 (doublon de 34, retrait en production à faire) | **archivé** le 22/11/2026 (remplacé par 34) |
 | 16 | `16-m365-input.sh` | Réception Microsoft 365 : input GELF HTTP 12201, jeu d'index, stream | oui | 10 à 13 | input « M365 (GELF HTTP 12201) » | optionnel |
 | 17 | `17-m365-fetcher.sh` | Collecteur Microsoft Graph vers GELF (minuterie 5 min) | oui | 16, variables `M365_*` | `omni-m365-fetch.timer` | optionnel |
 | 18 | `18-m365-activity.sh` | Audit Exchange, SharePoint, OneDrive (Management Activity API) | oui | 16 | `omni-m365-activity.timer`, pipeline « OMNI - M365 Activite » | optionnel |
 | 19 | `19-vsphere.sh` | Collecte ESXi/vCenter : inputs 1516, jeu d'index, pipeline | oui | 06 | inputs « vSphere » 1516, pipeline « OMNI - vSphere » | optionnel |
 | 21 | `21-alert-hygiene.sh` | Surcouche anti-tempête des définitions (délais de grâce, clés) | oui | 13 (à relancer après chaque 13) | n.v. | optionnel |
-| 22 | `22-alert-routing.sh` | Ancien routage mail/Teams à deux niveaux | non déclaré | sans objet | sans objet | **obsolète** (remplacé par 38-alert-triage) |
+| 22 | `tools/ponctuel/22-alert-routing.sh` | Ancien routage mail/Teams à deux niveaux | non déclaré | sans objet | sans objet | **archivé** le 22/11/2026 (remplacé par 38-alert-triage) |
+| 26 | `26-graylog-objets-manuels.sh` | Recrée les objets Graylog posés à la main en novembre 2026 (détections balayage IKE, scan WAF 404, lecture LAPS ; règles `omni-v3-laps-lecture*` et les 15 `omni-fp-26-*` ; raccordement à leurs pipelines). Plan en lecture seule par défaut, `--apply` pour créer ; un objet présent n'est jamais modifié. Sources : `objets-graylog/`, `tools/alertes-v2/regles/` | oui (test hors ligne `tests/test_graylog_objets_manuels.py`) | 36, 38, 49-expo-port-class, 81, `tools/omni-v3/v3_build.py` ; **à relancer après 49-expo-port-class, 49-enrich-lots, 81 et v3_build.py**, qui réécrivent la source de leur pipeline | plan du 22/11/2026 : 37 objets « déjà présent », aucun écart | optionnel |
 | 27 | `27-harden-services.sh` | Durcissement systemd de masse des services `omni-*` et `oms-*` | oui | services installés | fichiers `hardening.conf` présents | optionnel |
 | 28 | `28-vpn-remip-ti.sh` | Détection T1133 : connexion SSL-VPN depuis une IP malveillante | oui | 12 | définition « Login SSL-VPN depuis IP malveillante ou Tor (T1133) » | optionnel |
 | 29 | `29-drift-check.sh` | Contrôle de dérive dépôt/production, minuterie et alerte | oui | 06, 21, 30 | `omni-drift-check.timer` | optionnel |
 | 30 | `30-backup-config.sh` | Sauvegarde chiffrée de la configuration, export SMB, test de restaurabilité | non déclaré | `00-vars.env` (partage SMB) | `omni-backup-config.timer` (l'unité appelle le script de la copie `/root/omnitech-siem-setup`) | optionnel |
-| 31 | `31-retention-iso.sh` | Rétentions des jeux d'index (version du 12/06/2026) | oui | 10 | sans objet | **obsolète** (remplacé par 83, lui-même partiellement annulé) |
+| 31 | `tools/ponctuel/31-retention-iso.sh` | Rétentions des jeux d'index (version du 12/06/2026) | oui | 10 | sans objet | **archivé** le 22/11/2026 (remplacé par 83) |
 | 32 | `32-disk-guard.sh` | Garde-fou du disque `/data` toutes les 6 h | non déclaré | 31 | `omni-disk-guard.timer` (appelle le script de la copie `/root`) | optionnel |
 | 33 | `33-ldaps-auth.sh` | Authentification Active Directory (LDAPS) sur la console Graylog | oui | compte de liaison AD | backend « Active Directory OMNITECH » | optionnel |
 | 34 | `34-weekly-report.sh` | Rapport hebdomadaire `omni-weekly-report` (lundi 08:00) | oui | `00-vars.env` | `omni-weekly-report.timer` | optionnel |
@@ -78,14 +79,14 @@ paquets installés.
 |---|---|---|---|---|---|---|
 | 38 | `38-alert-triage.sh` | Triage des alertes (règles déterministes et couche LLM sur la zone grise) | oui | 13, 36 | `omni-alert-triage.service` actif | optionnel (proposé par l'installateur) |
 | 38 | `38-vuln-scan.sh` | Vulnérabilités : catalogue CISA KEV et ancienneté des correctifs | oui | 12, 21 | `omni-vuln-scan.timer` | optionnel |
-| 39 | `39-alert-digest.sh` | Récapitulatif des alertes retenues (l'en-tête indique lundi et jeudi 08:00) | oui | 38-alert-triage | `omni-alert-digest.timer`, réglée en production du lundi au vendredi à 08:00 (écart avec le script) | optionnel |
+| 39 | `39-alert-digest.sh` | Récapitulatif des alertes retenues, du lundi au vendredi à 08:00 | oui | 38-alert-triage | `omni-alert-digest.timer` (`OnCalendar=Mon..Fri *-*-* 08:00:00`, identique au script) | optionnel |
 | 39 | `39-collect-health.sh` | Supervision de la collecte (couverture, silence par hôte) | oui | 12, 21 | `omni-collect-health.timer` | optionnel |
 | 40 | `40-purge-logs.sh` | Purge du contenu des index de journaux, configuration conservée | **non (destructif)** | 30 (sauvegarde préalable) | sans objet | ponctuel, manuel uniquement |
 | 40 | `40-ueba-ndr.sh` | UEBA/NDR : volume, voyage impossible, beaconing, score d'entité | oui | 12, 21, 37 | minuteries `omni-ueba-*`, `omni-ndr-beacon` | optionnel |
 | 41 | `41-retention-iso.sh` | Réduction de bruit (pipeline étape 30) et rétention différenciée | oui | 12 | pipeline « OMNI - Reduction volume (ISO) » ; volet rétention remplacé par 83 | optionnel (partiellement remplacé) |
 | 42 | `42-carte-cyber.sh` | Carte des flux temps réel servie sous `/kit/` | oui | nginx, OpenSearch | `omni-geo-flux.timer` | optionnel |
 | 43 | `43-ndr-dns.sh` | Détection d'exfiltration et de tunnel DNS | oui | 21, 37 | `omni-ndr-dns.timer` | optionnel |
-| 44 | `44-incidents.sh` | Ancien moteur de corrélation `omni-incident-correlate` | oui | sans objet | unité présente, minuterie désactivée | **obsolète** (remplacé par `oms-xdr`) |
+| 44 | `tools/ponctuel/44-incidents.sh` | Ancien moteur de corrélation `omni-incident-correlate` | oui | sans objet | unité présente, minuterie désactivée | **archivé** le 22/11/2026 (remplacé par `oms-xdr`) |
 | 45 | `45-monthly-report.sh` | Rapport exécutif mensuel (HTML et PDF) | non déclaré | `00-vars.env` | `omni-monthly-report.timer` | optionnel |
 | 46 | `46-self-health.sh` | Auto-supervision des robots d'analyse | non déclaré | 21 | `omni-self-health.timer` | optionnel |
 | 47 | `47-detections-extra.sh` | Détections complémentaires (GPO, etc.) en pipeline dédié | oui | 12, 37 | pipeline « OMNI - Detections complementaires » | optionnel |
@@ -111,7 +112,7 @@ paquets installés.
 | N° | Script | Rôle | Idempotent | Dépendances | Trace en production | Statut |
 |---|---|---|---|---|---|---|
 | 61 | `61-supervision-robots.sh` | Versionne `omni-self-health` et `omni-collect-health` | oui | API | exécutables présents | optionnel |
-| 62 | `62-auto-security-updates.sh` | Mises à jour de sécurité durcies, jamais de redémarrage automatique | oui | aucune | `/etc/apt/apt.conf.d/52omni-siem.conf` | optionnel |
+| 62 | `62-auto-security-updates.sh` | Mises à jour de sécurité durcies ; `unattended-upgrades` ne redémarre jamais, le redémarrage automatique est porté par `oms-maj-siem` (dimanche 04:30, si `/var/run/reboot-required`) | oui | aucune | `/etc/apt/apt.conf.d/52omni-siem.conf` | optionnel |
 | 63 | `63-fortimanager.sh` | Source FortiManager : inputs 1517, jeu d'index, pipeline | oui | 06, 07, 12, 37 | inputs « FortiManager (Syslog 1517) », pipeline | optionnel |
 | 64 | `64-m365-fwd-audit.sh` | Audit des règles de transfert de messagerie existantes | oui | 16, 17 | `omni-m365-fwd-audit.timer` | optionnel |
 | 65 | `65-mobile-pwa.sh` | Première version de la PWA mobile et de son backend | oui | 04, 05, 12, 13 | `omni-mobile-api.service` actif | optionnel (publication reprise par 71) |
@@ -132,7 +133,7 @@ paquets installés.
 | 80 | `80-detection-extra2.sh` | Détecteurs ATT&CK haute fidélité (Defender, etc.) | oui | 12, 37, 13 | pipeline « OMNI - Detections extra2 » | optionnel |
 | 81 | `81-fp-allowlist.sh` | Liste d'autorisation des motifs bénins (étape 25) | oui | 12, 37 | pipeline « OMNI - Allowlist FP » | optionnel |
 | 82 | `82-graylog-analytics-dashboard.sh` | Tableau de bord « OMNI - Analytics » | oui | 21 | tableau de bord « OMNI - Analytics » | optionnel |
-| 83 | `83-retention-consolidee.sh` | Source unique des rétentions et migration de rotation | oui | 31, 41 | rotation **annulée** par `tools/ponctuel/revert-index-rotation-legacy.sh` (jeux `omni-*` en rotation héritée) | **à ne pas relancer en l'état** (voir note) |
+| 83 | `83-retention-consolidee.sh` | Augmentation du nombre d'index conservés, sans changement de période ni de stratégie | oui (plan par défaut, `--apply` pour écrire) | 10, 52, 55, 63, 79 | jeux `omni-*` en rotation héritée (P1D ou P1M), sans hiérarchisation | actif (révisé le 22/11/2026, voir note) |
 | 84 | `84-dashboards-triage-site.sh` | Tableau de bord « OMNI - Triage & Multi-site » | oui | 82, 97-multisite-soar | tableau de bord présent | optionnel |
 | 84 | `84-kerberoast-dedup.sh` | Consolidation des alertes Kerberos (anti-doublon) | oui (simulation par défaut) | 13 | n.v. | ponctuel |
 | 85 | `85-detection-extra3.sh` | Neuf détecteurs Sysmon haute fidélité | oui | 12, 37, 13 | pipeline « OMNI - Detections extra3 » | optionnel |
@@ -152,21 +153,55 @@ paquets installés.
 | 97 | `97-enrich-alerts.sh` | Enrichit le contenu des alertes (regroupement, champs) | oui | API | n.v. | ponctuel |
 | 97 | `97-multisite-soar.sh` | Dimension site FortiGate (BDX/IV/LC) et alimentation SOAR WAF | oui | 36, 12, 93 | table `omni-fortigate-site` | optionnel |
 | 98 | `98-index-templates.sh` | Bridage du mapping des index à fort volume | oui | OpenSearch | gabarit non posé (préfixes vides par choix documenté) | outil (non appliqué) |
-| 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré | 06 | input absent, jeu d'index retiré | **obsolète** (serveur décommissionné) |
+| 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré, sans mode plan | 06 | Réinstallé le 22/11/2026 selon le compte rendu opérateur : entrée, jeu d'index, stream, pipeline et alerte ; réception des journaux de la source encore à valider | optionnel ; ne pas relancer pour une mise à jour de code |
 
-Les numéros 20 et 23 à 26 ne sont pas attribués.
+Les numéros 20 et 23 à 25 ne sont pas attribués. Les scripts 15, 22, 31 et 44,
+retirés, sont archivés sous [`tools/ponctuel/`](../../tools/ponctuel/README.md#scripts-retirés)
+sans changement de nom ; leurs numéros ne doivent pas être réutilisés.
 
 ### Note sur le script 83
 
-`83-retention-consolidee.sh` migre les jeux d'index vers la rotation
-`TimeBasedSizeOptimizing` avec hiérarchisation. Sur la version de Graylog
-alors en service, cette migration a provoqué des suppressions prématurées
-d'index (incident de septembre 2026). Le retour arrière
-`tools/ponctuel/revert-index-rotation-legacy.sh` a été appliqué : tous les
-jeux `omni-*` sont aujourd'hui en rotation héritée quotidienne, sans
-hiérarchisation (constaté le 21/11/2026). Relancer 83 tel quel referait la
-migration annulée. Une décision est nécessaire : corriger 83 pour qu'il
-n'applique plus que les durées de rétention, ou le déclarer obsolète.
+Jusqu'au 21/11/2026, `83-retention-consolidee.sh` migrait les jeux d'index vers
+la rotation `TimeBasedSizeOptimizing` avec hiérarchisation (`data_tiering`
+`hot_only`). Sur la version de Graylog alors en service, cette migration a
+supprimé des index à environ 30 jours au lieu de la rétention demandée
+(incident de septembre 2026) ; le retour arrière
+`tools/ponctuel/revert-index-rotation-legacy.sh` a été appliqué.
+
+Révision du 22/11/2026 (décision de l'administrateur) : le script ne fait plus
+cette migration. Il peut uniquement augmenter le nombre d'index conservés,
+sans modifier la stratégie ni la période de rotation existantes, et :
+
+- affiche le plan par défaut et n'écrit qu'avec `--apply` (la variable `APPLY=1`
+  n'est plus reconnue) ;
+- ne supprime, ne réduit ni ne réindexe aucun index existant et n'émet aucun
+  appel `DELETE` ;
+- ne réduit jamais le compteur de rétention et refuse tout changement de
+  période, même si le nombre d'index présents semble compatible : le premier
+  index créé après une telle migration pourrait supprimer des index récents ;
+- refuse un réglage qui conserverait moins d'index qu'il n'en existe (Graylog
+  supprimerait les plus anciens), par exemple un passage de P1D à P1M, et
+  refuse d'agir si OpenSearch ne permet pas de compter les index ;
+- se contente de signaler un écart de routage des streams (plus de correction
+  automatique).
+
+Le produit nombre d'index × période est une estimation ; les mois sont
+calendaires. Une garantie d'âge minimal demande une analyse distincte des
+rotations et de l'âge des index.
+
+Code retour 3 si au moins un jeu d'index est écarté, 1 sur une lecture,
+écriture ou confirmation API en échec (arrêt immédiat). Tests hors ligne :
+`tests/test_retention_consolidee.py`.
+
+Relevé du 22/11/2026 (API Graylog en GET) : six jeux sont en rotation
+quotidienne (`omni-winsec`, `omni-winother`, `omni-sysmon`, `omni-vsphere`,
+`omni-fortigate`, `omni-bunkerweb`) et les autres en rotation mensuelle avec
+4 index conservés (5 pour `omni-seal-audit`), soit une rétention effective
+d'environ 120 jours. Pour `omni-m365`, `omni-eset`, `omni-seal-*`, elle est
+inférieure à la [politique de rétention](../securite-conformite/POLITIQUE-RETENTION.md) :
+le plan du script propose de l'allonger (impact disque à évaluer avant
+`--apply`). Pour les jeux à 90 jours, la rétention en place est plus longue que
+la politique : le script le signale et ne la réduit pas.
 
 ## Autres scripts de la racine
 
@@ -179,7 +214,7 @@ n'applique plus que les durées de rétention, ou le déclarer obsolète.
 | `run-tests.sh` | Suites de tests hors ligne et contrôle des liens de la documentation | actif |
 | `scan-depot.sh` | Blocage des secrets et des mentions d'outillage dans les commits (crochets Git) | actif |
 | `generer-manifeste.sh`, `synchro-manifeste.sh`, `manifeste-deploye.txt` | Comparaison et recopie du code en service vers `deploye/` | actifs |
-| `sync-deploye.sh` | Ancien outil de recopie, réduit à un message de renvoi vers `synchro-manifeste.sh` | retiré (suppression à arbitrer) |
+| `tools/ponctuel/sync-deploye.sh` | Ancien outil de recopie, réduit à un message de renvoi vers `synchro-manifeste.sh` | **archivé** le 22/11/2026 |
 | `verif-post-reboot.sh` | Vérification en lecture seule après un redémarrage (déchiffrement `/data`, services, collecte) | outil |
 | `seal_graylog_setup.py` | Orchestrateur de l'intégration SEAL vers Graylog (voir `seal/`) | optionnel |
 
@@ -210,10 +245,10 @@ désigne une opération.
 | Statut | Nombre | Scripts |
 |---|---|---|
 | socle | 15 | 00 à 08, 10 à 14, 71 (08 est remplacé en production mais reste utilisé par les installations neuves) |
-| optionnel | 77 | extensions activées sur l'installation de référence |
+| optionnel | 78 | extensions activées sur l'installation de référence |
 | ponctuel | 6 | 40-purge-logs, 53, 54, 79, 84-kerberoast-dedup, 97-enrich-alerts |
 | outil | 2 | 57, 98 |
-| obsolète | 4 | 22, 31, 44, 99 |
+| obsolète | 3 | 22, 31, 44 |
 | à arbitrer | 1 | 83 (voir la note ci-dessus) |
 
 Le décompte « optionnel » inclut 41 (partiellement remplacé) et 15 (recouvre 34).
@@ -234,7 +269,7 @@ tant que les contraintes ci-dessous ne sont pas levées.
    | Plage | Domaine | Exemples actuels |
    |---|---|---|
    | 100-199 | Sources et collecteurs | 16, 17, 18, 19, 52, 55, 56, 63, 64, 90, 92, 93, 94 |
-   | 200-299 | Détections | 28, 35, 47, 50, 51, 67, 73, 76, 78, 80, 85, 86, 87, 88, 91 |
+   | 200-299 | Détections | 26, 28, 35, 47, 50, 51, 67, 73, 76, 78, 80, 85, 86, 87, 88, 91 |
    | 300-399 | Enrichissement et corrélation | 37, 48-m365, 49 (trois), 58, 66, 81, 96, 97-multisite |
    | 400-499 | Triage, réponse et SOAR | 36, 38-triage, 39-digest, 69 |
    | 500-599 | Analyses comportementales et ML | 40-ueba, 43, 48-ndr, 49-ldap, 77, 89 |
@@ -246,7 +281,7 @@ tant que les contraintes ci-dessous ne sont pas levées.
    79, 84-kerberoast-dedup et 97-enrich-alerts rejoignent `tools/ponctuel/`
    (ou un dossier `maintenance/` pour les purges, qui restent des procédures
    manuelles documentées).
-4. **Les scripts obsolètes sont retirés** (22, 31, 44, 99), leur historique
+4. **Les scripts obsolètes sont retirés** (22, 31, 44), leur historique
    restant dans Git ; 98 rejoint `tools/` comme outil.
 5. **L'ordre est décrit par un manifeste** (par exemple
    `provisioning/plan.yaml` : identifiant, script, dépendances, idempotence,

@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# =============================================================================
+# omni-mongo-backup : sauvegarde quotidienne de la configuration Graylog (MongoDB).
+#   Dump compressé (archive mongodump), contrôle d'intégrité (gzip -t et lecture
+#   de l'archive par mongorestore --dryRun), rétention locale, compte rendu GELF :
+#   event_source=siem_backup, event_action=backup_mongo_ok | backup_mongo_echec.
+#   Les snapshots OpenSearch relèvent d'oms-snap-siem ; ce robot ne les touche pas.
+# Paramètres lus dans 00-vars.env du dépôt (OMNI_SIEM_HOME) : MONGO_ADMIN_PASS,
+#   BACKUP_DIR ; MONGO_BACKUP_RETENTION_DAYS (défaut 14).
+# Le mot de passe passe par un fichier de configuration temporaire (0600),
+#   jamais sur la ligne de commande.
+# Décision du 22/11/2026 (sauvegarde MongoDB native arrêtée depuis le 14/08).
+# =============================================================================
+set -uo pipefail
+umask 077
+HOME_DEPOT="${OMNI_SIEM_HOME:-/opt/omni-siem/repository}"
+ENVFILE="${OMNI_VARS_FILE:-$HOME_DEPOT/00-vars.env}"
+GELF_URL="${GELF_URL:-http://127.0.0.1:12201/gelf}"
+SIEM_HOST="$(hostname -s)"
+
+gelf() {  # gelf <ok|echec> <message>
+  local msg="${2//\"/\'}"
+  curl -s -m 10 -X POST "$GELF_URL" -H 'Content-Type: application/json' -d "{
+    \"version\":\"1.1\",\"host\":\"$SIEM_HOST\",
+    \"short_message\":\"sauvegarde MongoDB ${1}: ${msg}\",
+    \"_event_source\":\"siem_backup\",\"_event_action\":\"backup_mongo_${1}\",
+    \"_alert_tag\":\"backup_mongo_${1}\"}" >/dev/null || true
+}
+echec() { echo "ERREUR : $*" >&2; gelf echec "$*"; exit 1; }
+
+[[ -r "$ENVFILE" ]] || echec "fichier de configuration illisible : $ENVFILE"
+# shellcheck disable=SC1090
+source "$ENVFILE"
+[[ -n "${MONGO_ADMIN_PASS:-}" ]] || echec "MONGO_ADMIN_PASS absent de $ENVFILE"
+DEST="${BACKUP_DIR:-/home/siem-backup}/mongo"
+RET="${MONGO_BACKUP_RETENTION_DAYS:-14}"
+[[ "$RET" =~ ^[0-9]+$ && "$RET" -ge 2 ]] || echec "MONGO_BACKUP_RETENTION_DAYS invalide : $RET"
+[[ ! -L "$DEST" ]] || echec "répertoire de sauvegarde en lien symbolique"
+install -d -m 700 "$DEST" || echec "création de $DEST impossible"
+exec 9>"$DEST/.omni-mongo-backup.lock" || echec "verrou indisponible"
+flock -n 9 || echec "une sauvegarde MongoDB est déjà en cours"
+
+TS="$(date +%Y%m%d-%H%M%S)"
+ID="$(python3 -c 'import secrets; print(secrets.token_hex(6))')" || echec "identifiant indisponible"
+ARCH="$DEST/omni-mongo-$TS-$ID.archive.gz"
+WORK="$(mktemp -d "$DEST/.omni-mongo-backup.XXXXXXXXXX")" || echec "répertoire temporaire indisponible"
+CONF="$WORK/mongo.json"
+PART="$WORK/archive.part"
+nettoyer() { rm -f -- "$CONF" "$PART"; rmdir -- "$WORK" 2>/dev/null || true; }
+trap nettoyer EXIT
+MONGO_ADMIN_PASS="$MONGO_ADMIN_PASS" python3 - "$CONF" <<'PY' || echec "configuration temporaire impossible"
+import json, os, sys
+with open(sys.argv[1], 'w', encoding='utf-8') as stream:
+    json.dump({'password': os.environ['MONGO_ADMIN_PASS']}, stream)
+PY
+URI="mongodb://admin@127.0.0.1:27017/?replicaSet=rs0&authSource=admin"
+
+DEBUT=$(date +%s)
+mongodump --quiet --config="$CONF" --uri="$URI" --gzip --archive="$PART" \
+  || echec "mongodump rc=$?"
+gzip -t "$PART" || echec "archive corrompue (gzip -t)"
+mongorestore --quiet --config="$CONF" --uri="$URI" --gzip --archive="$PART" --dryRun \
+  || echec "archive illisible par mongorestore --dryRun"
+[[ ! -e "$ARCH" ]] || echec "archive cible déjà présente"
+mv "$PART" "$ARCH" && chmod 600 "$ARCH" || echec "finalisation de l'archive impossible"
+TAILLE=$(du -h "$ARCH" | cut -f1)
+
+# Les archives héritées graylog-mongo-* ne sont jamais purgées par ce robot.
+# La purge suit uniquement une sauvegarde vérifiée et porte sur son format propre.
+find "$DEST" -regextype posix-extended -maxdepth 1 -type f \
+  -regex '.*/omni-mongo-[0-9]{8}-[0-9]{6}-[0-9a-f]{12}\.archive\.gz' \
+  -mtime +"$RET" -delete || echec "purge des archives propres en échec"
+
+echo "sauvegarde MongoDB OK : $ARCH ($TAILLE, $(( $(date +%s) - DEBUT )) s, rétention $RET j)"
+gelf ok "$(basename "$ARCH") $TAILLE"

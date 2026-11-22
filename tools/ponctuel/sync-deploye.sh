@@ -1,4 +1,5 @@
 #!/bin/bash
+# Archivé sous tools/ponctuel/ le 22/11/2026.
 # sync-deploye.sh est RETIRÉ (12/11/2026) : son étape « 2 bis » recopiait dans le dépôt les fichiers
 # modifiés de la copie /root/omnitech-siem-setup, qui contient des versions anciennes (régressions).
 # Utiliser à la place :

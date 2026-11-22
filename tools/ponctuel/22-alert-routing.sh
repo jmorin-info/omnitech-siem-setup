@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # 22-alert-routing.sh - DEPRECIE (2026-06-27). NE PLUS UTILISER.
+# ARCHIVE sous tools/ponctuel/ le 22/11/2026.
 #
 # Ce script faisait le routage mail/Teams en 2 tiers via une liste KEEP statique.
 # Il est REMPLACE par la couche de triage dynamique : 38-alert-triage.sh +

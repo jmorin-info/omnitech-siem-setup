@@ -10,6 +10,36 @@ publie pas de versions numérotées : chaque livraison est identifiée par sa da
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
+## [Non publié] - Décisions d'exploitation du 22/11/2026
+
+### Modifié
+
+- `83-retention-consolidee.sh` augmente uniquement les compteurs de rétention : stratégie et période conservées, aucune réduction de compteur, plan par défaut et relecture avant écriture. Une erreur API arrête l'opération ; le routage reste contrôlé en lecture seule. Tests hors ligne `tests/test_retention_consolidee.py`.
+- Redémarrage automatique : la règle retenue est de conserver celui d'`oms-maj-siem` (dimanche 04:30, seulement si `/var/run/reboot-required` existe après contrôles et sauvegarde). `62-auto-security-updates.sh`, le commentaire de `52omni-siem.conf` (script et miroir `deploye/apt`), `docs/UPDATES.md`, le guide d'exploitation et l'inventaire des scripts décrivent ce comportement ; `unattended-upgrades` ne redémarre toujours jamais.
+- `39-alert-digest.sh` installe la minuterie du récapitulatif d'alertes du lundi au vendredi à 08:00 (`OnCalendar=Mon..Fri *-*-* 08:00:00`), comme en production.
+- Politique de rétention : nombre d'index × période est une estimation ; les mois calendaires et les rotations anticipées empêchent d'en déduire une garantie d'âge minimal.
+
+### Ajouté
+
+- Sauvegarde MongoDB native quotidienne (`omni-mongo-backup`, timer 02:40) : contrôle d'intégrité, préfixe propre `omni-mongo-*`, archives héritées conservées, purge après succès seulement, verrou et secrets temporaires privés. Le test de restauration possède son processus et son socket Unix privé ; sa comparaison porte sur les comptages de collections.
+- `26-graylog-objets-manuels.sh` : versionne les objets Graylog créés à la main en
+  production (audit de cohérence du 21/11/2026, écarts G2 et G3). Sont concernées les
+  définitions « balayage IKE », « scan applicatif WAF (404) » et « lecture d'un mot de
+  passe LAPS », ainsi que les règles `omni-v3-laps-lecture`, `omni-v3-laps-lecture-it`
+  et les 15 règles `omni-fp-26-*`, avec leur raccordement aux pipelines. Sources :
+  `objets-graylog/` (flux et notifications désignés par titre) et
+  `tools/alertes-v2/regles/`. Le script affiche un plan en lecture seule par défaut ;
+  `--apply` crée seulement les objets absents. Un objet présent n'est jamais modifié et
+  un écart éventuel est signalé. Test hors ligne : `tests/test_graylog_objets_manuels.py`.
+- À relancer après `49-expo-port-class.sh`, `49-enrich-lots.sh`, `81-fp-allowlist.sh`
+  et `tools/omni-v3/v3_build.py`. Ces scripts réécrivent la source complète de leur
+  pipeline et en retirent les règles raccordées par le script 26.
+- Fiche de l'incident du 21/11/2026 (tests de la console écrits en production, message de test `soc_admin` conservé dans Graylog) : `docs/archives/INCIDENT-CONSOLE-2026-11-21.md`.
+
+### Supprimé
+
+- Scripts retirés archivés sous `tools/ponctuel/` sans changement de nom : `15-rapport-hebdo.sh` (doublon de `34-weekly-report.sh`), `22-alert-routing.sh`, `31-retention-iso.sh`, `44-incidents.sh`, `sync-deploye.sh`. Aucun appel actif trouvé en production ni dans le dépôt.
+
 ## [2026-11-22] - Administration, déploiement et maintenance
 
 ### Ajouté

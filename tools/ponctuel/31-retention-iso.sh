@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
+# ARCHIVE le 22/11/2026 : remplace par 83-retention-consolidee.sh. Ne pas relancer
+# (valeurs du 12/06/2026, contraires a la politique de retention actuelle).
+# -----------------------------------------------------------------------------
 # 31-retention-iso.sh - Retentions des index sets alignees ISO 27001 (12/06/2026)
 # -----------------------------------------------------------------------------
 # Base : volumetrie MESUREE le 12/06 (apres activation UTM FortiGate), disque
@@ -15,7 +18,7 @@
 # Idempotent. Relancer apres tout re-run de 10-graylog-model.sh.
 # =============================================================================
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 . ./00-vars.env
 . ./lib-graylog.sh
 require_api

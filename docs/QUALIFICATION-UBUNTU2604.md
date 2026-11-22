@@ -61,6 +61,11 @@ exécute [tools/test-ubuntu-vm.sh](../tools/test-ubuntu-vm.sh) :
 8. Exécution du job de sauvegarde installé : archive MongoDB et tar de
    configuration valides, présence des secrets du site et de la configuration
    console dans l'archive privée, snapshot OpenSearch terminé en `SUCCESS`.
+9. Recette du robot MongoDB dédié avec les vrais outils dans la VM : nouvelle
+   archive contrôlée, archives héritées conservées, restauration `graylog.*`
+   dans un enfant lié à un socket Unix privé et comparaison des comptages.
+   Le rapport expose ce contrôle sous `dedicated_mongo` ; aucune commande de
+   cette recette ne doit être lancée sur la production.
 
 Le rapport `ubuntu-2604-acceptance` contient le commit, le noyau, l'empreinte de
 l'image, les résultats des contrôles et des modules. Le résultat global n'est

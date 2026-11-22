@@ -10,8 +10,19 @@ stockage disponible.
 ## Durées de conservation (en ligne, consultable)
 
 Chaque source dispose d'un **index set dédié** (préfixe `omni-*`) avec rotation
-journalière (`P1D`) et rétention exprimée en nombre d'index (1 index = 1 jour).
+temporelle et rétention exprimée en nombre d'index. Le produit
+nombre d'index × période de rotation est une estimation, pas une garantie
+d'âge minimal (`P1M` est calendaire et des rotations peuvent être anticipées).
+La rotation est quotidienne `P1D` pour les sources à fort
+volume et mensuelle `P1M` pour les sources peu volumineuses (relevé du 22/11/2026).
 La rétention « supprime » (delete) les index une fois la fenêtre dépassée.
+Le script `83-retention-consolidee.sh` peut uniquement augmenter le compteur
+des index conservés en préservant intégralement la stratégie et la période
+de rotation existantes. Il refuse leur migration, toute réduction du compteur,
+un état illisible ou une configuration modifiée depuis son plan. Il n'appelle
+aucune suppression d'index ; Graylog conserve son mécanisme de rétention (voir
+[la note sur le script 83](../reference/SCRIPTS-PROVISIONING.md#note-sur-le-script-83),
+qui signale aussi les jeux dont la rétention en place diffère de ce tableau).
 
 | Source                          | Index set        | Durée  | Justification                                                            |
 |---------------------------------|------------------|--------|-------------------------------------------------------------------------|

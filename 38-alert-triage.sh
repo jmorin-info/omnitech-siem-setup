@@ -94,7 +94,7 @@ fi
 echo "==> [3/4] Triage = gardien UNIVERSEL du mail (couvre toutes les defs OMNI)"
 # Le triage devient le seul juge du mail : sur CHAQUE def OMNI, on retire le mail
 # DIRECT (si present) et on garantit la notif Triage. Ainsi meme une alerte
-# critique jusque-la en Teams-seul (ex. mail perdu par l'ancien 22-alert-routing)
+# critique jusque-la en Teams-seul (ex. mail perdu par l'ancien 22-alert-routing, archive sous tools/ponctuel/)
 # est remailee par le triage. Teams reste cable (firehose). Pagine (cf doublons).
 MAIL_NID="$(api_get "/events/notifications?per_page=100" | jq -r '.notifications[]?|select(.title=="OMNI - Mail equipe IT")|.id')"
 n=0

@@ -116,5 +116,6 @@ sans repartir de zéro.
 | Fait | Documentation rangée par usage, index unique, politique linguistique | [docs/README.md](README.md) |
 | Fait | Scripts ponctuels séparés des scripts de provisioning, avec statut | [tools/ponctuel/](../tools/ponctuel/README.md) |
 | Fait | Inventaire des scripts de provisioning et des numéros en double | [SCRIPTS-PROVISIONING.md](reference/SCRIPTS-PROVISIONING.md) |
-| À faire | Décider du sort de `83-retention-consolidee.sh` (migration annulée en production) | [SCRIPTS-PROVISIONING.md](reference/SCRIPTS-PROVISIONING.md#note-sur-le-script-83) |
-| À faire | Retirer les scripts obsolètes (22, 31, 44, 99) et les redirections de documents une fois les références externes mises à jour | |
+| Fait | `83-retention-consolidee.sh` révisé : seul le compteur de rétention peut augmenter ; période et stratégie conservées, état relu avant écriture | [SCRIPTS-PROVISIONING.md](reference/SCRIPTS-PROVISIONING.md#note-sur-le-script-83) |
+| Fait | Scripts retirés 15, 22, 31, 44 et ancien outil de synchronisation archivés | `tools/ponctuel/README.md` |
+| En cours | Source Cert Orchestrator réinstallée le 22/11/2026 ; réception et normalisation des premiers journaux encore à vérifier | `99-cert-orchestrator.sh` |

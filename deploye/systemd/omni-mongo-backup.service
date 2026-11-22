@@ -1,0 +1,14 @@
+[Unit]
+Description=OMNI SIEM - sauvegarde quotidienne MongoDB (configuration Graylog)
+After=mongod.service
+Wants=mongod.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omni-mongo-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full

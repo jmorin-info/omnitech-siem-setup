@@ -444,7 +444,7 @@ if [[ -n "${ST_INT}" ]]; then
   # Incident CRITIQUE : kill-chain multi-tactiques sur une entite -> P3.
   # DESACTIVEE le 17/07/2026 (audit F.3) - NE PAS REACTIVER SANS LIRE CECI.
   # Cette definition interroge 'event_source:incident', produit par le moteur
-  # omni-incident-correlate. Ce moteur a ete desactive le 28/06/2026 (44-incidents.sh:19,
+  # omni-incident-correlate. Ce moteur a ete desactive le 28/06/2026 (tools/ponctuel/44-incidents.sh,
   # anti double-comptage : le moteur d'incidents unique est desormais oms-xdr, qui emet
   # 'event_source:xdr_incident'). Dernier document 'incident' indexe : 02/07/2026 20:48.
   # Elle etait donc ENABLED avec 3 notifications tout en etant structurellement incapable

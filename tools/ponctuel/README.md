@@ -38,6 +38,23 @@ constaté sans action en écriture ou sans analyse plus poussée.
 | `revert-index-rotation-legacy.sh` | 09/2026 | Retour à la rotation quotidienne héritée après suppressions prématurées | Appliqué : jeux `omni-*` en rotation héritée, sans hiérarchisation |
 | `reclaim-shards-reindex.sh` | 09/2026 | Consolidation par réindexation des index quasi vides | État compatible : un seul index par préfixe visé |
 
+## Scripts retirés
+
+Scripts de provisioning ou outils remplacés, archivés ici le 22/11/2026 sans
+changement de nom pour conserver le lien avec l'historique, les journaux et les
+documents datés. Avant l'archivage, une recherche a vérifié qu'aucune unité
+systemd ni aucun exécutable en production (`/etc/systemd/system`,
+`/usr/local/sbin`, `/etc/cron*`) ni aucun autre script du dépôt ne les appelle :
+seuls des commentaires les citent. Ne pas les relancer.
+
+| Script | Retiré le | Remplacé par | Remarque |
+|---|---|---|---|
+| `15-rapport-hebdo.sh` | 22/11/2026 | `34-weekly-report.sh` (`omni-weekly-report.timer`, lundi 08:00) | Le fichier qu'il installait, `/etc/cron.weekly/omni-siem-rapport`, était encore présent en production le 22/11/2026 : rapport hebdomadaire envoyé en double tant qu'il n'est pas retiré |
+| `22-alert-routing.sh` | 27/06/2026 (archivé le 22/11/2026) | `38-alert-triage.sh` | Réduit à un message de dépréciation, sans action |
+| `31-retention-iso.sh` | 22/11/2026 | `83-retention-consolidee.sh` | Valeurs du 12/06/2026 contraires à la politique de rétention actuelle |
+| `44-incidents.sh` | 28/06/2026 (archivé le 22/11/2026) | `oms-xdr` | Se contentait de désactiver `omni-incident-correlate` |
+| `sync-deploye.sh` | 12/11/2026 (archivé le 22/11/2026) | `synchro-manifeste.sh`, `generer-manifeste.sh` | Réduit à un message d'erreur de renvoi |
+
 ## Règles pour ce dossier
 
 - Un script ponctuel porte sa date dans son nom ou dans son en-tête, décrit son

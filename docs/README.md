@@ -64,6 +64,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 | [Restauration depuis une sauvegarde](exploitation/RESTORE.md) | Restauration complète de la configuration |
 | [Plan de reconstruction (PRA)](exploitation/PRA-RECONSTRUCTION-SIEM.md) | RTO/RPO, scénarios, validation, journal des tests |
 | [Intégrité et valeur probante des journaux](securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md) | Registre chaîné, conservation des preuves |
+| [Incident du 21/11/2026 : tests de la console en production](archives/INCIDENT-CONSOLE-2026-11-21.md) | Indisponibilité du backend, restauration, message de test conservé dans Graylog |
 
 ## Mettre à jour
 

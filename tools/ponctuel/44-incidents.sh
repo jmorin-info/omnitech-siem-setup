@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 44-incidents.sh - DÉPRÉCIÉ (28/06/2026).
+# 44-incidents.sh - DÉPRÉCIÉ (28/06/2026). Archivé sous tools/ponctuel/ le 22/11/2026.
 #
 #   L'ancien moteur de corrélation `omni-incident-correlate` (event_source=incident,
 #   reconstruction de kill-chain par entité) est REMPLACÉ par **oms-xdr**

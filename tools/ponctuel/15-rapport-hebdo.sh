@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
+# ARCHIVE le 22/11/2026 : remplace par 34-weekly-report.sh (omni-weekly-report.timer).
+# Conserve pour tracabilite ; ne pas relancer.
+# ------------------------------------------------------------------------------
 # 15-rapport-hebdo.sh - Installe /etc/cron.weekly/omni-siem-rapport
 # Rapport hebdomadaire (HTML, envoye via le relais SMTP interne) :
 #   volumetrie par index, detections par tag, top comptes en echec,
@@ -7,7 +10,7 @@
 # Test immediat : /etc/cron.weekly/omni-siem-rapport
 # ==============================================================================
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 source ./00-vars.env
 [[ $EUID -eq 0 ]] || { echo "ERREUR: a lancer en root."; exit 1; }
 
