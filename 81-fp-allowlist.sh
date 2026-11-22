@@ -40,9 +40,37 @@
 #   Idempotent. Prerequis : 12 (streams/pipelines) + 37 (enrichissement MITRE
 #   stage 20). NE relance PAS d'alerte (les alertes existantes restent telles
 #   quelles). Voir la section "ETENDRE L'ALLOWLIST" en bas de ce fichier.
+#
+#   REGLES VERSIONNEES : la source du pipeline ecrite ici inclut aussi les regles
+#   omni-fp-26-* d'objets-graylog/raccordements.txt (sources .rule uniques, lues
+#   par lib-regles-versionnees.sh) ; les absentes sont creees, les presentes ne
+#   sont jamais modifiees. Un rejeu de ce script ne les retire donc plus.
+#   --source-pipeline : affiche la source complete du pipeline et s'arrete
+#   (hors ligne : ni 00-vars.env, ni appel API, ni ecriture).
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
+source ./lib-regles-versionnees.sh || exit 2
+
+# Stage 25 = APRES MITRE (20) donc risk_score/mitre_* deja poses (scoring garde),
+# AVANT la reduction ISO (30). match either : une seule des 3 regles s'applique.
+PIPELINE_TITRE="OMNI - Allowlist FP"
+source_pipeline() {
+  inclure_regles_versionnees "${PIPELINE_TITRE}" <<'PIPE'
+pipeline "OMNI - Allowlist FP"
+stage 25 match either
+rule "omni-fp-25-service-install"
+rule "omni-fp-25-scheduled-task"
+rule "omni-fp-25-autorun"
+rule "omni-fp-25-sysmon-injection"
+rule "omni-fp-25-adminshare-loopback"
+rule "omni-fp-25-ps-claude"
+rule "omni-fp-25-proctamper"
+end
+PIPE
+}
+if [[ "${1:-}" == "--source-pipeline" ]]; then source_pipeline; exit $?; fi
+
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "root requis"
@@ -293,21 +321,11 @@ end
 EOF
 
 echo "==> [3/4] Pipeline 'OMNI - Allowlist FP' (stage 25) + connexion streams"
-# Stage 25 = APRES MITRE (20) donc risk_score/mitre_* deja poses (scoring garde),
-# AVANT la reduction ISO (30). match either : une seule des 3 regles s'applique.
-PL="$(ensure_pipeline "OMNI - Allowlist FP" <<'PIPE'
-pipeline "OMNI - Allowlist FP"
-stage 25 match either
-rule "omni-fp-25-service-install"
-rule "omni-fp-25-scheduled-task"
-rule "omni-fp-25-autorun"
-rule "omni-fp-25-sysmon-injection"
-rule "omni-fp-25-adminshare-loopback"
-rule "omni-fp-25-ps-claude"
-rule "omni-fp-25-proctamper"
-end
-PIPE
-)"
+# Source definie en tete (source_pipeline) : regles 81 + regles versionnees.
+SRC_PL="$(source_pipeline)" || die "source du pipeline ${PIPELINE_TITRE} : inventaire des regles versionnees illisible"
+# Les regles versionnees doivent exister avant d'ecrire un pipeline qui les cite.
+ensure_regles_versionnees "${PIPELINE_TITRE}" || die "regles versionnees incompletes : pipeline ${PIPELINE_TITRE} non modifie"
+PL="$(ensure_pipeline "${PIPELINE_TITRE}" <<< "${SRC_PL}")"
 for ST in "OMNI - Windows Security" "OMNI - Sysmon"; do
   SID="$(get_stream_id "$ST")"
   [[ -n "$SID" ]] && connect_pipeline "$SID" "$PL" || warn "stream absent: $ST"

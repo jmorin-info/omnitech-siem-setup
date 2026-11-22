@@ -18,6 +18,10 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - Redémarrage automatique : la règle retenue est de conserver celui d'`oms-maj-siem` (dimanche 04:30, seulement si `/var/run/reboot-required` existe après contrôles et sauvegarde). `62-auto-security-updates.sh`, le commentaire de `52omni-siem.conf` (script et miroir `deploye/apt`), `docs/UPDATES.md`, le guide d'exploitation et l'inventaire des scripts décrivent ce comportement ; `unattended-upgrades` ne redémarre toujours jamais.
 - `39-alert-digest.sh` installe la minuterie du récapitulatif d'alertes du lundi au vendredi à 08:00 (`OnCalendar=Mon..Fri *-*-* 08:00:00`), comme en production.
 - Politique de rétention : nombre d'index × période est une estimation ; les mois calendaires et les rotations anticipées empêchent d'en déduire une garantie d'âge minimal.
+- Règles versionnées raccordées aux pipelines d'autres scripts : `49-expo-port-class.sh`, `49-enrich-lots.sh` (« OMNI - Exposition reseau »), `81-fp-allowlist.sh` (« OMNI - Allowlist FP ») et `tools/omni-v3/v3_build.py` (« OMNI v3 - Detections et correlation ») incluent eux-mêmes les 17 règles `omni-v3-laps-lecture*` et `omni-fp-26-*` dans la source qu'ils écrivent, à leur étape et à leur place. Inventaire unique `objets-graylog/raccordements.txt`, sources uniques les fichiers `.rule`, logique commune `lib-regles-versionnees.sh` (équivalent Python dans `v3_build.py`, testé identique). Les règles absentes sont créées, les présentes jamais modifiées. Cela remplace la consigne « à relancer après 49, 81 et v3_build.py » de l'entrée `26-graylog-objets-manuels.sh` ci-dessous : il n'y a plus de contrainte d'ordre.
+- `26-graylog-objets-manuels.sh` ne crée plus que les trois définitions d'événements ; les règles versionnées et leur raccordement sont seulement contrôlés (script propriétaire indiqué si absent).
+- Option `--source-pipeline` (hors ligne, sans API ni écriture) sur ces quatre scripts, et `tools/verif-pipelines-versionnees.sh` qui compare en lecture seule (un GET) la source générée à celle en service. Tests hors ligne : `tests/test_pipelines_versionnes.py`.
+- Qualité : `SC2034` n'est plus exclu globalement de ShellCheck (8 constats restants listés dans `tools/shellcheck-baseline.txt`), 16 `cd` vers le répertoire du script sortent explicitement en cas d'échec (SC2164, scripts ponctuels et outils), `lib-graylog.sh` déclare son shell, l'exclusion Ruff `F821` de `seal/graylog/provision_seal.py` est supprimée (import de `NoReturn`), imports inutilisés retirés de quatre fichiers non déployés.
 
 ### Ajouté
 
@@ -35,6 +39,10 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
   et `tools/omni-v3/v3_build.py`. Ces scripts réécrivent la source complète de leur
   pipeline et en retirent les règles raccordées par le script 26.
 - Fiche de l'incident du 21/11/2026 (tests de la console écrits en production, message de test `soc_admin` conservé dans Graylog) : `docs/archives/INCIDENT-CONSOLE-2026-11-21.md`.
+
+### Corrigé
+
+- `49-enrich-lots.sh` : la règle `omni-extra-10-explicit-cred` était écrite dans un heredoc non cité, si bien que bash remplaçait `$message` par une chaîne vide et `\\` par `\`. Le heredoc est désormais cité ; la source produite est identique à celle en service (vérifié par GET le 22/11/2026).
 
 ### Supprimé
 

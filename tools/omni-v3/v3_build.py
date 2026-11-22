@@ -2,15 +2,21 @@
 # OMNITECH 11/11/2026 - Couche de détection « OMNI v3 » (agent Détection & Corrélation, go jmorin).
 # Usage (root, sur BX-IT-GRAYLOG-VM) :  python3 v3_build.py --simuler   (vérifie la syntaxe des règles, ne crée rien)
 #                                       python3 v3_build.py --appliquer (sauvegarde, crée, écrit le script de retour)
+#                                       python3 v3_build.py --source-pipeline (affiche la source du pipeline, hors ligne)
 # Idempotent : un objet déjà présent (même titre/nom) n'est pas recréé. Aucun secret affiché ni écrit.
+# Règles versionnées : la source du pipeline inclut aussi les règles d'objets-graylog/raccordements.txt
+# destinées à ce pipeline (sources .rule uniques, même logique que lib-regles-versionnees.sh) ; les
+# absentes sont créées avec la description de l'inventaire, les présentes ne sont jamais modifiées.
 import json, os, re, ssl, subprocess, sys, time, urllib.request, urllib.error
+from pathlib import Path
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "--simuler"
-VARS = "/opt/omni-siem/repository/00-vars.env"
+VARS = os.environ.get("OMNI_V3_VARS", "/opt/omni-siem/repository/00-vars.env")
 env = {}
-for l in open(VARS, encoding="utf-8"):
-    m = re.match(r'^(?:export\s+)?([A-Z_]+)=["\']?([^"\'\n]*)', l)
-    if m: env[m.group(1)] = m.group(2)
+if MODE != "--source-pipeline":
+    for l in open(VARS, encoding="utf-8"):
+        m = re.match(r'^(?:export\s+)?([A-Z_]+)=["\']?([^"\'\n]*)', l)
+        if m: env[m.group(1)] = m.group(2)
 TOKEN = env.get("GRAYLOG_API_TOKEN", "")
 API = "https://127.0.0.1:9000/api"
 CTX = ssl.create_default_context(); CTX.check_hostname = False; CTX.verify_mode = ssl.CERT_NONE
@@ -202,9 +208,73 @@ then
 end'''
 
 PIPE_TITLE = "OMNI v3 - Detections et correlation"
-PIPE_SRC = 'pipeline "' + PIPE_TITLE + '"\nstage 40 match either\n' + \
+PIPE_BASE = 'pipeline "' + PIPE_TITLE + '"\nstage 40 match either\n' + \
     "".join(f'rule "{n}"\n' for n in R if n != "omni-v3-actif-critique") + \
     'stage 41 match either\nrule "omni-v3-actif-critique"\nend'
+
+# ---------------- règles versionnées (objets-graylog/raccordements.txt) ----------------
+def depot():
+    """Racine du dépôt : OMNI_REPO, sinon celle qui contient ce script, sinon le clone de référence."""
+    for c in (os.environ.get("OMNI_REPO"), Path(__file__).resolve().parents[2], "/opt/omni-siem/repository"):
+        if c and (Path(c) / "objets-graylog/raccordements.txt").is_file():
+            return Path(c)
+    sys.exit("objets-graylog/raccordements.txt introuvable (définir OMNI_REPO)")
+
+def raccordements(pipeline):
+    """[(titre, fichier, description, étape, position)] de l'inventaire pour ce pipeline."""
+    out = []
+    for l in (depot() / "objets-graylog/raccordements.txt").read_text(encoding="utf-8").splitlines():
+        if not l.strip() or l.lstrip().startswith("#"):
+            continue
+        c = l.split("|")
+        if len(c) != 6 or c[5] not in ("debut", "fin") or not re.fullmatch(r"-?\d+", c[4]):
+            sys.exit(f"raccordements.txt : ligne mal formée : {l}")
+        if c[3] == pipeline:
+            out.append((c[0], c[1], c[2], int(c[4]), c[5]))
+    return out
+
+def inclure_regles_versionnees(base, pipeline):
+    """Même algorithme que inclure_regles_versionnees (lib-regles-versionnees.sh) : position debut/fin
+    dans l'ordre de l'inventaire, étape absente créée à sa place, aucune règle dupliquée ni retirée."""
+    entrees = [(t, e, p) for t, _f, _d, e, p in raccordements(pipeline)]
+    lignes = base.split("\n")
+    present = {m.group(1) for l in lignes if (m := re.fullmatch(r'rule "([^"]*)"', l.strip()))}
+    base_etapes = {int(m.group(1)) for l in lignes if (m := re.match(r"\s*stage\s+(-?\d+)", l))}
+    out, emises = [], set()
+    def regle(t):
+        if t not in present:
+            out.append(f'rule "{t}"'); present.add(t)
+    def regles(s, pos):
+        for t, e, p in entrees:
+            if e == s and p == pos: regle(t)
+    def nouvelles(borne=None):
+        for s in sorted({e for _t, e, _p in entrees} - base_etapes - emises):
+            if borne is None or s < borne:
+                emises.add(s); out.append(f"stage {s} match either"); regles(s, "debut"); regles(s, "fin")
+    cour = None
+    for l in lignes:
+        if m := re.match(r"\s*stage\s+(-?\d+)", l):
+            s = int(m.group(1))
+            if cour is not None: regles(cour, "fin")
+            nouvelles(s); out.append(l); regles(s, "debut"); cour = s; continue
+        if re.fullmatch(r"\s*end\s*", l):
+            if cour is not None: regles(cour, "fin")
+            cour = None; nouvelles(); out.append(l); continue
+        out.append(l)
+    return "\n".join(out)
+
+def regles_versionnees():
+    """{titre: (source, description)} des règles versionnées de ce pipeline, lues dans les fichiers .rule."""
+    out = {}
+    for t, f, d, _e, _p in raccordements(PIPE_TITLE):
+        src = (depot() / f).read_text(encoding="utf-8")
+        if not src.startswith(f'rule "{t}"'):
+            sys.exit(f"{f} ne déclare pas rule \"{t}\"")
+        out[t] = (src, d)
+    return out
+
+def pipe_src():
+    return inclure_regles_versionnees(PIPE_BASE, PIPE_TITLE)
 PIPE_STREAMS = ["OMNI - Windows Security", "OMNI - Windows autres", "OMNI - ESET", "OMNI - FortiGate"]
 
 N_TEAMS, N_TRIAGE = "6a2abf7265bc77613c83880e", "6a3fd983b5993e874b5d518e"
@@ -278,11 +348,13 @@ def mesure():
 
 def main():
     if not TOKEN: sys.exit("jeton API absent de 00-vars.env")
+    PIPE_SRC = pipe_src()
+    RV = regles_versionnees()
     # 1. Vérification de syntaxe par Graylog (aucune création)
-    for n, src in R.items():
+    for n, src in list(R.items()) + [(t, s) for t, (s, _d) in RV.items()]:
         try: api("POST", "/system/pipelines/rule/parse", {"title": n, "description": "", "source": src})
         except RuntimeError as e: sys.exit(f"ERREUR SYNTAXE {n} : {e}")
-    print(f"syntaxe OK : {len(R)} regles")
+    print(f"syntaxe OK : {len(R)} regles + {len(RV)} versionnees")
     try: api("POST", "/system/pipelines/pipeline/parse", {"title": PIPE_TITLE, "description": "", "source": PIPE_SRC}); print("syntaxe pipeline OK")
     except RuntimeError as e:
         # le parse du pipeline échoue tant que les règles n'existent pas : on le signale seulement
@@ -325,6 +397,14 @@ def main():
     for n, src in R.items():
         if n in exist: continue
         r = api("POST", "/system/pipelines/rule", {"title": n, "description": "OMNITECH v3 11/11/2026", "source": src})
+        CREES.append(("rule", r["id"], n))
+    # règles versionnées : créées si absentes (description de l'inventaire), jamais modifiées
+    for n, (src, desc) in RV.items():
+        if n in exist:
+            if exist[n]["source"].rstrip() != src.rstrip():
+                print(f"regle versionnee {n} : source en service differente du depot (non modifiee)")
+            continue
+        r = api("POST", "/system/pipelines/rule", {"title": n, "description": desc, "source": src})
         CREES.append(("rule", r["id"], n))
     pipes = {p["title"]: p for p in api("GET", "/system/pipelines/pipeline")}
     if PIPE_TITLE in pipes:
@@ -370,6 +450,7 @@ def retour():
     print(f"retour : {n} objets supprimes")
 
 if __name__ == "__main__":
+    if MODE == "--source-pipeline": print(pipe_src()); sys.exit(0)
     if MODE == "--mesure": print(json.dumps(mesure())); sys.exit(0)
     if MODE == "--retour": retour(); sys.exit(0)
     main()

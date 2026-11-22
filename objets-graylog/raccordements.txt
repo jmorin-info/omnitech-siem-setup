@@ -1,0 +1,28 @@
+# Regles de pipeline versionnees raccordees a un pipeline possede par un autre
+# script. Inventaire unique, lu par lib-regles-versionnees.sh (scripts 49-expo-
+# port-class.sh, 49-enrich-lots.sh, 81-fp-allowlist.sh), tools/omni-v3/v3_build.py
+# et le controle 26-graylog-objets-manuels.sh.
+#
+# Format : titre|fichier .rule|description|pipeline|etape|position
+#   fichier     : chemin relatif a la racine du depot ; seule source de la regle.
+#   description : description posee a la creation de la regle.
+#   position    : debut (en tete de l'etape) ou fin (en fin d'etape), dans
+#                 l'ordre de ce fichier ; reproduit l'ordre en production au
+#                 22/11/2026 (verifie par GET, voir tools/verif-pipelines-versionnees.sh).
+omni-v3-laps-lecture|objets-graylog/regles/omni-v3-laps-lecture.rule|OMNITECH v3 11/11/2026|OMNI v3 - Detections et correlation|40|debut
+omni-v3-laps-lecture-it|objets-graylog/regles/omni-v3-laps-lecture-it.rule|OMNITECH v3 11/11/2026|OMNI v3 - Detections et correlation|41|debut
+omni-fp-26-expo-ztna-vaultwarden|objets-graylog/regles/omni-fp-26-expo-ztna-vaultwarden.rule|OMNITECH v3 11/11/2026|OMNI - Exposition reseau|17|fin
+omni-fp-26-service-veeam-vss|objets-graylog/regles/omni-fp-26-service-veeam-vss.rule|OMNITECH v3 11/11/2026|OMNI - Allowlist FP|25|debut
+omni-fp-26-lsass-ninjaone-metering|objets-graylog/regles/omni-fp-26-lsass-ninjaone-metering.rule|OMNITECH v3 11/11/2026|OMNI - Allowlist FP|25|debut
+omni-fp-26-adexplorer-dev-seal|objets-graylog/regles/omni-fp-26-adexplorer-dev-seal.rule|OMNITECH v3 11/11/2026|OMNI - Allowlist FP|25|debut
+omni-fp-26-adminshare-veeam-dc|tools/alertes-v2/regles/omni-fp-26-adminshare-veeam-dc.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-explicit-cred-admin|tools/alertes-v2/regles/omni-fp-26-explicit-cred-admin.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-injection-outils|tools/alertes-v2/regles/omni-fp-26-injection-outils.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-lsass-defender|tools/alertes-v2/regles/omni-fp-26-lsass-defender.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-ntds-surebackup-mh|tools/alertes-v2/regles/omni-fp-26-ntds-surebackup-mh.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-outlook-liens|tools/alertes-v2/regles/omni-fp-26-outlook-liens.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-schtask-oms|tools/alertes-v2/regles/omni-fp-26-schtask-oms.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-wbadmin-retention-dc|tools/alertes-v2/regles/omni-fp-26-wbadmin-retention-dc.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-webshell-proactive|tools/alertes-v2/regles/omni-fp-26-webshell-proactive.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-zerologon-mdp-machine|tools/alertes-v2/regles/omni-fp-26-zerologon-mdp-machine.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
+omni-fp-26-webshell-dev-central6|tools/alertes-v2/regles/omni-fp-26-webshell-dev-central6.rule|Faux positifs v2 11/11/2026 (agent alertes) - voir Rapport-Alertes-v2-20261111.md|OMNI - Allowlist FP|25|fin
