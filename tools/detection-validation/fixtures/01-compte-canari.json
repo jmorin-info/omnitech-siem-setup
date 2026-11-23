@@ -1,0 +1,101 @@
+{
+  "titre": "OMNI - COMPTE CANARI touché (intrusion AD probable)",
+  "critique": true,
+  "mitre": "T1078.002",
+  "justification": "Leurre AD : toute authentification sur le compte canari signe une intrusion, zéro faux positif attendu ; une panne de cette détection supprime le filet de dernier recours.",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "alert_tag:canary",
+    "streams": [
+      "OMNI - Windows Security"
+    ],
+    "group_by": [],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 1.0
+        }
+      }
+    },
+    "search_within_ms": 300000,
+    "execute_every_ms": 300000
+  },
+  "cas": [
+    {
+      "nom": "authentification sur le compte canari",
+      "attendu": {
+        "evenements": 1
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "canary",
+            "event_id": "4624",
+            "user": "svc-canari"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "autre étiquette sur le même flux",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "kerberoasting",
+            "user": "svc-canari"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "étiquette canary hors fenêtre de 5 min",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 900,
+          "champs": {
+            "alert_tag": "canary"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "étiquette canary sur un autre flux",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "alert_tag": "canary"
+          }
+        }
+      ]
+    }
+  ]
+}

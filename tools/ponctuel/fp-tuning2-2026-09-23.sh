@@ -20,7 +20,7 @@
 #   Idempotent.
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." || exit 1
 source ./00-vars.env
 source ./lib-graylog.sh
 require_api

@@ -1,5 +1,9 @@
 """26-graylog-objets-manuels.sh : syntaxe, plan en lecture seule et idempotence.
 
+Depuis le 22/11/2026, 26 ne crée plus que les définitions d'événements ; les
+règles versionnées et leur raccordement sont seulement contrôlés (ils sont posés
+par les scripts propriétaires des pipelines, voir tests/test_pipelines_versionnes.py).
+
 Le script réel est exécuté contre une API Graylog simulée : un faux `curl` placé
 en tête du PATH lit et écrit un état JSON (règles, pipelines, flux,
 notifications, définitions paginées). Aucun accès réseau.
@@ -91,12 +95,12 @@ PIPES = {"OMNI - Exposition reseau": ("p0000000000000000000000a", 'pipeline "OMN
 
 
 def inventaire():
-    """(titre, fichier, pipeline, étape) lus dans le script lui-même."""
+    """(titre, fichier, pipeline, étape) de l'inventaire unique ; définitions lues dans le script."""
     texte = SCRIPT.read_text(encoding="utf-8")
-    bloc = texte.split("REGLES=\"$(cat <<'EOF'\n", 1)[1].split("\nEOF\n", 1)[0]
-    regles = [tuple(l.split("|")) for l in bloc.splitlines() if l.strip()]
+    lignes = (ROOT / "objets-graylog/raccordements.txt").read_text(encoding="utf-8").splitlines()
+    regles = [tuple(l.split("|")) for l in lignes if l.strip() and not l.startswith("#")]
     defs = [l.strip() for l in texte.split("DEFINITIONS=(", 1)[1].split(")", 1)[0].splitlines() if l.strip()]
-    return [(t, f, p, e) for t, f, _d, p, e in regles], defs
+    return [(t, f, p, e) for t, f, _d, p, e, _pos in regles], defs
 
 
 def definition_resolue(fichier):
@@ -119,10 +123,10 @@ def etat_vide():
     }
 
 
-def etat_production():
-    """Tous les objets en service, définitions versionnées placées au-delà du rang 100."""
+def etat_pipelines_ok():
+    """Règles versionnées créées et raccordées par les scripts propriétaires ; définitions absentes."""
     etat = etat_vide()
-    regles, defs = inventaire()
+    regles, _defs = inventaire()
     for n, (titre, fichier, pipe, etape) in enumerate(regles):
         source = (ROOT / fichier).read_text(encoding="utf-8").rstrip("\n")   # production : sans saut final
         etat["regles"].append({"id": f"r{n}", "title": titre, "description": "", "source": source})
@@ -138,6 +142,13 @@ def etat_production():
             else:
                 corps += f"\nstage {etape} match either\n" + "\n".join(rs)
         p["source"] = corps + "\nend"
+    return etat
+
+
+def etat_production():
+    """Tous les objets en service, définitions versionnées placées au-delà du rang 100."""
+    etat = etat_pipelines_ok()
+    _regles, defs = inventaire()
     for n, f in enumerate(defs):
         d = definition_resolue(f)
         d["id"], d["state"] = f"e{n:023d}", "ENABLED"
@@ -208,27 +219,19 @@ def test_plan_sur_production_tout_deja_present(api):
 
 
 def test_plan_puis_apply_puis_idempotence(api):
-    api.charger(etat_vide())
+    api.charger(etat_pipelines_ok())
     plan = api.lancer()
     assert plan.returncode == 0, plan.stdout + plan.stderr
-    assert "0 déjà présent(s), 37 à créer" in plan.stdout
+    assert "34 déjà présent(s), 3 à créer" in plan.stdout
     assert "ecritures" not in api.etat, "le mode plan ne doit rien écrire"
 
     app = api.lancer("--apply")
     assert app.returncode == 0, app.stdout + app.stderr
     etat = api.etat
-    regles, defs = inventaire()
-    titres_regles = [r["title"] for r in etat["regles"]]
-    assert all(titres_regles.count(t) == 1 for t, *_ in regles)
-    # raccordement additif : lignes d'origine conservées, nouvelles étapes dans l'ordre
-    expo = next(p for p in etat["pipelines"] if p["title"] == "OMNI - Exposition reseau")["source"]
-    assert expo.splitlines() == ['pipeline "OMNI - Exposition reseau"', "stage 14 match either", 'rule "omni-forti-14-privflags"',
-                                 "stage 16 match either", 'rule "omni-forti-16-expo-internet"',
-                                 "stage 17 match either", 'rule "omni-fp-26-expo-ztna-vaultwarden"', "end"]
-    allow = next(p for p in etat["pipelines"] if p["title"] == "OMNI - Allowlist FP")["source"]
-    assert 'rule "omni-fp-25-service-install"' in allow and allow.count("stage 25") == 1
-    v3 = next(p for p in etat["pipelines"] if p["title"] == "OMNI v3 - Detections et correlation")["source"].splitlines()
-    assert v3.index('rule "omni-v3-laps-lecture"') < v3.index("stage 41 match either") < v3.index('rule "omni-v3-laps-lecture-it"')
+    _regles, defs = inventaire()
+    # seules écritures : les 3 définitions (règles et pipelines appartiennent à leurs scripts)
+    # (post_entity retente avec l'enveloppe Graylog 7 : 2 POST par définition)
+    assert {tuple(e) for e in etat["ecritures"]} == {("POST", "/events/definitions")}
     # définitions : enveloppe Graylog 7, identifiants résolus par titre, aucun doublon malgré la pagination
     crees = [d for d in etat["definitions"] if not d["title"].startswith("OMNI - remplissage")]
     assert sorted(d["title"] for d in crees) == sorted(json.loads((ROOT / f).read_text(encoding="utf-8"))["title"] for f in defs)
@@ -243,6 +246,18 @@ def test_plan_puis_apply_puis_idempotence(api):
     troisieme = api.lancer("--apply")
     assert troisieme.returncode == 0
     assert len(api.etat["ecritures"]) == n_ecritures, "second --apply : aucune écriture"
+
+
+def test_regles_absentes_controle_sans_ecriture(api):
+    """Instance reconstruite sans les scripts propriétaires : 26 signale, n'écrit ni règle ni pipeline."""
+    api.charger(etat_vide())
+    r = api.lancer("--apply")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "absent (relancer 81-fp-allowlist.sh) : règle omni-fp-26-outlook-liens" in r.stdout
+    assert "absent (relancer tools/omni-v3/v3_build.py --appliquer) : raccordement omni-v3-laps-lecture" in r.stdout
+    assert "absent (relancer 49-expo-port-class.sh" in r.stdout
+    ecritures = api.etat.get("ecritures", [])
+    assert all(chemin == "/events/definitions" for _m, chemin in ecritures), ecritures
 
 
 def test_ecart_signale_jamais_ecrase(api):
@@ -264,7 +279,7 @@ def test_prerequis_manquants(api):
     api.charger(etat)
     r = api.lancer("--apply")
     assert r.returncode == 1
-    assert "pipeline « OMNI - Allowlist FP » absent" in r.stdout
+    assert "absent (relancer 81-fp-allowlist.sh) : pipeline « OMNI - Allowlist FP »" in r.stdout
     assert "OMNI - BunkerWeb" in r.stdout
     assert not any("WAF" in d["title"] for d in api.etat["definitions"])
 

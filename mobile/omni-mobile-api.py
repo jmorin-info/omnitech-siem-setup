@@ -520,6 +520,18 @@ def update_case(b, who):
             if txt:
                 c.setdefault("notes", []).append(
                     {"by": who or "?", "ts": _dt.datetime.now().isoformat(timespec="seconds"), "text": txt[:1000]})
+        # Indicateurs SOC (MTTR) : historique daté (avec décalage horaire) des changements de statut,
+        # d'assignation et de qualification, et horodatage de la dernière clôture. Ajout seul.
+        if act in ("status", "assign", "disposition"):
+            now = _dt.datetime.now().astimezone().isoformat(timespec="seconds")
+            value = {"status": c.get("status", ""), "assign": c.get("assignée", ""),
+                     "disposition": c.get("disposition", "")}[act]
+            c.setdefault("history", []).append({"ts": now, "by": who or "?", "action": act, "value": value})
+            del c["history"][:-50]
+            if c.get("status") == "closed":
+                c.setdefault("closed_ts", now)
+            else:
+                c.pop("closed_ts", None)
         save_cases(st)
     return {"ok": True, "case": c}
 
@@ -3040,6 +3052,43 @@ ADMIN_GET_ROUTES = {
 }
 
 
+# ------------------------------------------------------------------ indicateurs SOC (lecture seule)
+# Calcul partagé avec l'outil en ligne de commande tools/omni-soc-kpi.py du clone de référence :
+# une seule implémentation des définitions (MTTD, MTTR, faux positifs, couverture).
+SOC_KPI_TOOL = _setting("SOC_KPI_TOOL", OMNI_REPO_DIR + "/tools/omni-soc-kpi.py")
+SOC_KPI_TZ = CONF.get("SOC_KPI_TZ", "Europe/Paris")
+_SOC_KPI_MOD: dict = {}
+
+
+class SocKpiUnavailable(Exception):
+    pass
+
+
+def _soc_kpi_module():
+    import importlib.util as _ilu
+    try:
+        mtime = os.path.getmtime(SOC_KPI_TOOL)
+    except OSError:
+        raise SocKpiUnavailable("outil d'indicateurs introuvable (SOC_KPI_TOOL)") from None
+    if _SOC_KPI_MOD.get("key") != (SOC_KPI_TOOL, mtime):
+        spec = _ilu.spec_from_file_location("omni_soc_kpi", SOC_KPI_TOOL)
+        mod = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _SOC_KPI_MOD.update(key=(SOC_KPI_TOOL, mtime), mod=mod)
+    return _SOC_KPI_MOD["mod"]
+
+
+def get_soc_kpi(days=30):
+    mod = _soc_kpi_module()
+    graylog_get = (lambda path: _graylog("GET", path)) if _graylog_token() else None
+    try:
+        return mod.compute(os_search, graylog_get, days=days, log_index="omni-*", cases_file=CASES_FILE,
+                           admin_dir=SOC_ADMIN_DIR, tz=SOC_KPI_TZ,
+                           mitre_csv=_setting("MITRE_LOOKUP", OMNI_REPO_DIR + "/lookups/mitre-attack.csv"))
+    except mod.KpiError:
+        raise SearchBackendError(502) from None
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):  # silencieux
         pass
@@ -3243,6 +3292,24 @@ class H(BaseHTTPRequestHandler):
             return self._json({"trend": get_kpi_trend()})
         if p == "/m/api/leaks2":
             return self._json(get_leaks_v2())
+        if p == "/m/api/soc-kpi":
+            # Indicateurs SOC : rôle analyste ou administrateur (le lecteur n'y a pas accès).
+            if not role_at_least(self._user(), "analyste"):
+                return self._json({"error": "indicateurs réservés aux rôles analyste et administrateur"}, 403)
+            qs = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            try:
+                days = max(1, min(90, int(qs.get("days", ["30"])[0])))
+            except (ValueError, TypeError):
+                days = 30
+            try:
+                return self._json(get_soc_kpi(days))
+            except SocKpiUnavailable as exc:
+                return self._json({"error": "kpi_unavailable", "available": False, "message": str(exc)}, 503)
+            except SearchBackendError:
+                raise
+            except Exception as exc:
+                return self._json({"error": "kpi_error", "available": False,
+                                   "message": f"calcul impossible ({type(exc).__name__})"}, 502)
         if p == "/m/api/stream":
             return self._sse()
         self._json({"error": "not found"}, 404)
@@ -3579,6 +3646,7 @@ get_entity        = cached()(get_entity)          # vue entité (unifiée, plus 
 get_investigation = cached()(get_investigation)   # pivot d'investigation (multi-requêtes)
 get_entity_timeline = cached()(get_entity_timeline)   # chronologie unifiée
 get_entities_browse = cached()(get_entities_browse)   # page Entités (top comptes/machines)
+get_soc_kpi = cached(600)(get_soc_kpi)                 # indicateurs SOC (période longue, ~3 s)
 
 
 # OMNITECH-SOC-20261111 : pages lentes prechargees en tache de fond (deploy ~17 s, report ~6 s)

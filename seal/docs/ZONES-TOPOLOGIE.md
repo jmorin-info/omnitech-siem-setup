@@ -71,6 +71,31 @@ Dès le CSV peuplé, `seal_zone` apparaît sur les nouveaux événements (les wi
 `ZON-001` se remplissent). Pour re-décorer l'historique : non nécessaire au SOC
 (l'analyse par zone porte sur le flux courant) ; sinon re-backfill Logstash.
 
+## Gabarit en attendant la vue SQL (22/11/2026)
+
+Constat : la table installée ne contient que son en-tête ; le plan des zones physiques
+(rattachement de chaque porte à une zone) n'existe ni dans SEAL accessible au compte de
+service ni dans le dépôt. ZON-001 est désactivée en production
+(`tools/maj-detections-2026-11.py`) tant que la table est vide.
+
+Pour avancer sans la vue `vw_SealZone_SIEM`, `seal/graylog/gabarit_zone_portes.py` liste en
+lecture seule les portes vues dans OpenSearch, avec la même clé que la règle
+(`seal_site:OBFI_ID`) :
+
+```bash
+python3 seal/graylog/gabarit_zone_portes.py gabarit --sortie /tmp/gabarit.csv \
+        --existant seal/graylog/omni-seal-zone.gabarit.csv
+# renseigner la colonne ZONE_PATH (ex. « Bâtiment A/Accueil »), puis :
+python3 seal/graylog/gabarit_zone_portes.py table --gabarit /tmp/gabarit.csv --sortie /tmp/omni-seal-zone.csv
+install -m 644 -o root -g graylog /tmp/omni-seal-zone.csv /etc/graylog/lookup/omni-seal-zone.csv
+```
+
+Le mode `table` ne garde que les portes dont la zone est renseignée. Instantané du
+22/11/2026 : `seal/graylog/omni-seal-zone.gabarit.csv` (127 portes : 87 sur `bx-seal-omega`,
+40 sur `bx-qa-seal-vm` ; libellés de porte vides dans la collecte). Une fois la table remplie,
+replanifier ZON-001 dans Graylog (attention : `provision_detections.py --enable-parked`
+réactive aussi EVT-002, parquée pour une autre raison).
+
 ## Découvrir les zones d'un autre parc
 
 `event_domain:audit AND target_object_type:GroupeZone` (libellés de zones) et

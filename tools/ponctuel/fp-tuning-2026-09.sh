@@ -15,7 +15,7 @@
 #   Idempotent (re-applique = sans effet si deja conforme).
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." || exit 1
 source ./00-vars.env
 source ./lib-graylog.sh
 require_api
@@ -26,7 +26,7 @@ id_by_title(){ echo "$DEFS" | jq -r --arg t "$1" '.event_definitions[]?|select(.
 
 # --- modifie la requete d'une detection (par titre) ---------------------------
 set_query(){ # $1=motif_titre  $2=nouvelle_query
-  local id t cur new
+  local id t cur
   id="$(id_by_title "$1")"; [[ -z "$id" ]] && { warn "detection absente: $1"; return; }
   t="$(echo "$DEFS" | jq -r --arg i "$id" '.event_definitions[]?|select(.id==$i)|.title')"
   cur="$(echo "$DEFS" | jq -r --arg i "$id" '.event_definitions[]?|select(.id==$i)|.config.query')"

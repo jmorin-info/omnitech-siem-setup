@@ -2,9 +2,7 @@
 # SC1090/SC1091 : 00-vars.env et les bibliothèques sont sourcés par un chemin calculé
 #   (fichier du site hors dépôt) ; l'analyse statique ne peut pas les suivre.
 disable=SC1090,SC1091
-# SC2034 : compteurs de boucle d'attente (for i in ...) et variables positionnées par
-#   lib-platform.sh pour les scripts qui la sourcent.
-disable=SC2034
 # SC2164 : « cd "$(dirname "$0")" » vers le répertoire du script, toujours présent ;
-#   environ 70 occurrences historiques, dette suivie plutôt que corrigée en masse.
+#   54 occurrences historiques (scripts numérotés), dette suivie plutôt que corrigée
+#   en masse (le 22/11/2026 : 16 corrigées dans tools/, seal/ et 26/49-enrich-lots/81).
 disable=SC2164

@@ -45,15 +45,19 @@ mk_detect() {
   else warn "creation KO : ${T}"; fi
 }
 
+# Casse (11/2026) : les champs keyword (Image, CommandLine, Details, dns_query) sont sensibles
+# a la casse ; les jokers sont ecrits en expressions regulieres Lucene a classes [aA]
+# (insensibles a la casse, mapping inchange). Cf. docs/detection/VALIDATION-DETECTIONS.md.
+# TeamViewer retire (outil sanctionne, tools/ponctuel/fp-tuning-2026-09.sh).
 # [#4] T1219 — RAT/RMM hors RMM officiel (NinjaRMM) et hors PC hotline (bx-hl-*)
 mk_detect "OMNI - Logiciel d'acces distant non autorise (RAT/RMM) - T1219" 2 \
-  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (winlogbeat_winlog_event_data_OriginalFileName:("AnyDesk.exe" OR "TeamViewer.exe" OR "RustDesk.exe" OR "ngrok.exe") OR winlogbeat_winlog_event_data_Image:(*anydesk* OR *teamviewer* OR *screenconnect* OR *splashtop* OR *atera* OR *rustdesk* OR *gotoassist* OR *remoteutilities* OR *zohoassist* OR *action1* OR *pulseway* OR *quickassist*)) AND NOT winlogbeat_winlog_event_data_Image:*ninjarmm* AND NOT source:bx\-hl\-*' \
+  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (winlogbeat_winlog_event_data_OriginalFileName:("AnyDesk.exe" OR "RustDesk.exe" OR "ngrok.exe") OR winlogbeat_winlog_event_data_Image:(/.*[aA][nN][yY][dD][eE][sS][kK].*/ OR /.*[sS][cC][rR][eE][eE][nN][cC][oO][nN][nN][eE][cC][tT].*/ OR /.*[sS][pP][lL][aA][sS][hH][tT][oO][pP].*/ OR /.*[aA][tT][eE][rR][aA].*/ OR /.*[rR][uU][sS][tT][dD][eE][sS][kK].*/ OR /.*[gG][oO][tT][oO][aA][sS][sS][iI][sS][tT].*/ OR /.*[rR][eE][mM][oO][tT][eE][uU][tT][iI][lL][iI][tT][iI][eE][sS].*/ OR /.*[zZ][oO][hH][oO][aA][sS][sS][iI][sS][tT].*/ OR /.*[aA][cC][tT][iI][oO][nN]1.*/ OR /.*[pP][uU][lL][sS][eE][wW][aA][yY].*/ OR /.*[qQ][uU][iI][cC][kK][aA][sS][sS][iI][sS][tT].*/)) AND NOT winlogbeat_winlog_event_data_Image:*ninjarmm* AND NOT source:bx\-hl\-*' \
   "$ST_SYSMON" '["source"]' 1 600000 300000 3600000 \
   "85/T1219 : outil de controle a distance hors RMM officiel (NinjaRMM) et hors hotline (bx-hl-*) = vecteur ransomware/intrusion. Sysmon EID1."
 
 # [#6] T1572 — tunneling sortant (ngrok/cloudflared/serveo/localtunnel)
 mk_detect "OMNI - Tunnel sortant ngrok/cloudflared (Protocol Tunneling) - T1572" 2 \
-  'event_source:sysmon AND ((winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_OriginalFileName:("cloudflared.exe" OR "ngrok.exe")) OR (winlogbeat_winlog_event_id:22 AND dns_query:(*.ngrok.io OR *.ngrok\-free.app OR *.ngrok.app OR *.trycloudflare.com OR *.loca.lt OR *.serveo.net OR *.lhr.life OR *.localhost.run)))' \
+  'event_source:sysmon AND ((winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_OriginalFileName:("cloudflared.exe" OR "ngrok.exe")) OR (winlogbeat_winlog_event_id:22 AND dns_query:(/.*[.][nN][gG][rR][oO][kK][.][iI][oO]/ OR /.*[.][nN][gG][rR][oO][kK]-[fF][rR][eE][eE][.][aA][pP][pP]/ OR /.*[.][nN][gG][rR][oO][kK][.][aA][pP][pP]/ OR /.*[.][tT][rR][yY][cC][lL][oO][uU][dD][fF][lL][aA][rR][eE][.][cC][oO][mM]/ OR /.*[.][lL][oO][cC][aA][.][lL][tT]/ OR /.*[.][sS][eE][rR][vV][eE][oO][.][nN][eE][tT]/ OR /.*[.][lL][hH][rR][.][lL][iI][fF][eE]/ OR /.*[.][lL][oO][cC][aA][lL][hH][oO][sS][tT][.][rR][uU][nN]/)))' \
   "$ST_SYSMON" '["source"]' 1 600000 300000 3600000 \
   "85/T1572 : tunnel sortant (ngrok/cloudflared/serveo/localtunnel) = exfiltration / C2 / acces distant cache. Sysmon EID1+EID22(dns_query)."
 
@@ -66,7 +70,7 @@ mk_detect "OMNI - MFA fatigue / push bombing M365 (>=5 refus / compte / 10 min) 
 # [#7] T1203 — exploitation client (navigateur/PDF -> interpreteur de script).
 #   cmd.exe EXCLU : 9641 evts/7j = pattern legitime ici ; ps/wscript/mshta = 0 FP.
 mk_detect "OMNI - Exploitation client : navigateur/PDF lance un interpreteur - T1203" 3 \
-  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_ParentImage:(*chrome.exe OR *msedge.exe OR *firefox.exe OR *AcroRd32.exe OR *Acrobat.exe OR *iexplore.exe) AND winlogbeat_winlog_event_data_Image:(*powershell.exe OR *wscript.exe OR *cscript.exe OR *mshta.exe)' \
+  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND winlogbeat_winlog_event_data_ParentImage:(/.*[cC][hH][rR][oO][mM][eE][.][eE][xX][eE]/ OR /.*[mM][sS][eE][dD][gG][eE][.][eE][xX][eE]/ OR /.*[fF][iI][rR][eE][fF][oO][xX][.][eE][xX][eE]/ OR /.*[aA][cC][rR][oO][rR][dD]32[.][eE][xX][eE]/ OR /.*[aA][cC][rR][oO][bB][aA][tT][.][eE][xX][eE]/ OR /.*[iI][eE][xX][pP][lL][oO][rR][eE][.][eE][xX][eE]/) AND winlogbeat_winlog_event_data_Image:(/.*[pP][oO][wW][eE][rR][sS][hH][eE][lL][lL][.][eE][xX][eE]/ OR /.*[wW][sS][cC][rR][iI][pP][tT][.][eE][xX][eE]/ OR /.*[cC][sS][cC][rR][iI][pP][tT][.][eE][xX][eE]/ OR /.*[mM][sS][hH][tT][aA][.][eE][xX][eE]/)' \
   "$ST_SYSMON" '["source"]' 1 600000 300000 1800000 \
   "85/T1203 : un navigateur ou lecteur PDF engendre un interpreteur de script (powershell/wscript/mshta) = exploitation/RCE cote client. cmd.exe exclu (bruit legitime du parc)."
 
@@ -78,20 +82,20 @@ mk_detect "OMNI - Authentification legacy M365 (bypass MFA) - T1078.004" 3 \
 
 # [#10] T1555.004 — vol de credentials Windows Credential Manager (cmdkey/vaultcmd /list).
 mk_detect "OMNI - Vol Credential Manager Windows (cmdkey/vaultcmd) - T1555.004" 3 \
-  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (command_line:*cmdkey* OR command_line:*vaultcmd*) AND command_line:*list*' \
+  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (command_line:/.*[cC][mM][dD][kK][eE][yY].*/ OR command_line:/.*[vV][aA][uU][lL][tT][cC][mM][dD].*/) AND command_line:/.*[lL][iI][sS][tT].*/' \
   "$ST_SYSMON" '["source"]' 1 600000 300000 3600000 \
   "85/T1555.004 : enumeration du gestionnaire d'identifiants Windows (cmdkey /list, vaultcmd /list) = vol de credentials stockes. Rare en legitime (IT/provisioning a allowlister si besoin)."
 
 # [#23] T1518.001 Security Software Discovery — l'attaquant enumere l'AV/EDR avant de frapper.
 mk_detect "OMNI - Reconnaissance de l'antivirus/EDR (Security Software Discovery) - T1518.001" 2 \
-  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (command_line:*MpComputerStatus* OR command_line:*MpPreference* OR command_line:*securitycenter2* OR (command_line:*tasklist* AND (command_line:*defender* OR command_line:*sentinel* OR command_line:*crowdstrike* OR command_line:*eset*)))' \
+  'event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (command_line:/.*[mM][pP][cC][oO][mM][pP][uU][tT][eE][rR][sS][tT][aA][tT][uU][sS].*/ OR command_line:/.*[mM][pP][pP][rR][eE][fF][eE][rR][eE][nN][cC][eE].*/ OR command_line:/.*[sS][eE][cC][uU][rR][iI][tT][yY][cC][eE][nN][tT][eE][rR]2.*/ OR (command_line:/.*[tT][aA][sS][kK][lL][iI][sS][tT].*/ AND (command_line:/.*[dD][eE][fF][eE][nN][dD][eE][rR].*/ OR command_line:/.*[sS][eE][nN][tT][iI][nN][eE][lL].*/ OR command_line:/.*[cC][rR][oO][wW][dD][sS][tT][rR][iI][kK][eE].*/ OR command_line:/.*[eE][sS][eE][tT].*/)))' \
   "$ST_SYSMON" '["source"]' 1 600000 300000 3600000 \
   "85/T1518.001 : enumeration du produit de securite (Get-MpComputerStatus/MpPreference, securitycenter2, tasklist|findstr AV) = repérage avant desactivation/contournement. Rare en legitime."
 
 # [#extra] T1547.001 Boot/Logon Autostart — Run-key avec charge malveillante (persistance).
 #   Valeurs legitimes (OneDrive/Apidog/installeurs) EXCLUES ; on cible le payload franc.
 mk_detect "OMNI - Persistance autorun malveillant (Run key) - T1547.001" 3 \
-  'event_source:sysmon AND winlogbeat_winlog_event_id:13 AND winlogbeat_winlog_event_data_TargetObject:*CurrentVersion*Run* AND winlogbeat_winlog_event_data_Details:(*EncodedCommand* OR *FromBase64* OR *DownloadString* OR *DownloadFile* OR *IEX* OR *hidden* OR *bitsadmin* OR *certutil*)' \
+  'event_source:sysmon AND winlogbeat_winlog_event_id:13 AND winlogbeat_winlog_event_data_TargetObject:/.*[cC][uU][rR][rR][eE][nN][tT][vV][eE][rR][sS][iI][oO][nN].*[rR][uU][nN].*/ AND winlogbeat_winlog_event_data_Details:(/.*[eE][nN][cC][oO][dD][eE][dD][cC][oO][mM][mM][aA][nN][dD].*/ OR /.*[fF][rR][oO][mM][bB][aA][sS][eE]64.*/ OR /.*[dD][oO][wW][nN][lL][oO][aA][dD][sS][tT][rR][iI][nN][gG].*/ OR /.*[dD][oO][wW][nN][lL][oO][aA][dD][fF][iI][lL][eE].*/ OR /.*[iI][eE][xX].*/ OR /.*[hH][iI][dD][dD][eE][nN].*/ OR /.*[bB][iI][tT][sS][aA][dD][mM][iI][nN].*/ OR /.*[cC][eE][rR][tT][uU][tT][iI][lL].*/)' \
   "$ST_SYSMON" '["source"]' 1 600000 300000 3600000 \
   "85/T1547.001 : cle Run/RunOnce ecrite avec une charge malveillante (powershell encode, DownloadString, certutil/bitsadmin, fenetre cachee) = persistance de malware. 0 FP valide."
 

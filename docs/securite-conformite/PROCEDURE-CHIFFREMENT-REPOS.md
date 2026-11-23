@@ -9,6 +9,14 @@
 - Périmètre : seul `/data` (les **logs** OpenSearch) est chiffré. Le rootfs (OS + config) ne l'est pas — la config sensible y vit (`00-vars.env` chmod 600). Durcissement futur possible : chiffrer le rootfs.
 
 ## Configuration en place (référence)
+
+> **Attention (22/11/2026)** : le nom du périphérique a changé depuis le déploiement. Le
+> conteneur LUKS de `/data` est aujourd'hui **`/dev/sdb1`** ; `/dev/sda1` est `/boot/efi`.
+> Les commandes ci-dessous, écrites le 14/06/2026, citent `/dev/sda1` : toujours
+> identifier le périphérique avant d'agir (`cryptsetup status cryptdata`, ligne
+> `device:` ; ou `lsblk -o NAME,FSTYPE,MOUNTPOINT`), surtout avant `luksHeaderRestore`.
+> L'en-tête est aussi archivé chaque nuit par `30-backup-config.sh` depuis le
+> 22/11/2026 (`luks/data-header.img`, procédure : `docs/exploitation/RESTORE.md` §3 bis).
 | Élément | Valeur |
 |---|---|
 | Device | `/dev/sda1` (7,3 To) |

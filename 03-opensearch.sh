@@ -83,7 +83,7 @@ systemctl daemon-reload
 systemctl enable --now opensearch
 
 echo "==> [6/6] Attente du cluster..."
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   STATUS="$(curl -s 'http://127.0.0.1:9200/_cluster/health' | jq -r .status 2>/dev/null || true)"
   [[ "${STATUS}" == "green" || "${STATUS}" == "yellow" ]] && break
   sleep 5

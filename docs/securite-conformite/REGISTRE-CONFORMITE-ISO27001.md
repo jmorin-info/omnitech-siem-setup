@@ -46,7 +46,7 @@ Légende statut : [OK] Conforme · [Partiel] Partiel (action en cours) · [À tr
 | 8.9 Gestion de configuration | Config maîtrisée | **IaC** : scripts 10→34 idempotents, sauvegarde de config quotidienne | [OK] |
 | 8.10 Suppression d'informations | Effacement à terme | Rétention automatique par index (POL §4, `31`) | [OK] |
 | 8.12 Prévention fuite de données | Détecter exfiltration | M365 (partage externe, transfert mail), FortiGate (threat intel sortant) | [OK] |
-| 8.13 Sauvegarde | Sauvegarder/tester | Sauvegarde config chiffrée externalisée (`30`), PRA, **test à réaliser** | [Partiel] |
+| 8.13 Sauvegarde | Sauvegarder/tester | Sauvegarde config chiffrée externalisée (`30`), snapshots sélectifs non externalisés, PRA, objectifs RTO/RPO mesurés et exercice outillé ([RESTAURATION-COMPLETE.md](../exploitation/RESTAURATION-COMPLETE.md)), **exercice complet à réaliser** | [Partiel] |
 | 8.15 Journalisation | Produire/protéger les logs | 7 inputs, 13 streams, 144 règles de pipeline, rétention POL §4, STD complet | [OK] |
 | 8.16 Activités de surveillance | Surveiller/alerter | **88 définitions** (87 détections + 1 système), dashboard 24 pages, notifications, auto-surveillance | [OK] |
 | 8.17 Synchronisation des horloges | Horloge commune | NTP sur toutes les sources, UTC dans le SIEM (STD §7) | [OK] |
@@ -59,7 +59,7 @@ Légende statut : [OK] Conforme · [Partiel] Partiel (action en cours) · [À tr
 | # | Action | Réf | Responsable | Échéance |
 |---|---|---|---|---|
 | 1 | Faire signer la POL par la DSI | POL §12 | DSI | — |
-| 2 | Réaliser le test de restauration (PRA) | PRA, A.8.13 | Admin SIEM | Trimestre en cours |
+| 2 | Réaliser le test de restauration (PRA) avec `tools/omni-restore-drill.py` sur VM isolée ([procédure](../exploitation/RESTAURATION-COMPLETE.md)) | PRA, A.8.13 | Admin SIEM | Trimestre en cours |
 | 3 | Décaler le job Veeam *Backup Copy* (contention de verrou de point de restauration ; la sauvegarde **aboutit au retry**, pas un trou de PRA) | Détection Veeam | Admin Sys | — |
 | 4 | Étendre la collecte aux serveurs Windows restants + activer les SACL d'audit fichier sur les dossiers sensibles | STD §1 / `59` | Admin Sys | — |
 | 5 | Chiffrement au repos `/data` (LUKS2/TPM2) | A.8.24, PROCEDURE-CHIFFREMENT | Admin SIEM | [OK] **Fait le 2026-06-14** |

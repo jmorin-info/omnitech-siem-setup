@@ -66,21 +66,34 @@ def gl_get(path):
         return json.load(r)
 
 # --- 1. Snapshots OpenSearch --------------------------------------------------
-def check_snapshots():
+def depot_snapshots():
+    """Depot ecrit par oms-snap-siem (DEPOT dans /etc/oms-snap-siem.conf, defaut graylog_fs)."""
     try:
-        repo = os_get("/_snapshot/graylog_fs")
-        if "graylog_fs" not in repo:
-            ecart("snapshot_repo", "depot de snapshots graylog_fs ABSENT (repository_missing)"); return
-        snaps = os_get("/_snapshot/graylog_fs/_all").get("snapshots", [])
+        for ligne in open("/etc/oms-snap-siem.conf"):
+            if ligne.startswith("DEPOT="):
+                valeur = ligne.split("=", 1)[1].strip().strip('"')
+                if valeur:
+                    return valeur
+    except OSError:
+        pass
+    return "graylog_fs"
+
+def check_snapshots():
+    depot = depot_snapshots()
+    try:
+        repo = os_get(f"/_snapshot/{depot}")
+        if depot not in repo:
+            ecart("snapshot_repo", f"depot de snapshots {depot} ABSENT (repository_missing)"); return
+        snaps = os_get(f"/_snapshot/{depot}/_all").get("snapshots", [])
         ok = [s for s in snaps if s.get("state") == "SUCCESS"]
         if not ok:
-            ecart("snapshot_vide", "depot graylog_fs sans aucun snapshot SUCCESS"); return
+            ecart("snapshot_vide", f"depot {depot} sans aucun snapshot SUCCESS"); return
         last = max(s.get("end_time_in_millis", 0) for s in ok) / 1000
         age_h = (time.time() - last) / 3600
         if age_h > 48:
             ecart("snapshot_vieux", f"dernier snapshot OpenSearch il y a {age_h:.0f} h (>48h)")
         else:
-            print(f"  OK snapshots : {len(ok)} SUCCESS, dernier il y a {age_h:.0f} h")
+            print(f"  OK snapshots ({depot}) : {len(ok)} SUCCESS, dernier il y a {age_h:.0f} h")
     except Exception as e:
         ecart("snapshot_err", f"controle snapshots impossible: {e}")
 

@@ -37,6 +37,7 @@ import os
 import re
 import ssl
 import sys
+from typing import NoReturn
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -112,7 +113,7 @@ warn = lambda m: _p("!", m)   # noqa: E731
 info = lambda m: _p("i", m)   # noqa: E731
 
 
-def die(msg: str) -> "NoReturn":  # type: ignore[name-defined]
+def die(msg: str) -> NoReturn:
     print(f"ERREUR: {msg}", file=sys.stderr)
     sys.exit(1)
 

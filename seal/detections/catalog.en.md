@@ -55,7 +55,7 @@
 | ID | Title | Graylog query (D4) | group_by | Threshold | Window | Sev. | Technique | Notif. | Status |
 |---|---|---|---|---|---|---|---|---|---|
 | HYP-001 | Console brute force (authentication failures) | `event_domain:hypervisor_audit AND event_action:ConnectionFailure` | `actor_login` | `count() ≥ 5` | 10 / 1 | High | T1110 | immediate | active |
-| HYP-002 | Brute force **followed by a success** (same account) | `event_domain:hypervisor_audit AND alert_tag:seal_bf_then_success` | `actor_login` | `count() ≥ 1` | 15 / 1 | High | T1110 / T1078 | immediate | [SEQ]-approx |
+| HYP-002 | Brute force **followed by a success** (same account) | `event_domain:hypervisor_audit AND event_action:(ConnectionFailure OR Connection)` | `actor_login` | `sum(severity_num) ≥ 25 && min(severity_num) ≤ 0` (at least 5 failures and one success; fix of 22/11/2026, the `seal_bf_then_success` tag had no producer) | 15 / 1 | High | T1110 / T1078 | immediate | [SEQ]-approx |
 | HYP-003 | Administration console connection (`SealAdmin`) | `event_domain:hypervisor_audit AND event_action:Connection AND operation_channel:SealAdmin` | `actor_usercode` | `count() ≥ 1` | 10 / 5 | Medium | T1078 | digest | active |
 | HYP-004 | In-session profile change (`SwitchProfile`) | `event_domain:hypervisor_audit AND event_action:SwitchProfile` | `actor_usercode` | `count() ≥ 1` | 10 / 5 | Medium | T1078 | digest | active |
 | HYP-005 | Admin connection **outside working hours** | `event_domain:hypervisor_audit AND event_action:Connection AND operation_channel:SealAdmin AND off_hours:true` | `actor_usercode` | `count() ≥ 1` | 15 / 5 | High | T1078 | immediate | [SEQ]-approx |

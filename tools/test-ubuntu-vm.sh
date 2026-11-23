@@ -90,7 +90,7 @@ qemu-system-x86_64 -enable-kvm -cpu host -smp 2 -m 16384 -display none \
 VM_PID=$!
 SSH=(-i "$WORK/id_vm" -p 22026 -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$WORK/known_hosts" root@127.0.0.1)
 READY=0
-for attempt in $(seq 1 120); do
+for _ in $(seq 1 120); do
   kill -0 "$VM_PID" 2>/dev/null || { echo 'The isolated VM stopped during boot.' >&2; exit 1; }
   if ssh "${SSH[@]}" 'true' > "$WORK/ssh.log" 2>&1; then READY=1; break; fi
   sleep 5
@@ -151,7 +151,22 @@ if [[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 ]]; then
   ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && install -m 600 /dev/null /run/omni-isolated-vm-test && OMNI_ISOLATED_VM_TEST=1 python3 tools/test-integration-vm.py --output /root/integrations-acceptance.json' > "$WORK/integrations.log" 2>&1 || INTEGRATION_CODE=$?
   ssh "${SSH[@]}" 'cat /root/integrations-acceptance.json' > "$WORK/integrations.json" 2> "$WORK/integrations-errors.log" || true
 fi
-if [[ "$INSTALL_CODE" != 0 || "$VERIFY_CODE" != 0 || "$INTEGRATION_CODE" != 0 ]]; then
+# Optional complete restore drill: synthetic backups made in this guest, simulated loss,
+# then the timed drill. Nothing from production is used and nothing leaves the guest
+# except the drill's JSON report (no secret: counts, durations, names).
+DRILL_ENABLED="${OMNI_VM_RESTORE_DRILL:-0}"
+DRILL_CODE=0
+if [[ "$DRILL_ENABLED" == 1 ]]; then
+  DRILL_CODE=1
+  if [[ "$INTEGRATION_CODE" == 0 ]]; then
+    STAGE=restore_drill
+    echo 'Ubuntu VM: timed complete restore drill from synthetic backups.'
+    DRILL_CODE=0
+    ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && export OMNI_ISOLATED_VM_TEST=1 && python3 tools/omni-restore-drill.py jeu-factice --sortie /root/drill-src && python3 tools/omni-restore-drill.py sinistre-factice --jeu /root/drill-src/jeu.json && OMNI_RESTORE_DRILL_ISOLATED=1 python3 tools/omni-restore-drill.py executer --jeu /root/drill-src/jeu.json --rapport /root/drill-report' > "$WORK/drill.log" 2>&1 || DRILL_CODE=$?
+    ssh "${SSH[@]}" 'cat /root/drill-report/rapport-restauration.json' > "$WORK/drill.json" 2> "$WORK/drill-errors.log" || true
+  fi
+fi
+if [[ "$INSTALL_CODE" != 0 || "$VERIFY_CODE" != 0 || "$INTEGRATION_CODE" != 0 || "$DRILL_CODE" != 0 ]]; then
   # Only the disposable test guest's redacted diagnostics may leave the VM.
   ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && python3 -' > "$WORK/diagnose.log" 2>&1 <<'DIAG' || true
 import base64, importlib.util, json
@@ -182,7 +197,7 @@ report_path.write_text(json.dumps(report, indent=2) + "\n")
 DIAG
 fi
 ssh "${SSH[@]}" 'cat /root/acceptance.json' > "$WORK/report.json" 2> "$WORK/report-errors.log" || true
-if python3 - "$WORK/report.json" "$INSTALL_CODE" "$WORK/image-sha256" "$WORK/integrations.json" "$VERIFY_CODE" "$INTEGRATION_CODE" <<'PY'
+if python3 - "$WORK/report.json" "$INSTALL_CODE" "$WORK/image-sha256" "$WORK/integrations.json" "$VERIFY_CODE" "$INTEGRATION_CODE" "${DRILL_ENABLED:-0}" "${DRILL_CODE:-0}" "$WORK/drill.json" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 data = json.loads(path.read_text())
@@ -194,6 +209,14 @@ data["cloud_image_sha256"] = pathlib.Path(sys.argv[3]).read_text()
 integrations = pathlib.Path(sys.argv[4])
 data["integrations"] = json.loads(integrations.read_text()) if integrations.is_file() else {"passed": False, "skipped": True}
 data["passed"] = data["passed"] and all(data[key] == 0 for key in ("install_exit_code", "verify_exit_code", "integration_exit_code")) and data["integrations"].get("passed") is True
+if sys.argv[7] == "1":
+    drill = pathlib.Path(sys.argv[9])
+    try:
+        data["restore_drill"] = json.loads(drill.read_text()) if drill.is_file() and drill.stat().st_size else {"reussi": False, "absent": True}
+    except ValueError:
+        data["restore_drill"] = {"reussi": False, "invalide": True}
+    data["restore_drill_exit_code"] = int(sys.argv[8])
+    data["passed"] = data["passed"] and data["restore_drill_exit_code"] == 0 and data["restore_drill"].get("reussi") is True
 path.write_text(json.dumps(data, indent=2) + "\n")
 PY
 then
@@ -202,7 +225,7 @@ else
   echo 'Ubuntu VM acceptance report is missing or invalid.' >&2
   exit 1
 fi
-[[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 && "$INTEGRATION_CODE" == 0 ]] || { echo "Ubuntu VM acceptance failed; inspect the sanitized JSON report." >&2; exit 1; }
+[[ "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 && "$INTEGRATION_CODE" == 0 && "${DRILL_CODE:-0}" == 0 ]] || { echo "Ubuntu VM acceptance failed; inspect the sanitized JSON report." >&2; exit 1; }
 python3 - "$REPORT" <<'PY'
 import json, sys
 if json.load(open(sys.argv[1])).get("passed") is not True:

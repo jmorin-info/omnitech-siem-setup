@@ -1,0 +1,102 @@
+{
+  "titre": "OMNI - Authentification legacy M365 (bypass MFA) - T1078.004",
+  "critique": true,
+  "mitre": "T1078.004",
+  "justification": "Protocole hérité contournant la MFA : valeurs entre guillemets combinées par OR.",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "event_source:m365 AND m365_type:signin AND event_action:connexion_reussie AND client_app:(\"Other clients\" OR \"IMAP4\" OR \"POP3\")",
+    "streams": [
+      "OMNI - M365"
+    ],
+    "group_by": [
+      "user"
+    ],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 1.0
+        }
+      }
+    },
+    "search_within_ms": 3600000,
+    "execute_every_ms": 600000
+  },
+  "cas": [
+    {
+      "nom": "connexion IMAP4 réussie",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "jdupont"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - M365",
+          "age_s": 60,
+          "champs": {
+            "event_source": "m365",
+            "m365_type": "signin",
+            "event_action": "connexion_reussie",
+            "client_app": "IMAP4",
+            "user": "jdupont"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "client moderne",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - M365",
+          "age_s": 60,
+          "champs": {
+            "event_source": "m365",
+            "m365_type": "signin",
+            "event_action": "connexion_reussie",
+            "client_app": "Browser",
+            "user": "jdupont"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "échec IMAP4",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - M365",
+          "age_s": 60,
+          "champs": {
+            "event_source": "m365",
+            "m365_type": "signin",
+            "event_action": "echec_connexion",
+            "client_app": "IMAP4",
+            "user": "jdupont"
+          }
+        }
+      ]
+    }
+  ]
+}

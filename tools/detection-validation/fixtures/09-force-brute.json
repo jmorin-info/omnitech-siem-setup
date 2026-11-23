@@ -1,0 +1,140 @@
+{
+  "titre": "OMNI - Force brute (>=10 échecs / compte / 10 min)",
+  "critique": true,
+  "mitre": "T1110.001",
+  "justification": "Force brute sur un compte : seuil, regroupement par utilisateur et liste d'exclusions (comptes machine, comptes techniques).",
+  "capture": "2026-11-22, GET /api/events/definitions (production)",
+  "definition": {
+    "query": "event_id:4625 AND logon_fail:1 AND NOT user:*$ AND NOT user:(ninjaone OR ADSyncMSA_* OR sealtoagrid OR Invité OR Guest)",
+    "streams": [
+      "OMNI - Windows Security"
+    ],
+    "group_by": [
+      "user"
+    ],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 10.0
+        }
+      }
+    },
+    "search_within_ms": 600000,
+    "execute_every_ms": 600000
+  },
+  "cas": [
+    {
+      "nom": "10 échecs sur le même compte",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "jdupont"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "event_id": "4625",
+            "logon_fail": 1,
+            "user": "jdupont"
+          },
+          "repeter": 10,
+          "pas_s": 20
+        }
+      ]
+    },
+    {
+      "nom": "9 échecs : sous le seuil",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "event_id": "4625",
+            "logon_fail": 1,
+            "user": "jdupont"
+          },
+          "repeter": 9,
+          "pas_s": 20
+        }
+      ]
+    },
+    {
+      "nom": "compte machine (se termine par $)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "event_id": "4625",
+            "logon_fail": 1,
+            "user": "BX-PC-01$"
+          },
+          "repeter": 12,
+          "pas_s": 10
+        }
+      ]
+    },
+    {
+      "nom": "compte technique exclu (ninjaone)",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "event_id": "4625",
+            "logon_fail": 1,
+            "user": "ninjaone"
+          },
+          "repeter": 12,
+          "pas_s": 10
+        }
+      ]
+    },
+    {
+      "nom": "10 échecs répartis sur 10 comptes",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Windows Security",
+          "age_s": 60,
+          "champs": {
+            "event_id": "4625",
+            "logon_fail": 1,
+            "user": "user{i}"
+          },
+          "repeter": 10,
+          "pas_s": 10
+        }
+      ]
+    }
+  ]
+}

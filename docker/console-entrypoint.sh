@@ -14,7 +14,7 @@ load_file_secret() {
   if [[ -n "$f" ]]; then
     [[ -r "$f" ]] || { echo "Unreadable secret file: $file_variable" >&2; return 1; }
     printf -v "$1" '%s' "$(cat -- "$f")"
-    export "$1"
+    export "${1?}"
   fi
   return 0
 }

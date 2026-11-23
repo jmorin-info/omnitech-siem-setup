@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Patch v2 (11/11/2026) de omni-alert-triage et omni-alert-digest. Idempotent : chaque bloc n'est applique qu'une fois
 # (marqueur "v2-20261111"). Echoue (code 1) sans rien ecrire si un point d'ancrage attendu est introuvable.
-import re, sys
+import sys
 T, D = "/usr/local/sbin/omni-alert-triage", "/usr/local/sbin/omni-alert-digest"
 t = open(T, encoding="utf-8").read(); d = open(D, encoding="utf-8").read()
 def rep(src, old, new, label):

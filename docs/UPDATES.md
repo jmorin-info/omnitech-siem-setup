@@ -299,10 +299,27 @@ résultat d'`oms-maj-siem` avec son prochain passage, ainsi que la date du **der
 réel** (hors simulation) : au-delà de 8 jours, un passage hebdomadaire a été manqué.
 `oms-maj-siem.timer` est en `Persistent=false` : si la machine est arrêtée ou redémarre
 pendant la fenêtre du dimanche, le passage est perdu sans rattrapage ni alerte ; ce contrôle
-le rend visible. Le rattrapage automatique au démarrage (`Persistent=true`) n'est pas
-recommandé en l'état, car le script peut redémarrer la machine : il ferait alors une mise à
-jour et un redémarrage à une heure imprévue. Si un rattrapage est voulu, il faut d'abord
-ajouter au script un contrôle de fenêtre horaire (décision de l'administrateur).
+le rend visible.
+
+**Règle retenue le 22/11/2026 : `Persistent=false` est conservé.** Avec le redémarrage
+automatique maintenu, c'est la règle la plus sûre :
+
+- `Persistent=true` lancerait le passage manqué dès le démarrage suivant, donc à une heure
+  imprévue, souvent en journée : mise à jour de la pile puis redémarrage 60 s après la fin si
+  `/var/run/reboot-required` existe. Le cas le plus probable de passage manqué est un arrêt
+  non planifié (coupure, comme le 26/06/2026) : le rattrapage enchaînerait alors une mise à
+  jour et un second redémarrage sur une machine qui vient juste de reprendre ;
+- le coût d'un passage manqué est borné : les correctifs de sécurité Debian restent appliqués
+  chaque jour par `unattended-upgrades` (`apt-daily-upgrade.timer`, indépendant de ce
+  timer) ; seuls la pile épinglée, les autres paquets et le redémarrage attendent une
+  semaine ;
+- le passage manqué est visible : `omni-update-status.py --layer os` signale un dernier
+  passage réel de plus de 8 jours.
+
+Pour rattraper sans attendre, lancer `sudo systemctl start oms-maj-siem.service` à un moment
+choisi (mêmes contrôles ; redémarrage possible). Un rattrapage automatique dans une fenêtre
+de nuit (second créneau conditionné à l'absence de passage dans la semaine) demanderait une
+modification d'`oms-maj-siem` ; il n'est pas implémenté.
 Constat du 21/11/2026 : le passage du 15/11 a bien eu lieu (démarrage 04:38:41, journal
 `/var/log/oms-maj-siem.log` et `journalctl -u oms-maj-siem.service`) ; le redémarrage du
 timer à 04:43 correspond au redémarrage de la machine qu'il a lui-même déclenché. Attention : `oms-maj-siem --simuler`
@@ -518,8 +535,14 @@ dans `omni-update.py` (`migration_review_required`).
   une source ne renvoie rien, le robot conserve l'ancien fichier : une source morte se voit
   donc à l'âge du fichier, pas à son contenu. La couche signale tout fichier de plus de
   3 jours. Constat du 21/11/2026 : `ti-mal-domain.csv` est figé depuis le 21/10/2026
-  (553 domaines) ; la source URLhaus ne fournit plus de données (HTTP 410 relevé par l'audit
-  de cohérence). Il faut remplacer l'adresse du flux dans `omni-ti-feeds` (chantier détection).
+  (553 domaines) : les exports publics d'URLhaus (`downloads/text_recent`, comme `csv_recent`,
+  `hostfile` et `text_online`) répondent HTTP 410 et l'API URLhaus répond 401 sans clé
+  (vérifié le 22/11/2026). `omni-ti-feeds` interroge désormais l'API authentifiée
+  (`urlhaus-api.abuse.ch/v1/urls/recent/`, 1 000 URL récentes) avec la clé abuse.ch gratuite
+  `ABUSECH_AUTH_KEY` (ou `THREATFOX_AUTH_KEY`, la même clé) de `/etc/default/omni-ti-feeds`,
+  vide en production au 22/11/2026. Sans clé, le robot l'écrit dans son journal et garde
+  l'ancien fichier. Le format de réponse de l'API est repris de sa documentation et testé
+  hors ligne ; il n'a pas été vérifié avec une vraie clé.
 - **Définitions Graylog** (règles de pipeline, alertes, tableaux de bord) : provisionnées par
   les scripts numérotés, idempotents, lancés explicitement ; elles sont sauvegardées
   chaque nuit dans l'archive de configuration. Aucune comparaison automatique dépôt / Graylog
@@ -547,8 +570,10 @@ dans `tmux`.
 État constaté le 21/11/2026 :
 
 - `omni-backup-config` (`30-backup-config.sh`, 03:15) : `mongodump`, configurations,
-  en-tête LUKS, archive chiffrée vérifiée (déchiffrement, lecture, présence des collections
-  critiques) puis copiée sur le partage ; dernier passage en succès le 21/11/2026 à 03:21.
+  en-tête LUKS (en fait absent de l'archive jusqu'à la correction du 22/11/2026, voir
+  `docs/exploitation/RESTAURATION-COMPLETE.md` §7), archive chiffrée vérifiée (déchiffrement,
+  lecture, présence des collections critiques) puis copiée sur le partage ; dernier passage
+  en succès le 21/11/2026 à 03:21.
 - `oms-snap-siem` (01:30) : snapshot OpenSearch sélectif ; `oms-snap-siem-test` (mercredi
   11:00) restaure un index dans un index temporaire et compare le nombre de documents
   (dernier test OK le 18/11/2026).

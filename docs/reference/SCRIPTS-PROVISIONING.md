@@ -60,7 +60,7 @@ paquets installés.
 | 19 | `19-vsphere.sh` | Collecte ESXi/vCenter : inputs 1516, jeu d'index, pipeline | oui | 06 | inputs « vSphere » 1516, pipeline « OMNI - vSphere » | optionnel |
 | 21 | `21-alert-hygiene.sh` | Surcouche anti-tempête des définitions (délais de grâce, clés) | oui | 13 (à relancer après chaque 13) | n.v. | optionnel |
 | 22 | `tools/ponctuel/22-alert-routing.sh` | Ancien routage mail/Teams à deux niveaux | non déclaré | sans objet | sans objet | **archivé** le 22/11/2026 (remplacé par 38-alert-triage) |
-| 26 | `26-graylog-objets-manuels.sh` | Recrée les objets Graylog posés à la main en novembre 2026 (détections balayage IKE, scan WAF 404, lecture LAPS ; règles `omni-v3-laps-lecture*` et les 15 `omni-fp-26-*` ; raccordement à leurs pipelines). Plan en lecture seule par défaut, `--apply` pour créer ; un objet présent n'est jamais modifié. Sources : `objets-graylog/`, `tools/alertes-v2/regles/` | oui (test hors ligne `tests/test_graylog_objets_manuels.py`) | 36, 38, 49-expo-port-class, 81, `tools/omni-v3/v3_build.py` ; **à relancer après 49-expo-port-class, 49-enrich-lots, 81 et v3_build.py**, qui réécrivent la source de leur pipeline | plan du 22/11/2026 : 37 objets « déjà présent », aucun écart | optionnel |
+| 26 | `26-graylog-objets-manuels.sh` | Recrée les définitions posées à la main en novembre 2026 (balayage IKE, scan WAF 404, lecture LAPS) et contrôle, sans écrire, les règles `omni-v3-laps-lecture*` et les 15 `omni-fp-26-*` ainsi que leur raccordement (ils sont posés par le script propriétaire de chaque pipeline). Plan en lecture seule par défaut, `--apply` pour créer les définitions ; un objet présent n'est jamais modifié. Sources : `objets-graylog/` (inventaire `raccordements.txt`), `tools/alertes-v2/regles/` | oui (tests hors ligne `tests/test_graylog_objets_manuels.py`, `tests/test_pipelines_versionnes.py`) | 36, 38, 49-expo-port-class, 81, `tools/omni-v3/v3_build.py` ; plus de contrainte d'ordre depuis le 22/11/2026 | plan du 22/11/2026 : 37 objets « déjà présent », aucun écart | optionnel |
 | 27 | `27-harden-services.sh` | Durcissement systemd de masse des services `omni-*` et `oms-*` | oui | services installés | fichiers `hardening.conf` présents | optionnel |
 | 28 | `28-vpn-remip-ti.sh` | Détection T1133 : connexion SSL-VPN depuis une IP malveillante | oui | 12 | définition « Login SSL-VPN depuis IP malveillante ou Tor (T1133) » | optionnel |
 | 29 | `29-drift-check.sh` | Contrôle de dérive dépôt/production, minuterie et alerte | oui | 06, 21, 30 | `omni-drift-check.timer` | optionnel |
@@ -92,8 +92,8 @@ paquets installés.
 | 47 | `47-detections-extra.sh` | Détections complémentaires (GPO, etc.) en pipeline dédié | oui | 12, 37 | pipeline « OMNI - Detections complementaires » | optionnel |
 | 48 | `48-m365-fail-codes.sh` | Libellés des codes d'échec de connexion M365 | oui | 12 | pipeline « OMNI - Enrichissement M365 » | optionnel |
 | 48 | `48-ndr-scan.sh` | Détection de balayage réseau interne | oui | 21, 37 | `omni-ndr-scan.timer` | optionnel |
-| 49 | `49-enrich-lots.sh` | Enrichissements lots 1 et 2 (hors heures, classes de comptes) | oui | 12, 37 | pipelines « Enrichissement off-hours », « Enrichissement comptes » | optionnel |
-| 49 | `49-expo-port-class.sh` | Exposition Internet et classe de port à risque (FortiGate) | oui | 12 | pipeline « OMNI - Exposition reseau » | optionnel |
+| 49 | `49-enrich-lots.sh` | Enrichissements lots 1 et 2 (hors heures, classes de comptes) ; inclut les règles versionnées d'`objets-graylog/raccordements.txt` dans « OMNI - Exposition reseau » (`--source-pipeline` l'affiche hors ligne) | oui | 12, 37 | pipelines « Enrichissement off-hours », « Enrichissement comptes », « OMNI - Exposition reseau » | optionnel |
+| 49 | `49-expo-port-class.sh` | Exposition Internet et classe de port à risque (FortiGate) ; inclut les règles versionnées d'`objets-graylog/raccordements.txt` (`--source-pipeline` affiche la source hors ligne) | oui | 12 | pipeline « OMNI - Exposition reseau » | optionnel |
 | 49 | `49-ldap-recon.sh` | Détection de reconnaissance LDAP (BloodHound, SharpHound) | oui | collecteur `omni-ldap-recon` | `omni-ldap-recon.timer` | optionnel |
 | 50 | `50-enrich-lot3.sh` | Lot 3 : GPP, Kerberos RC4, ajout administrateur local, collecteurs | oui | 12, 37 | pipeline « OMNI - Detections Lot3 » | optionnel |
 | 51 | `51-enrich-lot4.sh` | Lot 4 : WMI latéral, shadow credentials, abus AD CS | oui | 12, 37 | pipeline « OMNI - Detections Lot4 » | optionnel |
@@ -118,7 +118,7 @@ paquets installés.
 | 65 | `65-mobile-pwa.sh` | Première version de la PWA mobile et de son backend | oui | 04, 05, 12, 13 | `omni-mobile-api.service` actif | optionnel (publication reprise par 71) |
 | 66 | `66-threatintel.sh` | Flux IOC abuse.ch (Feodo, URLhaus) en tables de correspondance | oui | 11, 12, 37 | pipeline « OMNI - Threat Intel IOC », `omni-ti-feeds.timer` | optionnel |
 | 67 | `67-detection-coverage.sh` | Détections ciblées sur les lacunes ATT&CK (inspirées Sigma) | oui | 12, 37 | pipeline « OMNI - Couverture ATT&CK etendue » | optionnel |
-| 68 | `68-iso-evidence.sh` | Dossier de preuves ISO 27001 mensuel | oui | API, OpenSearch | `omni-iso-evidence.timer` (appelle le script de la copie `/root`) | optionnel |
+| 68 | `68-iso-evidence.sh` | Dossier de preuves ISO 27001 mensuel | oui | API, OpenSearch | `omni-iso-evidence.timer` (drop-in `50-depot-reference.conf` : script du dépôt canonique, écriture limitée à `docs/archives/preuves-iso`) | optionnel |
 | 69 | `69-ad-response.sh` | Actionneur de désactivation de compte AD (LDAPS, garde-fous) | oui | compte de service | `omni-ad-disable` présent | optionnel |
 | 70 | `70-leak-github.sh` | Surveillance de fuites sur GitHub | oui | jeton GitHub | `omni-leak-github.timer` | optionnel |
 | 71 | `71-soc-console.sh` | Console SOC complète, backend et routes nginx | non déclaré (préserve la configuration) | 05 | `/var/www/siem-soc` publié | socle |
@@ -131,7 +131,7 @@ paquets installés.
 | 78 | `78-detection-tuning.sh` | Câblage de l'alerte d'arrêt des services de sécurité | oui | 47, 13 | n.v. | optionnel |
 | 79 | `79-interne-indexset.sh` | Jeu d'index dédié au stream « OMNI - Interne SIEM » | oui | 21 | jeu d'index `omni-interne` | ponctuel (correctif appliqué) |
 | 80 | `80-detection-extra2.sh` | Détecteurs ATT&CK haute fidélité (Defender, etc.) | oui | 12, 37, 13 | pipeline « OMNI - Detections extra2 » | optionnel |
-| 81 | `81-fp-allowlist.sh` | Liste d'autorisation des motifs bénins (étape 25) | oui | 12, 37 | pipeline « OMNI - Allowlist FP » | optionnel |
+| 81 | `81-fp-allowlist.sh` | Liste d'autorisation des motifs bénins (étape 25) ; inclut les règles versionnées `omni-fp-26-*` d'`objets-graylog/raccordements.txt` (`--source-pipeline` affiche la source hors ligne) | oui | 12, 37 | pipeline « OMNI - Allowlist FP » | optionnel |
 | 82 | `82-graylog-analytics-dashboard.sh` | Tableau de bord « OMNI - Analytics » | oui | 21 | tableau de bord « OMNI - Analytics » | optionnel |
 | 83 | `83-retention-consolidee.sh` | Augmentation du nombre d'index conservés, sans changement de période ni de stratégie | oui (plan par défaut, `--apply` pour écrire) | 10, 52, 55, 63, 79 | jeux `omni-*` en rotation héritée (P1D ou P1M), sans hiérarchisation | actif (révisé le 22/11/2026, voir note) |
 | 84 | `84-dashboards-triage-site.sh` | Tableau de bord « OMNI - Triage & Multi-site » | oui | 82, 97-multisite-soar | tableau de bord présent | optionnel |
@@ -153,7 +153,7 @@ paquets installés.
 | 97 | `97-enrich-alerts.sh` | Enrichit le contenu des alertes (regroupement, champs) | oui | API | n.v. | ponctuel |
 | 97 | `97-multisite-soar.sh` | Dimension site FortiGate (BDX/IV/LC) et alimentation SOAR WAF | oui | 36, 12, 93 | table `omni-fortigate-site` | optionnel |
 | 98 | `98-index-templates.sh` | Bridage du mapping des index à fort volume | oui | OpenSearch | gabarit non posé (préfixes vides par choix documenté) | outil (non appliqué) |
-| 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré, sans mode plan | 06 | Réinstallé le 22/11/2026 selon le compte rendu opérateur : entrée, jeu d'index, stream, pipeline et alerte ; réception des journaux de la source encore à valider | optionnel ; ne pas relancer pour une mise à jour de code |
+| 99 | `99-cert-orchestrator.sh` | Source Cert Orchestrator (GELF UDP 12201) | non déclaré, sans mode plan | 06 | Réinstallé le 22/11/2026 selon le compte rendu opérateur : entrée, jeu d'index, stream, pipeline et alerte ; réception des journaux de la source encore à valider. Source `cert_orchestrator` et index set `P1M` x 3 depuis le 22/11/2026 ; production antérieure : `tools/maj-cert-orchestrator-prod.sh` | optionnel ; ne pas relancer pour une mise à jour de code |
 
 Les numéros 20 et 23 à 25 ne sont pas attribués. Les scripts 15, 22, 31 et 44,
 retirés, sont archivés sous [`tools/ponctuel/`](../../tools/ponctuel/README.md#scripts-retirés)
@@ -292,8 +292,9 @@ tant que les contraintes ci-dessous ne sont pas levées.
 
 - Trois unités systemd de production appellent des scripts par leur chemin :
   `omni-backup-config.service` (30), `omni-disk-guard.service` (32) et
-  `omni-iso-evidence.service` (68), toutes vers la copie
-  `/root/omnitech-siem-setup`. Elles doivent être mises à jour dans la même
+  `omni-iso-evidence.service` (68) : unités de base vers la copie
+  `/root/omnitech-siem-setup`, repointées vers le dépôt canonique par leurs drop-ins
+  `50-depot-reference.conf`. Unités et drop-ins doivent être mis à jour dans la même
   livraison.
 - `tools/install-platform.py` (liste des phases), `manager/inventory.py`
   (classement par préfixe) et les tests associés citent les noms actuels.

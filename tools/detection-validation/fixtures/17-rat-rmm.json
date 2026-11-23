@@ -1,0 +1,169 @@
+{
+  "titre": "OMNI - Logiciel d'acces distant non autorise (RAT/RMM) - T1219",
+  "critique": true,
+  "mitre": "T1219",
+  "justification": "Outil d'accès distant non autorisé (constaté en production sur bx-hl-gbe-pc2) ; exclusions par hôte et par agent RMM légitime. Requête insensible à la casse depuis 11/2026 : *anydesk* ne trouvait pas C:\\Program Files (x86)\\AnyDesk\\AnyDesk.exe (300 messages manqués sur 30 jours).",
+  "capture": "2026-11-22, GET /api/events/definitions (production) + cible de tools/maj-detections-2026-11/cibles.json",
+  "definition": {
+    "query": "event_source:sysmon AND winlogbeat_winlog_event_id:1 AND (winlogbeat_winlog_event_data_OriginalFileName:(\"AnyDesk.exe\" OR \"RustDesk.exe\" OR \"ngrok.exe\") OR winlogbeat_winlog_event_data_Image:(/.*[aA][nN][yY][dD][eE][sS][kK].*/ OR /.*[sS][cC][rR][eE][eE][nN][cC][oO][nN][nN][eE][cC][tT].*/ OR /.*[sS][pP][lL][aA][sS][hH][tT][oO][pP].*/ OR /.*[aA][tT][eE][rR][aA].*/ OR /.*[rR][uU][sS][tT][dD][eE][sS][kK].*/ OR /.*[gG][oO][tT][oO][aA][sS][sS][iI][sS][tT].*/ OR /.*[rR][eE][mM][oO][tT][eE][uU][tT][iI][lL][iI][tT][iI][eE][sS].*/ OR /.*[zZ][oO][hH][oO][aA][sS][sS][iI][sS][tT].*/ OR /.*[aA][cC][tT][iI][oO][nN]1.*/ OR /.*[pP][uU][lL][sS][eE][wW][aA][yY].*/ OR /.*[qQ][uU][iI][cC][kK][aA][sS][sS][iI][sS][tT].*/)) AND NOT winlogbeat_winlog_event_data_Image:*ninjarmm* AND NOT source:bx\\-hl\\-*",
+    "streams": [
+      "OMNI - Sysmon"
+    ],
+    "group_by": [
+      "source"
+    ],
+    "series": [
+      {
+        "type": "count",
+        "id": "count()",
+        "field": null
+      }
+    ],
+    "conditions": {
+      "expression": {
+        "expr": ">=",
+        "left": {
+          "expr": "number-ref",
+          "ref": "count()"
+        },
+        "right": {
+          "expr": "number",
+          "value": 1.0
+        }
+      }
+    },
+    "search_within_ms": 600000,
+    "execute_every_ms": 300000
+  },
+  "cas": [
+    {
+      "nom": "AnyDesk lancé (OriginalFileName)",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "BX-PC-07"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_OriginalFileName": "AnyDesk.exe",
+            "winlogbeat_winlog_event_data_Image": "C:\\Users\\x\\Downloads\\AnyDesk.exe",
+            "source": "BX-PC-07"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "chemin en minuscules (rustdesk)",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "BX-PC-08"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_Image": "c:\\program files\\rustdesk\\rustdesk.exe",
+            "source": "BX-PC-08"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "chemin en casse Windows sans OriginalFileName (AnyDesk.exe)",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "IV-TECH-FMO-LT"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_Image": "C:\\Program Files (x86)\\AnyDesk\\AnyDesk.exe",
+            "source": "IV-TECH-FMO-LT"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "Assistance rapide Windows (QuickAssist, casse mixte)",
+      "attendu": {
+        "evenements": 1,
+        "cles": [
+          [
+            "BX-PC-10"
+          ]
+        ]
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_Image": "C:\\Program Files\\WindowsApps\\MicrosoftCorporationII.QuickAssist_2.0.35.0_x64__8wekyb3d8bbwe\\Microsoft.RemoteAssistance.QuickAssist\\QuickAssist.exe",
+            "source": "BX-PC-10"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "hôte exclu bx-hl-*",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_OriginalFileName": "AnyDesk.exe",
+            "source": "bx-hl-gbe-pc2"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "agent NinjaRMM légitime",
+      "attendu": {
+        "evenements": 0
+      },
+      "documents": [
+        {
+          "flux": "OMNI - Sysmon",
+          "age_s": 60,
+          "champs": {
+            "event_source": "sysmon",
+            "winlogbeat_winlog_event_id": "1",
+            "winlogbeat_winlog_event_data_Image": "c:\\programdata\\ninjarmm\\anydesk\\ninjarmm-anydesk.exe",
+            "source": "BX-PC-09"
+          }
+        }
+      ]
+    }
+  ]
+}

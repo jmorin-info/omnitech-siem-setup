@@ -25,7 +25,7 @@
 #   Idempotent : relance sans effet si un prefixe est deja consolide (1 index).
 # =============================================================================
 set -uo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." || exit 1
 source ./00-vars.env
 source ./lib-graylog.sh
 [[ $EUID -eq 0 ]] || die "root requis"

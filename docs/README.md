@@ -60,9 +60,11 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 |---|---|
 | [Procédure de gestion des incidents](exploitation/PROCEDURE-INCIDENT.md) | Détection, évaluation, réponse, clôture |
 | [Playbooks SOAR](exploitation/SOAR-PLAYBOOKS.md) | Réponse automatisée, garde-fous, déblocage |
+| [Indicateurs SOC](exploitation/INDICATEURS-SOC.md) | Volume d'alertes, MTTD, MTTR, faux positifs, couverture ATT&CK : définitions, outil, page de la console, lacunes |
 | [Détection avancée et réponse automatisée](exploitation/REPONSE-AUTOMATISEE.md) | Compte canari AD et SOAR |
 | [Restauration depuis une sauvegarde](exploitation/RESTORE.md) | Restauration complète de la configuration |
 | [Plan de reconstruction (PRA)](exploitation/PRA-RECONSTRUCTION-SIEM.md) | RTO/RPO, scénarios, validation, journal des tests |
+| [Restauration complète chronométrée](exploitation/RESTAURATION-COMPLETE.md) | Couverture des sauvegardes, intrants mesurés, objectifs RTO/RPO, exercice sur VM isolée |
 | [Intégrité et valeur probante des journaux](securite-conformite/PROCEDURE-INTEGRITE-PREUVE.md) | Registre chaîné, conservation des preuves |
 | [Incident du 21/11/2026 : tests de la console en production](archives/INCIDENT-CONSOLE-2026-11-21.md) | Indisponibilité du backend, restauration, message de test conservé dans Graylog |
 
@@ -104,6 +106,7 @@ Corpus documentaire du SMSI pour le périmètre SIEM (référentiel ISO/IEC
 | [Moteur de détection](detection/DETECTIONS.md) | Fonctionnement des détections (en anglais) |
 | [Couverture MITRE ATT&CK](detection/COUVERTURE-MITRE-ATTACK.md) | Carte de couverture, plan de validation par technique |
 | [Backlog de détection](detection/DETECTION-BACKLOG.md) | Lacunes ATT&CK identifiées et propositions |
+| [Validation continue des détections](detection/VALIDATION-DETECTIONS.md) | Contrôle hebdomadaire en lecture seule des définitions actives, fixtures, vivacité |
 | [OMNI Sentinel](architecture/OMNI-SENTINEL.md) | Défense proactive : architecture et gouvernance |
 | [Plan de leurres](detection/DECEPTION-PLAN.md) | Semis des honeytokens |
 | [Calque ATT&CK Navigator](detection/mitre-navigator-layer.json) | Fichier généré par `57-mitre-coverage.sh` |

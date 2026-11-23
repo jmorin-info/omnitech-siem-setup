@@ -12,7 +12,7 @@
 #     STD     : ecrit /var/lib (state des robots).
 #     WEB     : STD + /var/www/siem-kit + SupplementaryGroups=www-data.
 #     LOOKUP  : STD + /etc/graylog/lookup (CSV threat-intel/dhcp).
-#     DOCS    : STD + /opt/omni-siem/repository/docs (dossier de preuves ISO).
+#     DOCS    : STD + /opt/omni-siem/repository/docs/archives/preuves-iso (preuves ISO).
 #     BACKUPS : STD + /var/backups/siem (rapport hebdo).
 #   NON durcis (privileges incompressibles) : omni-backup-config et
 #   omni-cert-renew montent un partage CIFS (CAP_SYS_ADMIN) et/ou renouvellent
@@ -88,7 +88,9 @@ for u in "${STD_UNITS[@]}"; do
     omni-ti-feeds|omni-fortidhcp-fetch)
       emit "${unit}" "/var/lib /etc/graylog/lookup" ;;
     omni-iso-evidence)
-      emit "${unit}" "/var/lib ${PWD}/docs" ;;
+      # Seul le dossier de preuves est inscriptible (68-iso-evidence.sh), aligné sur
+      # le drop-in 50-depot-reference.conf ; ${PWD} = dépôt canonique.
+      emit "${unit}" "/var/lib ${PWD}/docs/archives/preuves-iso" ;;
     omni-weekly-report)
       emit "${unit}" "/var/lib /var/backups/siem" ;;
     *)

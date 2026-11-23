@@ -76,7 +76,7 @@ security:
 EOF
 systemctl enable --now mongod
 echo "    Attente de mongod..."
-for i in $(seq 1 24); do
+for _ in $(seq 1 24); do
   mongosh --quiet --eval 'db.runCommand({ping:1})' >/dev/null 2>&1 && break
   sleep 5
 done
@@ -91,7 +91,7 @@ catch (e) {
   print("rs0 initialise.");
 }' || true
 echo "    Attente du PRIMARY rs0 avant la creation des comptes..."
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   mongosh --quiet --eval 'if (!db.hello().isWritablePrimary) { quit(1); }' >/dev/null 2>&1 && break
   sleep 2
 done

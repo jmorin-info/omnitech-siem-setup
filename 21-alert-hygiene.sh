@@ -260,12 +260,28 @@ ensure_def_simple "OMNI - Backup config SIEM en échec" \
   "event_action:backup_config_echec" "${COND_GE1}" 1800000 1800000 14400000
 ensure_def_simple "OMNI - Backup config SIEM absent (>26h)" \
   "event_action:backup_config_ok" "${COND_LT1}" 93600000 21600000 43200000
-# Sauvegarde QUOTIDIENNE (siem-backup.sh, durci 02/07/2026 apres 17 jours
-# d'echec silencieux des snapshots) : echec explicite + detection d'absence.
+# Snapshots OpenSearch selectifs (oms-snap-siem, 01:30). Il reprend les evenements
+# GELF de l'ancien siem-backup.sh (event_source=siem_backup, backup_daily_ok/_echec,
+# champ backup_outil=oms-snap-siem) : l'alerte d'echec, inchangee, couvre ses echecs.
 ensure_def_simple "OMNI - Sauvegarde quotidienne SIEM en échec" \
   "event_action:backup_daily_echec" "${COND_GE1}" 1800000 1800000 14400000
-ensure_def_simple "OMNI - Sauvegarde quotidienne SIEM absente (>26h)" \
-  "event_action:backup_daily_ok" "${COND_LT1}" 93600000 21600000 43200000
+# Absence : detection attribuee a oms-snap-siem. L'ancienne definition « Sauvegarde
+# quotidienne SIEM absente (>26h) » (siem-backup.timer, arrete volontairement en
+# aout 2026, a sonne a tort jusqu'au demarrage d'oms-snap-siem) n'est plus creee ni
+# touchee ici ; l'administrateur la desactive ou la supprime lui-meme. On ne la
+# renomme pas : un renommage par titre creerait un doublon.
+ensure_def_simple "OMNI - Snapshot OpenSearch absent (>26h)" \
+  'event_action:backup_daily_ok AND backup_outil:"oms-snap-siem"' "${COND_LT1}" 93600000 21600000 43200000
+OBSOLETE="OMNI - Sauvegarde quotidienne SIEM absente (>26h)"
+OBS_ID="$(event_def_id "${OBSOLETE}")"
+if [[ -n "${OBS_ID}" && "${OBS_ID}" != "null" ]]; then
+  OBS_ETAT="$(api_get "/events/definitions/${OBS_ID}" | jq -r '.state // "?"')"
+  if [[ "${OBS_ETAT}" == "DISABLED" ]]; then
+    skip "'${OBSOLETE}' obsolete, desactivee (${OBS_ID}) : non modifiee"
+  else
+    warn "'${OBSOLETE}' obsolete mais ${OBS_ETAT} (${OBS_ID}) : a desactiver par l'administrateur (non modifiee ici)"
+  fi
+fi
 # Sauvegarde MongoDB native (omni-mongo-backup, 02:40, décision du 22/11/2026).
 ensure_def_simple "OMNI - Sauvegarde MongoDB en échec" \
   "event_action:backup_mongo_echec" "${COND_GE1}" 1800000 1800000 14400000
@@ -289,10 +305,12 @@ ensure_def_simple "OMNI - Certificat SIEM expire bientôt (<45j)" \
 ensure_def_simple "OMNI - Dérive dépôt/production détectée" \
   'event_source:siem_drift AND alert_tag:drift_ecart' "${COND_GE1}" 604800000 604800000 604800000
 
-# Re-pointage idempotent des 4 definitions vers le stream interne (au cas ou
-# elles auraient ete creees avant le stream, sur le mauvais stream)
+# Re-pointage idempotent des definitions vers le stream interne (au cas ou
+# elles auraient ete creees avant le stream, sur le mauvais stream). Le PUT
+# ?schedule=true REACTIVE une definition desactivee : n'y mettre aucune definition
+# obsolete (d'ou le retrait de « Sauvegarde quotidienne SIEM absente (>26h) »).
 for T in "OMNI - Backup config SIEM en échec" "OMNI - Backup config SIEM absent (>26h)" \
-         "OMNI - Sauvegarde quotidienne SIEM en échec" "OMNI - Sauvegarde quotidienne SIEM absente (>26h)" \
+         "OMNI - Sauvegarde quotidienne SIEM en échec" "OMNI - Snapshot OpenSearch absent (>26h)" \
          "OMNI - Disque SIEM >80% (/data)" "OMNI - PURGE D'URGENCE retention (disque presque plein)" \
          "OMNI - Rapport hebdomadaire en échec"; do
   ID="$(event_def_id "${T}")"

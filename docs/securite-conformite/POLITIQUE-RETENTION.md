@@ -38,6 +38,7 @@ qui signale aussi les jeux dont la rétention en place diffère de ce tableau).
 | Vaultwarden (coffre MDP)        | `omni-vaultwarden` | 90 j | Coffre de mots de passe : échecs d'auth, accès admin. **Index dédié** pour éviter que le volume/rejeu n'évince les events internes du SIEM |
 | FortiManager (admin/config)     | `omni-fortimanager` | 90 j | Journaux d'administration/configuration FAZ (changements, accès admin). **Index dédié** (créé par `63`). 90 j sous contrainte de capacité (à relever si besoin de traçabilité longue) |
 | Interne SIEM (UEBA/ML/santé)    | `omni-interne`   | 90 j   | Événements réinjectés : scores UEBA/ML, SLA de collecte, santé robots, incidents XDR. 90 j couvrent l'analyse de tendance et l'entraînement ML (fenêtres ≤ 7 j). **Index dédié** (créé par `79`) |
+| Cert Orchestrator (BX-IT-CERT-VM) | `omni-cert`    | 90 j   | Erreurs de renouvellement et de demande de certificats (source `cert_orchestrator`). Faible volume : rotation `P1M`, 3 index (`99-cert-orchestrator.sh`, `83-retention-consolidee.sh`) |
 
 Sources annexes :
 - **NPS / RADIUS** : champs mappés et index prêts côté SIEM, mais la collecte

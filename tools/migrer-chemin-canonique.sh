@@ -83,7 +83,11 @@ else
   bloc "lib-platform.sh ne normalise pas /api : omni-disk-guard ne doit pas être repointé (purge d'urgence inopérante)"
 fi
 [[ -f "$CANON/mobile/requirements.txt" ]] && ok "mobile/requirements.txt présent" || bloc "mobile/requirements.txt absent"
-info "omni-iso-evidence n'est pas repointé : il écrit dans docs/ de son répertoire de travail (sortie dédiée à décider)"
+if [[ -d "$CANON/docs/archives/preuves-iso" ]]; then
+  ok "dossier de preuves ISO présent (seule écriture d'omni-iso-evidence dans le dépôt)"
+else
+  bloc "docs/archives/preuves-iso absent de $CANON : omni-iso-evidence échouerait (ReadWritePaths)"
+fi
 
 echo "[5] Références restantes hors outil de déploiement"
 if grep -q "$ANCIEN" "$CANON/mobile/omni-mobile-api.py" 2>/dev/null; then
@@ -128,7 +132,7 @@ if [[ -f /etc/default/omni-mobile ]] && ! grep -q '^MITRE_LOOKUP=' /etc/default/
 fi
 DEPLOY=(env OMNI_SIEM_HOME="$CANON" python3 "$CANON/tools/omni-deploy.py" --home "$CANON")
 "${DEPLOY[@]}" deploy venvs --apply --no-verify
-for service in oms-graph oms-graph-respond oms-ml-anomaly oms-ml-fp oms-xdr omni-backup-config omni-disk-guard omni-mobile-api; do
+for service in omni-iso-evidence oms-graph oms-graph-respond oms-ml-anomaly oms-ml-fp oms-xdr omni-backup-config omni-disk-guard omni-mobile-api; do
   echo "== Repointage de $service"
   "${DEPLOY[@]}" deploy systemd --filtre "/etc/systemd/system/$service.service.d/50-depot-reference.conf" --apply --no-verify
 done
@@ -138,6 +142,6 @@ cat <<EOF
 Migration appliquée. Transactions : ${DEPLOY[*]} history
 L'ancienne copie $ANCIEN est conservée pour le retour arrière.
 Étape 4, après un cycle complet de timers (24 h) sans incident, NON exécutée ici :
-  mv $ANCIEN $ANCIEN.retire-\$(date +%Y%m%d) && ln -s $CANON $ANCIEN
+  bash tools/retirer-ancienne-copie.sh   (plan, puis --apply : contrôles, mv et lien symbolique)
 Étape 5, après 7 jours sans incident : retrait des copies obsolètes (voir docs/DEPLOYMENT.md).
 EOF
