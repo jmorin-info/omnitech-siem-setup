@@ -131,6 +131,8 @@ OMNI_REPO_DIR=/opt/omni-siem/repository
 # Rôles et audit
 SOC_ADMIN_DIR=/var/lib/omni-mobile/admin
 SOC_DEFAULT_ROLE=analyste
+# Apparence de la console (appearance.json et logo), dérivé du dossier de MOBILE_SUBS_FILE
+SOC_APPEARANCE_DIR=/var/lib/omni-mobile/appearance
 # Écritures d'administration limitées aux réseaux internes
 SOC_ADMIN_INTERNAL_ONLY=1
 SOC_ADMIN_NETS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128,fc00::/7
@@ -158,7 +160,7 @@ Sur une installation neuve où le backend tourne sous le compte `omni-console`,
 Paramètres l'indique et l'ajout de faux positifs échoue faute de jeton de triage.
 
 Les chemins d'état (`MOBILE_SUBS_FILE`, `MOBILE_CASES_FILE`, `MOBILE_WATCH_FILE`,
-`SOC_REQ_DIR`, `SOC_ADMIN_DIR`) se lisent dans ce fichier ou, à défaut, dans
+`SOC_REQ_DIR`, `SOC_ADMIN_DIR`, `SOC_APPEARANCE_DIR`) se lisent dans ce fichier ou, à défaut, dans
 l'environnement. Avec `OMNI_TEST_MODE=1` (imposé par la suite de tests), le backend et
 l'exécuteur refusent de démarrer si l'un d'eux vise `/var/lib`, `/etc`, `/var/www`,
 `/var/log`, `/usr` ou `/opt/oms-*`, et aucune copie GELF n'est émise.

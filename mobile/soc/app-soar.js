@@ -52,7 +52,7 @@ window.loadTodo=function(){Promise.all([j("/siem-ops").catch(()=>null),j("/soar"
   const el=$("#todo");if(!el)return;
   el.innerHTML=`<div class="todo"><b>À traiter</b>`+(L.length?L.map(([v,t,p])=>`<span class="tdi tdi-${v}" role="button" tabindex="0" data-onclick="goNav('${p}')" data-onkeydown="socNavKey(event,'${p}')">${esc(t)}</span>`).join(""):`<span class="tdi tdi-ok">Rien d'urgent</span>`)+`</div>`;});};
 window.socTheme=function(v){if(v){try{localStorage.setItem("soc_theme",v)}catch(e){}}
-  let th=v;if(!th){try{th=localStorage.getItem("soc_theme")}catch(e){}}th=th||((window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark");
+  let th=v;if(!th){try{th=localStorage.getItem("soc_theme")}catch(e){}}th=th||window.SOC_THEME_DEFAULT||((window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark");
   document.documentElement.setAttribute("data-theme",th);const b=document.getElementById("themeBtn");if(b)b.textContent=th==="light"?"☾ Sombre":"☀ Clair";};
 socTheme();
 })();

@@ -120,6 +120,7 @@ sauf si `SOC_ADMIN_SELF_APPROVE=1` (déconseillé) ; la console le signale.
 | Détections | Désactiver une détection | fort | API Graylog `PUT /events/definitions/{id}/unschedule` |
 | Paramètres | Triage : `MAIL_SCORE_THRESHOLD` (50-100), `GRAY_SCORE_THRESHOLD` (30-95, inférieur au seuil mail), `TRIAGE_DEDUP_SECONDS` (300-86400), `FP_DEFAULT_TTL_DAYS` (1-90), `KILLCHAIN_COUNT` (2-10), `KILLCHAIN_WINDOW` (300-7200), `MAIL_RECIPIENTS` (1 à 10 adresses) | fort | exécuteur → `/etc/omni-alert-triage.env` |
 | Supervision | Redémarrer un service de la liste blanche | fort | exécuteur, liste blanche vide par défaut |
+| Apparence | Nom, sous-titre, logo, couleurs, thème par défaut ; retour aux valeurs d'origine | normal | `appearance.json` et `logo.<ext>` sous `SOC_APPEARANCE_DIR` (écriture atomique, droits `640`) |
 
 Lectures seules : liste des utilisateurs et rôles, faux positifs actifs, IP bloquées,
 exclusions fixes, paramètres (seules les clés de la liste blanche sont lues : les secrets
@@ -134,6 +135,56 @@ SOAR le vérifie de toute façon au moment du blocage. Les paramètres SOAR abse
 `soar.env` affichent « non définie dans ce fichier » : la valeur effective vient alors de
 `00-vars.env` ou du défaut du moteur, et une valeur écrite par la console la remplace.
 La console n'affiche ni ne pilote la couche LLM du triage.
+
+### Apparence
+
+L'onglet **Apparence** modifie la mise en forme de la console pour tous les utilisateurs :
+
+- **nom** affiché (barre latérale, fil d'Ariane de l'en-tête, titre de l'onglet du
+  navigateur, page de connexion) et **sous-titre**, 40 et 60 caractères au plus ; vides,
+  ils reprennent « OMNI SOC » et « OMNITECH SECURITY » ;
+- **logo** : PNG, JPEG ou WebP uniquement, 512 Ko au plus, 16 à 1024 px de côté. Le
+  serveur identifie le format par la signature binaire du fichier (jamais par son nom) et
+  lit les dimensions dans l'en-tête ; le SVG est refusé (il peut contenir du script). Le
+  logo est servi par `GET /m/api/appearance/logo` avec son type MIME exact,
+  `X-Content-Type-Options: nosniff` et `Content-Security-Policy: default-src 'none'; sandbox`.
+  Le fichier est recontrôlé à chaque lecture (empreinte SHA-256 enregistrée, signature) :
+  un fichier altéré sur le disque n'est pas servi et le logo d'origine reste affiché ;
+- **couleurs** des modes sombre et clair : sept variables existantes de
+  `app-professional.css` (`--pro-accent`, `--cy`, `--bg`, `--card`, `--fg`, `--mut`,
+  `--pro-sidebar`), au format `#rrggbb` validé par le serveur. Un enregistrement est refusé
+  si une paire texte/fond qui touche une couleur modifiée descend sous 4,5:1 (WCAG AA) ;
+  les paires contrôlées sont affichées dans l'onglet. Les paires restées d'origine ne sont
+  pas bloquantes : le texte blanc des boutons sur l'accent sombre d'origine (`#447ce2`)
+  est à 4,02:1 ;
+- **thème par défaut** (système, sombre, clair) : appliqué aux utilisateurs qui n'ont pas
+  choisi de thème ; un choix personnel (menu Thème) reste prioritaire, et l'option
+  personnelle « Système » revient au thème par défaut de la console.
+
+**Prévisualiser** applique les valeurs à la page courante seulement ; **Vérifier et
+enregistrer** suit le circuit commun (simulation, motif, exécution immédiate, audit avec
+avant/après, sans le contenu du logo). **Rétablir les valeurs d'origine** supprime les
+surcharges et le logo personnalisé. Les autres utilisateurs voient la modification au
+prochain chargement de la console.
+
+Lecture : `GET /m/api/appearance` pour tout utilisateur authentifié (nom, sous-titre,
+thème par défaut, couleurs modifiées, adresse du logo). Ni cette route ni le logo ne sont
+accessibles sans session : la console est exposée sur Internet et la page de connexion
+n'a pas besoin du logo. La page de connexion reprend le nom et les couleurs de la dernière
+configuration vue par ce navigateur (copie locale `soc_appearance`), sinon l'origine.
+Écriture : `POST /m/api/admin/appearance`, mêmes garde-fous que les autres écritures
+d'administration, corps de 720 Kio au plus pour cette seule route (logo en base64).
+
+Robustesse : fichier absent, illisible ou JSON invalide, valeur hors liste blanche ou
+contraste devenu insuffisant : le serveur renvoie les valeurs d'origine pour le champ
+concerné et l'onglet signale un fichier illisible. Côté navigateur, seules les valeurs
+`#rrggbb` des variables connues sont appliquées, par `document.documentElement.style.setProperty`
+depuis `app-theme.js` : la CSP n'est pas modifiée (aucun script ni style en ligne ajouté ;
+les modifications CSSOM ne relèvent pas de `style-src`).
+
+Non couvert : le nom de l'application installée (manifeste PWA, `apple-mobile-web-app-title`)
+et la couleur de la barre du navigateur (`theme-color`) restent ceux d'origine ; les
+icônes de la PWA ne sont pas remplacées par le logo.
 
 ### Retour arrière
 
@@ -159,7 +210,7 @@ automatique.
 - Rôle administrateur vérifié sur chaque endpoint `/m/api/admin/*` (lecture et écriture).
 - Écritures : méthode POST, `Content-Type: application/json`, en-tête `Origin` obligatoire
   et présent dans `SOC_ORIGINS`, jeton anti-CSRF `X-SOC-CSRF` lié à la session, corps de
-  16 Kio maximum, 30 écritures par 5 minutes et par compte (`SOC_ADMIN_WRITES_PER_5MIN`).
+  16 Kio maximum (720 Kio pour `/m/api/admin/appearance`), 30 écritures par 5 minutes et par compte (`SOC_ADMIN_WRITES_PER_5MIN`).
 - Réseau : avec `SOC_ADMIN_INTERNAL_ONLY=1` (défaut), écritures acceptées seulement si l'IP
   cliente (posée par nginx dans `X-Real-IP`, prise en compte uniquement depuis 127.0.0.1)
   appartient à `SOC_ADMIN_NETS` (RFC 1918, boucle locale et fc00::/7 par défaut).

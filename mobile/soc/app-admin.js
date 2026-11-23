@@ -10,13 +10,13 @@
  */
 (function () {
   "use strict";
-  var ADM = { me: null, tab: "requests", data: {}, prep: null, refs: [], detq: "", auditq: "" };
+  var ADM = { me: null, tab: "requests", data: {}, prep: null, refs: [], detq: "", auditq: "", appLogo: "conserver" };
   var TABS = [
     ["requests", "Validations"], ["access", "Accès"], ["fp", "Faux positifs"], ["soar", "SOAR"],
-    ["detections", "Détections"], ["settings", "Paramètres"], ["services", "Supervision"], ["audit", "Journal"]
+    ["detections", "Détections"], ["settings", "Paramètres"], ["appearance", "Apparence"], ["services", "Supervision"], ["audit", "Journal"]
   ];
   var TAB_API = { requests: "/admin/requests", access: "/admin/users", fp: "/admin/fp", soar: "/admin/soar",
-    detections: "/admin/detections", settings: "/admin/settings", services: "/admin/services", audit: "/admin/audit?limit=300" };
+    detections: "/admin/detections", settings: "/admin/settings", appearance: "/admin/appearance", services: "/admin/services", audit: "/admin/audit?limit=300" };
   var STATUS = { en_attente: "En attente", approuvee: "Approuvée", rejetee: "Rejetée", expiree: "Expirée",
     faite: "Faite", echec: "Échec", transmise: "Transmise à l'exécuteur", simulee: "Simulée", refusee: "Refusée" };
   var EVENT = { simulation: "Simulation", demande: "Demande", approbation: "Approbation", rejet: "Rejet",
@@ -276,6 +276,41 @@
       return head + card("Services et timers", "lecture seule · redémarrage uniquement pour la liste blanche (" + ((d.restartable || []).length ? h(d.restartable.join(", ")) : "vide") + ")", list);
     },
 
+    appearance: function (d) {
+      ADM.app = d; ADM.appLogo = "conserver";
+      var def = d.defaults || {}, lim = d.limits || {}, labels = d.labels || {};
+      var head = '<div class="adm-banner">' + (d.file_ok === false ? '<span class="adm-pill crit">Fichier de configuration illisible : thème d\'origine appliqué</span>' : "") +
+        '<span class="adm-pill">' + (d.updated_at ? "Modifiée le " + h(fmtTs(d.updated_at)) + " par " + h(d.updated_by) : "Valeurs d'origine") + "</span>" +
+        '<span class="adm-pill">Contraste minimal ' + h(lim.min_contrast) + ":1 (WCAG AA)</span></div>";
+      var ident = '<div class="adm-form">' +
+        field("admAppName", "Nom de la console (" + h(lim.name_max) + " caractères maximum)", '<input id="admAppName" type="text" maxlength="' + h(lim.name_max) + '" placeholder="' + h(def.name) + '" value="' + h(d.name) + '" autocomplete="off">') +
+        field("admAppSub", "Sous-titre (" + h(lim.subtitle_max) + " caractères maximum)", '<input id="admAppSub" type="text" maxlength="' + h(lim.subtitle_max) + '" placeholder="' + h(def.subtitle) + '" value="' + h(d.subtitle) + '" autocomplete="off">') +
+        field("admAppTheme", "Thème par défaut", '<select id="admAppTheme">' + [["system", "Système (préférence de l'appareil)"], ["dark", "Sombre"], ["light", "Clair"]].map(function (t) {
+          return '<option value="' + t[0] + '"' + (d.theme_default === t[0] ? " selected" : "") + ">" + h(t[1]) + "</option>";
+        }).join("") + "</select>") + "</div>" +
+        '<p class="muted adm-help">Nom et sous-titre vides : valeurs d\'origine (' + h(def.name) + ", " + h(def.subtitle) + "). Le choix personnel de thème d'un utilisateur reste prioritaire.</p>";
+      var logo = '<div class="adm-row"><div class="adm-logo-box" id="admAppLogoBox">' + logoPreview() + "</div>" +
+        '<div class="adm-main"><b>Logo</b><div class="adm-meta">PNG, JPEG ou WebP, ' + Math.round((lim.logo_max_bytes || 0) / 1024) + " Ko maximum, " +
+        h(lim.logo_min_px) + " à " + h(lim.logo_max_px) + " px de côté. SVG refusé. Format contrôlé par le serveur sur la signature du fichier." +
+        (d.logo_meta ? "<br>Actuel : " + h(d.logo_meta.type) + " " + h(d.logo_meta.width) + " x " + h(d.logo_meta.height) + " px" : "<br>Actuel : logo d'origine") + "</div></div>" +
+        '<div class="adm-actions"><input id="admAppLogo" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Choisir un logo" data-onchange="admAppLogo(this)">' +
+        btn("Logo d'origine", "admAppLogoReset()") + "</div></div>";
+      var colors = ["dark", "light"].map(function (m) {
+        var cur = (d.colors || {})[m] || {}, base = (def.colors || {})[m] || {};
+        return '<h4 class="adm-key">' + (m === "dark" ? "Mode sombre" : "Mode clair") + "</h4><div class=\"adm-colors\">" + Object.keys(base).map(function (k, n) {
+          var v = cur[k] || base[k], id = "admAppC_" + m + "_" + n;
+          return '<label class="adm-color" for="' + id + '"><input id="' + id + '" type="color" value="' + h(v) + '" data-oninput="admAppCheck()">' +
+            "<span>" + h(labels[k] || k) + '<br><span class="mono" id="' + id + '_v">' + h(v) + "</span>" + (cur[k] ? "" : " (origine)") + "</span></label>";
+        }).join("") + "</div>";
+      }).join("");
+      var actions = '<div class="adm-actions">' + btn("Prévisualiser", "admAppPreview()") + btn("Annuler l'aperçu", "admAppEndPreview()") +
+        btn("Vérifier et enregistrer", "admAppSave()", "pri") + btn("Rétablir les valeurs d'origine", "admAppReset()") + "</div>";
+      return head + card("Identité", "nom affiché, onglet du navigateur, en-tête", ident + logo) +
+        card("Couleurs", "variables du thème existant ; contrôle de contraste texte/fond", colors + '<div id="admAppContrast">' + contrastHtml() + "</div>") +
+        card("Appliquer", "aperçu local, puis simulation, motif et journalisation", actions +
+          '<p class="muted adm-help">L\'aperçu ne s\'applique qu\'à cette page. L\'enregistrement s\'applique à tous les utilisateurs au prochain chargement de la console.</p>');
+    },
+
     audit: function (d) {
       ADM.audit = d.entries || [];
       return '<div class="adm-banner"><span class="adm-pill ' + (d.chain_ok ? "ok" : "crit") + '">' +
@@ -328,12 +363,109 @@
     }).join("") || '<div class="empty">Aucune entrée.</div>';
   }
 
+  /* ------------------------------------------------------------ apparence */
+  function lum(hex) {
+    var c = [1, 3, 5].map(function (i) {
+      var v = parseInt(hex.substr(i, 2), 16) / 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function ratio(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function appColors() {
+    var d = ADM.app || {}, def = (d.defaults || {}).colors || {}, out = { dark: {}, light: {} };
+    ["dark", "light"].forEach(function (m) {
+      Object.keys(def[m] || {}).forEach(function (k, n) {
+        var el = document.getElementById("admAppC_" + m + "_" + n);
+        var v = el ? String(el.value || "").toLowerCase() : "";
+        if (/^#[0-9a-f]{6}$/.test(v) && v !== def[m][k]) out[m][k] = v;
+      });
+    });
+    return out;
+  }
+  /* Même règle que le serveur : seules les paires touchant une couleur modifiée sont bloquantes. */
+  function contrastIssues(colors) {
+    var d = ADM.app || {}, def = (d.defaults || {}).colors || {}, min = (d.limits || {}).min_contrast || 4.5, out = [];
+    ["dark", "light"].forEach(function (m) {
+      var over = colors[m] || {}, eff = {};
+      Object.keys(def[m] || {}).forEach(function (k) { eff[k] = over[k] || def[m][k]; });
+      (d.pairs || []).forEach(function (p) {
+        if (!over[p.fg] && !over[p.bg]) return;
+        var r = ratio(p.fg.charAt(0) === "#" ? p.fg : eff[p.fg], eff[p.bg]);
+        if (r < min) out.push((m === "dark" ? "Mode sombre" : "Mode clair") + " : " + p.label + " = " + r.toFixed(2) + ":1");
+      });
+    });
+    return out;
+  }
+  function contrastHtml() {
+    if (!ADM.app) return "";
+    var issues = contrastIssues(appColors());
+    return issues.length ? issues.map(function (x) { return '<p class="adm-refus">Contraste insuffisant. ' + h(x) + "</p>"; }).join("") :
+      '<p class="adm-ok">Contrastes conformes pour les couleurs modifiées.</p>';
+  }
+  function logoPreview() {
+    var d = ADM.app || {}, l = ADM.appLogo;
+    if (l && l.src) return '<img alt="Aperçu du nouveau logo" src="' + h(l.src) + '">';
+    if (l === "origine" || !d.logo) return "<span>Logo d'origine</span>";
+    return '<img alt="Logo actuel" src="' + h(d.logo.url) + '">';
+  }
+  function appParams() {
+    var l = ADM.appLogo;
+    return { name: val("admAppName"), subtitle: val("admAppSub"), theme_default: val("admAppTheme") || "system",
+      colors: appColors(), logo: l && l.data ? { data: l.data } : (l === "origine" ? "origine" : "conserver") };
+  }
+  window.admAppCheck = function () {
+    var d = ADM.app || {}, def = (d.defaults || {}).colors || {};
+    ["dark", "light"].forEach(function (m) {
+      Object.keys(def[m] || {}).forEach(function (k, n) {
+        var el = document.getElementById("admAppC_" + m + "_" + n), lab = document.getElementById("admAppC_" + m + "_" + n + "_v");
+        if (el && lab) lab.textContent = String(el.value || "").toLowerCase();
+      });
+    });
+    var box = q("#admAppContrast"); if (box) box.innerHTML = contrastHtml();
+  };
+  window.admAppLogo = function (el) {
+    var f = el && el.files && el.files[0], lim = (ADM.app || {}).limits || {};
+    if (!f) return;
+    if ((lim.logo_types || []).indexOf(f.type) < 0) { note("err", "Format refusé : PNG, JPEG ou WebP uniquement."); el.value = ""; return; }
+    if (f.size > (lim.logo_max_bytes || 0)) { note("err", "Logo trop volumineux (" + Math.round(lim.logo_max_bytes / 1024) + " Ko maximum)."); el.value = ""; return; }
+    var rd = new FileReader();
+    rd.onload = function () {
+      var src = String(rd.result || "");
+      ADM.appLogo = { src: src, data: src.split(",", 2)[1] || "" };
+      var box = q("#admAppLogoBox"); if (box) box.innerHTML = logoPreview();
+    };
+    rd.onerror = function () { note("err", "Lecture du fichier impossible."); };
+    rd.readAsDataURL(f);
+  };
+  window.admAppLogoReset = function () {
+    ADM.appLogo = "origine";
+    var el = document.getElementById("admAppLogo"); if (el) el.value = "";
+    var box = q("#admAppLogoBox"); if (box) box.innerHTML = logoPreview();
+  };
+  window.admAppPreview = function () {
+    var issues = contrastIssues(appColors());
+    if (issues.length) note("warn", "Aperçu affiché, mais l'enregistrement sera refusé : contraste insuffisant.");
+    if (!window.socAppearance) { note("err", "Module d'apparence indisponible."); return; }
+    var p = appParams(), cur = (ADM.app || {}).logo, l = ADM.appLogo;
+    window.socAppearance.preview({ name: p.name, subtitle: p.subtitle, theme_default: p.theme_default, colors: p.colors,
+      logo: l && l.src ? { src: l.src } : (l === "origine" ? null : cur) });
+  };
+  window.admAppEndPreview = function () { if (window.socAppearance) window.socAppearance.endPreview(); };
+  window.admAppSave = function () {
+    var issues = contrastIssues(appColors());
+    if (issues.length) { note("err", "Contraste insuffisant : corriger les couleurs signalées."); return; }
+    prepare("appearance_set", appParams(), "/admin/appearance");
+  };
+  window.admAppReset = function () { prepare("appearance_set", { reset: true }, "/admin/appearance"); };
+
   /* ------------------------------------------------------------ simulation puis confirmation */
-  function prepare(action, params) {
+  function prepare(action, params, path) {
     if (ADM.me && !ADM.me.writes_allowed) { note("err", "Écritures d'administration refusées depuis ce réseau."); return; }
-    post("/admin/action", { action: action, params: params, simulate: true }).then(function (r) {
+    path = path || "/admin/action";
+    post(path, { action: action, params: params, simulate: true }).then(function (r) {
       if (!r.ok) { note("err", r.error || "Refusé"); return; }
-      ADM.prep = { action: action, params: params, preview: r.preview, label: r.label };
+      ADM.prep = { action: action, params: params, preview: r.preview, label: r.label, path: path };
       var p = r.preview || {}, fort = p.impact === "fort";
       var panel = q("#admPanel");
       if (!panel) return;
@@ -355,16 +487,21 @@
     var pr = ADM.prep; if (!pr) return;
     var motif = val("admMotif");
     if (motif.length < 4) { note("warn", "Indiquer un motif (4 caractères minimum)."); return; }
-    post("/admin/action", { action: pr.action, params: pr.params, motif: motif }).then(function (r) {
+    post(pr.path || "/admin/action", { action: pr.action, params: pr.params, motif: motif }).then(function (r) {
       if (!r.ok) { note("err", r.error || "Refusé"); return; }
       note("ok", r.message || (r.pending ? "Demande enregistrée." : "Action effectuée."));
+      if (pr.action === "appearance_set" && window.socAppearance) window.socAppearance.reload();
       ADM.prep = null; var panel = q("#admPanel"); if (panel) panel.innerHTML = "";
       load(ADM.tab);
     }).catch(function () { note("err", "Connexion au SIEM interrompue."); });
   };
   window.admCancel = function () { ADM.prep = null; var panel = q("#admPanel"); if (panel) panel.innerHTML = ""; };
 
-  window.admTab = function (i) { var t = TABS[i]; if (!t) return; ADM.tab = t[0]; window.admCancel(); render(); };
+  window.admTab = function (i) {
+    var t = TABS[i]; if (!t) return;
+    if (ADM.tab === "appearance" && t[0] !== "appearance") window.admAppEndPreview();
+    ADM.tab = t[0]; window.admCancel(); render();
+  };
   window.admDecide = function (i, decision) {
     var r = ADM.refs[i]; if (!r) return;
     var motif = val("admDec" + i);

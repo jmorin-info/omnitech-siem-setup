@@ -41,7 +41,10 @@ aside::after {display:none;}
   padding:0 30px;gap:9px;box-shadow:none;min-height:72px;
 }
 #ptitle {font-size:12px;font-weight:550;color:var(--mut);max-width:26%;}
-#ptitle::before {content:"OMNI / ";color:var(--dim);font-weight:400;}
+#ptitle::before {content:var(--soc-crumb,"OMNI / ");color:var(--dim);font-weight:400;}
+/* logo personnalisé (app-theme.js) : image contenue dans le pavé du logo */
+.brand .logo.soc-custom-logo {background:transparent;overflow:hidden;}
+.brand .logo .soc-logo-img {width:100%;height:100%;object-fit:contain;display:block;}
 header .iconbtn {min-width:34px;min-height:34px;padding:6px 9px;background:var(--card)!important;border-color:var(--bd);border-radius:7px;color:var(--mut);font-size:11px;box-shadow:none;}
 header .pill {font-family:inherit;font-size:10px;background:transparent!important;border:0;padding:5px 6px;}
 header .pill .dot {width:6px;height:6px;box-shadow:none;animation:none;}
@@ -201,3 +204,11 @@ body.compact #nav a {padding:7px 12px;min-height:34px;}
 .adm-refus{color:var(--red);font-weight:600;margin:8px 0}
 .adm-btn.pri{border-color:var(--pro-accent);color:var(--fg);background:var(--pro-accent-bg)!important}
 @media (max-width:760px){.adm-actions{width:100%}.adm-actions input,.adm-actions select{flex:1 1 100%;min-width:0}.adm-form{grid-template-columns:1fr}}
+/* Administration > Apparence */
+.adm-colors{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 16px}
+.adm-color{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--mut);padding:5px 0}
+.adm-color input[type=color]{width:46px;height:32px;padding:2px;margin:0;flex:0 0 auto;cursor:pointer}
+.adm-color .mono{color:var(--fg);font-size:12px}
+.adm-logo-box{width:64px;height:64px;border:1px solid var(--bd);border-radius:10px;background:var(--card2);display:grid;place-items:center;overflow:hidden;color:var(--mut);font-size:11px;text-align:center}
+.adm-logo-box img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.adm-ok{color:var(--grn);font-size:13px;margin:6px 0}
