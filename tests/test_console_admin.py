@@ -608,8 +608,8 @@ def test_admin_assets_are_published_and_cached_by_service_worker():
     sw = (SOC / "sw.js").read_text(encoding="utf-8")
     import re
     scripts = re.findall(r'<script src="(/soc/[^"]+)"', html)
-    assert "/soc/app-admin.js?v=2026112101" in scripts
-    assert scripts.index("/soc/app-admin.js?v=2026112101") > scripts.index("/soc/app-csp.js?v=2026112101")
+    assert "/soc/app-admin.js?v=2026112301" in scripts
+    assert scripts.index("/soc/app-admin.js?v=2026112301") > scripts.index("/soc/app-csp.js?v=2026112101")
     for src in scripts:
         if "?v=" in src:
             assert f'"{src}"' in sw, src

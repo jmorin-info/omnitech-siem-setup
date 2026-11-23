@@ -100,7 +100,7 @@ window.addEventListener("hashchange",onHash);window.addEventListener("popstate",
 function openUrl(url){var i=String(url||"").indexOf("#"),h=i>=0?String(url).slice(i):"#p=incidents";if(location.hash===h){LASTH="";onHash();}else location.hash=h;}
 var PAGE_WRAP={twin:"#twinWrap",ems:"#emsWrap",network:"#netWrap",deploy:"#depWrap"};
 function afterNav(p){syncNav(p);socCloseSheet();var m=q1("main");if(m)m.scrollTop=0;
-  try{document.title=((titles[LANG]||titles.fr)[p]||"Console")+" · OMNI SOC";}catch(e){}
+  try{document.title=((titles[LANG]||titles.fr)[p]||"Console")+" · "+(window.SOC_APP_NAME||"OMNI SOC");}catch(e){}
   var sel=PAGE_WRAP[p];
   if(sel)setTimeout(function(){var w=q1(sel);if(w&&curPage()===p&&w.querySelector('p.muted[data-i18n$="_loading"]'))w.innerHTML='<div class="card">'+errBox(T("Page indisponible","Page unavailable"),"goNav('"+p+"')")+'</div>';},25000);
   if(p==="report")setTimeout(function(){var r=q1("#reportBody");if(r&&curPage()==="report"&&!r.innerHTML.trim())r.innerHTML=errBox(T("Rapport indisponible","Report unavailable"),"goNav('report')");},25000);}

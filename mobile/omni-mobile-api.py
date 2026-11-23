@@ -2020,6 +2020,8 @@ ROLE_RANK = {"lecteur": 1, "analyste": 2, "administrateur": 3}
 ROLE_LABEL = {"lecteur": "Lecteur", "analyste": "Analyste", "administrateur": "Administrateur"}
 _DATA_DIR = os.path.dirname(SUBS_FILE) or "/var/lib/omni-mobile"
 SOC_ADMIN_DIR = _setting("SOC_ADMIN_DIR", os.path.join(_DATA_DIR, "admin"))
+# Apparence de la console (nom, logo, couleurs) : fichier JSON + logo, modifiables par un administrateur.
+SOC_APPEARANCE_DIR = _setting("SOC_APPEARANCE_DIR", os.path.join(_DATA_DIR, "appearance"))
 SOC_DEFAULT_ROLE = CONF.get("SOC_DEFAULT_ROLE", "analyste").strip().lower()
 if SOC_DEFAULT_ROLE not in ("lecteur", "analyste"):
     SOC_DEFAULT_ROLE = "lecteur"          # jamais administrateur par défaut
@@ -2067,7 +2069,8 @@ _PROD_PREFIXES = ("/var/lib", "/etc", "/var/www", "/var/log", "/usr", "/opt/oms-
 
 def state_paths():
     return {"MOBILE_SUBS_FILE": SUBS_FILE, "MOBILE_CASES_FILE": CASES_FILE, "MOBILE_WATCH_FILE": WATCH_FILE,
-            "SOC_REQ_DIR": SOC_REQ_DIR, "SOC_ADMIN_DIR": SOC_ADMIN_DIR}
+            "SOC_REQ_DIR": SOC_REQ_DIR, "SOC_ADMIN_DIR": SOC_ADMIN_DIR,
+            "SOC_APPEARANCE_DIR": SOC_APPEARANCE_DIR}
 
 
 def enforce_test_isolation():
@@ -2838,6 +2841,345 @@ def _x_exec(kind):
     return execute
 
 
+# ------------------------------------------------------------------ apparence de la console
+# Nom affiché, sous-titre, logo, couleurs (variables CSS existantes de app-professional.css)
+# et thème par défaut. Stockage : SOC_APPEARANCE_DIR/appearance.json (+ logo.<ext>), écrit
+# de façon atomique en 0640. Lecture tolérante : fichier absent, illisible ou invalide =
+# thème d'origine (la console ne doit jamais être cassée par ce réglage).
+APPEARANCE_FILE = os.path.join(SOC_APPEARANCE_DIR, "appearance.json")
+APPEARANCE_LOGO_MAX = 512 * 1024                     # octets, après décodage
+APPEARANCE_LOGO_DIM = (16, 1024)                     # largeur et hauteur, en pixels
+APPEARANCE_MAX_BODY = 720 * 1024                     # corps JSON de la route dédiée (logo en base64)
+APPEARANCE_MIN_CONTRAST = 4.5                        # WCAG 2.x niveau AA, texte normal
+APPEARANCE_THEMES = ("system", "dark", "light")
+APPEARANCE_NAME_DEFAULT = "OMNI SOC"
+APPEARANCE_SUBTITLE_DEFAULT = "OMNITECH SECURITY"
+_APPEARANCE_LOGO_EXT = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+# Valeurs d'origine = celles de mobile/soc/app-professional.css (:root et html[data-theme=light]).
+APPEARANCE_DEFAULTS = {
+    "dark": {"pro-accent": "#447ce2", "cy": "#87b4ff", "bg": "#0c1220", "card": "#151f30",
+             "fg": "#eaf0f8", "mut": "#b0bed2", "pro-sidebar": "#101a2c"},
+    "light": {"pro-accent": "#285eb8", "cy": "#2859ad", "bg": "#f1f4f9", "card": "#ffffff",
+              "fg": "#182740", "mut": "#53647b", "pro-sidebar": "#15253f"},
+}
+APPEARANCE_LABELS = {
+    "pro-accent": "Accent principal (boutons, éléments actifs)", "cy": "Accent du texte (liens, valeurs mises en avant)",
+    "bg": "Fond de page", "card": "Fond des cartes et de l'en-tête", "fg": "Texte principal",
+    "mut": "Texte secondaire", "pro-sidebar": "Barre latérale",
+}
+# Paires texte/fond contrôlées. Une valeur commençant par « # » est une couleur fixe de la
+# feuille de style (texte blanc des boutons, liens de la barre latérale).
+APPEARANCE_PAIRS = [
+    ("fg", "bg", "texte principal sur le fond de page"), ("fg", "card", "texte principal sur les cartes"),
+    ("mut", "bg", "texte secondaire sur le fond de page"), ("mut", "card", "texte secondaire sur les cartes"),
+    ("cy", "bg", "accent du texte sur le fond de page"), ("cy", "card", "accent du texte sur les cartes"),
+    ("#ffffff", "pro-accent", "texte blanc des boutons principaux sur l'accent"),
+    ("#ffffff", "pro-sidebar", "titre blanc sur la barre latérale"),
+    ("#c0cde1", "pro-sidebar", "liens de navigation sur la barre latérale"),
+]
+_HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+_BIDI_RE = re.compile("[\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+
+
+def _rel_luminance(hex_color):
+    def channel(v):
+        c = v / 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+
+
+def contrast_ratio(a, b):
+    """Rapport de contraste WCAG entre deux couleurs #rrggbb (1 à 21)."""
+    la, lb = sorted((_rel_luminance(a), _rel_luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def _v_hex(value, what):
+    s = str(value if value is not None else "").strip()
+    if not _HEX_RE.match(s):
+        raise AdminError(f"{what} : couleur hexadécimale #rrggbb attendue")
+    return s.lower()
+
+
+def appearance_colors(raw):
+    """Valide les surcharges de couleurs {mode: {variable: #rrggbb}} (clés en liste blanche)."""
+    if raw in (None, ""):
+        return {"dark": {}, "light": {}}
+    if not isinstance(raw, dict) or set(raw) - set(APPEARANCE_DEFAULTS):
+        raise AdminError("couleurs : modes acceptés « dark » et « light »")
+    out = {}
+    for mode in APPEARANCE_DEFAULTS:
+        vals = raw.get(mode) or {}
+        if not isinstance(vals, dict):
+            raise AdminError(f"couleurs du mode {mode} : objet attendu")
+        unknown = set(vals) - set(APPEARANCE_DEFAULTS[mode])
+        if unknown:
+            raise AdminError("variable de couleur non modifiable : " + ", ".join(sorted(str(k)[:40] for k in unknown)))
+        out[mode] = {k: _v_hex(v, f"couleur {k} ({mode})") for k, v in vals.items()
+                     if v not in (None, "")}
+        # une valeur identique à l'origine n'est pas une surcharge
+        out[mode] = {k: v for k, v in out[mode].items() if v != APPEARANCE_DEFAULTS[mode][k]}
+    return out
+
+
+def appearance_contrast_issues(colors):
+    """Paires texte/fond sous le seuil, parmi celles qui touchent au moins une couleur modifiée.
+    Les paires entièrement d'origine ne sont pas bloquantes (elles ne dépendent pas de l'administrateur)."""
+    issues = []
+    for mode, defaults in APPEARANCE_DEFAULTS.items():
+        over = colors.get(mode) or {}
+        eff = dict(defaults, **over)
+        for fg, bg, label in APPEARANCE_PAIRS:
+            if fg not in over and bg not in over:
+                continue
+            ratio = contrast_ratio(fg if fg.startswith("#") else eff[fg], eff[bg])
+            if ratio < APPEARANCE_MIN_CONTRAST:
+                issues.append({"mode": mode, "pair": [fg, bg], "label": label, "ratio": round(ratio, 2)})
+    return issues
+
+
+def _appearance_text(value, max_len, what):
+    s = _clean_text(value, max_len, 0, what)
+    if _BIDI_RE.search(s):
+        raise AdminError(f"{what} : caractères invisibles ou de contrôle refusés")
+    return s
+
+
+def image_info(data):
+    """Type et dimensions d'une image PNG, JPEG ou WebP d'après sa signature binaire.
+    Renvoie (type MIME, largeur, hauteur) ou lève AdminError. Aucun autre format (SVG compris)."""
+    n = len(data)
+    if n >= 24 and data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR":
+        w, h = int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+        return "image/png", w, h
+    if n >= 4 and data[:3] == b"\xff\xd8\xff":
+        i = 2
+        while i + 9 < n:
+            if data[i] != 0xFF:
+                break
+            marker = data[i + 1]
+            if marker == 0xFF:
+                i += 1
+                continue
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            seg = int.from_bytes(data[i + 2:i + 4], "big")
+            if seg < 2:
+                break
+            if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+                h, w = int.from_bytes(data[i + 5:i + 7], "big"), int.from_bytes(data[i + 7:i + 9], "big")
+                return "image/jpeg", w, h
+            if marker in (0xD9, 0xDA):
+                break
+            i += 2 + seg
+        raise AdminError("image JPEG illisible (dimensions introuvables)")
+    if n >= 30 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        kind = data[12:16]
+        if kind == b"VP8 " and data[23:26] == b"\x9d\x01\x2a":
+            w = int.from_bytes(data[26:28], "little") & 0x3FFF
+            h = int.from_bytes(data[28:30], "little") & 0x3FFF
+            return "image/webp", w, h
+        if kind == b"VP8L" and data[20] == 0x2F:
+            b0, b1, b2, b3 = data[21:25]
+            w = 1 + (b0 | ((b1 & 0x3F) << 8))
+            h = 1 + ((b1 >> 6) | (b2 << 2) | ((b3 & 0x0F) << 10))
+            return "image/webp", w, h
+        if kind == b"VP8X":
+            w = 1 + int.from_bytes(data[24:27], "little")
+            h = 1 + int.from_bytes(data[27:30], "little")
+            return "image/webp", w, h
+        raise AdminError("image WebP illisible (en-tête non reconnu)")
+    raise AdminError("format de logo refusé : PNG, JPEG ou WebP uniquement (signature binaire contrôlée)")
+
+
+def appearance_logo(data):
+    """Contrôle d'un logo décodé : taille, signature, dimensions. Renvoie ses métadonnées."""
+    if not isinstance(data, (bytes, bytearray)) or not data:
+        raise AdminError("logo vide")
+    if len(data) > APPEARANCE_LOGO_MAX:
+        raise AdminError(f"logo trop volumineux ({len(data) // 1024} Ko, {APPEARANCE_LOGO_MAX // 1024} Ko maximum)")
+    mime, w, h = image_info(bytes(data))
+    lo, hi = APPEARANCE_LOGO_DIM
+    if not (lo <= w <= hi and lo <= h <= hi):
+        raise AdminError(f"dimensions du logo refusées ({w} x {h} px ; {lo} à {hi} px de côté)")
+    return {"type": mime, "width": w, "height": h, "size": len(data),
+            "sha256": hashlib.sha256(bytes(data)).hexdigest()}
+
+
+def _appearance_defaults():
+    return {"name": "", "subtitle": "", "theme_default": "system", "colors": {"dark": {}, "light": {}}, "logo": None}
+
+
+def load_appearance():
+    """Configuration en vigueur, revalidée à chaque lecture. Toute anomalie = valeurs d'origine
+    pour le champ concerné (fichier corrompu : tout d'origine)."""
+    cfg = _appearance_defaults()
+    raw = _jl(APPEARANCE_FILE, None)
+    if not isinstance(raw, dict):
+        return cfg
+    for key, max_len in (("name", 40), ("subtitle", 60)):
+        try:
+            cfg[key] = _appearance_text(raw.get(key, ""), max_len, key)
+        except AdminError:
+            pass
+    if raw.get("theme_default") in APPEARANCE_THEMES:
+        cfg["theme_default"] = raw["theme_default"]
+    try:
+        colors = appearance_colors(raw.get("colors"))
+        if not appearance_contrast_issues(colors):
+            cfg["colors"] = colors
+    except AdminError:
+        pass
+    logo = raw.get("logo")
+    if isinstance(logo, dict) and logo.get("type") in _APPEARANCE_LOGO_EXT and \
+            re.fullmatch(r"[0-9a-f]{64}", str(logo.get("sha256", ""))):
+        cfg["logo"] = {k: logo.get(k) for k in ("type", "width", "height", "size", "sha256")}
+    for key in ("updated_by", "updated_at"):
+        if isinstance(raw.get(key), str):
+            cfg[key] = raw[key][:64]
+    return cfg
+
+
+def _appearance_logo_path(mime):
+    return os.path.join(SOC_APPEARANCE_DIR, "logo." + _APPEARANCE_LOGO_EXT[mime])
+
+
+def appearance_logo_bytes():
+    """(type MIME, octets) du logo personnalisé, ou None. Le fichier est recontrôlé à chaque
+    lecture (empreinte enregistrée, signature) : un fichier altéré n'est jamais servi."""
+    logo = load_appearance().get("logo")
+    if not logo:
+        return None
+    try:
+        with open(_appearance_logo_path(logo["type"]), "rb") as fh:
+            data = fh.read(APPEARANCE_LOGO_MAX + 1)
+        meta = appearance_logo(data)
+    except (OSError, AdminError):
+        return None
+    if meta["sha256"] != logo["sha256"] or meta["type"] != logo["type"]:
+        return None
+    return logo["type"], data
+
+
+def appearance_public():
+    """Vue servie à tout utilisateur authentifié : uniquement ce qui est nécessaire à l'affichage."""
+    cfg = load_appearance()
+    logo = None
+    if cfg["logo"] and appearance_logo_bytes():
+        logo = {"url": "/m/api/appearance/logo?v=" + cfg["logo"]["sha256"][:16],
+                "width": cfg["logo"]["width"], "height": cfg["logo"]["height"]}
+    return {"name": cfg["name"], "subtitle": cfg["subtitle"], "theme_default": cfg["theme_default"],
+            "colors": cfg["colors"], "logo": logo}
+
+
+def admin_appearance():
+    """Vue d'administration : configuration, valeurs d'origine, libellés et limites."""
+    out = appearance_public()
+    cfg = load_appearance()
+    out.update(updated_by=cfg.get("updated_by", ""), updated_at=cfg.get("updated_at", ""),
+               logo_meta=cfg["logo"] if out["logo"] else None,
+               defaults={"name": APPEARANCE_NAME_DEFAULT, "subtitle": APPEARANCE_SUBTITLE_DEFAULT,
+                         "theme_default": "system", "colors": APPEARANCE_DEFAULTS},
+               labels=APPEARANCE_LABELS, themes=list(APPEARANCE_THEMES),
+               pairs=[{"fg": a, "bg": b, "label": c} for a, b, c in APPEARANCE_PAIRS],
+               limits={"logo_max_bytes": APPEARANCE_LOGO_MAX, "logo_min_px": APPEARANCE_LOGO_DIM[0],
+                       "logo_max_px": APPEARANCE_LOGO_DIM[1], "logo_types": sorted(_APPEARANCE_LOGO_EXT),
+                       "min_contrast": APPEARANCE_MIN_CONTRAST, "name_max": 40, "subtitle_max": 60},
+               file_ok=isinstance(_jl(APPEARANCE_FILE, None), dict) or not os.path.exists(APPEARANCE_FILE))
+    return out
+
+
+def _a_appearance(p, actor):
+    if p.get("reset") is True:
+        return {"id": "apparence", "reset": True}
+    c = {"id": "apparence", "reset": False,
+         "name": _appearance_text(p.get("name", ""), 40, "nom de la console"),
+         "subtitle": _appearance_text(p.get("subtitle", ""), 60, "sous-titre"),
+         "theme_default": str(p.get("theme_default") or "system")}
+    if c["theme_default"] not in APPEARANCE_THEMES:
+        raise AdminError("thème par défaut : system, dark ou light")
+    c["colors"] = appearance_colors(p.get("colors"))
+    issues = appearance_contrast_issues(c["colors"])
+    if issues:
+        raise AdminError("contraste insuffisant (" + str(APPEARANCE_MIN_CONTRAST) + ":1 minimum) : " + "; ".join(
+            f"{i['label']} en mode {'sombre' if i['mode'] == 'dark' else 'clair'} = {i['ratio']}:1" for i in issues[:4]))
+    logo = p.get("logo", "conserver")
+    if logo in (None, "", "conserver"):
+        c["logo"] = "conserver"
+    elif logo == "origine":
+        c["logo"] = "origine"
+    elif isinstance(logo, dict) and isinstance(logo.get("data"), str):
+        b64 = logo["data"]
+        if b64.startswith("data:"):
+            b64 = b64.split(",", 1)[-1]
+        if len(b64) > (APPEARANCE_LOGO_MAX * 4) // 3 + 8:
+            raise AdminError(f"logo trop volumineux ({APPEARANCE_LOGO_MAX // 1024} Ko maximum)")
+        try:
+            data = base64.b64decode(b64, validate=True)
+        except (ValueError, TypeError):
+            raise AdminError("logo : encodage base64 invalide") from None
+        c["logo"] = "nouveau"
+        c["logo_meta"] = appearance_logo(data)
+        c["logo_data"] = data
+    else:
+        raise AdminError("logo : « conserver », « origine » ou {data: base64}")
+    return c
+
+
+def _appearance_summary(cfg):
+    logo = cfg.get("logo")
+    return {"nom": cfg.get("name") or f"{APPEARANCE_NAME_DEFAULT} (origine)",
+            "sous_titre": cfg.get("subtitle") or f"{APPEARANCE_SUBTITLE_DEFAULT} (origine)",
+            "theme": cfg.get("theme_default", "system"),
+            "couleurs": {m: v for m, v in (cfg.get("colors") or {}).items() if v} or "origine",
+            "logo": f"{logo['type']} {logo['width']}x{logo['height']} sha256:{logo['sha256'][:12]}" if logo else "origine"}
+
+
+def _appearance_target(c):
+    cur = load_appearance()
+    if c["reset"]:
+        return _appearance_defaults()
+    new = {k: c[k] for k in ("name", "subtitle", "theme_default", "colors")}
+    new["logo"] = None if c["logo"] == "origine" else (c["logo_meta"] if c["logo"] == "nouveau" else cur["logo"])
+    return new
+
+
+def _p_appearance(c):
+    before = _appearance_summary(load_appearance())
+    after = _appearance_summary(_appearance_target(c))
+    effects = ["Mise en forme appliquée à tous les utilisateurs au prochain chargement de la console.",
+               "Le choix personnel de thème (clair/sombre) d'un utilisateur reste prioritaire sur le thème par défaut."]
+    if c["reset"]:
+        effects.insert(0, "Retour au nom, au logo, aux couleurs et au thème d'origine.")
+    return {"before": before, "after": after, "impact": "normal", "effects": effects,
+            "refus": "" if before != after else "aucun changement"}
+
+
+def _x_appearance(c, actor, motif, rid):
+    with _ADMIN_LOCK:
+        os.makedirs(SOC_APPEARANCE_DIR, mode=0o750, exist_ok=True)
+        target = _appearance_target(c)
+        if c.get("logo") == "nouveau":
+            path = _appearance_logo_path(target["logo"]["type"])
+            tmp = path + "." + _uuid.uuid4().hex[:8] + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(c["logo_data"])
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        _atomic_write_json(APPEARANCE_FILE, dict(target, version=1, updated_by=actor, updated_at=_now_iso(),
+                                                 request_id=rid))
+        keep = _appearance_logo_path(target["logo"]["type"]) if target.get("logo") else None
+        for mime in _APPEARANCE_LOGO_EXT:
+            old = _appearance_logo_path(mime)
+            if old != keep and os.path.exists(old):
+                os.unlink(old)
+    return {"ok": True, "message": "Apparence enregistrée : appliquée à tous les utilisateurs au prochain chargement de la console."}
+
+
 ADMIN_ACTIONS = {
     "role_set": {"label": "Rôle d'un utilisateur", "validate": _a_role_set, "preview": _p_role_set, "execute": _x_role_set},
     "fp_add": {"label": "Ajout d'un faux positif", "validate": _a_fp_add, "preview": _p_fp_add, "execute": _x_fp_add},
@@ -2852,6 +3194,7 @@ ADMIN_ACTIONS = {
                      "preview": _p_param(TRIAGE_PARAMS, SOC_TRIAGE_ENV, "Triage"), "execute": _x_exec("triage_param")},
     "detection_toggle": {"label": "Activation d'une détection", "validate": _a_detection, "preview": _p_detection, "execute": _x_detection},
     "service_restart": {"label": "Redémarrage d'un service", "validate": _a_restart, "preview": _p_restart, "execute": _x_exec("service_restart")},
+    "appearance_set": {"label": "Apparence de la console", "validate": _a_appearance, "preview": _p_appearance, "execute": _x_appearance},
 }
 
 
@@ -3049,6 +3392,7 @@ ADMIN_GET_ROUTES = {
     "/m/api/admin/services": lambda q: admin_services(),
     "/m/api/admin/requests": lambda q: admin_requests(),
     "/m/api/admin/audit": lambda q: audit_read(max(1, min(int((q.get("limit") or ["200"])[0] or 200), 1000))),
+    "/m/api/admin/appearance": lambda q: admin_appearance(),
 }
 
 
@@ -3179,6 +3523,10 @@ class H(BaseHTTPRequestHandler):
             return self._json({"error": "auth"}, 401)
         if p.startswith("/m/api/admin/"):
             return self._admin_get(p)
+        if p == "/m/api/appearance":
+            return self._json_raw(appearance_public())
+        if p == "/m/api/appearance/logo":
+            return self._appearance_logo()
         if p == "/m/api/soar":
             d = get_soar(); d["is_admin"] = soc_is_admin(self._user())
             return self._json(d)
@@ -3368,6 +3716,22 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _appearance_logo(self):
+        """Logo personnalisé, même origine, type MIME exact et nosniff ; 404 si absent ou altéré."""
+        found = appearance_logo_bytes()
+        if not found:
+            return self._json_raw({"error": "not found"}, 404)
+        mime, data = found
+        self.send_response(200)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
+        self.send_header("Content-Disposition", 'inline; filename="logo.' + _APPEARANCE_LOGO_EXT[mime] + '"')
+        self.send_header("Cache-Control", "private, max-age=86400")
+        self.end_headers()
+        self.wfile.write(data)
+
     def _admin_get(self, p):
         u = self._user()
         ip = admin_client_ip(self)
@@ -3418,7 +3782,8 @@ class H(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0) or 0)
         except ValueError:
             n = -1
-        if n < 0 or n > 16384:
+        limit = APPEARANCE_MAX_BODY if p == "/m/api/admin/appearance" else 16384
+        if n < 0 or n > limit:
             return deny("requête trop volumineuse", 413)
         try:
             body = json.loads(self.rfile.read(n) or b"{}")
@@ -3431,6 +3796,9 @@ class H(BaseHTTPRequestHandler):
                 r = admin_action(body, u, ip)
             elif p == "/m/api/admin/decide":
                 r = admin_decide(body, u, ip)
+            elif p == "/m/api/admin/appearance":
+                body["action"] = "appearance_set"     # même chaîne que /admin/action : simulation, motif, audit
+                r = admin_action(body, u, ip)
             else:
                 return self._json_raw({"error": "not found"}, 404)
         except AdminError as ex:
