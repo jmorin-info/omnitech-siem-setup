@@ -7,3 +7,6 @@ SOC_ADMIN_DIR=/var/lib/omni-mobile/admin
 SOC_EXEC_RESTARTABLE=
 # 1 = un administrateur peut approuver sa propre demande (déconseillé).
 SOC_EXEC_SELF_APPROVE=0
+# File root (0700) des demandes de mise à jour de l'environnement, lue par
+# omni-console-update.service (unité path). Ne pas modifier sans adapter omni-console-update.path.
+SOC_UPDATE_QUEUE=/var/lib/omni-console-update/queue

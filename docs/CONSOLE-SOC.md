@@ -16,7 +16,7 @@ onglets inférieurs et le menu pour accéder à l’ensemble des pages.
 | Pilotage | **Vue d’ensemble** : indicateurs et activité ; **Incidents** : cas corrélés et suivi ; **Détections** : événements tagués, filtres et export CSV. |
 | Investigation | **Entités** : dossiers comptes et machines ; **ATT&CK** : techniques observées ; **Graphe d’attaque** et **Jumeau d’attaque** : relations et exposition ; **Playbooks** : guides de traitement. |
 | Visibilité | **Endpoint (EMS)**, **Réseau & Infra**, **Carte mondiale**, **Fuites & Dark Web** : informations des connecteurs configurés. |
-| Administration | **Santé & Collecte** : sources et fraîcheur ; **SOAR** : actions autorisées ; **Exploitation SIEM** : état opérationnel ; **Administration** (administrateurs SOC uniquement) : rôles, faux positifs, SOAR, détections, paramètres, supervision, journal d'audit ; **Déploiement** : enrôlement ; **Rapport** : synthèse imprimable. |
+| Administration | **Santé & Collecte** : sources et fraîcheur ; **SOAR** : actions autorisées ; **Exploitation SIEM** : état opérationnel ; **Administration** (administrateurs SOC uniquement) : rôles, faux positifs, SOAR, détections, paramètres, supervision, mises à jour, journal d'audit ; **Déploiement** : enrôlement ; **Rapport** : synthèse imprimable. |
 
 Les pages des extensions restent dépendantes de leur configuration. Le profil
 d’installation de base n’active pas à lui seul ML, UEBA, XDR, les scans ou le SOAR.
@@ -99,6 +99,9 @@ jamais `administrateur`). Un administrateur ne peut pas modifier son propre rôl
    placée dans l'onglet **Validations**, à approuver ou rejeter (motif obligatoire pour un
    rejet) par un **autre administrateur** dans le délai `SOC_ADMIN_APPROVAL_TTL` (24 h par
    défaut). Avant exécution, la demande est revalidée et son effet recalculé.
+   Exception : action à **impact élevé** en libre-service (seulement la mise à jour de
+   l'environnement et son retour arrière, voir [Mises à jour](#mises-à-jour)) : exécutée sans
+   second administrateur après une confirmation explicite.
 
 Avec `SOC_ADMIN_DRY_RUN=1`, toute action est simulée et journalisée sans être appliquée.
 Une seule personne administratrice ne peut pas valider ses propres demandes à fort impact,
@@ -120,6 +123,8 @@ sauf si `SOC_ADMIN_SELF_APPROVE=1` (déconseillé) ; la console le signale.
 | Détections | Désactiver une détection | fort | API Graylog `PUT /events/definitions/{id}/unschedule` |
 | Paramètres | Triage : `MAIL_SCORE_THRESHOLD` (50-100), `GRAY_SCORE_THRESHOLD` (30-95, inférieur au seuil mail), `TRIAGE_DEDUP_SECONDS` (300-86400), `FP_DEFAULT_TTL_DAYS` (1-90), `KILLCHAIN_COUNT` (2-10), `KILLCHAIN_WINDOW` (300-7200), `MAIL_RECIPIENTS` (1 à 10 adresses) | fort | exécuteur → `/etc/omni-alert-triage.env` |
 | Supervision | Redémarrer un service de la liste blanche | fort | exécuteur, liste blanche vide par défaut |
+| Mises à jour | Rechercher maintenant (`git fetch` en lecture seule, plan, tests) | normal | fichier `update/check-request` → `omni-console-update-check.path` |
+| Mises à jour | Mettre à jour l'environnement ; retour arrière de la dernière mise à jour | élevé (libre-service, confirmation de la révision) | exécuteur `omni-soc-admin-exec` → file root → `omni-console-update.service` |
 | Apparence | Nom, sous-titre, logo, couleurs, thème par défaut ; retour aux valeurs d'origine | normal | `appearance.json` et `logo.<ext>` sous `SOC_APPEARANCE_DIR` (écriture atomique, droits `640`) |
 
 Lectures seules : liste des utilisateurs et rôles, faux positifs actifs, IP bloquées,
@@ -186,6 +191,37 @@ Non couvert : le nom de l'application installée (manifeste PWA, `apple-mobile-w
 et la couleur de la barre du navigateur (`theme-color`) restent ceux d'origine ; les
 icônes de la PWA ne sont pas remplacées par le logo.
 
+### Mises à jour
+
+L'onglet **Mises à jour** affiche la révision installée et la révision disponible sur la
+branche `main` du dépôt GitHub (dépôt public, lecture anonyme), la date de la dernière
+recherche et son éventuel échec classé, les commits, l'extrait du `CHANGELOG.md`, les fichiers
+modifiés par catégorie, les services qui seront redémarrés, toutes les vérifications préalables
+(bloquantes ou non), le résultat de la suite de tests hors ligne du candidat et les options :
+publication de la console, redémarrage des services concernés, modules d'intégration non
+installés (installables seulement si l'installation est configurée ; un module non coché n'est
+jamais installé). Un bandeau « Mise à jour disponible » apparaît en haut de la console pour les
+administrateurs. La recherche est quotidienne (`omni-console-update-check.timer`) et le bouton
+**Rechercher maintenant** la relance (au plus une fois toutes les 2 minutes).
+
+Lancement : **Préparer la mise à jour** (simulation), motif, case « J'ai lu le plan et les
+vérifications », saisie des 12 premiers caractères de la révision cible, **Lancer**. Décision de
+l'administrateur du 23/11/2026 : **un seul administrateur suffit** pour cette action et pour son
+retour arrière ; ce libre-service est réservé à ces deux actions (vérifié aussi par l'exécuteur) ;
+toutes les autres actions à fort impact gardent la double validation et `SOC_ADMIN_SELF_APPROVE`
+est inchangé. Refusé si un contrôle est bloquant, si le plan a plus de 24 h, si la révision n'est
+plus la révision disponible ou si une mise à jour est en cours. Tous les autres garde-fous
+s'appliquent (rôle, réseau interne, `Origin`, CSRF, débit, `SOC_ADMIN_DRY_RUN`, audit).
+
+Le suivi est affiché en direct (étapes, statut, détail), y compris pendant le redémarrage du
+backend. En cas d'échec d'une étape ou de régression au contrôle de santé final, le retour
+arrière est automatique et complet. **Retour arrière de cette mise à jour** annule manuellement
+la dernière mise à jour (confirmation de la révision à restaurer). Pour qu'un collègue puisse
+s'en servir, ajouter son compte Graylog à `SOC_ADMINS` (`/etc/default/omni-mobile`, puis
+redémarrage d'`omni-mobile-api`) ou lui attribuer le rôle administrateur dans l'onglet
+**Accès** (action à fort impact, validée par un second administrateur). Fonctionnement, prérequis, installation et limites :
+[UPDATES.md, section 13](UPDATES.md#13-mise-à-jour-depuis-la-console-soc-en-un-clic).
+
 ### Retour arrière
 
 Le journal propose **Préparer le retour arrière** sur chaque exécution réversible
@@ -224,7 +260,8 @@ automatique.
   sur 24 caractères hexadécimaux, noms d'unité `omni-*`/`oms-*`), aucune commande shell
   construite à partir d'une entrée, écritures atomiques.
 - L'exécuteur privilégié revalide tout : action et paramètres identiques à la demande
-  approuvée, approbateur distinct du demandeur, liste blanche de redémarrage propre
+  approuvée, approbateur distinct du demandeur (sauf mise à jour en libre-service, dont il
+  revérifie la confirmation), liste blanche de redémarrage propre
   (`SOC_EXEC_RESTARTABLE`), trois redémarrages par heure au plus, rejeu refusé.
 - Les réponses de l'espace Administration ne sont pas pseudonymisées (`MOBILE_REDACT`) :
   les actions portent sur les valeurs réelles. Le service worker ne les met jamais en cache.

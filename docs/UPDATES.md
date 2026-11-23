@@ -24,12 +24,13 @@ commande de ce guide ne modifie la machine sans option explicite (`apply-code`,
 10. [Sauvegardes, restauration et preuve de résilience](#10-sauvegardes-restauration-et-preuve-de-résilience)
 11. [Garder GitHub et les fichiers réellement servis cohérents](#11-garder-github-et-les-fichiers-réellement-servis-cohérents)
 12. [Limites connues](#12-limites-connues)
+13. [Mise à jour depuis la console SOC (en un clic)](#13-mise-à-jour-depuis-la-console-soc-en-un-clic)
 
 ## 1. Vue d'ensemble des couches
 
 | Couche | Détection (lecture seule) | Exécution explicite | Retour arrière | Automatisme existant en production |
 |---|---|---|---|---|
-| Code du dépôt | `omni-update-status.py --layer code`, `omni-update.py fetch` puis `plan` | `omni-update.py stage` puis `apply-code` | `omni-update.py rollback` / `recover` | aucun |
+| Code du dépôt | `omni-update-status.py --layer code`, `omni-update.py fetch` puis `plan` ; console SOC, Administration > Mises à jour (§ 13) | `omni-update.py stage` puis `apply-code` ; ou mise à jour en un clic depuis la console (§ 13) | `omni-update.py rollback` / `recover` ; retour arrière automatique ou manuel de la console (§ 13) | `omni-console-update-check.timer` (recherche quotidienne, une fois installé) |
 | Paquets OS | `omni-update-status.py --layer os` | `unattended-upgrades` (sécurité), `oms-maj-siem` (hebdomadaire) | réinstallation de la version précédente (`apt-get install paquet=version`) ; sauvegardes `oms-maj-siem` dans `/data/backups/maj-*` | `apt-daily-upgrade.timer` (quotidien), `oms-maj-siem.timer` (dimanche 04:30) |
 | Pile Graylog / OpenSearch / MongoDB / Logstash | `omni-update-status.py --layer stack`, `omni-stack-upgrade.py plan` | `omni-stack-upgrade.py apply --execute --confirm` | `omni-stack-upgrade.py rollback` (paquet) ; restauration MongoDB manuelle | `omni-version-watch.timer` (veille quotidienne) ; `oms-maj-siem` applique les correctifs **dans la série épinglée** |
 | Dépendances Python | `omni-pydeps.py audit`, `omni-update-status.py --layer python` | réinstallation depuis le verrouillage (`pip install --no-deps -r python-locks/<venv>.txt`) | restaurer la copie du venv ou l'ancien verrouillage (Git) | aucun |
@@ -226,7 +227,9 @@ manuelle obligatoire, `apply-code` refusé).
   un seuil de débit minimal ; un réseau bloqué ne fige plus l'outil.
 - Les échecs sont classés sans recopier la sortie de Git (qui peut contenir une URL ou un
   chemin sensible) : `ref_not_found`, `authentication_required`, `repository_not_found`,
-  `network_unavailable` (y compris délai dépassé), `unsafe_repository`, `git_error`.
+  `network_unavailable` (y compris délai dépassé), `unsafe_repository`, `host_key_unverified`
+  (clé d'hôte SSH inconnue), `git_error`. Un refus de clé SSH (`Permission denied (publickey)`)
+  est classé `authentication_required`.
   Exemple : `Update refused: Git operation failed: fetch (ref_not_found)`.
 - Le verrou `update.lock` est libéré après un échec ; un second `fetch` simultané est refusé.
 - Le candidat et la révision installée sont épinglés par des références
@@ -625,3 +628,190 @@ recherche, les tableaux de bord et le rechargement de la PWA.
   (chemin codé en dur) ; son alignement sur les chemins canoniques relève du chantier
   déploiement.
 - Le scan de vulnérabilités Python suppose l'installation de `pip-audit` et un accès réseau.
+
+## 13. Mise à jour depuis la console SOC (en un clic)
+
+Automatise, depuis **Administration > Mises à jour** de la console `/soc/`, la procédure manuelle
+suivie en production : arbre propre, `git fetch`, avance rapide possible, aucune unité en
+démarrage, sauvegarde de la révision, `git merge --ff-only`, `omni-deploy.py deploy robots apt
+systemd`, publication de la console si elle a changé, redémarrage des seuls services dont le code
+a changé, contrôle de santé. Elle réutilise `omni-update.py` (appels Git, classement des échecs,
+règles de revue manuelle), `omni_deploy` (plan, transactions, retour arrière, santé) et
+`omni-integrations.py` (modules). Code : `omni_update/console.py`, `tools/omni-console-update.py`.
+
+### Architecture et privilèges
+
+| Élément | Compte | Rôle |
+|---|---|---|
+| `omni-console-update-check.timer` (quotidien 06:40, délai aléatoire 15 min, rattrapage au démarrage) et `omni-console-update-check.path` (bouton « Rechercher maintenant ») | root, `ProtectSystem=full`, `ProtectHome=read-only`, `NoNewPrivileges` | `omni-console-update.py check` : `git fetch` du remote attendu, plan, vérifications, tests ; publie `status.json` |
+| `omni-mobile-api` (backend, confiné) | inchangé | lit `status.json` et `run.json`, dépose le déclencheur `check-request`, enregistre la demande confirmée et la transmet à l'exécuteur ; ne lance aucune commande |
+| `omni-soc-admin-exec` (exécuteur privilégié existant) | root | revalide la demande (action, paramètres identiques, confirmation) puis la dépose dans la file root `/var/lib/omni-console-update/queue` (0700) |
+| `omni-console-update.path` + `.service` | root, sans confinement (déploie dans `/usr/local/sbin`, `/etc/systemd/system`, `/var/www`) | `omni-console-update.py run-queue` : revalide encore, recalcule le plan, applique ou annule ; publie `run.json` à chaque étape |
+
+Fichiers : état privé `/var/lib/omni-console-update` (verrou `update.lock`, `run.json`,
+`runs/<id>.json`, `tests/<sha>.json`, `queue/`) ; publication pour la console
+`/var/lib/omni-mobile/admin/update/` (`status.json`, `run.json`, `last_apply.json` : dernière mise à jour effective, seule annulable ; droits 640). Le backend ne fait
+jamais confiance à son propre répertoire pour agir : le service recalcule tout à partir du dépôt.
+Même un backend compromis ne peut faire appliquer qu'une révision présente sur `main` du remote
+attendu et descendante de la révision installée, avec des options en liste fermée.
+
+### Détection (lecture seule pour l'arbre de travail)
+
+`git fetch --no-tags -- <UPDATE_EXPECTED_REMOTE> +refs/heads/main:refs/remotes/origin/main`, avec
+`GIT_TERMINAL_PROMPT=0`, locale C, délai maximal, sans recopier la sortie de Git. Le dépôt
+GitHub étant public, la lecture HTTPS anonyme suffit : aucune authentification n'est à
+configurer. L'URL du remote `origin` doit être celle attendue (`UPDATE_EXPECTED_REMOTE`, par
+défaut `https://github.com/jmorin-info/omnitech-siem-setup.git`) : un remote modifié localement
+ne peut pas servir de source (`remote_refuse`). Une règle `url.*.insteadOf` portant des
+identifiants est refusée. Les échecs sont classés (`authentication_required`,
+`network_unavailable`, `repository_not_found`, `ref_not_found`, `host_key_unverified`...) et
+affichés tels quels dans la console.
+
+`status.json` contient : révision installée et disponible, commits (200 au plus), extrait des
+lignes ajoutées au `CHANGELOG.md`, fichiers modifiés classés (code, robots, unités, console,
+scripts numérotés, revue manuelle, non déployés automatiquement, intégrations, documentation et
+tests), services à redémarrer, résultat des vérifications et des tests, options disponibles.
+
+### Vérifications (affichées avant toute action, revalidées juste avant l'application)
+
+Bloquantes : branche `main` extraite ; remote attendu sans identifiant ; aucune modification de
+fichier suivi ; aucune mise à jour en cours (verrou) ni interrompue ; avance rapide possible ;
+candidat présent sur `main` du remote ; aucun fichier non suivi écrasé ; manifeste valide ; aucun
+changement exigeant une revue manuelle (mêmes règles que `omni-update.py` :
+scripts de pile, `stack-versions.env`, `deploye/apt/`, Compose, migrations, `requirements*.txt`,
+`pyproject.toml`, verrous, `python-locks/`, Dockerfile ; la mise à jour en un clic est alors
+refusée et la procédure manuelle des sections 4, 6 et 7 s'applique) ; plan omni-deploy sans
+blocage (une modification des préférences APT est bloquante) ; suite `run-tests.sh` verte sur le
+candidat, exécutée dans une copie temporaire (`git archive`, jamais dans le dépôt actif) sous le
+compte `UPDATE_TEST_USER` (`nobody` par défaut, via `setpriv`), résultat conservé 24 h par
+révision ; aucune unité `omni-*`/`oms-*`/`siem-*` en `activating` (hors unités de la mise à jour
+elle-même) ; OpenSearch vert ; API Graylog `lbstatus` 200 ; sauvegarde de configuration vérifiée
+de moins de 26 h (`omni-backup-config` en succès) ; 2 Gio libres sur `/` et 1 Gio sur `/var`.
+
+Avertissements (non bloquants) : unités en échec, fichiers non suivis, scripts numérotés modifiés
+(**jamais lancés automatiquement** : à examiner et lancer à la main si nécessaire), composants
+`etc`, `opt`, `nginx`, `logstash` modifiés (non déployés par la mise à jour en un clic : utiliser
+`omni-deploy.py`), `00-vars.env.example` modifié (comparer avec `00-vars.env`, jamais modifié),
+écarts préexistants entre la production et le dépôt (les fichiers seront remplacés, avec
+sauvegarde dans la transaction), services à redémarrer hors liste blanche.
+
+### Options
+
+- **Publier la console** : proposé si `mobile/soc/` ou `mobile/www/` change ; composant `console`
+  d'omni-deploy (transactionnel), les routes nginx ne sont pas modifiées.
+- **Redémarrer les services concernés** : services longs `omni-*`/`oms-*` versionnés dont le
+  code exécuté vit dans un répertoire modifié du dépôt (par exemple `omni-mobile-api` si `mobile/`
+  change), restreints à `UPDATE_RESTART_ALLOW`. Les unités dont un fichier déployé change sont
+  redémarrées par omni-deploy (si actives), même option décochée.
+- **Modules d'intégration** (catalogue `integrations/` du candidat, par exemple un module
+  WatchGuard) : état installé ou non lu par GET dans Graylog ; un module n'est proposé que s'il
+  n'est pas installé et que `UPDATE_GRAYLOG_TOKEN_FILE`, `UPDATE_INTEGRATION_API` et
+  `UPDATE_INTEGRATION_BIND` sont renseignés. **Un module non coché n'est jamais installé.**
+  L'installation (`omni-integrations.py install --apply`, port par défaut du manifeste) a lieu
+  après la mise à jour du code validée ; comme documenté dans
+  [INTEGRATIONS-MODULAIRES.md](INTEGRATIONS-MODULAIRES.md), elle n'est pas transactionnelle : un
+  échec est signalé (« terminée avec avertissements ») sans annuler la mise à jour du code ni
+  supprimer d'entité. Un module déjà installé dans une autre révision exige une migration
+  préparée : il n'est pas proposé.
+
+### Exécution et retour arrière automatique
+
+Après confirmation (voir la console ci-dessous), le service : prend le verrou, refait le `fetch`,
+recalcule plan, vérifications et tests (refus sans modification si un blocage apparaît),
+sauvegarde la révision (`refs/omni-console-update/avant-<id>`), l'état de santé et la liste des
+unités en échec, fait `git merge --ff-only <révision approuvée>` (jamais au-delà, même si `main` a
+avancé), applique `omni-deploy` (robots, unités, préférences APT), publie la console, redémarre
+la liste blanche puis vérifie que chaque service reste actif, et lance le contrôle de santé
+(`omni_deploy.health`, comme `omni-healthcheck.py`). Toute étape en échec, ou une régression du
+contrôle final (contrôle critique passé en échec, nouvelle unité en échec), déclenche le retour
+arrière automatique complet : transactions omni-deploy annulées en ordre inverse, `git reset
+--keep` vers la révision sauvegardée, services redémarrés sur l'ancien code, contrôle de santé.
+Statuts : `terminee`, `terminee_avec_avertissements`, `refusee` (rien modifié), `annulee`,
+`annulation_incomplete` (à traiter à la main : voir le détail des étapes), `restauree`.
+
+Délais : service 90 min (`TimeoutStartSec`), tests 30 min (`UPDATE_TEST_TIMEOUT`), Git 300 s,
+redémarrage 180 s par service. Jamais : modification de `00-vars.env`, de `/etc/default/*` ou d'un
+secret, lancement d'un script numéroté, `git push`, installation d'un module non coché.
+
+Retour arrière manuel : bouton **Retour arrière de cette mise à jour** sur la dernière mise à
+jour terminée ou interrompue (confirmation par la révision courte à restaurer). Refusé si l'arbre
+a été modifié ou si `HEAD` n'est plus la révision installée par la mise à jour. Les modules
+installés ne sont pas désinstallés. Une coupure pendant l'opération laisse `run.json` « en
+cours » sans verrou : la console l'affiche « interrompue », bloque toute nouvelle mise à jour et
+propose le retour arrière ; une transaction omni-deploy en cours au moment de la coupure n'est
+pas connue du journal : la contrôler avec `python3 tools/omni-deploy.py history`.
+
+### Dans la console : décision de l'administrateur (23/11/2026)
+
+La mise à jour et son retour arrière sont des actions d'impact **élevé** en **libre-service** :
+**un seul administrateur** les lance, sans approbation d'un second administrateur. Ce sont les
+seules exceptions : toutes les autres actions à fort impact restent soumises à la double
+validation et `SOC_ADMIN_SELF_APPROVE` n'est pas modifié. Déroulé : lecture du plan et des
+vérifications, **Préparer la mise à jour** (simulation), motif obligatoire, case « J'ai lu le
+plan et les vérifications », saisie des 12 premiers caractères de la révision cible, **Lancer**.
+Le backend enregistre la demande (`self_service`, demandeur = confirmant), l'exécuteur n'accepte
+ce libre-service que pour `update_apply` et `update_rollback` et revérifie la confirmation.
+Restent actifs : rôle administrateur, réseau interne, `Origin`, jeton anti-CSRF, débit,
+`SOC_ADMIN_DRY_RUN` (simulation sans transmission), audit chaîné, verrou, retour arrière
+automatique. Le suivi en direct interroge `GET /m/api/admin/update` toutes les 4 s (le backend
+peut être brièvement indisponible s'il est lui-même redémarré).
+
+### Installer sur un environnement (administrateur, et collègue sur le sien)
+
+Pré-requis : dépôt canonique cloné (`/opt/omni-siem/repository` ou `OMNI_SIEM_HOME`), console et
+exécuteur `omni-soc-admin-exec` déjà installés ([CONSOLE-DEPLOIEMENT.md](CONSOLE-DEPLOIEMENT.md)),
+compte de l'administrateur listé dans `SOC_ADMINS` de `/etc/default/omni-mobile` (ajouter le compte
+Graylog du collègue sur son environnement, ou sur celui-ci s'il doit l'utiliser), sauvegarde
+`omni-backup-config` active, accès HTTPS sortant vers github.com.
+
+```bash
+cd /opt/omni-siem/repository
+git remote get-url origin          # doit afficher l'URL attendue (UPDATE_EXPECTED_REMOTE)
+# Interpréteur de la suite de tests (aucun venv de production ne contient pytest au 23/11/2026)
+python3 -m venv /opt/omni-siem/test-venv
+/opt/omni-siem/test-venv/bin/pip install -r /opt/omni-siem/repository/requirements-dev.txt
+# Configuration (modèle commenté)
+install -m 640 mobile/systemd/omni-console-update.default.example /etc/default/omni-console-update
+grep -q '^SOC_UPDATE_QUEUE=' /etc/default/omni-soc-admin-exec || \
+  echo 'SOC_UPDATE_QUEUE=/var/lib/omni-console-update/queue' >> /etc/default/omni-soc-admin-exec
+# Unités (plan puis application, transactionnel)
+python3 tools/omni-deploy.py deploy systemd --filtre '*/omni-console-update*'
+python3 tools/omni-deploy.py deploy systemd --filtre '*/omni-console-update*' --apply
+systemctl enable --now omni-console-update-check.timer omni-console-update-check.path omni-console-update.path
+systemctl start omni-console-update-check.service     # première recherche (quelques minutes)
+python3 tools/omni-console-update.py status
+```
+
+Puis, avec le nouvel exécuteur et le nouveau backend en place (fichiers `mobile/`), ouvrir
+**Administration > Mises à jour**. Désactivation : `systemctl disable --now` des trois unités.
+
+### Dépôt redevenu privé (option, non requise aujourd'hui)
+
+Utiliser une **clé de déploiement GitHub en lecture seule** dédiée au serveur, jamais un jeton :
+`ssh-keygen -t ed25519 -N '' -f /root/.ssh/omni-siem-deploy -C "$(hostname -f) lecture seule"`,
+déclarer la clé publique dans GitHub (dépôt > Settings > Deploy keys, sans « Allow write
+access »), puis dans `/root/.ssh/config` un bloc `Host github.com` avec
+`IdentityFile /root/.ssh/omni-siem-deploy` et `IdentitiesOnly yes`, ajouter la clé d'hôte de
+GitHub à `known_hosts` après vérification de son empreinte publiée, et passer remote et
+`UPDATE_EXPECTED_REMOTE` à `git@github.com:jmorin-info/omnitech-siem-setup.git` (adapter alors
+`validate_remote` : seule l'URL HTTPS est acceptée aujourd'hui). Une clé par serveur, révocable
+séparément. Ne jamais placer de jeton dans une URL, un fichier du dépôt ou un journal.
+
+### Ligne de commande et limites
+
+```bash
+python3 tools/omni-console-update.py status          # lecture seule
+python3 tools/omni-console-update.py plan [--tests]  # plan sur origin/main déjà récupéré, sans fetch
+sudo python3 tools/omni-console-update.py check      # ce que fait le timer
+```
+
+- Ne traite que le code du dépôt et ses composants robots, unités, console et modules : pas la
+  pile (section 6), pas les paquets OS, pas les venvs (section 7), pas les composants `etc`,
+  `opt`, `nginx`, `logstash`, pas les scripts numérotés.
+- Les services redémarrés sont déterminés d'après les chemins du dépôt cités par les unités :
+  un service qui charge du code par un autre chemin n'est pas détecté.
+- La comparaison de santé ignore les contrôles déjà en échec avant la mise à jour.
+- L'installation d'un module n'est pas annulée automatiquement.
+- Pas de notification par courriel ni d'alerte Graylog de fin de mise à jour : le compte rendu est
+  dans la console, `run.json` et l'audit de l'exécuteur.
+

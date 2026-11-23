@@ -1,0 +1,14 @@
+[Unit]
+Description=OMNI - application ou retour arrière d'une mise à jour demandée depuis la console /soc
+Documentation=file:///opt/omni-siem/repository/docs/UPDATES.md
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Demandes déposées par omni-soc-admin-exec dans /var/lib/omni-console-update/queue (root, 0700).
+# Pas de confinement systemd : l'application déploie dans /usr/local/sbin, /etc/systemd/system,
+# /var/www et redémarre des services (liste blanche, voir /etc/default/omni-console-update).
+ExecStart=/usr/bin/python3 /opt/omni-siem/repository/tools/omni-console-update.py run-queue
+TimeoutStartSec=5400
+PrivateTmp=true
+KillMode=mixed

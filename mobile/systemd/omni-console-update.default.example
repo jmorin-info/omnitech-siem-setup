@@ -1,0 +1,35 @@
+# /etc/default/omni-console-update - mise à jour de l'environnement depuis la console /soc
+# (tools/omni-console-update.py, unités omni-console-update*.{service,timer,path}).
+# Droits 640 root:root. Aucun secret en clair ici : le jeton Graylog éventuel est lu dans
+# un fichier séparé (UPDATE_GRAYLOG_TOKEN_FILE, 600).
+
+# Dépôt canonique mis à jour (git merge --ff-only) et branche suivie.
+UPDATE_REPO=/opt/omni-siem/repository
+UPDATE_BRANCH=main
+# URL attendue du remote « origin » : la mise à jour est refusée si le remote a été modifié.
+# Dépôt public : lecture HTTPS anonyme, aucune authentification à configurer.
+UPDATE_EXPECTED_REMOTE=https://github.com/jmorin-info/omnitech-siem-setup.git
+# État privé (verrou, journaux d'exécution, file d'attente root 0700).
+UPDATE_STATE_DIR=/var/lib/omni-console-update
+# Répertoire partagé avec la console (status.json, run.json publiés en 640).
+SOC_ADMIN_DIR=/var/lib/omni-mobile/admin
+
+# Suite de tests hors ligne du candidat : interpréteur disposant de requirements-dev.txt
+# (pytest, PyYAML, requests, numpy, scikit-learn, joblib). Sans lui, le contrôle « tests »
+# est bloquant. Exemple de création : voir docs/UPDATES.md, section 13.
+UPDATE_TEST_PYTHON=/opt/omni-siem/test-venv/bin/python
+# Compte non privilégié qui exécute les tests (setpriv) ; « aucun » = pas de changement de compte.
+UPDATE_TEST_USER=nobody
+UPDATE_TEST_TIMEOUT=1800
+
+# Liste blanche des services redémarrables par la mise à jour. Vide = services longs
+# omni-*/oms-* versionnés dans deploye/systemd ; « aucun » = aucun redémarrage automatique.
+UPDATE_RESTART_ALLOW=
+
+# Installation facultative de modules d'intégration (omni-integrations.py install --apply).
+# Les trois valeurs sont requises pour proposer la case à cocher ; sinon les modules sont
+# affichés sans pouvoir être installés depuis la console.
+UPDATE_GRAYLOG_TOKEN_FILE=
+UPDATE_INTEGRATION_API=
+UPDATE_INTEGRATION_CA=
+UPDATE_INTEGRATION_BIND=

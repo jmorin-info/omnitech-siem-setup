@@ -44,10 +44,12 @@ GIT_TIMEOUT_SECONDS = 300
 # (a French locale prints "impossible de trouver la reference distante").
 GIT_FAILURES = (
     ("unsafe_repository", ("dubious ownership", "safe.directory")),
+    ("host_key_unverified", ("host key verification failed",)),
     ("ref_not_found", ("couldn't find remote ref", "could not find remote ref", "unknown revision",
                        "not a valid ref", "invalid refspec")),
     ("authentication_required", ("could not read username", "authentication failed", "terminal prompts disabled",
-                                 "http basic: access denied", "403", "401")),
+                                 "http basic: access denied", "403", "401",
+                                 "permission denied (publickey")),
     ("repository_not_found", ("repository not found", "does not appear to be a git repository",
                               "not found", "no such file or directory")),
     ("network_unavailable", ("could not resolve host", "failed to connect", "could not connect", "connection refused",
