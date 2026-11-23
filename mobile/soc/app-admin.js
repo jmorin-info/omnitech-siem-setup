@@ -614,7 +614,7 @@
         (p.refus ? '<div class="adm-actions">' + btn("Fermer", "admCancel()") + "</div>" : "") + "</div>";
       try { panel.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) { /* ancien navigateur */ }
       var m = document.getElementById("admMotif"); if (m) m.focus();
-    }).catch(function () { note("err", "Connexion au SIEM interrompue."); });
+    }).catch(function (e) { note("err", "Connexion au SIEM interrompue" + (e && e.message && e.message !== "auth" ? " (" + e.message + ")" : "") + "."); });
   }
 
   window.admConfirm = function () {
@@ -635,7 +635,7 @@
       if (pr.action === "appearance_set" && window.socAppearance) window.socAppearance.reload();
       ADM.prep = null; var panel = q("#admPanel"); if (panel) panel.innerHTML = "";
       load(ADM.tab);
-    }).catch(function () { note("err", "Connexion au SIEM interrompue."); });
+    }).catch(function (e) { note("err", "Connexion au SIEM interrompue" + (e && e.message && e.message !== "auth" ? " (" + e.message + ")" : "") + "."); });
   };
   window.admCancel = function () { ADM.prep = null; var panel = q("#admPanel"); if (panel) panel.innerHTML = ""; };
 
@@ -654,7 +654,7 @@
     post("/admin/decide", { id: r.id, decision: decision, motif: motif }).then(function (res) {
       if (!res.ok) { note("err", res.error || "Refusé"); } else { note("ok", res.message || (decision === "approuver" ? "Demande approuvée." : "Demande rejetée.")); }
       load("requests");
-    }).catch(function () { note("err", "Connexion au SIEM interrompue."); });
+    }).catch(function (e) { note("err", "Connexion au SIEM interrompue" + (e && e.message && e.message !== "auth" ? " (" + e.message + ")" : "") + "."); });
   };
   window.admRoleEdit = function (i) {
     var u = ADM.refs[i]; if (!u) return;
