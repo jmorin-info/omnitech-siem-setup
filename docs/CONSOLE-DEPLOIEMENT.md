@@ -66,6 +66,10 @@ Déploiement ; aucun nom ni adresse du site de référence ne sert de valeur de 
 `SOC_ORIGINS` contient les noms ou IP autorisés pour les actions provenant du
 navigateur, sans schéma ni chemin. À défaut, le backend utilise l'identité du site
 et le nom de son API Graylog. L'authentification reste assurée par Graylog.
+Si la console est aussi atteinte par un autre nom (proxy ou publication via le pare-feu),
+ce nom doit figurer dans `SOC_ORIGINS` : sinon les écritures d'administration sont refusées
+(« origine absente ou refusée » dans le journal d'administration, « Connexion au SIEM
+interrompue » dans la console). Définir alors la liste complète, valeurs par défaut comprises.
 
 `SOC_ADMINS` énumère les identifiants Graylog autorisés aux demandes SOAR et aux
 notifications push, séparés par des virgules. Une liste vide n’accorde ces droits
