@@ -82,6 +82,15 @@
     el.textContent = "";
     state.logoNode.forEach(function (n) { el.appendChild(n.cloneNode(true)); });
     el.classList.remove("soc-custom-logo");
+    var brand = el.closest(".brand");
+    if (brand) brand.classList.remove("soc-brand-wide");
+  }
+
+  // Logo large : placé au-dessus du nom pour rester lisible dans le bandeau latéral.
+  function layoutLogo(el, img) {
+    var brand = el.closest(".brand");
+    if (!brand || !img.naturalHeight) return;
+    brand.classList.toggle("soc-brand-wide", img.naturalWidth / img.naturalHeight >= 1.6);
   }
 
   function applyLogo(c) {
@@ -91,12 +100,13 @@
     var src = c && c.logo ? (c.logo.src || c.logo.url) : "";
     if (!src) { restoreLogo(el); return; }
     var img = el.querySelector("img.soc-logo-img");
-    if (img && img.getAttribute("src") === src) return;
+    if (img && img.getAttribute("src") === src) { layoutLogo(el, img); return; }
     img = document.createElement("img");
     img.className = "soc-logo-img";
     img.alt = "Logo " + ((c && c.name) || "OMNI SOC");
     img.decoding = "async";
     img.addEventListener("error", function () { restoreLogo(el); });
+    img.addEventListener("load", function () { layoutLogo(el, img); });
     img.src = src;
     el.textContent = "";
     el.appendChild(img);
