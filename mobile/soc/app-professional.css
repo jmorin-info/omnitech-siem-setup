@@ -43,8 +43,13 @@ aside::after {display:none;}
 #ptitle {font-size:12px;font-weight:550;color:var(--mut);max-width:26%;}
 #ptitle::before {content:var(--soc-crumb,"OMNI / ");color:var(--dim);font-weight:400;}
 /* logo personnalisé (app-theme.js) : image contenue dans le pavé du logo */
-.brand .logo.soc-custom-logo {background:transparent;overflow:hidden;}
-.brand .logo .soc-logo-img {width:100%;height:100%;object-fit:contain;display:block;}
+/* Logo carré ou proche du carré : 56 px de haut à côté du nom. Logo large (rapport
+   largeur/hauteur >= 1,6) : au-dessus du nom, sur toute la largeur du bandeau, 72 px au plus. */
+.brand .logo.soc-custom-logo {background:transparent;overflow:visible;border-radius:6px;width:auto;height:56px;min-width:56px;max-width:110px;flex:0 0 auto;}
+.brand .logo .soc-logo-img {height:100%;width:auto;max-width:100%;object-fit:contain;display:block;}
+.brand.soc-brand-wide {flex-direction:column;align-items:flex-start;gap:10px;}
+.brand.soc-brand-wide .logo.soc-custom-logo {height:auto;max-height:72px;width:100%;max-width:100%;min-width:0;}
+.brand.soc-brand-wide .logo .soc-logo-img {height:auto;max-height:72px;width:auto;max-width:100%;}
 header .iconbtn {min-width:34px;min-height:34px;padding:6px 9px;background:var(--card)!important;border-color:var(--bd);border-radius:7px;color:var(--mut);font-size:11px;box-shadow:none;}
 header .pill {font-family:inherit;font-size:10px;background:transparent!important;border:0;padding:5px 6px;}
 header .pill .dot {width:6px;height:6px;box-shadow:none;animation:none;}

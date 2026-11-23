@@ -8,6 +8,7 @@
 /etc/logstash/sql/alarms.sql	deploye/logstash/sql/alarms.sql
 /etc/logstash/sql/audit.sql	deploye/logstash/sql/audit.sql
 /etc/logstash/sql/events.sql	deploye/logstash/sql/events.sql
+/etc/nginx/conf.d/omni-real-ip.conf	deploye/nginx/omni-real-ip.conf
 /etc/nginx/snippets/omni-sec-headers-soc.conf	deploye/nginx/omni-sec-headers-soc.conf
 /etc/nginx/snippets/omni-sec-headers.conf	deploye/nginx/omni-sec-headers.conf
 /etc/oms-snap-siem.conf	deploye/etc/oms-snap-siem.conf

@@ -250,10 +250,12 @@ automatique.
 - Réseau : avec `SOC_ADMIN_INTERNAL_ONLY=1` (défaut), écritures acceptées seulement si l'IP
   cliente (posée par nginx dans `X-Real-IP`, prise en compte uniquement depuis 127.0.0.1)
   appartient à `SOC_ADMIN_NETS` (RFC 1918, boucle locale et fc00::/7 par défaut).
-  **Point à vérifier** : les journaux nginx montrent aujourd'hui les clients de `/m/api/`
-  sous l'adresse `10.33.70.1`. Si l'accès Internet passe par une traduction d'adresse
-  source vers cette adresse, il apparaîtrait comme interne : exclure alors cette adresse
-  de `SOC_ADMIN_NETS` (lister précisément les plages internes réelles).
+  Derrière le FortiGate (proxy `10.33.70.1`, nom `bx-it-graylog-vm.omnitech-security.fr`),
+  nginx retrouve l'adresse réelle du poste dans `X-Forwarded-For` grâce à
+  `/etc/nginx/conf.d/omni-real-ip.conf` (`deploye/nginx/omni-real-ip.conf`) : seul
+  `10.33.70.1` est de confiance et `real_ip_recursive` retient l'adresse ajoutée par le
+  FortiGate, une valeur forgée par le client étant ignorée. Ne jamais ajouter `10.33.70.1`
+  à `SOC_ADMIN_NETS` : tout le trafic relayé, Internet compris, paraîtrait interne.
 - Entrées validées par listes blanches et bornes (IP, CIDR, clés, identifiants Graylog
   sur 24 caractères hexadécimaux, noms d'unité `omni-*`/`oms-*`), aucune commande shell
   construite à partir d'une entrée, écritures atomiques.
