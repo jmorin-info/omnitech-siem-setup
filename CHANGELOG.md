@@ -12,6 +12,8 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ## [Non publié]
 
+- Console SOC : logo personnalisé agrandi (56 px à côté du nom, logo large placé au-dessus du nom) ; adresse cliente réelle derrière le proxy FortiGate (`deploye/nginx/omni-real-ip.conf`), qui rétablit les écritures d'administration depuis les réseaux autorisés et des limites de débit par poste.
+
 ### Ajouté
 
 - Console SOC, Administration > Apparence : nom affiché, sous-titre, logo (PNG, JPEG ou WebP, 512 Ko, signature binaire et dimensions contrôlées, SVG refusé), couleurs des modes sombre et clair limitées aux variables existantes de `app-professional.css` avec refus sous 4,5:1 de contraste, thème par défaut, aperçu local et retour aux valeurs d'origine. Routes `GET /m/api/appearance`, `GET /m/api/appearance/logo` (utilisateur authentifié, `nosniff`), `GET`/`POST /m/api/admin/appearance` (administrateur, garde-fous et audit existants) ; stockage sous `SOC_APPEARANCE_DIR` ; nouveau module `mobile/soc/app-theme.js`, service worker `soc-v8-2026112301`. Documentation `docs/CONSOLE-SOC.md#apparence`, tests `tests/test_console_appearance.py`.
