@@ -1,0 +1,10 @@
+[Unit]
+Description=OMNI - recherche quotidienne de mise à jour du SIEM
+
+[Timer]
+OnCalendar=*-*-* 06:40:00
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

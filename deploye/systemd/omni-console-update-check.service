@@ -1,0 +1,16 @@
+[Unit]
+Description=OMNI - recherche de mise à jour du SIEM (git fetch sans toucher l'arbre, plan, tests hors ligne)
+Documentation=file:///opt/omni-siem/repository/docs/UPDATES.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/omni-siem/repository/tools/omni-console-update.py check --from-request
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2700
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only

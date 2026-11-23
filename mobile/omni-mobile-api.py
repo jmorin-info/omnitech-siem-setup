@@ -3180,6 +3180,195 @@ def _x_appearance(c, actor, motif, rid):
     return {"ok": True, "message": "Apparence enregistrée : appliquée à tous les utilisateurs au prochain chargement de la console."}
 
 
+# ------------------------------------------------------------------ mise à jour de l'environnement
+# Le backend ne lance aucune commande : il lit l'état publié par omni-console-update
+# (SOC_ADMIN_DIR/update/status.json et run.json, écrits par root), dépose un fichier de
+# déclenchement pour « Rechercher maintenant » (unité omni-console-update-check.path) et
+# transmet les demandes confirmées à l'exécuteur privilégié, qui les revalide puis les
+# confie à omni-console-update.service. Impact « eleve » : libre-service (un seul
+# administrateur, révision courte saisie), seule exception à la double validation.
+SOC_UPDATE_DIR = os.path.join(SOC_ADMIN_DIR, "update")
+_SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
+_SHA12_RE = re.compile(r"^[0-9a-f]{12}$")
+_MODULE_RE = re.compile(r"^[a-z][a-z0-9_-]{0,40}$")
+_RUN_ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{8}$")
+UPDATE_STATUS_MAX_AGE = 24 * 3600
+UPDATE_CHECK_COOLDOWN = 120
+
+
+def _update_status():
+    d = _jl(os.path.join(SOC_UPDATE_DIR, "status.json"), None)
+    return d if isinstance(d, dict) else None
+
+
+def _update_run():
+    d = _jl(os.path.join(SOC_UPDATE_DIR, "run.json"), None)
+    return d if isinstance(d, dict) else None
+
+
+def _update_last_apply():
+    d = _jl(os.path.join(SOC_UPDATE_DIR, "last_apply.json"), None)
+    return d if isinstance(d, dict) else None
+
+
+def _update_in_progress():
+    """Mise à jour en cours : service démarré, ou demande transmise pas encore prise en charge (2 h max)."""
+    run = _update_run() or {}
+    if run.get("status") == "en_cours":
+        return True
+    for r in _list_requests(50):
+        if r.get("action") not in ("update_apply", "update_rollback") or r.get("status") != "transmise":
+            continue
+        if time.time() - int(r.get("requested_ts", 0) or 0) > 7200:
+            continue
+        ex = r.get("execution")
+        if not ex or (ex.get("status") == "faite" and run.get("id") != r.get("id")):
+            return True
+    return False
+
+
+def admin_update():
+    st, run = _update_status(), _update_run()
+    req = os.path.join(SOC_UPDATE_DIR, "check-request")
+    try:
+        check_pending_since = int(time.time() - os.path.getmtime(req))
+    except OSError:
+        check_pending_since = None
+    age = None
+    if st and st.get("generated_ts"):
+        try:
+            age = int(time.time() - float(st["generated_ts"]))
+        except (TypeError, ValueError):
+            age = None
+    return {"status": st, "run": run, "last_apply": _update_last_apply(), "status_age_s": age,
+            "check_pending_since_s": check_pending_since,
+            "in_progress": _update_in_progress(), "configured": st is not None, "generated": _now_iso()}
+
+
+def update_banner():
+    st = _update_status() or {}
+    av = st.get("available") or {}
+    return {"update_available": bool(st.get("update_available")), "update_short": str(av.get("short", ""))[:12],
+            "update_can_apply": bool(st.get("can_apply"))}
+
+
+def _a_update_check(p, actor):
+    return {}
+
+
+def _p_update_check(c):
+    st = _update_status() or {}
+    req = os.path.join(SOC_UPDATE_DIR, "check-request")
+    refus = ""
+    if os.path.exists(req) and time.time() - os.path.getmtime(req) < 600:
+        refus = "une recherche est déjà demandée (traitement en cours)"
+    elif st.get("generated_ts") and time.time() - float(st.get("generated_ts") or 0) < UPDATE_CHECK_COOLDOWN:
+        refus = "recherche effectuée il y a moins de 2 minutes"
+    elif _update_in_progress():
+        refus = "une mise à jour est en cours"
+    return {"before": (st.get("installed") or {}).get("short", "inconnue"), "after": "recherche demandée", "impact": "normal",
+            "refus": refus, "effects": ["git fetch de la branche suivie sur le remote attendu (lecture seule, arbre de travail intact).",
+                                       "Recalcul du plan, des vérifications et, pour une nouvelle révision, de la suite de tests hors ligne (quelques minutes)."]}
+
+
+def _x_update_check(c, actor, motif, rid):
+    os.makedirs(SOC_UPDATE_DIR, exist_ok=True)
+    _atomic_write_json(os.path.join(SOC_UPDATE_DIR, "check-request"), {"by": actor, "t": _now_iso(), "id": rid}, 0o640)
+    return {"ok": True, "message": "Recherche demandée : le résultat s'affiche dans quelques minutes."}
+
+
+def _a_update_apply(p, actor):
+    target = str(p.get("target", "")).strip()
+    if not _SHA40_RE.match(target):
+        raise AdminError("révision cible invalide (SHA complet attendu)")
+    confirm = str(p.get("confirm", "")).strip().lower()
+    if confirm and not _SHA12_RE.match(confirm):
+        raise AdminError("confirmation : saisir les 12 premiers caractères de la révision")
+    mods = p.get("modules") or []
+    if not isinstance(mods, list) or len(mods) > 10 or not all(isinstance(m, str) and _MODULE_RE.match(m) for m in mods):
+        raise AdminError("liste de modules invalide")
+    return {"target": target, "confirm": confirm, "console": p.get("console") is not False,
+            "restart": p.get("restart") is not False, "modules": sorted(set(mods)), "plan_read": p.get("plan_read") is True}
+
+
+def _p_update_apply(c):
+    st = _update_status()
+    refus = ""
+    if not st:
+        refus = "aucun état de mise à jour publié (omni-console-update-check jamais exécuté)"
+    elif not st.get("update_available") or (st.get("available") or {}).get("rev") != c["target"]:
+        refus = "la révision demandée n'est pas la mise à jour disponible : relancer la recherche"
+    elif time.time() - float(st.get("generated_ts") or 0) > UPDATE_STATUS_MAX_AGE:
+        refus = "plan de plus de 24 h : relancer la recherche"
+    elif not st.get("can_apply"):
+        refus = "vérifications bloquantes : " + "; ".join(st.get("blocking") or [])[:400]
+    elif _update_in_progress():
+        refus = "une mise à jour ou un retour arrière est déjà en cours"
+    opts = st.get("options") if st else {}
+    if not refus:
+        mods = {m.get("id"): m for m in (opts or {}).get("modules", [])}
+        bad = [m for m in c["modules"] if not (mods.get(m) or {}).get("installable")]
+        if bad:
+            refus = "module non installable depuis la console : " + ", ".join(bad)
+    effects = ["Revalidation complète par le service privilégié (git fetch, vérifications, tests) avant toute modification.",
+               "Sauvegarde de la révision installée, puis git merge --ff-only vers " + c["target"][:12] + ".",
+               "Déploiement transactionnel des robots, unités et préférences APT (omni-deploy).",
+               ("Publication de la console." if c["console"] and (opts or {}).get("console", {}).get("available")
+                else "Console non publiée."),
+               ("Redémarrage limité à : " + ", ".join(st.get("restarts") or []) if c["restart"] and st and st.get("restarts")
+                else "Aucun redémarrage de service par la mise à jour."),
+               "Contrôle de santé final ; en cas d'échec : retour arrière automatique complet."]
+    if c["modules"]:
+        effects.append("Installation des modules cochés après la mise à jour : " + ", ".join(c["modules"])
+                       + " (une installation en échec n'annule pas la mise à jour du code).")
+    warnings = [x.get("label", "") + " : " + x.get("detail", "") for x in (st or {}).get("checks", [])
+                if x.get("status") == "avertissement"]
+    return {"before": ((st or {}).get("installed") or {}).get("short", "?"), "after": c["target"][:12], "impact": "eleve",
+            "refus": refus, "effects": effects, "warnings": warnings[:10],
+            "confirmation": {"expected": c["target"][:12], "label": "Saisir la révision courte de la cible"}}
+
+
+def _confirm_update_apply(c):
+    if c.get("plan_read") is not True:
+        raise AdminError("cocher « J'ai lu le plan et les vérifications »")
+    if c.get("confirm") != c["target"][:12]:
+        raise AdminError("confirmation incorrecte : saisir les 12 premiers caractères de la révision cible")
+
+
+def _a_update_rollback(p, actor):
+    run_id = str(p.get("run_id", "")).strip()
+    if not _RUN_ID_RE.match(run_id):
+        raise AdminError("identifiant de mise à jour invalide")
+    confirm = str(p.get("confirm", "")).strip().lower()
+    if confirm and not _SHA12_RE.match(confirm):
+        raise AdminError("confirmation : saisir les 12 premiers caractères de la révision à restaurer")
+    return {"run_id": run_id, "confirm": confirm}
+
+
+def _p_update_rollback(c):
+    run = _update_last_apply() or {}
+    refus = ""
+    prev = str(run.get("prev_rev") or "")
+    if run.get("id") != c["run_id"] or run.get("kind") != "apply":
+        refus = "seule la dernière mise à jour peut être annulée"
+    elif run.get("status") not in ("terminee", "terminee_avec_avertissements", "interrompue") or not prev:
+        refus = "dernière mise à jour dans l'état « " + str(run.get("status")) + " » : retour arrière sans objet"
+    elif _update_in_progress():
+        refus = "une mise à jour ou un retour arrière est en cours"
+    return {"before": str(run.get("target") or "")[:12], "after": prev[:12], "impact": "eleve", "refus": refus,
+            "effects": ["Retour arrière des transactions omni-deploy de cette mise à jour (fichiers déployés restaurés).",
+                        "git reset --keep vers la révision sauvegardée " + prev[:12] + ".",
+                        "Redémarrage des services redémarrés par la mise à jour, puis contrôle de santé.",
+                        "Les modules d'intégration installés ne sont pas désinstallés (procédure manuelle)."],
+            "confirmation": {"expected": prev[:12], "label": "Saisir la révision courte à restaurer"}}
+
+
+def _confirm_update_rollback(c):
+    run = _update_last_apply() or {}
+    if c.get("confirm") != str(run.get("prev_rev") or "")[:12]:
+        raise AdminError("confirmation incorrecte : saisir les 12 premiers caractères de la révision à restaurer")
+
+
 ADMIN_ACTIONS = {
     "role_set": {"label": "Rôle d'un utilisateur", "validate": _a_role_set, "preview": _p_role_set, "execute": _x_role_set},
     "fp_add": {"label": "Ajout d'un faux positif", "validate": _a_fp_add, "preview": _p_fp_add, "execute": _x_fp_add},
@@ -3195,6 +3384,13 @@ ADMIN_ACTIONS = {
     "detection_toggle": {"label": "Activation d'une détection", "validate": _a_detection, "preview": _p_detection, "execute": _x_detection},
     "service_restart": {"label": "Redémarrage d'un service", "validate": _a_restart, "preview": _p_restart, "execute": _x_exec("service_restart")},
     "appearance_set": {"label": "Apparence de la console", "validate": _a_appearance, "preview": _p_appearance, "execute": _x_appearance},
+    "update_check": {"label": "Recherche de mise à jour", "validate": _a_update_check, "preview": _p_update_check, "execute": _x_update_check},
+    # Libre-service : impact « eleve », exécution sans second administrateur après confirmation
+    # explicite (révision courte). Revalidé par l'exécuteur (SELF_SERVICE_KINDS) et par le service.
+    "update_apply": {"label": "Mise à jour de l'environnement", "validate": _a_update_apply, "preview": _p_update_apply,
+                     "execute": _x_exec("update_apply"), "self_service": True, "confirm": _confirm_update_apply},
+    "update_rollback": {"label": "Retour arrière de la mise à jour", "validate": _a_update_rollback, "preview": _p_update_rollback,
+                        "execute": _x_exec("update_rollback"), "self_service": True, "confirm": _confirm_update_rollback},
 }
 
 
@@ -3243,7 +3439,7 @@ def _run_action(name, clean, actor, motif, rid, preview, ip):
 
 def _target(c):
     return c.get("user") or c.get("entity") or c.get("ip") or c.get("value") or c.get("unit") or \
-        (f"{c.get('key')}" if c.get("key") else "") or c.get("id") or ""
+        (f"{c.get('key')}" if c.get("key") else "") or c.get("id") or c.get("target") or c.get("run_id") or ""
 
 
 def admin_action(body, actor, ip):
@@ -3265,7 +3461,16 @@ def admin_action(body, actor, ip):
         audit_append(actor, "refus", name, _target(clean), motif, preview.get("before"), preview.get("after"),
                      preview["refus"], "", ip)
         raise AdminError(preview["refus"], 409)
+    if spec.get("confirm"):
+        try:
+            spec["confirm"](clean)
+        except AdminError as ex:
+            audit_append(actor, "refus", name, _target(clean), motif, preview.get("before"), preview.get("after"),
+                         str(ex), "", ip)
+            raise
     rid = time.strftime("%Y%m%d-%H%M%S") + "-" + _uuid.uuid4().hex[:8]
+    if spec.get("self_service"):
+        return _self_service_action(name, spec, clean, actor, motif, rid, preview, ip)
     if preview.get("impact") == "fort":
         with _ADMIN_LOCK:
             os.makedirs(ADMIN_REQ_DIR, exist_ok=True)
@@ -3283,6 +3488,33 @@ def admin_action(body, actor, ip):
                 "message": "Demande enregistrée : validation par un second administrateur requise."
                 if not SOC_ADMIN_SELF_APPROVE else "Demande enregistrée : confirmer dans l'onglet Validations."}
     res = _run_action(name, clean, actor, motif, rid, preview, ip)
+    res["id"] = rid
+    return res
+
+
+def _self_service_action(name, spec, clean, actor, motif, rid, preview, ip):
+    """Action en libre-service (mise à jour) : demande confirmée par son auteur, enregistrée
+    avant transmission (l'exécuteur exige self_service=True et decided_by == requested_by)."""
+    if spec is not ADMIN_ACTIONS.get(name) or name not in ("update_apply", "update_rollback"):
+        raise AdminError("libre-service réservé à la mise à jour", 403)
+    with _ADMIN_LOCK:
+        req = {"id": rid, "action": name, "label": spec["label"], "params": clean, "motif": motif,
+               "requested_by": actor, "requested_at": _now_iso(), "requested_ts": int(time.time()),
+               "expires_ts": int(time.time()) + SOC_ADMIN_APPROVAL_TTL, "status": "transmise", "self_service": True,
+               "decided_by": actor, "decided_at": _now_iso(), "decision_motif": "confirmation explicite (libre-service)",
+               "preview": preview, "requested_ip": ip, "decided_ip": ip}
+        _atomic_write_json(_req_path(rid), req)
+    audit_append(actor, "demande", name, _target(clean), motif, preview.get("before"), preview.get("after"),
+                 "confirmée par l'administrateur (libre-service, sans second administrateur)", rid, ip)
+    res = _run_action(name, clean, actor, motif, rid, preview, ip)
+    with _ADMIN_LOCK:
+        req = _jl(_req_path(rid), req)
+        if res.get("simulation"):
+            req["status"] = "simulee"
+        elif not res.get("queued"):
+            req["status"] = "echec"
+        req["result"] = {k: res.get(k) for k in ("ok", "message", "error", "queued", "simulation") if k in res}
+        _atomic_write_json(_req_path(rid), req)
     res["id"] = rid
     return res
 
@@ -3378,7 +3610,7 @@ def admin_me(user, session_token, ip):
                    dry_run=SOC_ADMIN_DRY_RUN, self_approve=SOC_ADMIN_SELF_APPROVE,
                    approval_ttl_s=SOC_ADMIN_APPROVAL_TTL, admins=admin_users()["admins"],
                    detections_available=bool(_graylog_token()), restartable=SOC_ADMIN_RESTARTABLE,
-                   actions={k: v["label"] for k, v in ADMIN_ACTIONS.items()})
+                   actions={k: v["label"] for k, v in ADMIN_ACTIONS.items()}, **update_banner())
     return out
 
 
@@ -3393,6 +3625,7 @@ ADMIN_GET_ROUTES = {
     "/m/api/admin/requests": lambda q: admin_requests(),
     "/m/api/admin/audit": lambda q: audit_read(max(1, min(int((q.get("limit") or ["200"])[0] or 200), 1000))),
     "/m/api/admin/appearance": lambda q: admin_appearance(),
+    "/m/api/admin/update": lambda q: admin_update(),
 }
 
 

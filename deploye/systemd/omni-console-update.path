@@ -1,0 +1,11 @@
+[Unit]
+Description=OMNI - surveille les demandes de mise à jour transmises par l'exécuteur de la console /soc
+
+[Path]
+DirectoryNotEmpty=/var/lib/omni-console-update/queue
+MakeDirectory=yes
+DirectoryMode=0700
+Unit=omni-console-update.service
+
+[Install]
+WantedBy=paths.target

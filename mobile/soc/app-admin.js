@@ -13,12 +13,24 @@
   var ADM = { me: null, tab: "requests", data: {}, prep: null, refs: [], detq: "", auditq: "", appLogo: "conserver" };
   var TABS = [
     ["requests", "Validations"], ["access", "Accès"], ["fp", "Faux positifs"], ["soar", "SOAR"],
-    ["detections", "Détections"], ["settings", "Paramètres"], ["appearance", "Apparence"], ["services", "Supervision"], ["audit", "Journal"]
+    ["detections", "Détections"], ["settings", "Paramètres"], ["appearance", "Apparence"], ["services", "Supervision"],
+    ["updates", "Mises à jour"], ["audit", "Journal"]
   ];
   var TAB_API = { requests: "/admin/requests", access: "/admin/users", fp: "/admin/fp", soar: "/admin/soar",
-    detections: "/admin/detections", settings: "/admin/settings", appearance: "/admin/appearance", services: "/admin/services", audit: "/admin/audit?limit=300" };
+    detections: "/admin/detections", settings: "/admin/settings", appearance: "/admin/appearance", services: "/admin/services", updates: "/admin/update", audit: "/admin/audit?limit=300" };
   var STATUS = { en_attente: "En attente", approuvee: "Approuvée", rejetee: "Rejetée", expiree: "Expirée",
     faite: "Faite", echec: "Échec", transmise: "Transmise à l'exécuteur", simulee: "Simulée", refusee: "Refusée" };
+  var RUN_STATUS = { en_cours: "En cours", terminee: "Terminée", terminee_avec_avertissements: "Terminée avec avertissements",
+    annulee: "Échec : retour arrière automatique effectué", annulation_incomplete: "Échec : retour arrière INCOMPLET",
+    refusee: "Refusée (aucune modification)", restauree: "Retour arrière effectué", restauration_incomplete: "Retour arrière INCOMPLET",
+    interrompue: "Interrompue : retour arrière à lancer", echec: "Échec" };
+  var FETCH_ERR = { authentication_required: "authentification requise par le remote (dépôt devenu privé ?)",
+    network_unavailable: "réseau indisponible ou délai dépassé", repository_not_found: "dépôt introuvable",
+    ref_not_found: "branche introuvable", host_key_unverified: "clé d'hôte SSH non vérifiée",
+    unsafe_repository: "dépôt refusé par Git (propriétaire)", remote_refuse: "remote refusé", git_error: "erreur Git" };
+  var CAT_LABEL = { code: "Code", robots: "Robots", unites: "Unités systemd", console: "Console", scripts_numerotes: "Scripts numérotés (jamais lancés)",
+    revue_manuelle: "Revue manuelle obligatoire", non_deployes: "Non déployés automatiquement", integrations: "Intégrations",
+    documentation_tests: "Documentation et tests", autres: "Autres" };
   var EVENT = { simulation: "Simulation", demande: "Demande", approbation: "Approbation", rejet: "Rejet",
     execution: "Exécution", execution_privilegiee: "Exécution privilégiée", refus: "Refus" };
 
@@ -87,10 +99,25 @@
     if ((location.hash || "").indexOf("p=admin") >= 0) setTimeout(function () { a.click(); }, 50);
   }
 
+  /* bandeau global « Mise à jour disponible » (administrateurs uniquement) */
+  function updateBanner() {
+    var m = ADM.me || {}, old = q("#admUpdBanner");
+    if (old) old.parentNode.removeChild(old);
+    if (!m.update_available) return;
+    var main = q("main");
+    if (!main) return;
+    var div = document.createElement("div");
+    div.id = "admUpdBanner"; div.className = "adm-banner"; div.setAttribute("role", "status");
+    div.innerHTML = '<span class="adm-pill warn">Mise à jour disponible : révision ' + h(m.update_short) +
+      (m.update_can_apply ? "" : " (vérifications bloquantes)") + "</span>" +
+      btn("Ouvrir Administration > Mises à jour", "admUpdOpen()");
+    main.insertBefore(div, main.firstChild);
+  }
+
   function init() {
     get("/admin/me").then(function (me) {
       ADM.me = me;
-      if (me && me.is_admin) ensureNav();
+      if (me && me.is_admin) { ensureNav(); updateBanner(); }
     }).catch(function () { /* non connecté ou backend ancien : pas d'espace Administration */ });
   }
 
@@ -133,8 +160,14 @@
       var body = q("#admBody");
       if (body) body.innerHTML = RENDER[tab](d);
       if (tab === "requests") { var t = q(".adm-tabs"); if (t) t.outerHTML = tabs(); }
+      if (tab === "updates") updPoll(d);
     }).catch(function (e) {
       var body = q("#admBody");
+      if (tab === "updates" && ADM.updPolling) {        /* backend redémarré par la mise à jour : on réessaie */
+        var w = q("#admUpdLive"); if (w) w.textContent = "Backend momentanément indisponible (redémarrage) : nouvelle tentative…";
+        updPoll({ in_progress: true });
+        return;
+      }
       if (body && ADM.tab === tab) body.innerHTML = '<div class="card"><p class="muted">Données indisponibles : ' + h(e.message) + "</p></div>";
     });
     if (tab !== "requests") get(TAB_API.requests).then(function (d) { ADM.data.requests = d; var t = q(".adm-tabs"); if (t) t.outerHTML = tabs(); }).catch(function () {});
@@ -274,6 +307,68 @@
           u.restartable ? btn("Redémarrer", "admRestart(" + i + ")") : "");
       }).join("") || '<div class="empty">Aucune unité omni-* ou oms-* trouvée.</div>';
       return head + card("Services et timers", "lecture seule · redémarrage uniquement pour la liste blanche (" + ((d.restartable || []).length ? h(d.restartable.join(", ")) : "vide") + ")", list);
+    },
+
+    updates: function (d) {
+      var st = d.status, run = d.run, out = "";
+      if (!d.configured) {
+        out += card("Mises à jour", "non configuré",
+          '<p class="muted">Aucun état publié : installer et activer omni-console-update-check.timer et .path (docs/UPDATES.md, section 13).</p>' +
+          '<div class="adm-actions">' + btn("Rechercher maintenant", "admUpdCheck()", "pri") + "</div>");
+        return out + updRun(run, d);
+      }
+      var inst = st.installed || {}, av = st.available || {}, f = st.fetch || {};
+      var head = '<div class="adm-banner">' +
+        '<span class="adm-pill">Installée : <b class="mono">' + h(inst.short) + "</b></span>" +
+        '<span class="adm-pill ' + (st.update_available ? "warn" : "ok") + '">' +
+          (st.update_available ? "Disponible : <b class=\"mono\">" + h(av.short) + "</b> (" + h(st.commit_count || 0) + " commit(s))" : "À jour") + "</span>" +
+        '<span class="adm-pill ' + (f.ok === false ? "crit" : "") + '">Dernière recherche : ' + h(fmtTs(st.generated_at)) +
+          (f.ok === false ? " — échec : " + h(FETCH_ERR[f.error] || f.error) : "") + "</span>" +
+        (d.check_pending_since_s != null ? '<span class="adm-pill warn">Recherche en cours…</span>' : "") + "</div>";
+      out += card("Mise à jour de l'environnement", (st.remote || "") + " · branche " + (st.branch || ""),
+        head + "<p>" + h(inst.subject) + "</p>" + '<div class="adm-actions">' + btn("Rechercher maintenant", "admUpdCheck()") + "</div>");
+      out += updRun(run, d);
+      if (!st.update_available) return out;
+      var checks = (st.checks || []).map(function (c) {
+        var lv = c.status === "ok" ? "ok" : (c.status === "echec" ? "crit" : "warn");
+        return row('<span class="adm-dot lv-' + lv + '"></span><b>' + h(c.label) + "</b>" + (c.level !== "bloquant" ? ' <span class="adm-chip">' + h(c.level) + "</span>" : ""), h(c.detail), "");
+      }).join("");
+      out += card("Vérifications préalables", st.can_apply ? "aucun blocage" : "mise à jour en un clic refusée", checks +
+        (st.can_apply ? "" : '<p class="adm-refus">Bloquant : ' + h((st.blocking || []).join(" ; ")) + "</p>"));
+      var cats = (st.changes || {}).categories || {};
+      var cl = Object.keys(CAT_LABEL).filter(function (k) { return (cats[k] || []).length; }).map(function (k) {
+        return "<details><summary>" + h(CAT_LABEL[k]) + " (" + cats[k].length + ")</summary><div class=\"adm-meta mono\">" +
+          cats[k].map(h).join("<br>") + "</div></details>";
+      }).join("");
+      var dep = st.deploy || {};
+      out += card("Changements", (st.changes || {}).total + " fichier(s)", cl +
+        '<div class="adm-meta">Fichiers déployés : ' + h((dep.files || []).length) + " · console : " + h(dep.console_files || 0) +
+        " · services redémarrés : " + h(show(st.restarts)) + (st.restarts_manual && st.restarts_manual.length ? " · à redémarrer manuellement : " + h(show(st.restarts_manual)) : "") + "</div>");
+      out += card("Commits", "", (st.commits || []).slice(0, 40).map(function (c) {
+        return row('<span class="mono">' + h(c.short) + "</span> " + h(c.subject), h(c.author) + " · " + h(fmtTs(c.date)), "");
+      }).join("") || '<div class="empty">Aucun commit.</div>');
+      if ((st.changelog || []).length)
+        out += card("Extrait du CHANGELOG", "", '<pre class="adm-meta" style="white-space:pre-wrap">' + h(st.changelog.join("\n")) + "</pre>");
+      var t = st.tests || {};
+      if (t.status && t.status !== "ok")
+        out += card("Tests hors ligne du candidat", t.status, '<pre class="adm-meta" style="white-space:pre-wrap">' + h((t.tail || []).join("\n")) + "</pre>");
+      var o = st.options || {}, mods = o.modules || [];
+      ADM.updMods = mods;
+      var opt = '<div class="adm-form">' +
+        '<label class="adm-field"><span>Publier la console</span><input type="checkbox" id="admUpdConsole"' + ((o.console || {}).default ? " checked" : "") +
+          ((o.console || {}).available ? "" : " disabled") + "><small>" + h((o.console || {}).detail) + "</small></label>" +
+        '<label class="adm-field"><span>Redémarrer les services concernés</span><input type="checkbox" id="admUpdRestart"' + ((o.restart || {}).default !== false ? " checked" : "") +
+          "><small>" + h((o.restart || {}).detail) + "</small></label>" +
+        mods.map(function (m, i) {
+          return '<label class="adm-field"><span>Module ' + h(m.name) + " (révision " + h(m.revision) + ")</span>" +
+            '<input type="checkbox" id="admUpdMod' + i + '"' + (m.installable ? "" : " disabled") + "><small>" + h(m.detail) + "</small></label>";
+        }).join("") + "</div>" +
+        '<p class="muted adm-help">Un module non coché n\'est jamais installé. Les scripts numérotés ne sont jamais lancés. ' +
+        "La mise à jour est revalidée par le service privilégié, puis appliquée avec retour arrière automatique en cas d'échec. " +
+        "Action en libre-service : motif et confirmation de la révision obligatoires, sans second administrateur.</p>" +
+        '<div class="adm-actions">' + btn("Préparer la mise à jour", "admUpdPrepare()", "pri") + "</div>";
+      out += card("Options et lancement", "impact élevé", opt);
+      return out;
     },
 
     appearance: function (d) {
@@ -459,6 +554,43 @@
   };
   window.admAppReset = function () { prepare("appearance_set", { reset: true }, "/admin/appearance"); };
 
+  /* ------------------------------------------------------------ mises à jour : suivi */
+  function updRun(run, d) {
+    if (!run) return "";
+    var steps = (run.steps || []).map(function (s) {
+      var lv = s.status === "ok" ? "ok" : (s.status === "en_cours" || s.status === "avertissement" ? "warn" : "crit");
+      return row('<span class="adm-dot lv-' + lv + '"></span>' + h(s.label), h(s.status) + (s.detail ? " · " + h(s.detail) : "") +
+        " · " + h(fmtTs(s.started)), "");
+    }).join("");
+    var la = d.last_apply;
+    var rb = la && la.prev_rev && ["terminee", "terminee_avec_avertissements", "interrompue"].indexOf(la.status) >= 0 && !d.in_progress;
+    ADM.updRun = la;
+    return card(run.kind === "rollback" ? "Dernier retour arrière" : "Dernière mise à jour",
+      (RUN_STATUS[run.status] || run.status) + " · " + (run.requested_by || ""),
+      '<p id="admUpdLive" class="muted">' + (d.in_progress ? "Opération en cours : suivi automatique." : h(run.result || "")) + "</p>" +
+      (run.target ? '<div class="adm-meta">Cible ' + h(String(run.target).slice(0, 12)) + (run.prev_rev ? " · révision précédente " + h(String(run.prev_rev).slice(0, 12)) : "") + "</div>" : "") +
+      steps + (rb ? '<div class="adm-actions">' + btn("Retour arrière de la mise à jour " + String(la.target || "").slice(0, 12), "admUpdRollback()") + "</div>" : ""));
+  }
+  function updPoll(d) {
+    clearTimeout(ADM.updTimer);
+    ADM.updPolling = !!(d && d.in_progress);
+    if (ADM.updPolling && ADM.tab === "updates") ADM.updTimer = setTimeout(function () { if (ADM.tab === "updates") load("updates"); }, 4000);
+  }
+  window.admUpdOpen = function () {
+    var a = q("#nav a[data-p='admin']"); if (!a) return;
+    a.click();
+    var i = TABS.map(function (t) { return t[0]; }).indexOf("updates"); if (i >= 0) window.admTab(i);
+  };
+  window.admUpdCheck = function () { prepare("update_check", {}); };
+  window.admUpdPrepare = function () {
+    var st = ((ADM.data.updates || {}).status || {}), av = st.available || {};
+    var mods = (ADM.updMods || []).filter(function (m, i) { var el = document.getElementById("admUpdMod" + i); return el && el.checked && m.installable; })
+      .map(function (m) { return m.id; });
+    var c = document.getElementById("admUpdConsole"), r = document.getElementById("admUpdRestart");
+    prepare("update_apply", { target: av.rev, console: !!(c && c.checked), restart: !!(r && r.checked), modules: mods });
+  };
+  window.admUpdRollback = function () { var run = ADM.updRun; if (run) prepare("update_rollback", { run_id: run.id }); };
+
   /* ------------------------------------------------------------ simulation puis confirmation */
   function prepare(action, params, path) {
     if (ADM.me && !ADM.me.writes_allowed) { note("err", "Écritures d'administration refusées depuis ce réseau."); return; }
@@ -466,7 +598,7 @@
     post(path, { action: action, params: params, simulate: true }).then(function (r) {
       if (!r.ok) { note("err", r.error || "Refusé"); return; }
       ADM.prep = { action: action, params: params, preview: r.preview, label: r.label, path: path };
-      var p = r.preview || {}, fort = p.impact === "fort";
+      var p = r.preview || {}, fort = p.impact === "fort", eleve = p.impact === "eleve", conf = p.confirmation;
       var panel = q("#admPanel");
       if (!panel) return;
       panel.innerHTML = '<div class="card adm-confirm" role="dialog" aria-labelledby="admPrepTitle">' +
@@ -476,7 +608,9 @@
         (p.warnings || []).map(function (x) { return '<p class="adm-warn">' + h(x) + "</p>"; }).join("") +
         (p.refus ? '<p class="adm-refus">Action impossible : ' + h(p.refus) + "</p>" :
           field("admMotif", "Motif (obligatoire, journalisé)", '<textarea id="admMotif" maxlength="300" rows="2"></textarea>') +
-          '<div class="adm-actions">' + btn(fort ? "Soumettre à validation" : "Confirmer l'action", "admConfirm()", "pri") + btn("Annuler", "admCancel()") + "</div>") +
+          (conf ? '<label class="adm-field"><span><input type="checkbox" id="admConfRead"> J\'ai lu le plan et les vérifications</span></label>' +
+            field("admConfRev", conf.label + " : " + conf.expected, input("admConfRev", conf.expected, 12)) : "") +
+          '<div class="adm-actions">' + btn(fort ? "Soumettre à validation" : (eleve ? "Lancer" : "Confirmer l'action"), "admConfirm()", "pri") + btn("Annuler", "admCancel()") + "</div>") +
         (p.refus ? '<div class="adm-actions">' + btn("Fermer", "admCancel()") + "</div>" : "") + "</div>";
       try { panel.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) { /* ancien navigateur */ }
       var m = document.getElementById("admMotif"); if (m) m.focus();
@@ -487,7 +621,15 @@
     var pr = ADM.prep; if (!pr) return;
     var motif = val("admMotif");
     if (motif.length < 4) { note("warn", "Indiquer un motif (4 caractères minimum)."); return; }
-    post(pr.path || "/admin/action", { action: pr.action, params: pr.params, motif: motif }).then(function (r) {
+    var params = pr.params;
+    if (pr.preview && pr.preview.confirmation) {
+      var rd = document.getElementById("admConfRead");
+      if (!rd || !rd.checked) { note("warn", "Cocher « J'ai lu le plan et les vérifications »."); return; }
+      if (val("admConfRev").toLowerCase() !== pr.preview.confirmation.expected) { note("warn", "Révision de confirmation incorrecte."); return; }
+      params = JSON.parse(JSON.stringify(pr.params));
+      params.confirm = val("admConfRev").toLowerCase(); params.plan_read = true;
+    }
+    post(pr.path || "/admin/action", { action: pr.action, params: params, motif: motif }).then(function (r) {
       if (!r.ok) { note("err", r.error || "Refusé"); return; }
       note("ok", r.message || (r.pending ? "Demande enregistrée." : "Action effectuée."));
       if (pr.action === "appearance_set" && window.socAppearance) window.socAppearance.reload();
@@ -500,6 +642,7 @@
   window.admTab = function (i) {
     var t = TABS[i]; if (!t) return;
     if (ADM.tab === "appearance" && t[0] !== "appearance") window.admAppEndPreview();
+    clearTimeout(ADM.updTimer); ADM.updPolling = false;
     ADM.tab = t[0]; window.admCancel(); render();
   };
   window.admDecide = function (i, decision) {

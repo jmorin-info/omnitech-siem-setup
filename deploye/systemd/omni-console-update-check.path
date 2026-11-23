@@ -1,0 +1,9 @@
+[Unit]
+Description=OMNI - bouton « Rechercher maintenant » de la console /soc
+
+[Path]
+PathExists=/var/lib/omni-mobile/admin/update/check-request
+Unit=omni-console-update-check.service
+
+[Install]
+WantedBy=paths.target

@@ -180,7 +180,8 @@ class Console:
         self.exec_conf.write_text("\n".join([
             f"SOC_ADMIN_DIR={self.data}/admin", f"SOC_TRIAGE_ENV={self.triage_env}",
             f"SOC_SOAR_ENV={self.soar_env}", f"SOC_SOAR_FIX={self.soar_fix}",
-            f"SOC_SYSTEMCTL={self.systemctl}", "SOC_EXEC_RESTARTABLE=omni-alert-triage.service"]) + "\n")
+            f"SOC_SYSTEMCTL={self.systemctl}", "SOC_EXEC_RESTARTABLE=omni-alert-triage.service",
+            f"SOC_UPDATE_QUEUE={tmp}/update-queue"]) + "\n")
         env = dict(os.environ, MOBILE_CONFIG=str(conf), FAKE_SYSTEMCTL_LOG=str(tmp / "systemctl.log"), OMNI_TEST_MODE="1")
         self.proc = subprocess.Popen([sys.executable, str(API)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         deadline = time.time() + 15
@@ -588,7 +589,8 @@ def test_backend_and_executor_whitelists_match(api, tmp_path, monkeypatch):
     fake.chmod(0o755)
     monkeypatch.setenv("OMNI_SOC_EXEC_CONFIG", str(tmp_path / "absent.conf"))
     for k, v in (("SOC_ADMIN_DIR", tmp_path / "a"), ("SOC_TRIAGE_ENV", tmp_path / "t.env"),
-                 ("SOC_SOAR_ENV", tmp_path / "s.env"), ("SOC_SOAR_FIX", tmp_path / "f.txt"), ("SOC_SYSTEMCTL", fake)):
+                 ("SOC_SOAR_ENV", tmp_path / "s.env"), ("SOC_SOAR_FIX", tmp_path / "f.txt"), ("SOC_SYSTEMCTL", fake),
+                 ("SOC_UPDATE_QUEUE", tmp_path / "q")):
         monkeypatch.setenv(k, str(v))
     loader = importlib.machinery.SourceFileLoader("omni_soc_admin_exec", str(EXEC))
     spec = importlib.util.spec_from_loader(loader.name, loader)
@@ -608,8 +610,8 @@ def test_admin_assets_are_published_and_cached_by_service_worker():
     sw = (SOC / "sw.js").read_text(encoding="utf-8")
     import re
     scripts = re.findall(r'<script src="(/soc/[^"]+)"', html)
-    assert "/soc/app-admin.js?v=2026112301" in scripts
-    assert scripts.index("/soc/app-admin.js?v=2026112301") > scripts.index("/soc/app-csp.js?v=2026112101")
+    assert "/soc/app-admin.js?v=2026112302" in scripts
+    assert scripts.index("/soc/app-admin.js?v=2026112302") > scripts.index("/soc/app-csp.js?v=2026112101")
     for src in scripts:
         if "?v=" in src:
             assert f'"{src}"' in sw, src

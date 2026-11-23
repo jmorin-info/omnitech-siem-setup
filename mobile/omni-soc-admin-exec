@@ -15,6 +15,10 @@
 #   sauvegarde horodatée avant chaque modification (10 conservées), résultat dans
 #   exec/done/<id>.json et entrée dans le journal d'audit chaîné de la console.
 #   Aucune commande shell : subprocess en liste d'arguments uniquement.
+#   Mise à jour de l'environnement (update_apply, update_rollback) : action à impact
+#   « élevé » en libre-service (un seul administrateur, confirmation explicite de la
+#   révision courte) ; revalidée ici puis transmise à omni-console-update.service par
+#   la file root SOC_UPDATE_QUEUE (0700). Aucune autre action n'est en libre-service.
 # Configuration facultative : /etc/default/omni-soc-admin-exec (ou OMNI_SOC_EXEC_CONFIG).
 # =============================================================================
 import fcntl
@@ -31,7 +35,7 @@ import time
 
 CONF = {}
 for _k in ("SOC_ADMIN_DIR", "SOC_TRIAGE_ENV", "SOC_SOAR_ENV", "SOC_SOAR_FIX", "SOC_SYSTEMCTL",
-           "SOC_EXEC_RESTARTABLE", "SOC_EXEC_SELF_APPROVE"):
+           "SOC_EXEC_RESTARTABLE", "SOC_EXEC_SELF_APPROVE", "SOC_UPDATE_QUEUE"):
     if os.environ.get(_k):
         CONF[_k] = os.environ[_k]
 _cfg = os.environ.get("OMNI_SOC_EXEC_CONFIG", "/etc/default/omni-soc-admin-exec")
@@ -55,10 +59,14 @@ SOAR_FIX = CONF.get("SOC_SOAR_FIX", "/etc/omni-soar/exclusions-statiques.txt")
 SYSTEMCTL = CONF.get("SOC_SYSTEMCTL", "systemctl")
 RESTARTABLE = {u.strip() for u in CONF.get("SOC_EXEC_RESTARTABLE", "").split(",") if u.strip()}
 SELF_APPROVE = CONF.get("SOC_EXEC_SELF_APPROVE", "0") == "1"
+UPDATE_QUEUE = CONF.get("SOC_UPDATE_QUEUE", "/var/lib/omni-console-update/queue")
+# Seules actions exécutables sans second administrateur (décision du 23/11/2026) : la mise à
+# jour de l'environnement et son retour arrière. Toutes les autres restent à double validation.
+SELF_SERVICE_KINDS = ("update_apply", "update_rollback")
 # Garde-fou des tests : en OMNI_TEST_MODE=1, refus de démarrer si un chemin écrit vise la production.
 if os.environ.get("OMNI_TEST_MODE") == "1":
     _bad = [n for n, v in (("SOC_ADMIN_DIR", ADMIN_DIR), ("SOC_TRIAGE_ENV", TRIAGE_ENV), ("SOC_SOAR_ENV", SOAR_ENV),
-                           ("SOC_SOAR_FIX", SOAR_FIX))
+                           ("SOC_SOAR_FIX", SOAR_FIX), ("SOC_UPDATE_QUEUE", UPDATE_QUEUE))
             if any(os.path.realpath(v) == p or os.path.realpath(v).startswith(p + "/")
                    for p in ("/var/lib", "/etc", "/var/www", "/var/log", "/usr", "/opt/oms-"))]
     _sc = os.path.realpath(shutil.which(SYSTEMCTL) or SYSTEMCTL)
@@ -88,6 +96,8 @@ SOAR_PARAMS = {
     "SOAR_MAX": {"type": "int", "min": 10, "max": 2000},
 }
 UNIT_RE = re.compile(r"^(omni|oms)-[A-Za-z0-9@._-]{1,80}\.service$")
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+MODULE_RE = re.compile(r"^[a-z][a-z0-9_-]{0,40}$")
 ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{8}$")
 
 
@@ -295,13 +305,23 @@ def handle(job):
     req = load_json(os.path.join(REQS, rid + ".json"))
     if not isinstance(req, dict):
         raise Refus("demande d'origine introuvable")
-    if req.get("status") not in ("approuvee", "transmise"):
-        raise Refus("demande non approuvée")
-    if not req.get("decided_by"):
-        raise Refus("approbateur absent")
-    if str(req.get("decided_by", "")).lower() == str(req.get("requested_by", "")).lower() and not SELF_APPROVE:
-        raise Refus("approbateur identique au demandeur")
     kind = job.get("kind")
+    if kind in SELF_SERVICE_KINDS:
+        # Libre-service réservé à la mise à jour : demande confirmée par son auteur, jamais
+        # « approuvée » par un tiers (la double validation ne s'applique pas à cette action).
+        if req.get("status") != "transmise" or req.get("self_service") is not True:
+            raise Refus("demande de mise à jour non confirmée")
+        if not req.get("requested_by") or str(req.get("decided_by", "")).lower() != str(req.get("requested_by", "")).lower():
+            raise Refus("confirmation absente ou d'un autre compte")
+    else:
+        if req.get("self_service"):
+            raise Refus("libre-service refusé pour cette action")
+        if req.get("status") not in ("approuvee", "transmise"):
+            raise Refus("demande non approuvée")
+        if not req.get("decided_by"):
+            raise Refus("approbateur absent")
+        if str(req.get("decided_by", "")).lower() == str(req.get("requested_by", "")).lower() and not SELF_APPROVE:
+            raise Refus("approbateur identique au demandeur")
     if kind != req.get("action"):
         raise Refus("action différente de la demande approuvée")
     p = job.get("params") or {}
@@ -332,7 +352,50 @@ def handle(job):
         if out.returncode != 0:
             raise RuntimeError((out.stderr or out.stdout).strip()[-300:] or f"code {out.returncode}")
         return {"before": "", "after": "redémarré", "resultat": f"{unit} redémarré"}
+    if kind in SELF_SERVICE_KINDS:
+        clean = check_update_params(kind, p)
+        queue_update(rid, kind, clean)
+        return {"before": "", "after": "transmise",
+                "resultat": "transmise au service de mise à jour (suivi dans Administration > Mises à jour)"}
     raise Refus("type d'action non autorisé")
+
+
+def check_update_params(kind, p):
+    if kind == "update_apply":
+        if set(p) != {"target", "confirm", "console", "restart", "modules", "plan_read"}:
+            raise Refus("paramètres de mise à jour inattendus")
+        target = str(p.get("target", ""))
+        if not SHA_RE.match(target) or p.get("confirm") != target[:12] or p.get("plan_read") is not True:
+            raise Refus("révision cible ou confirmation invalide")
+        if not isinstance(p.get("console"), bool) or not isinstance(p.get("restart"), bool):
+            raise Refus("options invalides")
+        mods = p.get("modules")
+        if not isinstance(mods, list) or len(mods) > 10 or not all(isinstance(m, str) and MODULE_RE.match(m) for m in mods):
+            raise Refus("liste de modules invalide")
+    else:
+        if set(p) != {"run_id", "confirm"} or not ID_RE.match(str(p.get("run_id", ""))) \
+                or not re.match(r"^[0-9a-f]{12}$", str(p.get("confirm", ""))):
+            raise Refus("paramètres de retour arrière invalides")
+    return p
+
+
+def queue_update(rid, kind, params):
+    """File root (0700) lue par omni-console-update.service (unité path)."""
+    os.makedirs(UPDATE_QUEUE, mode=0o700, exist_ok=True)
+    os.chmod(UPDATE_QUEUE, 0o700)
+    if len(glob.glob(os.path.join(UPDATE_QUEUE, "*.json"))) >= 3:
+        raise Refus("trop de demandes de mise à jour en attente")
+    path = os.path.join(UPDATE_QUEUE, rid + ".json")
+    if os.path.exists(path) or os.path.exists(os.path.join(UPDATE_QUEUE, "done", rid + ".json")):
+        raise Refus("demande déjà transmise (rejeu refusé)")
+    data = json.dumps({"id": rid, "kind": kind, "params": params, "t": now_iso()}, ensure_ascii=False)
+    tmp = os.path.join(UPDATE_QUEUE, "." + rid + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
 
 
 def main():
@@ -356,7 +419,7 @@ def main():
                 res.update(status="echec", resultat=f"{type(ex).__name__}: {str(ex)[:200]}")
         jd = job if isinstance(job, dict) else {}
         pr = jd.get("params") if isinstance(jd.get("params"), dict) else {}
-        target = pr.get("key") or pr.get("value") or pr.get("unit") or ""
+        target = pr.get("key") or pr.get("value") or pr.get("unit") or pr.get("target") or pr.get("run_id") or ""
         try:
             audit(jd.get("actor", "?"), res.get("kind") or "inconnue", target,
                   f"{res['status']} : {res.get('resultat', '')}", res["id"], res.get("before"), res.get("after"),
