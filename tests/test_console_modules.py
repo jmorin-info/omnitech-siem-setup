@@ -126,6 +126,14 @@ def test_field_catalog_rejects_partial_index_results(configured, monkeypatch):
     assert configured._modules_field_catalog() == [{"name": "source", "type": "keyword", "aggregatable": True}]
 
 
+def test_empty_graylog_catalog_explains_service_account_permissions(configured, monkeypatch):
+    monkeypatch.setattr(configured, "_modules_graylog_catalog", lambda: ([], []))
+    monkeypatch.setattr(configured, "_modules_field_catalog", lambda: [])
+    monkeypatch.setattr(configured, "os_search", lambda *a: {"_shards": {"failed": 0}, "aggregations": {"sources": {"buckets": []}}})
+    errors = configured.admin_modules()["catalog"]["errors"]
+    assert len(errors) == 2 and all("partages du compte Graylog" in e for e in errors)
+
+
 def test_pages_are_opt_in_and_filtered_by_server_role(configured, monkeypatch):
     publish(configured)
     assert configured.modules_public("reader")["pages"] == []

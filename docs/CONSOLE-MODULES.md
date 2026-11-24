@@ -56,6 +56,9 @@ arbitraire ne peut être ajouté dans un widget.
 Le catalogue utilise le jeton de service `SOC_GRAYLOG_TOKEN_FILE` pour lire les streams
 et dashboards Graylog. Un catalogue indisponible est signalé et ne supprime pas la
 configuration enregistrée. Le catalogue présente au maximum 100 dashboards.
+Un jeton limité aux définitions d'événements peut recevoir HTTP 200 avec des listes
+vides : partager aussi les streams et dashboards concernés avec son compte de service,
+en lecture. Vérifier ces droits avec ce compte, pas seulement avec un administrateur.
 Le lien vers un dashboard ouvre sa vue native : les graphiques Graylog existants
 ne sont pas convertis automatiquement en widgets SOC.
 

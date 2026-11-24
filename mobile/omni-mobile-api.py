@@ -3480,6 +3480,10 @@ def admin_modules():
     catalog = {"streams": [], "dashboards": [], "fields": [], "sources": [], "errors": []}
     try:
         catalog["streams"], catalog["dashboards"] = _modules_graylog_catalog()
+        if not catalog["streams"]:
+            catalog["errors"].append("Aucun stream visible avec le jeton de service ; vérifier les droits et les partages du compte Graylog.")
+        if not catalog["dashboards"]:
+            catalog["errors"].append("Aucun dashboard visible avec le jeton de service ; vérifier les droits et les partages du compte Graylog.")
     except Exception:
         catalog["errors"].append("Catalogue Graylog indisponible ; vérifier le jeton et ses permissions de lecture.")
     try:

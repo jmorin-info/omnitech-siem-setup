@@ -262,6 +262,17 @@ def test_console_profile_refuses_custom_port_without_changing_configuration(env,
     assert git(env["home"], "rev-parse", "HEAD") == env["v1"]
 
 
+@pytest.mark.parametrize("destination,accepted", [("301 /soc/", True), ("308 /soc/", True),
+                                                 ("301 https://external.test/", False), ("301 /custom/", False)])
+def test_retired_mobile_route_to_soc_is_preserved(env, destination, accepted):
+    site = env["root"] / "etc/nginx/sites-enabled/graylog"
+    site.write_text("server { location /soc/ { alias /var/www/siem-soc/; } location /m/ { return " + destination + "; } }\n")
+    before = site.read_bytes()
+    problems = env["updater"].console_profile_problems([("M", "mobile/soc/app-modules.js")])
+    assert (not problems) is accepted
+    assert site.read_bytes() == before
+
+
 def test_console_update_and_rollback_preserve_site_widget_configuration(env):
     custom = env["root"] / "var/lib/omni-mobile/modules/config.json"
     custom.parent.mkdir(parents=True)

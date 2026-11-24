@@ -83,6 +83,10 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
   configuré. Conservation des pages locales pendant une mise à jour et son retour arrière.
 - Contrôle de qualité : un exécutable ShellCheck ou Ruff absent provoque désormais
   un refus explicite, au lieu de laisser apparaître un résultat de lint incomplet.
+- Catalogue SOC : diagnostic des listes vides renvoyées à un compte de service sans
+  partage des streams et dashboards. Mise à jour : redirection historique `/m/` vers
+  `/soc/` acceptée et conservée. Retrait d'une redéfinition identique de `add_mitre`
+  dans le script 49, qui faisait échouer la recette avec ShellCheck 0.9.
 
 - `30-backup-config.sh` : l'en-tête LUKS de `/data` est enfin archivé. Le script testait `/dev/sda1` (`/boot/efi`) ; il détecte désormais le périphérique sous-jacent de `/data` (`findmnt` ou `/etc/fstab`, puis `cryptsetup status`, `lsblk`, `/etc/crypttab` ; surcharge `LUKS_DEVICE`), copie l'en-tête par `cryptsetup luksHeaderBackup` dans `luks/data-header.img` de l'archive chiffrée, contrôle sa signature et son UUID et joint `luks/data-header.txt`. Un échec n'empêche pas l'envoi mais émet `backup_config_echec`.
 - `30-backup-config.sh` : `mongodb_uri` lu sur la dernière ligne non commentée de `server.conf`, comme Graylog (les 4 lignes de production étaient concaténées) ; arrêt explicite si aucune ligne n'est trouvée.

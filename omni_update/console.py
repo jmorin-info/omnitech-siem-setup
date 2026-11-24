@@ -488,6 +488,10 @@ class ConsoleUpdater:
             else:
                 for route, expected in (("soc", "/var/www/siem-soc"), ("m", "/var/www/siem-mobile")):
                     blocks = re.findall(r"location\s+(?:\^~\s+)?/" + route + r"/\s*\{([^{}]*)\}", site)
+                    # The retired mobile UI may intentionally redirect to the SOC.
+                    # Publishing its unused assets must not undo or block that route.
+                    if route == "m" and len(blocks) == 1 and re.fullmatch(r"\s*return\s+(?:301|302|307|308)\s+/soc/\s*;\s*", blocks[0]):
+                        continue
                     aliases = [re.search(r"\balias\s+([^;]+);", block) for block in blocks]
                     if len(aliases) != 1 or aliases[0] is None or aliases[0][1].strip().strip('"').rstrip("/") != expected:
                         problems.append("racine nginx /" + route + "/ personnalisée ou indéterminée : "

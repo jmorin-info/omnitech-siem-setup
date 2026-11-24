@@ -41,6 +41,8 @@ chemins web personnalisés exige une publication manuelle adaptée et bloque le 
 automatique concerné avant modification. Les paramètres `UPDATE_CONSOLE_CONFIG`
 et `UPDATE_NGINX_SITE` permettent de désigner les fichiers de configuration à inspecter ;
 ils ne rendent pas un profil personnalisé automatiquement compatible.
+Une redirection explicite de l'ancienne interface `/m/` vers `/soc/` est acceptée
+et conservée ; elle n'est pas réactivée en tant qu'interface séparée.
 
 | Couche | Détection (lecture seule) | Exécution explicite | Retour arrière | Automatisme existant en production |
 |---|---|---|---|---|
