@@ -277,6 +277,49 @@ def dedicated_mongo_test():
     return facts
 
 
+def console_module_widgets(client, module_id, stream_id, dashboard_id, expected):
+    """Exercise the installed SOC backend against real lab streams, never production."""
+    isolated_configuration()  # Recheck the write guard even if called independently.
+    installed = Path("/opt/omni-siem/console/omni-mobile-api.py")
+    if installed.read_bytes() != (ROOT / "mobile/omni-mobile-api.py").read_bytes():
+        raise RuntimeError("installed console backend does not match the tested revision")
+    spec = importlib.util.spec_from_file_location("vm_console_widgets", installed)
+    api = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(api)
+    api._graylog = client.call
+    api.SOC_ADMINS = {"lab-console"}
+    api.SOC_DEFAULT_ROLE = "lecteur"
+    with tempfile.TemporaryDirectory(prefix="omni-console-widgets-", dir="/run") as directory:
+        api.SOC_MODULES_DIR = directory
+        api.MODULES_CONFIG_FILE = str(Path(directory) / "config.json")
+        raw = {"schema_version": 1, "revision": 0, "pages": [{
+            "id": module_id, "title": "Lab " + module_id, "enabled": True, "min_role": "analyste",
+            "stream_ids": [stream_id], "integration_ids": [module_id], "days": 1,
+            "graylog_dashboard_id": dashboard_id, "widgets": [
+                {"id": "volume", "title": "Volume", "type": "count"},
+                {"id": "activity", "title": "Activity", "type": "timeseries"},
+                {"id": "sources", "title": "Sources", "type": "terms", "field": "source"},
+                {"id": "logs", "title": "Logs", "type": "messages"}]}]}
+        clean = api._a_modules(raw, "lab-console")
+        saved = api._x_modules(clean, "lab-console", "Isolated VM acceptance", "lab")
+        catalog = api.admin_modules()["catalog"]
+        page = api.modules_page(module_id, "lab-console")
+        widgets = {w["type"]: w for w in page["widgets"]}
+        available = len(widgets) == 4 and all(w["status"] == "ok" for w in widgets.values())
+        facts = {"installed_backend_matches": True, "persisted_revision": saved.get("revision") == 1,
+                 "stream_in_catalog": any(s["id"] == stream_id for s in catalog["streams"]),
+                 "dashboard_in_catalog": any(d["id"] == dashboard_id for d in catalog["dashboards"]),
+                 "catalog_complete": not catalog["errors"], "four_widgets_available": available,
+                 "reader_page_hidden": not api.modules_public("lab-reader")["pages"]}
+        if available:
+            facts.update(count_at_least_fixtures=widgets["count"]["data"]["value"] >= expected,
+                         messages_at_least_fixtures=len(widgets["messages"]["data"]["messages"]) >= expected,
+                         activity_present=bool(widgets["timeseries"]["data"]["buckets"]),
+                         source_buckets_present=bool(widgets["terms"]["data"]["buckets"]))
+        facts["passed"] = available and all(value is True for value in facts.values())
+        return facts
+
+
 def test_module(client, module, report):
     report["stage"] = "install"
     plan = install(client, module, parameters(module), apply=True)
@@ -331,9 +374,11 @@ def test_module(client, module, report):
     report["delivery_evidence"] = input_evidence(client, input_id, module["id"], module["default_port"], fixtures)
     report["stage"] = "dashboard_search"
     report["dashboard_search"] = execute_dashboard(client, view, module["id"], fixtures)
+    report["stage"] = "console_widgets"
+    report["console_widgets"] = console_module_widgets(client, module["id"], stream_id, dashboard_id, len(fixtures))
     report["passed"] = all(report.get(key) is True for key in (
         "installed", "stream_running", "pipeline_connected", "dashboard_scoped", "input_running")) and all(
-        item["received"] and item["normalized"] and item["routed_to_module_stream"] for item in report["fixtures"]) and report["dashboard_search"]["passed"]
+        item["received"] and item["normalized"] and item["routed_to_module_stream"] for item in report["fixtures"]) and report["dashboard_search"]["passed"] and report["console_widgets"]["passed"]
     report["stage"] = "complete"
 
 

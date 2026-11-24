@@ -42,6 +42,12 @@ def test_vm_metadata_and_hostname_must_both_match(tmp_path):
         vm.verify_identity(config, {**metadata, "source_root": "/other"}, "siem.lab.test", tmp_path)
 
 
+def test_console_widget_acceptance_rechecks_isolated_vm_guard(monkeypatch):
+    monkeypatch.delenv("OMNI_ISOLATED_VM_TEST", raising=False)
+    with pytest.raises(ValueError, match="OMNI_ISOLATED_VM_TEST"):
+        vm.console_module_widgets(None, "watchguard", "a" * 24, "b" * 24, 3)
+
+
 def test_fixture_evidence_requires_normalization_and_owned_stream_without_leaking_values():
     fixtures = [{"message": "synthetic fixture", "expected": {"src_port": 443}}]
     messages = [{"message": "synthetic fixture", "src_port": "443", "event_source": "watchguard",

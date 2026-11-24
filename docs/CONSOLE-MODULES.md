@@ -119,3 +119,11 @@ sans cette fonction ne l'affichera pas. Un fichier illisible ou de schéma non p
 charge produit une erreur explicite ; il n'est pas remplacé par une configuration vide.
 Pour les profils d'installation et leurs limites de mise à jour, suivre
 [le guide des mises à jour](UPDATES.md#13-mise-à-jour-depuis-la-console-soc-en-un-clic).
+
+## Vérifications
+
+Les tests API couvrent les droits, les filtres, les réponses partielles et les révisions.
+Les essais navigateur couvrent l'édition et l'affichage sur ordinateur et mobile.
+La recette VM `tools/test-integration-vm.py` vérifie aussi les quatre types de widgets
+du backend installé sur les journaux synthétiques réellement collectés pour WatchGuard,
+UniFi et Palo Alto. Son garde d'isolation refuse une exécution sur la production.
