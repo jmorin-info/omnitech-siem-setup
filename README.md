@@ -39,7 +39,8 @@ detections mapped to MITRE ATT&CK, and adds in-house services:
   an **exposure graph** (`oms-graph`);
 - **bounded, reversible automated response**: IP blocking on the FortiGate
   firewalls through a threat feed, with expiry, exclusions and a simulation mode;
-- a **SOC web console** and an installable app (PWA);
+- a **SOC web console** and an installable app (PWA), with
+  [site-configured pages and widgets](docs/CONSOLE-MODULES.md) for existing Graylog streams;
 - **ISO/IEC 27001:2022 evidence**: tiered retention, integrity chain, monthly
   evidence packs.
 
@@ -68,8 +69,9 @@ and Entra ID, vSphere, ESET PROTECT, BunkerWeb, Vaultwarden, Linux, Aruba
 switches, SEAL physical access control (access, alarms, audit).
 
 The number of definitions measures catalogue breadth, not detection
-effectiveness: scenario-based validation is still to be built (see
-[Status and limitations](#status-and-limitations)).
+effectiveness. [Automated detection checks and synthetic fixtures](docs/detection/VALIDATION-DETECTIONS.md)
+are available; their results do not replace a controlled campaign on the target
+environment (see [Status and limitations](#status-and-limitations)).
 
 ## Architecture
 
