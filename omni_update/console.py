@@ -139,6 +139,8 @@ def load_config(path=None, environ=None):
         "integration_ca": get("UPDATE_INTEGRATION_CA", ""),
         "integration_bind": get("UPDATE_INTEGRATION_BIND", ""),
         "integration_token_file": get("UPDATE_GRAYLOG_TOKEN_FILE", ""),
+        "console_config": Path(get("UPDATE_CONSOLE_CONFIG", "/etc/default/omni-mobile")),
+        "nginx_site": Path(get("UPDATE_NGINX_SITE", "/etc/nginx/sites-enabled/graylog")),
         "settle_seconds": float(get("UPDATE_SETTLE_SECONDS", "5")),
         "min_free": {"/": 2 * GiB, "/var": 1 * GiB},
     }
@@ -159,7 +161,7 @@ def validate_config(cfg, environ=None):
         OU.validate_remote(cfg["expected_remote"])
     except OU.UpdateError:
         raise ConsoleUpdateError("UPDATE_EXPECTED_REMOTE doit être une URL HTTPS sans identifiant") from None
-    for key in ("repo", "state", "admin_dir", "deploy_root"):
+    for key in ("repo", "state", "admin_dir", "deploy_root", "console_config", "nginx_site"):
         path = cfg[key]
         if not path.is_absolute() or ".." in path.parts:
             raise ConsoleUpdateError(key + " doit être un chemin absolu normalisé")
@@ -449,6 +451,49 @@ class ConsoleUpdater:
             return {u.strip() for u in value.split(",") if UNIT_RE.fullmatch(u.strip())}
         return {name for name, info in units.items() if info["long"] and UNIT_RE.fullmatch(name)}
 
+    def console_profile_problems(self, changes):
+        """Do not publish to a different runtime or web root and claim alignment.
+
+        Paths are read from the actual installed service/site, never from the
+        candidate's unit templates. Nonstandard profiles require explicit
+        publication; no configuration or local customization is changed here.
+        """
+        paths = {path for _, path in changes}
+        backend_changed = bool(paths & {"mobile/omni-mobile-api.py", "tools/omni-soc-kpi.py"})
+        assets_changed = any(p.startswith(("mobile/soc/", "mobile/www/")) for p in paths)
+        if not (backend_changed or assets_changed):
+            return []
+        physical = self.deployer(self.cfg["repo"]).physical
+        problems = []
+        config = self.system.read(physical(str(self.cfg["console_config"])))
+        values = {}
+        for line in (config or "").splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                key, value = line.split("=", 1)
+                values[key.strip()] = value.strip().strip('"').strip("'")
+        if config is None:
+            problems.append("configuration console illisible : publication manuelle requise")
+        elif values.get("MOBILE_PORT", "8090") != "8090":
+            problems.append("MOBILE_PORT différent de 8090 : sondes de publication non adaptées, publication manuelle requise")
+        if backend_changed:
+            code, executable = self.systemctl("show", "omni-mobile-api.service", "-p", "ExecStart", "--value")
+            expected = str(self.cfg["repo"] / "mobile/omni-mobile-api.py")
+            if code or not re.search(re.escape(expected) + r"(?=[\s;\"}]|$)", executable):
+                problems.append("backend console exécuté hors du dépôt canonique (copie gérée ou chemin personnalisé) : "
+                                "publication explicite du backend et de ses outils requise")
+        if assets_changed:
+            site = self.system.read(physical(str(self.cfg["nginx_site"])))
+            if site is None:
+                problems.append("site nginx console illisible : publication manuelle requise")
+            else:
+                for route, expected in (("soc", "/var/www/siem-soc"), ("m", "/var/www/siem-mobile")):
+                    blocks = re.findall(r"location\s+(?:\^~\s+)?/" + route + r"/\s*\{([^{}]*)\}", site)
+                    aliases = [re.search(r"\balias\s+([^;]+);", block) for block in blocks]
+                    if len(aliases) != 1 or aliases[0] is None or aliases[0][1].strip().strip('"').rstrip("/") != expected:
+                        problems.append("racine nginx /" + route + "/ personnalisée ou indéterminée : "
+                                        "la publication automatique vise " + expected + ", publication manuelle requise")
+        return problems
+
     # --------------------------------------------------------------- verrous
     @contextlib.contextmanager
     def flock(self, name):
@@ -693,6 +738,9 @@ class ConsoleUpdater:
             if any(p.startswith("00-vars.env.example") for p in sum(cats.values(), [])):
                 add("variables", "Nouvelles variables de configuration possibles", False,
                     "00-vars.env.example modifié : comparer avec 00-vars.env (jamais modifié automatiquement)", "avertissement")
+            profile_problems = self.console_profile_problems(changes)
+            add("profil_console", "Profil de publication de la console compatible", not profile_problems,
+                "; ".join(profile_problems) or "chemins du service, port et racines web compatibles")
             deploy = self.deploy_preview(candidate, changes, cats)
             report["deploy"] = deploy
             add("plan_deploiement", "Plan omni-deploy sans blocage", not deploy["blockers"],

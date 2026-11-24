@@ -167,6 +167,10 @@ def env(tmp_path, monkeypatch):
     # production factice alignée sur v1 (moteur omni-deploy réel, racine factice)
     deploy_engine.Deployer(home, home=home, root=str(tmp_path / "root"),
                            state_dir=str(tmp_path / "deploy-state")).apply(["robots", "systemd", "console"])
+    write(tmp_path / "root", "etc/default/omni-mobile", "MOBILE_PORT=8090\n")
+    write(tmp_path / "root", "etc/nginx/sites-enabled/graylog",
+          "server { location /soc/ { alias /var/www/siem-soc/; } "
+          "location /m/ { alias /var/www/siem-mobile/; } }\n")
     health = Health()
     updater = console.ConsoleUpdater(cfg, system=FakeSystem(), health=health, sleep=lambda s: None)
     return {"tmp": tmp_path, "work": work, "mirror": mirror, "home": home, "root": tmp_path / "root", "v1": v1,
@@ -208,6 +212,7 @@ def test_check_detects_update_without_touching_the_worktree(env):
     assert report["installed"]["rev"] == env["v1"] and report["available"]["rev"] == env["v2"]
     assert report["can_apply"] is True, report["blocking"]
     assert [c["subject"] for c in report["commits"]] == ["v2 : robot et console"]
+
     assert "- Nouveauté de la v2." in report["changelog"]
     cats = report["changes"]["categories"]
     assert cats["robots"] == ["deploye/sbin/omni-demo"] and cats["console"] == ["mobile/soc/app.js"]
@@ -221,6 +226,54 @@ def test_check_detects_update_without_touching_the_worktree(env):
     assert robot(env) == "#!/bin/sh\necho v1\n"
     assert published(env, "status.json")["available"]["short"] == env["v2"][:12]
 
+
+
+
+def test_console_profiles_require_actual_canonical_backend_and_standard_web_roots(env, monkeypatch):
+    updater = env["updater"]
+    original = updater.systemctl
+    expected = str(env["home"] / "mobile/omni-mobile-api.py")
+    command = {"exec": "{ argv[]=/usr/bin/python3 " + expected + " ; }"}
+    def systemctl(*args, **kwargs):
+        if args == ("show", "omni-mobile-api.service", "-p", "ExecStart", "--value"):
+            return 0, command["exec"]
+        return original(*args, **kwargs)
+    monkeypatch.setattr(updater, "systemctl", systemctl)
+    changes = [("M", "mobile/omni-mobile-api.py"), ("A", "mobile/soc/app-modules.js")]
+    assert updater.console_profile_problems(changes) == []
+    command["exec"] = "{ argv[]=/usr/bin/python3 /opt/omni-siem/console/omni-mobile-api.py ; }"
+    assert any("hors du dépôt canonique" in p for p in updater.console_profile_problems(changes))
+    command["exec"] = "{ argv[]=/usr/bin/python3 " + expected + " ; }"
+    site = env["root"] / "etc/nginx/sites-enabled/graylog"
+    site.write_text("server { location /soc/ { alias /srv/client/soc/; } location /m/ { alias /var/www/siem-mobile/; } }\n")
+    assert any("racine nginx /soc/" in p for p in updater.console_profile_problems(changes))
+    assert updater.console_profile_problems([("M", "docs/README.md")]) == []
+
+
+@pytest.mark.parametrize("setting", ["MOBILE_PORT=9999\n", "MOBILE_PORT=bad\n"])
+def test_console_profile_refuses_custom_port_without_changing_configuration(env, setting):
+    config = env["root"] / "etc/default/omni-mobile"
+    config.write_text(setting)
+    before = config.read_bytes()
+    report = env["updater"].check()
+    assert not report["can_apply"]
+    assert any(c["id"] == "profil_console" and "MOBILE_PORT" in c["detail"] for c in report["checks"])
+    assert config.read_bytes() == before
+    assert git(env["home"], "rev-parse", "HEAD") == env["v1"]
+
+
+def test_console_update_and_rollback_preserve_site_widget_configuration(env):
+    custom = env["root"] / "var/lib/omni-mobile/modules/config.json"
+    custom.parent.mkdir(parents=True)
+    custom.write_text('{"schema_version":1,"pages":[{"id":"client-watchguard"}]}\n')
+    original = custom.read_bytes()
+    env["updater"].check()
+    result = submit(env)
+    assert result["status"] == "terminee"
+    assert custom.read_bytes() == original
+    rolled_back = submit(env, "update_rollback", RID2, {"run_id": RID, "confirm": env["v1"][:12]})
+    assert rolled_back["status"] == "restauree"
+    assert custom.read_bytes() == original
 
 def test_tests_are_cached_per_candidate(env):
     env["updater"].check()

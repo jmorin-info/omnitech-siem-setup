@@ -63,6 +63,8 @@ def test_container_entrypoint_runs_with_env_or_file_secrets(tmp_path, file_secre
     assert "SIEM_IP=192.0.2.10\n" in config
     assert "SOC_LOG_INDICES=customer-*,graylog_*\n" in config
     assert "SOC_EXPECTED_SOURCES=" + expected_sources + "\n" in config
+    assert "OMNI_REPO_DIR=/app\n" in config
+    assert "SOC_KPI_TOOL=/app/tools/omni-soc-kpi.py\n" in config
     assert not (tmp_path / "injected").exists()
     assert ((tmp_path / "data/omni-mobile.conf").stat().st_mode & 0o077) == 0
 
