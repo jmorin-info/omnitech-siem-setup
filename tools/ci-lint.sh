@@ -12,6 +12,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 SHELLCHECK="${SHELLCHECK:-shellcheck}"
 RUFF="${RUFF:-ruff}"
+for lint_tool in "$SHELLCHECK" "$RUFF"; do
+  command -v "$lint_tool" >/dev/null 2>&1 || {
+    echo "Outil de controle indisponible : $lint_tool (installer requirements-lint.txt)." >&2
+    exit 2
+  }
+done
 SH=(); PY=()
 while IFS= read -r -d '' f; do
   [[ -f "$f" && ! -L "$f" ]] || continue

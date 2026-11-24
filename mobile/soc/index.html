@@ -738,6 +738,7 @@
   html[data-theme=light] .kpitrend.kt-bad{color:#a3162a;background:#fde4e7}html[data-theme=light] .kpitrend.kt-good{color:#13805b;background:#e3f6ee}
 </style>
 <link rel="stylesheet" href="/soc/app-professional.css?v=2026112302">
+<link rel="stylesheet" href="/soc/app-modules.css?v=2026112401">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -794,6 +795,7 @@
       <a data-p="incidents"><span class="ic"><svg class="svi"><use href="#i-alert"></use></svg></span><span data-i18n="nav_incidents">Incidents</span></a>
       <a data-p="detections"><span class="ic"><svg class="svi"><use href="#i-target"></use></svg></span><span data-i18n="nav_detections">Détections</span></a>
       <a data-p="kpi"><span class="ic"><svg class="svi"><use href="#i-pulse"></use></svg></span><span>Indicateurs</span></a>
+      <a data-p="modules"><span class="ic"><svg class="svi"><use href="#i-grid"></use></svg></span><span>Modules</span></a>
       <a data-p="entities"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span><span data-i18n="nav_entities">Entités</span></a>
       <a data-p="attack"><span class="ic"><svg class="svi"><use href="#i-matrix"></use></svg></span><span data-i18n="nav_attack">ATT&CK</span></a>
       <a data-p="graph"><span class="ic"><svg class="svi"><use href="#i-network"></use></svg></span><span data-i18n="nav_graph">Graphe d'attaque</span></a>
@@ -954,6 +956,7 @@
         <div class="card"><h3><svg class="svi"><use href="#i-pulse"></use></svg> <span>Dernières décisions du SOAR</span><span class="tag">blocages, déblocages, exclusions</span></h3><div class="feed" id="shist"></div></div>
       </div>
     </section>
+    <section class="page" id="p-modules" aria-label="Pages de votre environnement"><div id="modulesRoot"></div></section>
     <section class="page" id="p-kpi" aria-label="Indicateurs SOC">
       <div id="kpiRoot"></div>
     </section>
@@ -1013,11 +1016,12 @@
   </div>
 </div>
 
-<script src="/soc/app.js?v=2026112101"></script>
+<script src="/soc/app.js?v=2026112401"></script>
 <script src="/soc/app-soar.js?v=2026112301"></script>
 <script src="/soc/app-v3.js?v=2026112301"></script><script src="/soc/app-handlers.js?v=2026112101"></script>
-<script src="/soc/app-professional.js?v=2026112101"></script>
+<script src="/soc/app-professional.js?v=2026112401"></script>
 <script src="/soc/app-admin.js?v=2026112302"></script>
 <script src="/soc/app-kpi.js?v=2026112201"></script>
+<script src="/soc/app-modules.js?v=2026112401"></script>
 </body>
 </html>

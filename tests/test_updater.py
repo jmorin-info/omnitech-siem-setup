@@ -37,10 +37,12 @@ def installation(tmp_path):
     put(source, ".gitignore", "00-vars.env\n")
     put(source, "mobile/soc/app.js", "const version = 1;\n")
     put(source, "mobile/omni-mobile-api.py", "version = 1\n")
+    put(source, "tools/omni-soc-kpi.py", "version = 1\n")
     put(source, "oms-xdr/config.yaml", "site: example\n")
     base = commit(source, "base")
     put(source, "mobile/soc/app.js", "const version = 2;\n")
     put(source, "mobile/omni-mobile-api.py", "version = 2\n")
+    put(source, "tools/omni-soc-kpi.py", "version = 2\n")
     put(source, "oms-xdr/config.yaml", "site: upstream-new-example\n")
     target = commit(source, "code update and configuration example")
     git(source, "checkout", base)
@@ -60,15 +62,23 @@ def test_plan_is_read_only_and_reports_withheld_config(installation):
 
 def test_update_and_rollback_keep_tenant_configuration_and_git_head(installation):
     source, state, base, target = installation
+    widgets = source.parent / "local-state/modules/modules.json"
+    widgets.parent.mkdir(parents=True)
+    widgets.write_text('{"schema_version":1,"pages":[{"id":"site-watchguard"}]}\n')
+    before_widgets = widgets.read_bytes()
     updater.stage(source, state, target)
     applied = updater.apply_code(source, state, target)
     assert (source / "mobile/soc/app.js").read_text() == "const version = 2;\n"
+    assert (source / "tools/omni-soc-kpi.py").read_text() == "version = 2\n"
+    assert widgets.read_bytes() == before_widgets
     assert (source / "00-vars.env").read_text() == "SITE_PRIVATE_VALUE=local-only\n"
     assert (source / "oms-xdr/config.yaml").read_text() == "site: tenant-customization\n"
     assert git(source, "rev-parse", "HEAD") == base
     assert updater.plan(source, state, target)["code_files"] == []
     updater.restore(source, state, applied["transaction"])
     assert (source / "mobile/soc/app.js").read_text() == "const version = 1;\n"
+    assert (source / "tools/omni-soc-kpi.py").read_text() == "version = 1\n"
+    assert widgets.read_bytes() == before_widgets
     assert (source / "oms-xdr/config.yaml").read_text() == "site: tenant-customization\n"
     assert not (state / "current.json").exists()
 

@@ -1,111 +1,67 @@
-# SOC console "OMNI SOC" — Guide
+# SOC console guide
 
-Web console + mobile PWA for operating the OMNITECH SIEM/XDR. **VPN-only**,
-AD authentication (delegated to Graylog/LDAPS). Built on the
-`omni-mobile-api` backend (OpenSearch read, stdlib + pywebpush) served by nginx.
-Premium interface (glassmorphism, glow, micro-interactions), keyboard accessible.
+Open `https://YOUR_FQDN/soc/` over HTTPS and use an account accepted by Graylog.
+Local Graylog accounts work; directory accounts require the site's authentication
+integration. Network access follows the site's nginx and firewall policy.
+For installation or a 404 response, use the [deployment guide](CONSOLE-DEPLOIEMENT.md).
 
-## Access
-- **Desktop console**: `https://bx-it-graylog-vm.omnitech.security/soc/`
-- **Mobile app (PWA)**: `https://bx-it-graylog-vm.omnitech.security/m/` → *Share → Add to Home Screen* (installable, web-push).
-- Login: **AD account** (the same credentials as the Graylog console).
-- Shortcuts: **Ctrl/Cmd + K** = palette (navigation + **entity search**); **?** = help & shortcuts; **Esc** = close; **Enter/Space** = activate the focused element.
+The responsive SOC console is also an installable PWA. On mobile, use the bottom
+navigation and menu. A legacy `/m/` app may remain available or redirect to `/soc/`,
+depending on the site. Accept **Reload** when a new service worker is available.
 
-## Pages (desktop)
-| Page | Content |
-|---|---|
-| **Overview** | KPIs **with trend** (▲/▼ % vs previous period), 24 h detections curve, ATT&CK tactics donut, top detections/sources, **ML Anomalies** + **UEBA Risk** (real scores), real-time feed (SSE), geographic origins |
-| **Incidents** | Queue of **cases** (oms-xdr): status, assignment, notes; **True/False positive disposition** → feeds the FP-reduction ML model |
-| **Detections** | **Filterable** list (tactic/source) + **free search** + **CSV export**; real severity (`risk_severity`) + risk score; click → Entity-360 |
-| **ATT&CK Matrix** | Tactics × techniques heatmap, colored by real activity (7 d), clickable cells (drill) |
-| **Attack graph** | Entities ↔ techniques graph, **filterable** (tactic, volume threshold, entity centering) |
-| **Leaks & Dark Web** | Summary by category (extortion/credentials/GitHub), RansomLook/HIBP/Dehashed, reassuring "no leak" state |
-| **Health & Collection** | Cluster status, **self-supervision robots** (X/Y), **collection coverage (SLA)** + **go-dark hosts**, freshness per source |
-| **Report** | Printable executive summary (PDF): KPIs, coverage, **operational posture (robots/SLA)**, **ML & UEBA at-risk entities**, incidents, sources |
-| **Entity-360** (panel) | An entity's sheet: **ML score + UEBA score**, tactics, ATT&CK techniques, recent events ("load more" pagination) |
+## Find information
 
-## ML layer (oms-ml)
-The console surfaces the scores from the **`oms-ml`** package (local sklearn, cf. `oms-ml/README.md`):
-- **Unsupervised anomaly** (IsolationForest) per entity → `ml_score` reinjected as GELF (`event_source=ml_anomaly`), visible on the Overview and Entity-360.
-- **Supervised false-positive reduction**: trained from the **TP/FP disposition** set by analysts at case closure (closed loop).
-- Internal events (`ueba_score`, `collecte_sla`, `siem_health`, `xdr_incident`, `ml_anomaly`) are written to the **`omni-interne`** index set (cf. `79-interne-indexset.sh`) — without which the console (which reads `omni-*`) would not see them.
+Navigation groups cover operations, investigations, visibility and administration.
+Use **Ctrl/Cmd + K** for navigation, entity lookup and journal searches. A machine
+with newly indexed logs appears in searches and matching widgets; historical entity
+sheets focus on security activity and are not a complete asset inventory.
 
-## Ergonomics & UX
-- **Toasts**: non-blocking feedback on actions (case qualified, export, session expired, network error).
-- **Help (?)**: keyboard shortcuts, role of each page, glossary of signals (ML, UEBA, severity, go-dark, KEV).
-- **Density**: comfortable/compact toggle (persisted).
-- **Loading**: skeletons on first display, "Updated Xs ago" badge, adjustable **refresh cadence** (30 s / 60 s / pause).
-- **Accessibility**: navigation and modals operable via keyboard (visible focus, focus-trap, ARIA).
+The pages depend on their data sources and optional services. An empty indicator
+does not prove that a source is monitored. Backend errors and incomplete searches
+must remain distinguishable from a valid zero result.
 
-## Mobile PWA
-**Summary** tabs (KPIs, curve, tactics), **Alerts**, **Incidents**, and **Threat** —
-console parity: threat level + KPIs, **ML anomalies & UEBA risk** (gauges), detections with colored severity. Installable, web-push.
+## Configure pages and widgets
 
-## Architecture
-```
-Browser (VPN) → nginx 443 → /soc/ (static) + /m/ (PWA) + /m/api/* (proxy → omni-mobile-api 127.0.0.1:8090)
-omni-mobile-api: Graylog auth (LDAPS) → HMAC cookie; OpenSearch read; SSE; web-push VAPID
-```
-- **Endpoints** `/m/api/`: login, me, kpis, **kpi-trend**, timeseries, by-tactic, top-detections, top-sources,
-  alerts, cases (+POST case with `disposition`), detections, **entity-search**, entity (size/from + scores), attack-matrix,
-  graph, **leaks2**, health, report, geo, risk, stream (SSE), vapid/subscribe (push).
-- **Performance**: in-memory micro-cache with TTL (30 s, `MOBILE_CACHE_TTL`) on the heavy aggregations
-  (attack-matrix, report, kpis, health, geo, terms) — ATT&CK matrix ~783→7 ms, report ~811→3 ms.
-- **Security**: VPN-only, HttpOnly+Secure+SameSite=Strict cookie, login rate-limit (5/15 min),
-  CSP/HSTS/X-Frame-Options headers (`75-console-hardening.sh`).
-- **Redaction mode** (`MOBILE_REDACT=1`): consistently pseudonymizes accounts/hosts/IPs/SIDs
-  (reversible map for Entity-360) — used to produce anonymized screenshots. **Disabled in operation.**
+Under **Visibility > Modules**, SOC administrators can create pages using local
+Graylog streams, filters and a minimum SOC role. Available widget types are counts,
+time series, field distributions and recent messages. Presets cover WatchGuard,
+Ubiquiti UniFi, Palo Alto and developer vulnerabilities; custom pages are supported.
+A native Graylog dashboard can be linked, but its charts are not automatically
+converted into SOC widgets.
 
-## Operation
-- Backend: `systemctl status omni-mobile-api`; conf `/etc/default/omni-mobile`.
-- Deployment / update: `65-mobile-pwa.sh` (PWA + backend), `71-soc-console.sh` (console).
-- Front-end libraries vendored locally (`chart.min.js`, `cytoscape.min.js`) — no CDN at runtime.
-- **Tests** (offline, without OpenSearch): `./run-tests.sh` — redaction (`_rd`/`_scrub`) + oms-ml (anomaly, FP gating); 23 tests.
+Choose the streams, verify optional integration filters, simulate the change and
+publish with a reason. The configuration persists outside Git and is preserved by
+code updates and rollback. The service account must be allowed to read the selected
+streams and dashboards; a valid token can otherwise return empty catalogues.
+See the [complete page and widget guide](CONSOLE-MODULES.md), including data flow,
+backup paths, concurrent edits and known limits.
 
-## November 2026 changes
+## Roles and administration
 
-- An "Action needed" band at the top of the overview, every item clickable.
-- A "SOAR — blocks" page: blocked IPs, country, reason, expiry, Graylog link and an "Unblock" button with confirmation (plus "never block again", reason required). Requests are queued and processed by a root service that logs every action.
-- An "SIEM operations" page: automatic updates, snapshots and restore test, backup, disks, failed units, certificate, versions.
-- A Graylog link on every incident, an optional light theme, preloaded Deployment and Report pages.
-- Access is still restricted to AD accounts verified by Graylog; state-changing actions check their origin.
+SOC roles are reader (`lecteur`), analyst (`analyste`) and administrator
+(`administrateur`). Accounts in `SOC_ADMINS` are administrators; explicit roles are
+stored locally. `SOC_DEFAULT_ROLE` defaults to analyst for compatibility. SOC reads
+use the backend's OpenSearch scope and do not inherit each user's Graylog stream
+permissions. Grant access and configure page roles accordingly.
 
-## Administration area (November 2026)
+Administrative writes require role checks, an allowed browser origin, a CSRF token,
+an allowed client network and a reason. Changes are audited. High impact actions
+normally require another administrator; the self-service update workflow has its
+own explicit revision confirmation. `SOC_ADMIN_DRY_RUN=1` simulates writes.
+Appearance, site pages and widgets, roles, detections and updates have their own
+controls. The [French operator guide](CONSOLE-SOC.md) documents each screen.
 
-The **Administration** entry is shown to SOC administrators only; the server checks the
-role on every `/m/api/admin/*` request. Labels are in French.
+## Updates and deployment profiles
 
-**Roles.** *Lecteur* (reader: read-only), *Analyste* (reader + incidents, notes, false
-positives from Detections, entity watchlist), *Administrateur* (analyst + Administration,
-SOAR requests, push notifications). Accounts in `SOC_ADMINS` are administrators and cannot
-be changed from the console; other explicit roles live in `roles.json` under
-`SOC_ADMIN_DIR`. Authenticated accounts without an explicit role get `SOC_DEFAULT_ROLE`
-(`analyste` by default for compatibility; never administrator).
+The update plan checks the installed backend, nginx roots, health, backups and
+candidate tests. Automatic publication supports the configured canonical repository,
+the standard web roots and local port 8090, including a retired `/m/` route to `/soc/`.
+A copied backend or custom publication profile can require a manual deployment;
+the plan refuses unsupported profiles instead of reporting a false alignment.
+See [updates](UPDATES.md) and [deployment](CONSOLE-DEPLOIEMENT.md).
 
-**Workflow.** Every action is first simulated (before/after, effects, refusal), then
-confirmed with a mandatory reason. High-impact actions become requests that **another
-administrator** must approve within `SOC_ADMIN_APPROVAL_TTL` (24 h); they are revalidated
-before execution. `SOC_ADMIN_DRY_RUN=1` simulates everything.
-
-**Actions.** Roles (granting/removing administrator is high impact); false positives via
-the triage API (entity `key=value`, duration 1-90 days and justification required);
-SOAR unblock (existing `omni-soc-actions` queue), manual block of a public IPv4 (high
-impact, `omni-soar` `/block`), static exclusions and SOAR parameters (high impact, through
-the privileged executor `omni-soc-admin-exec`); Graylog detections enable (normal) /
-disable (high impact) through `schedule`/`unschedule` with a dedicated token; bounded
-triage parameters (high impact, executor); restart of whitelisted services only (empty
-whitelist by default). Read-only: users, active false positives, blocked IPs, settings
-(only whitelisted keys, never secrets), detections, `omni-*`/`oms-*` units, versions.
-The console does not display or control the triage LLM layer.
-
-**Audit.** Append-only `audit.jsonl`, SHA-256 chained and verified by the Journal tab;
-GELF copy (`event_source: soc_admin`). Reversible executions offer a prepared rollback,
-and the executor keeps the last ten `*.bak-soc-*` backups of each modified file.
-
-**Safeguards.** POST + JSON content type + mandatory matching `Origin` + session-bound
-`X-SOC-CSRF` token, 16 KiB body limit, 30 writes per 5 minutes, writes restricted to
-`SOC_ADMIN_NETS` when `SOC_ADMIN_INTERNAL_ONLY=1` (default). Note: nginx currently logs
-console clients as `10.33.70.1`; if Internet access is source-NATed to that address it
-would look internal, so exclude it from `SOC_ADMIN_NETS`. Deployment details are in
-`CONSOLE-DEPLOIEMENT.md` (French).
-
+Site state, secrets and web assets are separate. The normal widget configuration is
+`/var/lib/omni-mobile/modules/config.json`; include custom state paths in backups.
+Optional ML, graph, SOAR and collection services require their own configuration.
+The integration formats and qualification limits are described in the
+[WatchGuard, UniFi and Palo Alto guide](INTEGRATIONS-MODULAIRES.md).

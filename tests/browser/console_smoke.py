@@ -31,6 +31,10 @@ fixtures={
  '/search':{'total':1,'results':[{'ts':'2026-11-20T08:12:00Z','src':'WatchGuard','msg':'Fixture: authentication rejected for demo-account','host':'demo-firewall','ip':'192.0.2.20'}]},
  '/health':{'cluster':'green','events_24h':3584,'nodes':1,'shards':12,'sources':[{'k':'WatchGuard','n':1642,'last':'2026-11-20T08:12:00Z'},{'k':'UniFi','n':890,'last':'2026-11-20T08:11:00Z'},{'k':'Palo Alto','n':1052,'last':'2026-11-20T08:10:00Z'}]},
  '/siem-ops':{'status':'ok','items':[]},'/vapid':{},'/risk':{'threat_level':'SURVEILLE'},'/guidance':{'guidance':{'fixture':{'ce_que_cest':'Fixture'}}},
+ '/admin/me':{'is_admin':False,'role':'analyste'},
+ '/modules':{'revision':1,'pages':[{'id':'watchguard','title':'WatchGuard','stream_ids':['a'*24],'days':1}]},
+ '/modules/page':{'page':{'id':'watchguard','title':'WatchGuard','stream_ids':['a'*24],'days':1},'generated':'2026-11-24T10:00:00Z',
+                  'widgets':[{'id':'volume','title':'Volume reçu','type':'count','status':'ok','data':{'value':1642}}]},
 }
 
 with sync_playwright() as p:
@@ -90,6 +94,15 @@ with sync_playwright() as p:
    assert page.evaluate('window.rowClicks')==1, 'keyboard activated incident more than once'
    page.keyboard.press('Escape')
    page.screenshot(path=str(OUT/f'incidents-{width}-{theme}.png'),full_page=True)
+   if width>820:page.locator('#nav a[data-p=modules]').click()
+   else:
+    page.locator('#bMore').click()
+    page.locator('#shBody button[data-onclick="goNav(\'modules\')"]').click()
+   page.locator('#modulesRoot .modules-value').wait_for()
+   assert page.locator('#p-modules').is_visible()
+   assert page.locator('#modulesRoot .modules-value').inner_text()=='1 642' or page.locator('#modulesRoot .modules-value').inner_text()=='1\u202f642'
+   assert page.locator('main').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
+   page.screenshot(path=str(OUT/f'modules-{width}-{theme}.png'),full_page=True)
    if width>820:
     page.locator('#langBtn').click()
    else:

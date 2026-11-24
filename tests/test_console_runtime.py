@@ -18,6 +18,28 @@ deploy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deploy)
 
 
+def test_packaged_backend_uses_configured_lookup_directory(tmp_path, monkeypatch):
+    packaged = tmp_path / "application"
+    packaged.mkdir()
+    backend = packaged / "omni-mobile-api.py"
+    shutil.copyfile(ROOT / "mobile/omni-mobile-api.py", backend)
+    lookups = tmp_path / "site-lookups"
+    lookups.mkdir()
+    (lookups / "site-techniques.csv").write_text("alert_tag,technique,technique_name,tactic,severity\nfixture,T1110,Brute Force,Credential Access,high\n")
+    (lookups / "alert-guidance.json").write_text(json.dumps({"fixture": {"ce_que_cest": "Guide du site"}}))
+    config = tmp_path / "mobile.conf"
+    config.write_text("MOBILE_SECRET=fixture-session-secret\nMOBILE_PUSH_SECRET=fixture-push-secret\n"
+                      f"MOBILE_SUBS_FILE={tmp_path}/state/subs.json\nMITRE_LOOKUP={lookups}/site-techniques.csv\n"
+                      f"MOBILE_CASES_FILE={tmp_path}/state/cases.json\nMOBILE_WATCH_FILE={tmp_path}/state/watchlist.json\n"
+                      f"SOC_REQ_DIR={tmp_path}/state/requests\n")
+    monkeypatch.setenv("MOBILE_CONFIG", str(config))
+    module_spec = importlib.util.spec_from_file_location("packaged_mobile_api", backend)
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    assert module.get_guidance()["fixture"] == {"ce_que_cest": "Guide du site", "technique": "T1110",
+                                             "name": "Brute Force", "tactic": "Credential Access", "severity": "high"}
+
+
 @pytest.mark.skipif(os.name != "posix", reason="native Linux shell wrapper")
 def test_native_wrapper_exports_site_identity_and_log_scope(tmp_path):
     shutil.copyfile(ROOT / "71-soc-console.sh", tmp_path / "71-soc-console.sh")
@@ -63,6 +85,8 @@ def test_container_entrypoint_runs_with_env_or_file_secrets(tmp_path, file_secre
     assert "SIEM_IP=192.0.2.10\n" in config
     assert "SOC_LOG_INDICES=customer-*,graylog_*\n" in config
     assert "SOC_EXPECTED_SOURCES=" + expected_sources + "\n" in config
+    assert "OMNI_REPO_DIR=/app\n" in config
+    assert "SOC_KPI_TOOL=/app/tools/omni-soc-kpi.py\n" in config
     assert not (tmp_path / "injected").exists()
     assert ((tmp_path / "data/omni-mobile.conf").stat().st_mode & 0o077) == 0
 

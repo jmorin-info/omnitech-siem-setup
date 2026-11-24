@@ -46,6 +46,29 @@ service ; une mise à jour du dépôt ne met pas nécessairement à jour son `Ex
 Les endpoints de SOAR, graphe ou supervision qui dépendent d'autres services peuvent
 rester indisponibles tant que ces extensions ne sont pas configurées.
 
+Le profil natif neuf embarque aussi l'outil Indicateurs (`SOC_KPI_TOOL`) et ses
+lookups dans le répertoire applicatif : ils restent accessibles lorsque le clone
+initial est dans un répertoire personnel protégé par systemd. `OMNI_REPO_DIR` désigne
+le clone du site ; il ne remplace pas les chemins explicites des extensions.
+Une ancienne copie gérée dont l'outil Indicateurs manque ou diffère est refusée par
+la publication `71` avant activation du backend : réconcilier explicitement cet outil
+et `SOC_KPI_TOOL` selon le diagnostic, puis relancer le plan.
+
+La mise à jour en un clic accepte actuellement un backend exécuté directement
+depuis le dépôt configuré, le port local 8090 et les alias web standards
+`/var/www/siem-soc` et `/var/www/siem-mobile`. Une copie applicative séparée, un port
+différent ou des alias personnalisés bloquent le plan de publication automatique ;
+suivre la procédure manuelle adaptée au service au lieu d'annoncer un alignement
+qui laisserait une ancienne copie active. Voir [les mises à jour](UPDATES.md).
+La redirection historique de `/m/` vers `/soc/` est également acceptée et conservée.
+
+### Pages propres au site
+
+Pour ajouter des pages, des widgets et les liens vers les dashboards du Graylog local,
+suivre [CONSOLE-MODULES.md](CONSOLE-MODULES.md). Les réglages restent dans
+`/var/lib/omni-mobile/modules/config.json` par défaut, hors du dépôt et des assets publics.
+Le rôle minimum et les streams sont choisis par l'administrateur avant publication.
+
 ### Identité du site et journaux affichés
 
 Sur une installation native, le backend lit `/etc/default/omni-mobile`. Les nouvelles
@@ -184,12 +207,16 @@ affiche son dernier passage. Sa liste blanche de redémarrages (`SOC_EXEC_RESTAR
 `/etc/default/omni-soc-admin-exec`, modèle `mobile/systemd/omni-soc-admin-exec.default.example`)
 est vide par défaut.
 
-### Jeton Graylog pour les détections
+### Jeton Graylog pour les détections et le catalogue
 
 Créer dans Graylog un utilisateur de service dédié (par exemple `soc-console`), limité à
-la lecture et à la modification des définitions d'événements, puis un jeton d'accès pour
-cet utilisateur. Déposer ce jeton dans `/etc/omni-mobile/graylog-admin.token` (droits
-`600`, jamais dans le dépôt) et renseigner
+la lecture et à la modification des définitions d'événements selon les fonctions utilisées,
+puis un jeton d'accès pour cet utilisateur. Pour le catalogue **Modules**, lui partager
+également les streams et dashboards concernés en lecture. Un jeton peut être valide
+et recevoir des listes vides faute de partage ; un avertissement l'explique dans l'éditeur.
+Déposer ce jeton dans `/etc/omni-mobile/graylog-admin.token` (jamais dans le dépôt,
+lisible par le compte du service uniquement, par exemple `root:omni-console` et `640`
+pour le profil natif neuf) et renseigner
 `SOC_GRAYLOG_TOKEN_FILE=/etc/omni-mobile/graylog-admin.token`.
 
 ### Configuration nginx non versionnée
@@ -203,50 +230,31 @@ versionnement relève du chantier de déploiement. L'espace Administration n'ajo
 route nginx : il passe par `location /m/api/`, qui doit continuer à poser
 `proxy_set_header X-Real-IP $remote_addr;` (utilisé pour la restriction réseau).
 
-### Déployer cette version en production
+### Publier une mise à jour en production
 
-Commandes à exécuter par l'administrateur, après fusion de la branche dans `main`.
-Aujourd'hui, `omni-mobile-api` exécute `/root/omnitech-siem-setup/mobile/omni-mobile-api.py`
-avec le venv de cette ancienne copie ; la procédure le repointe vers le clone de référence.
+Commencer par [le guide des mises à jour](UPDATES.md) : le clone exécuté par les
+services est un composant actif, sa modification constitue une mise en production.
+Le plan doit être relu avant application et les sauvegardes vérifiées, notamment
+`/etc/default/omni-mobile` et `/var/lib/omni-mobile`.
 
-1. Mettre à jour le clone : `cd /opt/omni-siem/repository && git pull --ff-only`.
-2. Sauvegarder : `TS=$(date +%Y%m%d-%H%M%S)`, puis
-   `cp -a /etc/default/omni-mobile /etc/default/omni-mobile.avant-admin-$TS` et
-   `cp -a /var/www/siem-soc /var/backups/siem-soc.avant-admin-$TS`.
-3. Créer le venv : `python3 -m venv /opt/omni-siem/repository/mobile/.venv`, puis
-   `/opt/omni-siem/repository/mobile/.venv/bin/pip install -r /opt/omni-siem/repository/mobile/requirements.txt`.
-4. Ajouter à `/etc/default/omni-mobile` (sans rien retirer) : `OMNI_REPO_DIR=/opt/omni-siem/repository`
-   et, tant que le clone n'a pas de venv oms-graph,
-   `OMS_GRAPH_PY=/root/omnitech-siem-setup/oms-graph/.venv/bin/python`.
-5. Créer le drop-in `/etc/systemd/system/omni-mobile-api.service.d/20-depot-reference.conf`
-   contenant une section `[Service]`, une ligne `ExecStart=` vide puis
-   `ExecStart=/opt/omni-siem/repository/mobile/.venv/bin/python /opt/omni-siem/repository/mobile/omni-mobile-api.py`.
-   **Ne pas redémarrer le service avant que le venv de l'étape 3 existe** : sans lui,
-   le service échoue au démarrage (`status=203/EXEC`).
-6. Installer l'exécuteur :
-   `install -m 755 /opt/omni-siem/repository/mobile/omni-soc-admin-exec /usr/local/sbin/`,
-   `install -m 644 /opt/omni-siem/repository/mobile/systemd/omni-soc-admin-exec.service /opt/omni-siem/repository/mobile/systemd/omni-soc-admin-exec.path /opt/omni-siem/repository/mobile/systemd/omni-soc-admin-exec.timer /etc/systemd/system/`,
-   et, si absent, copier `omni-soc-admin-exec.default.example` vers `/etc/default/omni-soc-admin-exec` (droits `640`).
-7. Publier les assets : `install -m 644 /opt/omni-siem/repository/mobile/soc/*.js /opt/omni-siem/repository/mobile/soc/*.css /opt/omni-siem/repository/mobile/soc/index.html /var/www/siem-soc/`,
-   puis `chown www-data:www-data /var/www/siem-soc/*.js /var/www/siem-soc/*.css /var/www/siem-soc/index.html`.
-8. Activer : `systemctl daemon-reload`,
-   `systemctl enable --now omni-soc-admin-exec.path omni-soc-admin-exec.timer`,
-   `systemctl restart omni-mobile-api`.
-9. Contrôler : `systemctl show omni-mobile-api -p ExecStart --value`,
-   `curl -fsS http://127.0.0.1:8090/m/api/vapid`, `journalctl -u omni-mobile-api -n 30 --no-pager`.
+- **Installation native gérée** : utiliser le parcours `tools/install-console.sh`
+  puis `71-soc-console.sh` décrit au début de ce guide. Un backend modifié localement
+  ou un outil embarqué désaligné bloque la publication ; examiner le diagnostic.
+- **Backend depuis le dépôt canonique** : privilégier la mise à jour transactionnelle
+  de la console (section 13 du guide). Pour une publication manuelle, publier tous
+  les assets avec `71-soc-console.sh`, puis redémarrer `omni-mobile-api` après contrôle
+  de son `ExecStart` et de son environnement. La copie des assets seule n'active pas
+  de nouvelles routes d'API dans un processus déjà lancé.
+- **Ancien chemin** : inspecter `systemctl show omni-mobile-api -p ExecStart --value`.
+  Si une migration reste nécessaire, lire le plan de `tools/migrer-chemin-canonique.sh`
+  avant son application. Ne pas recopier un ancien drop-in pointant vers un venv absent.
+- **Docker** : reconstruire et recréer le conteneur avec sa configuration et son
+  volume persistants, selon la section Docker ci-dessous.
 
-Ensuite, depuis un poste du réseau interne, ouvrir `/soc/`, accepter **Recharger** (service
-worker `soc-v6-2026112101`), vérifier l'entrée **Administration** avec un compte de
-`SOC_ADMINS`, lancer une **simulation** (par exemple un blocage SOAR) et contrôler qu'elle
-apparaît dans l'onglet **Journal** avec une chaîne vérifiée. Facultatif, une fois
-`audit.jsonl` créé : `chattr +a /var/lib/omni-mobile/admin/audit.jsonl` interdit la
-réécriture du journal tout en autorisant les ajouts.
-
-Retour arrière : supprimer le drop-in `20-depot-reference.conf`, restaurer
-`/etc/default/omni-mobile.avant-admin-$TS` et `/var/backups/siem-soc.avant-admin-$TS`,
-désactiver `omni-soc-admin-exec.path` et `omni-soc-admin-exec.timer`, puis
-`systemctl daemon-reload` et `systemctl restart omni-mobile-api`. L'ancienne version
-ignore les fichiers de `/var/lib/omni-mobile/admin`.
+Après publication, contrôler les services, `/soc/`, les assets et l'API avec les
+commandes de diagnostic ci-dessous. Accepter **Recharger** pour activer le nouveau
+service worker. Avec un administrateur SOC, vérifier une simulation dans **Modules**
+et sa trace dans **Administration > Journal**, sans publier de changement de test.
 
 ## Distinguer les erreurs
 

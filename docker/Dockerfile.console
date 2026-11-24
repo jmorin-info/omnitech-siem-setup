@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir pywebpush==2.3.0 \
 WORKDIR /app
 COPY mobile/   /app/mobile/
 COPY lookups/  /app/lookups/
+COPY tools/omni-soc-kpi.py /app/tools/omni-soc-kpi.py
 COPY docker/console-entrypoint.sh /usr/local/bin/console-entrypoint.sh
 RUN chmod +x /usr/local/bin/console-entrypoint.sh && mkdir -p /app/data && chown -R omni /app/data
 

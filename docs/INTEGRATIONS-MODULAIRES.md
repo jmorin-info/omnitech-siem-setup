@@ -4,6 +4,10 @@ Ces modules ajoutent chacun un input, un stream, un pipeline de normalisation et
 un dashboard Graylog. Ils s'installent séparément du socle et de la console `/soc/`.
 Ils ne nécessitent pas de JAR additionnel ni de redémarrage de Graylog.
 
+Après installation et vérification de la collecte, un administrateur peut composer
+une page correspondante dans **SOC > Modules** : streams, widgets, filtres et droits.
+Suivre [le guide de configuration de la console](CONSOLE-MODULES.md).
+
 La révision 2 corrige le schéma natif des widgets et des champs statiques pour
 Graylog 7.2. La révision 1 publiée reste distincte : aucun pack déjà enregistré
 n'est écrasé. Si vous avez tenté une préversion, examiner d'abord ses installations

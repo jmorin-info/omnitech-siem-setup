@@ -28,6 +28,22 @@ commande de ce guide ne modifie la machine sans option explicite (`apply-code`,
 
 ## 1. Vue d'ensemble des couches
 
+Les pages et widgets SOC configurés sur le site sont des **données locales**, pas du
+code à synchroniser : `SOC_MODULES_DIR/config.json` reste conservé lors d'une mise à
+jour et d'un retour arrière. Inclure son emplacement dans les sauvegardes du site.
+Le [guide des modules de la console](CONSOLE-MODULES.md) décrit leurs droits, leurs
+filtres et l'arrivée de nouvelles machines.
+
+Pour la publication automatique de la console, le plan contrôle aussi le profil réel :
+backend exécuté depuis le dépôt configuré, port 8090, alias nginx standards
+`/var/www/siem-soc` et `/var/www/siem-mobile`. Une copie séparée du backend ou des
+chemins web personnalisés exige une publication manuelle adaptée et bloque le plan
+automatique concerné avant modification. Les paramètres `UPDATE_CONSOLE_CONFIG`
+et `UPDATE_NGINX_SITE` permettent de désigner les fichiers de configuration à inspecter ;
+ils ne rendent pas un profil personnalisé automatiquement compatible.
+Une redirection explicite de l'ancienne interface `/m/` vers `/soc/` est acceptée
+et conservée ; elle n'est pas réactivée en tant qu'interface séparée.
+
 | Couche | Détection (lecture seule) | Exécution explicite | Retour arrière | Automatisme existant en production |
 |---|---|---|---|---|
 | Code du dépôt | `omni-update-status.py --layer code`, `omni-update.py fetch` puis `plan` ; console SOC, Administration > Mises à jour (§ 13) | `omni-update.py stage` puis `apply-code` ; ou mise à jour en un clic depuis la console (§ 13) | `omni-update.py rollback` / `recover` ; retour arrière automatique ou manuel de la console (§ 13) | `omni-console-update-check.timer` (recherche quotidienne, une fois installé) |

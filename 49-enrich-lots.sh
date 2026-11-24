@@ -368,7 +368,6 @@ done
 # === MITRE : ajouter les techniques au CSV 37 (idempotent, meme helper que 47) ===
 # T1078 (Valid Accounts) + T1021 (Remote Services / lateral). severite=moyen, score 5.
 CSV="lookups/mitre-attack.csv"
-add_mitre() { grep -q "^$1," "${CSV}" || { echo "$1,$2,$3,$4,$5,$6" >> "${CSV}"; ok "MITRE +$1"; }; }
 add_mitre explicit_cred_use T1078 "Valid Accounts" "Defense Evasion" moyen 5
 install -m 644 "${CSV}" /etc/graylog/lookup/mitre-attack.csv
 chown root:graylog /etc/graylog/lookup/mitre-attack.csv 2>/dev/null || true

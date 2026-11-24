@@ -20,8 +20,11 @@ if ! systemctl cat omni-mobile-api.service >/dev/null 2>&1; then
   install -d -m 755 "$APP" /etc/omni-mobile
   install -d -o omni-console -g omni-console -m 750 "$STATE"
   install -m 644 "$ROOT/mobile/omni-mobile-api.py" "$APP/omni-mobile-api.py"
+  install -d -m 755 "$APP/tools"
+  install -m 644 "$ROOT/tools/omni-soc-kpi.py" "$APP/tools/omni-soc-kpi.py"
   install -d -m 755 "$APP/lookups"
   install -m 644 "$ROOT/lookups/mitre-attack.csv" "$APP/lookups/mitre-attack.csv"
+  install -m 644 "$ROOT/lookups/alert-guidance.json" "$APP/lookups/alert-guidance.json"
   if [[ ! -f /etc/default/omni-mobile ]]; then
     API=http://127.0.0.1:9000/api
     CA="${GRAYLOG_API_CA:-/etc/graylog/certs/omnitech-rootca.crt}"
@@ -43,6 +46,8 @@ MOBILE_SUBS_FILE=${STATE}/subscriptions.json
 MOBILE_CASES_FILE=${STATE}/cases.json
 MOBILE_WATCH_FILE=${STATE}/watchlist.json
 MITRE_LOOKUP=${APP}/lookups/mitre-attack.csv
+OMNI_REPO_DIR=${ROOT}
+SOC_KPI_TOOL=${APP}/tools/omni-soc-kpi.py
 SOC_ORIGINS=${SOC_ORIGINS:-${SIEM_FQDN:-localhost}${SIEM_IP:+,$SIEM_IP}}
 SIEM_FQDN=${SIEM_FQDN:-}
 SIEM_IP=${SIEM_IP:-}
@@ -81,6 +86,13 @@ EOF
 else
   if [[ -f /opt/omni-siem/console/backend.json ]] && \
      systemctl show omni-mobile-api.service -p ExecStart --value | grep -Fq '/opt/omni-siem/console/omni-mobile-api.py'; then
+    # The managed activator owns only the main backend file. Never report a
+    # complete update while leaving a different packaged KPI tool in service.
+    if [[ ! -f /opt/omni-siem/console/tools/omni-soc-kpi.py ]] || \
+       ! cmp -s "$ROOT/tools/omni-soc-kpi.py" /opt/omni-siem/console/tools/omni-soc-kpi.py; then
+      echo "Managed console KPI tool requires an explicit publication: reconcile /opt/omni-siem/console/tools/omni-soc-kpi.py and SOC_KPI_TOOL before retrying. No backend changed." >&2
+      exit 1
+    fi
     python3 "$ROOT/tools/manage-console-backend.py" --source "$ROOT/mobile/omni-mobile-api.py"
   else
     echo "Existing backend service/configuration retained; legacy code activation remains explicit."
