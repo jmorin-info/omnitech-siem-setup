@@ -32,3 +32,12 @@ def test_lint_has_no_new_findings():
     result = subprocess.run(["bash", str(ROOT / "tools/ci-lint.sh")], cwd=ROOT, capture_output=True, text=True,
                             env={"PATH": "/usr/bin:/bin", "SHELLCHECK": shellcheck, "RUFF": ruff})
     assert result.returncode == 0, result.stdout[-3000:]
+
+
+@pytest.mark.parametrize("missing", ["SHELLCHECK", "RUFF"])
+def test_lint_fails_when_a_required_tool_is_missing(missing):
+    env = {"PATH": "/usr/bin:/bin", "SHELLCHECK": "/bin/true", "RUFF": "/bin/true"}
+    env[missing] = "/missing/omni-lint-tool"
+    result = subprocess.run(["bash", str(ROOT / "tools/ci-lint.sh")], cwd=ROOT, capture_output=True, text=True, env=env)
+    assert result.returncode == 2 and "indisponible" in result.stderr
+    assert "aucun nouveau constat" not in result.stdout

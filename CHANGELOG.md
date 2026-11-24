@@ -30,6 +30,8 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
   copie du backend ou des chemins web personnalisés désalignés. L'installation native
   et Docker embarquent l'outil Indicateurs ; le lookup de guidance suit le chemin
   configuré. Conservation des pages locales pendant une mise à jour et son retour arrière.
+- Contrôle de qualité : un exécutable ShellCheck ou Ruff absent provoque désormais
+  un refus explicite, au lieu de laisser apparaître un résultat de lint incomplet.
 
 ### Ajouté (autres évolutions en attente de publication)
 
