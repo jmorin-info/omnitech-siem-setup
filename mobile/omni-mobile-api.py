@@ -2022,6 +2022,7 @@ _DATA_DIR = os.path.dirname(SUBS_FILE) or "/var/lib/omni-mobile"
 SOC_ADMIN_DIR = _setting("SOC_ADMIN_DIR", os.path.join(_DATA_DIR, "admin"))
 # Apparence de la console (nom, logo, couleurs) : fichier JSON + logo, modifiables par un administrateur.
 SOC_APPEARANCE_DIR = _setting("SOC_APPEARANCE_DIR", os.path.join(_DATA_DIR, "appearance"))
+SOC_MODULES_DIR = _setting("SOC_MODULES_DIR", os.path.join(_DATA_DIR, "modules"))
 SOC_DEFAULT_ROLE = CONF.get("SOC_DEFAULT_ROLE", "analyste").strip().lower()
 if SOC_DEFAULT_ROLE not in ("lecteur", "analyste"):
     SOC_DEFAULT_ROLE = "lecteur"          # jamais administrateur par défaut
@@ -2070,7 +2071,7 @@ _PROD_PREFIXES = ("/var/lib", "/etc", "/var/www", "/var/log", "/usr", "/opt/oms-
 def state_paths():
     return {"MOBILE_SUBS_FILE": SUBS_FILE, "MOBILE_CASES_FILE": CASES_FILE, "MOBILE_WATCH_FILE": WATCH_FILE,
             "SOC_REQ_DIR": SOC_REQ_DIR, "SOC_ADMIN_DIR": SOC_ADMIN_DIR,
-            "SOC_APPEARANCE_DIR": SOC_APPEARANCE_DIR}
+            "SOC_APPEARANCE_DIR": SOC_APPEARANCE_DIR, "SOC_MODULES_DIR": SOC_MODULES_DIR}
 
 
 def enforce_test_isolation():
@@ -3180,6 +3181,325 @@ def _x_appearance(c, actor, motif, rid):
     return {"ok": True, "message": "Apparence enregistrée : appliquée à tous les utilisateurs au prochain chargement de la console."}
 
 
+# ------------------------------------------------------------------ modules et widgets du site
+# Configuration du site hors du code distribué. Le catalogue Graylog est réservé
+# aux administrateurs ; la publication d'une page attribue des droits SOC explicites,
+# indépendants des permissions du compte de service Graylog utilisé pour le catalogue.
+MODULES_CONFIG_FILE = os.path.join(SOC_MODULES_DIR, "config.json")
+MODULES_MAX_BODY = 128 * 1024
+_MODULE_SLUG = re.compile(r"^[a-z][a-z0-9_-]{0,47}$")
+_MODULE_FIELD = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$")
+_MODULE_SOURCE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+_MODULE_WIDGET_TYPES = frozenset({"count", "timeseries", "terms", "messages"})
+
+
+def _module_text(value, maximum, label, empty=True):
+    if (not isinstance(value, str) or len(value) > maximum
+            or any(ord(c) < 32 or ord(c) == 127 for c in value)
+            or (not empty and not value.strip())):
+        raise AdminError(label + " invalide")
+    return value.strip()
+
+
+def _module_strings(raw, pattern, maximum, label, nonempty=False):
+    if (not isinstance(raw, list) or len(raw) > maximum or (nonempty and not raw)
+            or any(not isinstance(x, str) or not pattern.fullmatch(x) for x in raw)
+            or len(set(raw)) != len(raw)):
+        raise AdminError(label + " invalide")
+    return list(raw)
+
+
+def modules_validate_config(raw):
+    if not isinstance(raw, dict) or set(raw) - {"schema_version", "revision", "pages"}:
+        raise AdminError("configuration de modules invalide")
+    if type(raw.get("schema_version")) is not int or raw["schema_version"] != 1:
+        raise AdminError("version de configuration de modules non prise en charge")
+    revision = raw.get("revision")
+    if type(revision) is not int or not 0 <= revision < 2147483647:
+        raise AdminError("révision de modules invalide")
+    pages = raw.get("pages")
+    if not isinstance(pages, list) or len(pages) > 20:
+        raise AdminError("vingt pages de modules au maximum")
+    normalized, seen = [], set()
+    page_keys = {"id", "title", "description", "enabled", "min_role", "stream_ids", "event_sources",
+                 "integration_ids", "query", "days", "graylog_dashboard_id", "widgets"}
+    for page in pages:
+        if not isinstance(page, dict) or set(page) - page_keys:
+            raise AdminError("page de module invalide")
+        identifier = page.get("id")
+        if not isinstance(identifier, str) or not _MODULE_SLUG.fullmatch(identifier) or identifier in seen:
+            raise AdminError("identifiant de page invalide ou en double")
+        seen.add(identifier)
+        role = page.get("min_role", "analyste")
+        if not isinstance(role, str) or role not in ROLE_RANK:
+            raise AdminError("rôle minimal du module invalide")
+        if type(page.get("enabled", False)) is not bool:
+            raise AdminError("activation du module invalide")
+        days = page.get("days", 1)
+        if type(days) is not int or not 1 <= days <= 30:
+            raise AdminError("fenêtre du module : entre 1 et 30 jours")
+        dashboard = page.get("graylog_dashboard_id", "")
+        if not isinstance(dashboard, str) or (dashboard and not _GL_ID_RE.fullmatch(dashboard)):
+            raise AdminError("identifiant de dashboard Graylog invalide")
+        widgets = page.get("widgets")
+        if not isinstance(widgets, list) or not 1 <= len(widgets) <= 12:
+            raise AdminError("une à douze widgets sont requis par page")
+        output, widget_ids = [], set()
+        for widget in widgets:
+            if not isinstance(widget, dict) or set(widget) - {"id", "title", "type", "field", "size"}:
+                raise AdminError("widget de module invalide")
+            wid, kind = widget.get("id"), widget.get("type")
+            if not isinstance(wid, str) or not _MODULE_SLUG.fullmatch(wid) or wid in widget_ids:
+                raise AdminError("identifiant de widget invalide ou en double")
+            widget_ids.add(wid)
+            if not isinstance(kind, str) or kind not in _MODULE_WIDGET_TYPES:
+                raise AdminError("type de widget non pris en charge")
+            field = widget.get("field", "")
+            if not isinstance(field, str) or (field and not _MODULE_FIELD.fullmatch(field)) or (kind == "terms" and not field):
+                raise AdminError("champ de widget invalide")
+            size = widget.get("size", 10)
+            if type(size) is not int or not 1 <= size <= 50:
+                raise AdminError("taille du widget : entre 1 et 50")
+            output.append({"id": wid, "title": _module_text(widget.get("title", ""), 100, "titre du widget", False),
+                           "type": kind, "field": field, "size": size})
+        normalized.append({"id": identifier, "title": _module_text(page.get("title", ""), 100, "titre de page", False),
+            "description": _module_text(page.get("description", ""), 500, "description"),
+            "enabled": page.get("enabled", False), "min_role": role,
+            "stream_ids": _module_strings(page.get("stream_ids"), _GL_ID_RE, 30, "streams", True),
+            "event_sources": _module_strings(page.get("event_sources", []), _MODULE_SOURCE, 30, "sources"),
+            "integration_ids": _module_strings(page.get("integration_ids", []), _MODULE_SOURCE, 30, "intégrations"),
+            "query": _module_text(page.get("query", ""), 1000, "recherche"), "days": days,
+            "graylog_dashboard_id": dashboard, "widgets": output})
+    result = {"schema_version": 1, "revision": revision, "pages": normalized}
+    if len(json.dumps(result, ensure_ascii=False).encode()) > MODULES_MAX_BODY - 2048:
+        raise AdminError("configuration de modules trop volumineuse", 413)
+    return result
+
+
+def load_modules_config():
+    if os.path.islink(SOC_MODULES_DIR) or os.path.islink(MODULES_CONFIG_FILE):
+        raise AdminError("configuration de modules indisponible", 503)
+    try:
+        with open(MODULES_CONFIG_FILE, encoding="utf-8") as handle:
+            data = handle.read(MODULES_MAX_BODY + 1)
+    except FileNotFoundError:
+        return {"schema_version": 1, "revision": 0, "pages": []}
+    except OSError:
+        raise AdminError("configuration de modules illisible", 503) from None
+    try:
+        if len(data.encode()) > MODULES_MAX_BODY:
+            raise ValueError("oversize")
+        return modules_validate_config(json.loads(data))
+    except (AdminError, ValueError, TypeError):
+        raise AdminError("configuration de modules invalide ; conserver le fichier et corriger sa cause", 503) from None
+
+
+def _a_modules(p, actor):
+    config = modules_validate_config(p)
+    if config["revision"] != load_modules_config()["revision"]:
+        raise AdminError("la configuration a changé ; recharger les modules avant d'enregistrer", 409)
+    return {"id": "modules", "config": config}
+
+
+def _p_modules(c):
+    before = load_modules_config()
+    after = dict(c["config"], revision=before["revision"] + 1)
+    return {"before": before, "after": after, "impact": "normal", "refus": "",
+            "effects": ["Configuration de pages et widgets du site uniquement ; aucune écriture dans Graylog.",
+                        "Les rôles SOC autorisés voient uniquement les pages explicitement activées."]}
+
+
+def _x_modules(c, actor, motif, rid):
+    with _ADMIN_LOCK:
+        if os.path.islink(SOC_MODULES_DIR):
+            raise AdminError("répertoire de modules refusé", 503)
+        os.makedirs(SOC_MODULES_DIR, mode=0o750, exist_ok=True)
+        lock_path = os.path.join(SOC_MODULES_DIR, ".config.lock")
+        fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o640)
+        with os.fdopen(fd, "r+") as lock:
+            _fcntl.flock(lock, _fcntl.LOCK_EX)
+            previous = load_modules_config()
+            if c["config"]["revision"] != previous["revision"]:
+                raise AdminError("la configuration a changé ; recharger les modules avant d'enregistrer", 409)
+            updated = dict(c["config"], revision=previous["revision"] + 1)
+            _atomic_write_json(MODULES_CONFIG_FILE, updated)
+    return {"ok": True, "revision": updated["revision"], "message": "Pages et widgets enregistrés."}
+
+
+def _module_public(page):
+    return {key: page[key] for key in ("id", "title", "description", "min_role", "days", "stream_ids", "graylog_dashboard_id")}
+
+
+def modules_public(user):
+    config = load_modules_config()
+    return {"revision": config["revision"], "pages": [_module_public(p) for p in config["pages"]
+            if p["enabled"] and role_at_least(user, p["min_role"])]}
+
+
+def _module_scope(page):
+    filters = [{"terms": {"streams": page["stream_ids"]}},
+               {"range": {"timestamp": {"gte": "now-" + str(page["days"]) + "d", "lte": "now"}}}]
+    if page["event_sources"]:
+        filters.append({"terms": {"event_source": page["event_sources"]}})
+    if page["integration_ids"]:
+        filters.append({"terms": {"omni_integration_id": page["integration_ids"]}})
+    if page["query"]:
+        filters.append({"query_string": {"query": page["query"], "max_determinized_states": 1000}})
+    return {"bool": {"filter": filters}}
+
+
+def _module_count(value):
+    if type(value) is not int or value < 0:
+        raise SearchBackendError(502)
+    return value
+
+
+def _module_widget(page, widget):
+    kind = widget["type"]
+    body = {"query": _module_scope(page), "size": 0, "track_total_hits": True, "timeout": "10s"}
+    if kind == "terms":
+        body["aggs"] = {"items": {"terms": {"field": widget["field"], "size": widget["size"]}}}
+    elif kind == "timeseries":
+        body["aggs"] = {"items": {"date_histogram": {"field": "timestamp", "fixed_interval": "1h" if page["days"] <= 2 else "1d",
+                                                    "min_doc_count": 1}}}
+    elif kind == "messages":
+        body.update(size=min(widget["size"], 20), sort=[{"timestamp": {"order": "desc"}}],
+                    _source=["timestamp", "source", "message", "short_message"])
+    result = os_search(LOG_INDICES, body)
+    shards = result.get("_shards")
+    if not isinstance(shards, dict) or type(shards.get("failed")) is not int or shards["failed"] != 0:
+        raise SearchBackendError(502)
+    if kind == "count":
+        total = result["hits"]["total"]
+        if not isinstance(total, dict) or total.get("relation", "eq") != "eq":
+            raise SearchBackendError(502)
+        return {"value": _module_count(total.get("value"))}
+    if kind == "messages":
+        output = []
+        for hit in result["hits"]["hits"]:
+            source = hit.get("_source") if isinstance(hit, dict) else None
+            if not isinstance(source, dict):
+                raise SearchBackendError(502)
+            output.append({"timestamp": source.get("timestamp"), "source": _rd(source.get("source", "")),
+                           "message": _scrub(str(source.get("message") or source.get("short_message") or "")[:4000])})
+        return {"messages": output[:20]}
+    buckets = result.get("aggregations", {}).get("items", {}).get("buckets")
+    if not isinstance(buckets, list) or len(buckets) > (widget["size"] if kind == "terms" else 800):
+        raise SearchBackendError(502)
+    output = []
+    for bucket in buckets:
+        if not isinstance(bucket, dict) or "key" not in bucket:
+            raise SearchBackendError(502)
+        key = bucket.get("key_as_string") if kind == "timeseries" else bucket["key"]
+        if kind == "timeseries" and not isinstance(key, str):
+            raise SearchBackendError(502)
+        if not isinstance(key, (str, int, float)) or isinstance(key, bool):
+            raise SearchBackendError(502)
+        output.append({"key": _scrub(key) if isinstance(key, str) else key, "count": _module_count(bucket.get("doc_count"))})
+    return {"buckets": output}
+
+
+def modules_page(identifier, user):
+    config = load_modules_config()
+    page = next((p for p in config["pages"] if p["id"] == identifier and p["enabled"]
+                 and role_at_least(user, p["min_role"])), None)
+    if page is None:
+        raise AdminError("page de module introuvable", 404)
+    widgets = []
+    for widget in page["widgets"]:
+        item = {key: widget[key] for key in ("id", "title", "type")}
+        try:
+            item.update(status="ok", data=_module_widget(page, widget))
+        except (SearchBackendError, ValueError, TypeError, KeyError):
+            item.update(status="error", data=None, message="Données indisponibles ; vérifier la source et le champ du widget.")
+        widgets.append(item)
+    return {"revision": config["revision"], "page": _module_public(page), "widgets": widgets, "generated": _now_iso()}
+
+
+def _modules_graylog_catalog():
+    streams = _graylog("GET", "/streams")
+    if not isinstance(streams, dict) or not isinstance(streams.get("streams"), list):
+        raise ValueError("invalid stream catalog")
+    found = []
+    for stream in streams["streams"]:
+        if not isinstance(stream, dict) or not _GL_ID_RE.fullmatch(str(stream.get("id", ""))):
+            raise ValueError("invalid stream")
+        found.append({"id": stream["id"], "title": str(stream.get("title", ""))[:200]})
+    dashboards = []
+    for number in range(1, 4):
+        response = _graylog("GET", "/views?page=" + str(number) + "&per_page=100")
+        if not isinstance(response, dict) or not isinstance(response.get("views"), list):
+            raise ValueError("invalid dashboard catalog")
+        views = response["views"]
+        for view in views:
+            if not isinstance(view, dict) or not _GL_ID_RE.fullmatch(str(view.get("id", ""))):
+                raise ValueError("invalid view")
+            if view.get("type") not in (None, "DASHBOARD"):
+                continue
+            if len(dashboards) >= 100:
+                raise ValueError("dashboard catalog exceeds bounds")
+            full = _graylog("GET", "/views/" + view["id"])
+            state = full.get("state") if isinstance(full, dict) else None
+            if not isinstance(state, dict):
+                raise ValueError("invalid dashboard")
+            count = 0
+            for value in state.values():
+                if not isinstance(value, dict) or not isinstance(value.get("widgets", []), list):
+                    raise ValueError("invalid widgets")
+                count += len(value.get("widgets", []))
+            dashboards.append({"id": view["id"], "title": str(view.get("title", ""))[:200], "widgets": count})
+        total = response.get("total")
+        if type(total) is int and total >= 0 and number * 100 >= total:
+            break
+        if len(views) < 100:
+            break
+    else:
+        raise ValueError("dashboard catalog exceeds bounds")
+    return sorted(found, key=lambda i: i["title"].lower()), sorted(dashboards, key=lambda i: i["title"].lower())
+
+
+def _modules_field_catalog():
+    request = urllib.request.Request(OS_URL + "/" + LOG_INDICES + "/_field_caps?fields=*", headers={"Accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=10) as response:
+        result = json.load(response)
+    fields = result.get("fields") if isinstance(result, dict) else None
+    if not isinstance(fields, dict) or result.get("error") or result.get("failures") or result.get("failed_indices"):
+        raise ValueError("field inventory unavailable")
+    output = []
+    for name, types in sorted(fields.items()):
+        if not _MODULE_FIELD.fullmatch(name) or not isinstance(types, dict) or not types:
+            continue
+        if not all(isinstance(info, dict) and type(info.get("aggregatable")) is bool for info in types.values()):
+            raise ValueError("invalid field metadata")
+        output.append({"name": name, "type": next(iter(types)) if len(types) == 1 else "conflict",
+                       "aggregatable": len(types) == 1 and all(info["aggregatable"] for info in types.values())})
+    return output[:500]
+
+
+def admin_modules():
+    catalog = {"streams": [], "dashboards": [], "fields": [], "sources": [], "errors": []}
+    try:
+        catalog["streams"], catalog["dashboards"] = _modules_graylog_catalog()
+    except Exception:
+        catalog["errors"].append("Catalogue Graylog indisponible ; vérifier le jeton et ses permissions de lecture.")
+    try:
+        catalog["fields"] = _modules_field_catalog()
+    except Exception:
+        catalog["errors"].append("Inventaire des champs indisponible ; vérifier OpenSearch.")
+    try:
+        result = os_search(LOG_INDICES, {"size": 0, "query": {"range": {"timestamp": {"gte": "now-30d"}}},
+                                        "aggs": {"sources": {"terms": {"field": "event_source", "size": 100}}}})
+        buckets = result.get("aggregations", {}).get("sources", {}).get("buckets")
+        shards = result.get("_shards")
+        if (not isinstance(buckets, list) or not isinstance(shards, dict)
+                or type(shards.get("failed")) is not int or shards["failed"] != 0):
+            raise ValueError("invalid source catalog")
+        catalog["sources"] = [{"source": str(b["key"]), "count": _module_count(b["doc_count"])} for b in buckets]
+    except Exception:
+        catalog["errors"].append("Sources observées indisponibles ; aucune absence ne peut être conclue.")
+    return {"config": load_modules_config(), "catalog": catalog}
+
+
 # ------------------------------------------------------------------ mise à jour de l'environnement
 # Le backend ne lance aucune commande : il lit l'état publié par omni-console-update
 # (SOC_ADMIN_DIR/update/status.json et run.json, écrits par root), dépose un fichier de
@@ -3384,6 +3704,7 @@ ADMIN_ACTIONS = {
     "detection_toggle": {"label": "Activation d'une détection", "validate": _a_detection, "preview": _p_detection, "execute": _x_detection},
     "service_restart": {"label": "Redémarrage d'un service", "validate": _a_restart, "preview": _p_restart, "execute": _x_exec("service_restart")},
     "appearance_set": {"label": "Apparence de la console", "validate": _a_appearance, "preview": _p_appearance, "execute": _x_appearance},
+    "modules_set": {"label": "Pages et widgets du site", "validate": _a_modules, "preview": _p_modules, "execute": _x_modules},
     "update_check": {"label": "Recherche de mise à jour", "validate": _a_update_check, "preview": _p_update_check, "execute": _x_update_check},
     # Libre-service : impact « eleve », exécution sans second administrateur après confirmation
     # explicite (révision courte). Revalidé par l'exécuteur (SELF_SERVICE_KINDS) et par le service.
@@ -3625,6 +3946,7 @@ ADMIN_GET_ROUTES = {
     "/m/api/admin/requests": lambda q: admin_requests(),
     "/m/api/admin/audit": lambda q: audit_read(max(1, min(int((q.get("limit") or ["200"])[0] or 200), 1000))),
     "/m/api/admin/appearance": lambda q: admin_appearance(),
+    "/m/api/admin/modules": lambda q: admin_modules(),
     "/m/api/admin/update": lambda q: admin_update(),
 }
 
@@ -3756,6 +4078,14 @@ class H(BaseHTTPRequestHandler):
             return self._json({"error": "auth"}, 401)
         if p.startswith("/m/api/admin/"):
             return self._admin_get(p)
+        if p in ("/m/api/modules", "/m/api/modules/page"):
+            try:
+                if p == "/m/api/modules":
+                    return self._json_raw(modules_public(self._user()))
+                params = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+                return self._json_raw(modules_page(params.get("id", [""])[0], self._user()))
+            except AdminError as ex:
+                return self._json_raw({"error": str(ex)}, ex.code)
         if p == "/m/api/appearance":
             return self._json_raw(appearance_public())
         if p == "/m/api/appearance/logo":
@@ -4015,7 +4345,7 @@ class H(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0) or 0)
         except ValueError:
             n = -1
-        limit = APPEARANCE_MAX_BODY if p == "/m/api/admin/appearance" else 16384
+        limit = APPEARANCE_MAX_BODY if p == "/m/api/admin/appearance" else (MODULES_MAX_BODY if p == "/m/api/admin/modules" else 16384)
         if n < 0 or n > limit:
             return deny("requête trop volumineuse", 413)
         try:
@@ -4031,6 +4361,15 @@ class H(BaseHTTPRequestHandler):
                 r = admin_decide(body, u, ip)
             elif p == "/m/api/admin/appearance":
                 body["action"] = "appearance_set"     # même chaîne que /admin/action : simulation, motif, audit
+                r = admin_action(body, u, ip)
+            elif p == "/m/api/admin/modules":
+                body["action"] = "modules_set"
+                if "params" not in body:
+                    body["params"] = body.get("config", {})
+                if "mode" in body:
+                    if body["mode"] not in ("preview", "apply"):
+                        raise AdminError("mode de configuration invalide")
+                    body["simulate"] = body["mode"] == "preview"
                 r = admin_action(body, u, ip)
             else:
                 return self._json_raw({"error": "not found"}, 404)
