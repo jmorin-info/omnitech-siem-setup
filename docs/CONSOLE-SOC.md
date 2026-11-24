@@ -15,7 +15,7 @@ onglets inférieurs et le menu pour accéder à l’ensemble des pages.
 |---|---|
 | Pilotage | **Vue d’ensemble** : indicateurs et activité ; **Incidents** : cas corrélés et suivi ; **Détections** : événements tagués, filtres et export CSV. |
 | Investigation | **Entités** : dossiers comptes et machines ; **ATT&CK** : techniques observées ; **Graphe d’attaque** et **Jumeau d’attaque** : relations et exposition ; **Playbooks** : guides de traitement. |
-| Visibilité | **Endpoint (EMS)**, **Réseau & Infra**, **Carte mondiale**, **Fuites & Dark Web** : informations des connecteurs configurés. |
+| Visibilité | **Modules** : pages et widgets propres au site ; **Endpoint (EMS)**, **Réseau & Infra**, **Carte mondiale**, **Fuites & Dark Web** : informations des connecteurs configurés. |
 | Administration | **Santé & Collecte** : sources et fraîcheur ; **SOAR** : actions autorisées ; **Exploitation SIEM** : état opérationnel ; **Administration** (administrateurs SOC uniquement) : rôles, faux positifs, SOAR, détections, paramètres, supervision, mises à jour, journal d'audit ; **Déploiement** : enrôlement ; **Rapport** : synthèse imprimable. |
 
 Les pages des extensions restent dépendantes de leur configuration. Le profil
@@ -35,11 +35,12 @@ le dossier de l’entité. Utiliser **Échap** pour fermer une fenêtre,
 **Tab** pour parcourir les commandes et **Entrée/Espace** pour activer une commande.
 **?** ouvre l’aide et les raccourcis.
 
-Les modules WatchGuard, UniFi et Palo Alto disposent aussi de leurs dashboards
-dans **Graylog > Dashboards**. Ils n’ajoutent pas automatiquement une nouvelle page
-spécialisée à `/soc/`. Leurs événements normalisés peuvent alimenter les vues
-globales et la recherche selon `SOC_LOG_INDICES` ; voir
-[les modules](INTEGRATIONS-MODULAIRES.md) et
+La page **Modules** permet aux administrateurs de composer des pages WatchGuard,
+UniFi, Palo Alto, vulnérabilités ou propres au site : streams, filtres, rôle minimum,
+compteurs, évolutions, répartitions et journaux. Les dashboards Graylog existants
+peuvent être associés par un lien ; leurs graphiques ne sont pas convertis automatiquement.
+Suivre [le guide des pages et widgets](CONSOLE-MODULES.md),
+[les intégrations](INTEGRATIONS-MODULAIRES.md) et
 [le périmètre des indices](CONSOLE-DEPLOIEMENT.md#identité-du-site-et-journaux-affichés).
 
 ## Lire les états de disponibilité
@@ -246,7 +247,7 @@ automatique.
 - Rôle administrateur vérifié sur chaque endpoint `/m/api/admin/*` (lecture et écriture).
 - Écritures : méthode POST, `Content-Type: application/json`, en-tête `Origin` obligatoire
   et présent dans `SOC_ORIGINS`, jeton anti-CSRF `X-SOC-CSRF` lié à la session, corps de
-  16 Kio maximum (720 Kio pour `/m/api/admin/appearance`), 30 écritures par 5 minutes et par compte (`SOC_ADMIN_WRITES_PER_5MIN`).
+  16 Kio maximum (720 Kio pour `/m/api/admin/appearance`, 128 Kio pour `/m/api/admin/modules`), 30 écritures par 5 minutes et par compte (`SOC_ADMIN_WRITES_PER_5MIN`).
 - Réseau : avec `SOC_ADMIN_INTERNAL_ONLY=1` (défaut), écritures acceptées seulement si l'IP
   cliente (posée par nginx dans `X-Real-IP`, prise en compte uniquement depuis 127.0.0.1)
   appartient à `SOC_ADMIN_NETS` (RFC 1918, boucle locale et fc00::/7 par défaut).

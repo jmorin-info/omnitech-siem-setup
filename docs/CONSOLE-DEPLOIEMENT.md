@@ -46,6 +46,28 @@ service ; une mise à jour du dépôt ne met pas nécessairement à jour son `Ex
 Les endpoints de SOAR, graphe ou supervision qui dépendent d'autres services peuvent
 rester indisponibles tant que ces extensions ne sont pas configurées.
 
+Le profil natif neuf embarque aussi l'outil Indicateurs (`SOC_KPI_TOOL`) et ses
+lookups dans le répertoire applicatif : ils restent accessibles lorsque le clone
+initial est dans un répertoire personnel protégé par systemd. `OMNI_REPO_DIR` désigne
+le clone du site ; il ne remplace pas les chemins explicites des extensions.
+Une ancienne copie gérée dont l'outil Indicateurs manque ou diffère est refusée par
+la publication `71` avant activation du backend : réconcilier explicitement cet outil
+et `SOC_KPI_TOOL` selon le diagnostic, puis relancer le plan.
+
+La mise à jour en un clic accepte actuellement un backend exécuté directement
+depuis le dépôt configuré, le port local 8090 et les alias web standards
+`/var/www/siem-soc` et `/var/www/siem-mobile`. Une copie applicative séparée, un port
+différent ou des alias personnalisés bloquent le plan de publication automatique ;
+suivre la procédure manuelle adaptée au service au lieu d'annoncer un alignement
+qui laisserait une ancienne copie active. Voir [les mises à jour](UPDATES.md).
+
+### Pages propres au site
+
+Pour ajouter des pages, des widgets et les liens vers les dashboards du Graylog local,
+suivre [CONSOLE-MODULES.md](CONSOLE-MODULES.md). Les réglages restent dans
+`/var/lib/omni-mobile/modules/config.json` par défaut, hors du dépôt et des assets publics.
+Le rôle minimum et les streams sont choisis par l'administrateur avant publication.
+
 ### Identité du site et journaux affichés
 
 Sur une installation native, le backend lit `/etc/default/omni-mobile`. Les nouvelles

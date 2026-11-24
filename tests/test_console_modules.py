@@ -1,5 +1,6 @@
 """Site-owned console pages: role checks, bounded searches and persistent configuration."""
 import copy
+import io
 import json
 from pathlib import Path
 
@@ -83,6 +84,46 @@ def test_corrupt_configuration_is_not_silently_reset(configured):
     with pytest.raises(configured.AdminError) as error:
         configured.load_modules_config()
     assert error.value.code == 503 and '99' in path.read_text()
+
+
+def test_catalog_reads_native_dashboard_widgets_without_changing_graylog(configured, monkeypatch):
+    calls = []
+    def graylog(method, path):
+        calls.append((method, path))
+        if path == "/streams":
+            return {"streams": [{"id": "a" * 24, "title": "Veille développeurs"}]}
+        if path.startswith("/views?"):
+            return {"views": [{"id": "b" * 24, "title": "Vulnérabilités", "type": "DASHBOARD"},
+                              {"id": "c" * 24, "type": "SEARCH"}]}
+        assert path == "/views/" + "b" * 24
+        return {"state": {"page1": {"widgets": [{"id": "1"}, {"id": "2"}]}, "page2": {"widgets": [{"id": "3"}]}}}
+    monkeypatch.setattr(configured, "_graylog", graylog)
+    streams, dashboards = configured._modules_graylog_catalog()
+    assert streams[0]["title"] == "Veille développeurs"
+    assert dashboards == [{"id": "b" * 24, "title": "Vulnérabilités", "widgets": 3}]
+    assert all(method == "GET" for method, _ in calls)
+
+
+def test_partial_catalog_failure_keeps_saved_configuration(configured, monkeypatch):
+    publish(configured)
+    saved = Path(configured.MODULES_CONFIG_FILE).read_bytes()
+    def unavailable(*args, **kwargs):
+        raise ValueError("service unavailable")
+    monkeypatch.setattr(configured, "_graylog", unavailable)
+    monkeypatch.setattr(configured, "_modules_field_catalog", unavailable)
+    monkeypatch.setattr(configured, "os_search", unavailable)
+    result = configured.admin_modules()
+    assert result["config"]["revision"] == 1 and len(result["catalog"]["errors"]) == 3
+    assert result["catalog"]["streams"] == [] and Path(configured.MODULES_CONFIG_FILE).read_bytes() == saved
+
+
+def test_field_catalog_rejects_partial_index_results(configured, monkeypatch):
+    result = {"fields": {"source": {"keyword": {"aggregatable": True}}}, "failed_indices": ["unavailable-index"]}
+    monkeypatch.setattr(configured.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(json.dumps(result).encode()))
+    with pytest.raises(ValueError, match="unavailable"):
+        configured._modules_field_catalog()
+    result.pop("failed_indices")
+    assert configured._modules_field_catalog() == [{"name": "source", "type": "keyword", "aggregatable": True}]
 
 
 def test_pages_are_opt_in_and_filtered_by_server_role(configured, monkeypatch):

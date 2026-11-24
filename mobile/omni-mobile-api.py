@@ -1132,7 +1132,7 @@ def get_entities_browse(days=7):
     return {"users": _top("user", True), "machines": _top("source", False)}
 
 
-_LOOKDIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lookups")
+_LOOKDIR = os.path.dirname(_setting("MITRE_LOOKUP", os.path.join(OMNI_REPO_DIR, "lookups", "mitre-attack.csv")))
 _GUIDANCE_PATH = os.path.join(_LOOKDIR, "alert-guidance.json")
 _MITRE_PATH = os.path.join(_LOOKDIR, "mitre-attack.csv")
 _GUIDANCE = {"mtime": -1.0, "data": {}}

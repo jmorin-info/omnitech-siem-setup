@@ -6,6 +6,7 @@ import argparse
 import copy
 import json
 import mimetypes
+import re
 from pathlib import Path
 import tempfile
 from urllib.parse import urlsplit
@@ -13,6 +14,7 @@ from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2] / "mobile/soc"
+BASE_STYLE = re.search(r"<style>(.*?)</style>", (ROOT / "index.html").read_text(encoding="utf-8"), re.S)[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--screenshots", type=Path)
 args = parser.parse_args()
@@ -29,7 +31,7 @@ with sync_playwright() as p:
         for theme in ("dark", "light"):
             context = browser.new_context(viewport={"width": width, "height": 950}, service_workers="block")
             page = context.new_page()
-            state = {"admin": True, "failure": False, "posts": [], "config": {"schema_version": 1, "revision": 2, "pages": [copy.deepcopy(base_page)]}}
+            state = {"admin": True, "failure": False, "save_mode": "normal", "posts": [], "config": {"schema_version": 1, "revision": 2, "pages": [copy.deepcopy(base_page)]}}
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             def route(r):
@@ -37,8 +39,8 @@ with sync_playwright() as p:
                 if path == "/soc/test-modules":
                     return r.fulfill(content_type="text/html", body=(
                         '<html lang="fr" data-theme="' + theme + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-                        '<link rel="stylesheet" href="/soc/app-professional.css"><link rel="stylesheet" href="/soc/app-modules.css"></head>'
-                        '<body style="margin:0;padding:18px"><nav id="nav"><a data-p="modules" href="#">Modules</a></nav>'
+                        '<style>' + BASE_STYLE + '</style><link rel="stylesheet" href="/soc/app-professional.css"><link rel="stylesheet" href="/soc/app-modules.css"></head>'
+                        '<body style="margin:0;padding:18px;overflow:auto"><nav id="nav"><a data-p="modules" href="#">Modules</a></nav>'
                         '<main><div id="modulesRoot"></div></main><script src="/soc/app-modules.js"></script></body></html>'))
                 if path.startswith("/m/api/"):
                     status, result = 200, {}
@@ -67,10 +69,15 @@ with sync_playwright() as p:
                         state["posts"].append(data)
                         if data["simulate"]:
                             result = {"ok": True, "simulation": True, "preview": {"after": data["params"]}}
+                        elif state["save_mode"] == "rejected":
+                            result = {"ok": False, "error": "Publication refusée par le serveur"}
+                        elif state["save_mode"] == "dry_run":
+                            result = {"ok": True, "simulation": True}
                         else:
+                            assert data["params"]["revision"] == state["config"]["revision"], "Editor must retain the published revision"
                             state["config"] = copy.deepcopy(data["params"])
                             state["config"]["revision"] += 1
-                            result = {"ok": True}
+                            result = {"ok": True, "revision": state["config"]["revision"]}
                     return r.fulfill(status=status, content_type="application/json", body=json.dumps(result))
                 target = ROOT / path.removeprefix("/soc/")
                 if path.startswith("/soc/") and target.is_file():
@@ -87,15 +94,35 @@ with sync_playwright() as p:
             page.screenshot(path=str(out / f"modules-{width}-{theme}.png"), full_page=True)
             page.get_by_role("button", name="Configurer les pages et widgets", exact=True).click()
             page.get_by_role("heading", name="Pages et widgets de cet environnement").wait_for()
+            assert page.locator("main").evaluate("e=>e.scrollWidth <= e.clientWidth+1")
+            page.screenshot(path=str(out / f"modules-editor-{width}-{theme}.png"), full_page=True)
             page.get_by_label("Titre", exact=True).first.fill("Pare-feu du site")
             page.get_by_label("Motif du changement", exact=True).fill("Ajuster la page du site")
             page.get_by_role("button", name="Simuler le changement", exact=True).click()
             page.get_by_text("Simulation terminée.", exact=False).wait_for()
             assert len(state["posts"]) == 1 and state["posts"][0]["simulate"]
+            state["save_mode"] = "rejected"
+            page.get_by_role("button", name="Publier ces réglages", exact=True).click()
+            page.get_by_text("Publication refusée par le serveur", exact=True).wait_for()
+            assert state["config"]["revision"] == 2
+            state["save_mode"] = "dry_run"
+            page.get_by_role("button", name="Simuler le changement", exact=True).click()
+            page.get_by_text("Simulation terminée.", exact=False).wait_for()
+            page.get_by_role("button", name="Publier ces réglages", exact=True).click()
+            page.get_by_text("Mode simulation : aucun réglage n'a été modifié.", exact=True).wait_for()
+            assert state["config"]["revision"] == 2
+            state["save_mode"] = "normal"
+            page.get_by_role("button", name="Simuler le changement", exact=True).click()
+            page.get_by_text("Simulation terminée.", exact=False).wait_for()
             page.get_by_role("button", name="Publier ces réglages", exact=True).click()
             page.get_by_text("Réglages enregistrés.", exact=True).wait_for()
-            assert len(state["posts"]) == 2 and not state["posts"][1]["simulate"]
             assert state["config"]["pages"][0]["title"] == "Pare-feu du site"
+            page.get_by_label("Titre", exact=True).first.fill("Pare-feu du site publié")
+            page.get_by_role("button", name="Simuler le changement", exact=True).click()
+            page.get_by_text("Simulation terminée.", exact=False).wait_for()
+            page.get_by_role("button", name="Publier ces réglages", exact=True).click()
+            page.get_by_text("Réglages enregistrés.", exact=True).wait_for()
+            assert state["config"]["revision"] == 4
             page.get_by_role("button", name="Retour aux pages publiées", exact=True).click()
             page.get_by_role("button", name="Configurer les pages et widgets", exact=True).wait_for()
             state["failure"] = True

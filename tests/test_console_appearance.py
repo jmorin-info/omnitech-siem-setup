@@ -313,7 +313,7 @@ def test_theme_module_is_loaded_early_and_cached():
     scripts = re.findall(r'<script src="(/soc/[^"]+)"', html)
     theme = "/soc/app-theme.js?v=2026112302"
     assert scripts.index(theme) == scripts.index("/soc/app-boot.js?v=2026112101") + 1
-    assert f'"{theme}"' in sw and 'VERSION = "soc-v9-2026112302"' in sw
+    assert f'"{theme}"' in sw and 'VERSION = "soc-v10-2026112401"' in sw
     assert "<script>" not in html
 
 

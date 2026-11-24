@@ -173,6 +173,9 @@ def banc(tmp_path):
 
 
 def test_nominal_archive_tous_les_elements_de_reprise(banc):
+    modules = banc.racine / "var/lib/omni-mobile/modules/config.json"
+    modules.parent.mkdir(parents=True, exist_ok=True)
+    modules.write_text('{"schema_version":1,"revision":2,"pages":[]}', encoding="utf-8")
     r = banc.lancer()
     assert r.returncode == 0, r.stderr + r.stdout
     assert "en-tete LUKS /data inclus (/dev/sdb1" in r.stdout
@@ -183,7 +186,8 @@ def test_nominal_archive_tous_les_elements_de_reprise(banc):
     for attendu in ("luks/data-header.img", "etc/mongod.keyfile", "etc/nginx/sites-enabled/siem",
                     "etc/nginx/sites-available/siem", "etc/nginx/snippets/omni.conf",
                     "etc/nginx/conf.d/omni-ratelimit.conf", "var/www/siem-soc/index.html",
-                    "etc/default/omni-mobile", "etc/omni-alert-triage.env", "etc/omni-soar/soar.env",
+                    "etc/default/omni-mobile", "var/lib/omni-mobile/modules/config.json",
+                    "etc/omni-alert-triage.env", "etc/omni-soar/soar.env",
                     "etc/oms-ml/config.yaml", "opt/oms-seal-sla/seal_sla_poller.py",
                     "etc/graylog/lookup/mitre-attack.csv", "mongodump/graylog/streams.bson",
                     "opt/omni-siem/repository/README.md"):

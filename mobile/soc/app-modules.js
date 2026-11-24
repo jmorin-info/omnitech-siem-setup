@@ -21,7 +21,7 @@
       options.headers["X-SOC-CSRF"] = state.me && state.me.csrf || ""; options.body = JSON.stringify(body); }
     return fetch("/m/api" + path, options).then(function (r) {
       if (r.status === 401) { location.reload(); throw new Error("Session expirée"); }
-      return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "Source indisponible (HTTP " + r.status + ")"); return d; });
+      return r.json().then(function (d) { if (!r.ok || d.ok === false) throw new Error(d.error || "Source indisponible (HTTP " + r.status + ")"); return d; });
     });
   }
   function csv(value) { return String(value || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean); }
@@ -176,7 +176,11 @@
       api("/admin/modules",{params:state.draft,simulate:simulate,motif:motif.value}).then(function(result){
         if(simulate){state.preview=JSON.stringify(state.draft);message(feedback,"Simulation terminée. Vérifier les pages, leurs streams et leurs rôles avant de publier.");
           var pre=node("pre","modules-preview",JSON.stringify(result.preview,null,2));feedback.appendChild(pre);publishButton.disabled=!state.me.writes_allowed;
-        } else {message(feedback,result.pending?"Demande transmise pour validation dans Administration.":"Réglages enregistrés.");state.preview=null;state.config=null;}
+        } else {
+          message(feedback,result.simulation ? "Mode simulation : aucun réglage n'a été modifié." : result.pending ? "Demande transmise pour validation dans Administration." : "Réglages enregistrés.");
+          if(Number.isInteger(result.revision))state.draft.revision=result.revision;
+          state.preview=null;state.config=null;
+        }
       }).catch(function(e){message(feedback,e.message,true);});
     }
     save.appendChild(button("Simuler le changement",function(){submit(true);}));save.appendChild(publishButton);save.appendChild(feedback);root.appendChild(save);

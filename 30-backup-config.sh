@@ -152,7 +152,7 @@ fi
 # chacun d'eux est ensuite EXIGE dans l'archive par la verification §3b.
 CHEMINS=(etc/graylog etc/default/graylog-server etc/opensearch etc/mongod.conf etc/nginx
          etc/hosts etc/nftables.conf etc/systemd/system usr/local/sbin var/www/siem-kit)
-AJOUTS=(var/www/siem-soc)
+AJOUTS=(var/www/siem-soc var/lib/omni-mobile)
 # Cle interne MongoDB (keyFile exige par mongod.conf ; /etc/mongod.keyfile en production)
 KEYFILE="$(awk '$1 == "keyFile:" {print $2; exit}' "${RACINE}etc/mongod.conf" 2>/dev/null || true)"
 KEYFILE="${KEYFILE:-/etc/mongod.keyfile}"

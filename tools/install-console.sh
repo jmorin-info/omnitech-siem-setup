@@ -24,6 +24,7 @@ if ! systemctl cat omni-mobile-api.service >/dev/null 2>&1; then
   install -m 644 "$ROOT/tools/omni-soc-kpi.py" "$APP/tools/omni-soc-kpi.py"
   install -d -m 755 "$APP/lookups"
   install -m 644 "$ROOT/lookups/mitre-attack.csv" "$APP/lookups/mitre-attack.csv"
+  install -m 644 "$ROOT/lookups/alert-guidance.json" "$APP/lookups/alert-guidance.json"
   if [[ ! -f /etc/default/omni-mobile ]]; then
     API=http://127.0.0.1:9000/api
     CA="${GRAYLOG_API_CA:-/etc/graylog/certs/omnitech-rootca.crt}"
