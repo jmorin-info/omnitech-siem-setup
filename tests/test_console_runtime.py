@@ -25,11 +25,11 @@ def test_packaged_backend_uses_configured_lookup_directory(tmp_path, monkeypatch
     shutil.copyfile(ROOT / "mobile/omni-mobile-api.py", backend)
     lookups = tmp_path / "site-lookups"
     lookups.mkdir()
-    (lookups / "mitre-attack.csv").write_text("alert_tag,technique,technique_name,tactic,severity\nfixture,T1110,Brute Force,Credential Access,high\n")
+    (lookups / "site-techniques.csv").write_text("alert_tag,technique,technique_name,tactic,severity\nfixture,T1110,Brute Force,Credential Access,high\n")
     (lookups / "alert-guidance.json").write_text(json.dumps({"fixture": {"ce_que_cest": "Guide du site"}}))
     config = tmp_path / "mobile.conf"
     config.write_text("MOBILE_SECRET=fixture-session-secret\nMOBILE_PUSH_SECRET=fixture-push-secret\n"
-                      f"MOBILE_SUBS_FILE={tmp_path}/state/subs.json\nMITRE_LOOKUP={lookups}/mitre-attack.csv\n"
+                      f"MOBILE_SUBS_FILE={tmp_path}/state/subs.json\nMITRE_LOOKUP={lookups}/site-techniques.csv\n"
                       f"MOBILE_CASES_FILE={tmp_path}/state/cases.json\nMOBILE_WATCH_FILE={tmp_path}/state/watchlist.json\n"
                       f"SOC_REQ_DIR={tmp_path}/state/requests\n")
     monkeypatch.setenv("MOBILE_CONFIG", str(config))

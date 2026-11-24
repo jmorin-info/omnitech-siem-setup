@@ -24,17 +24,6 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
   Le lien vers un dashboard conserve sa vue native, sans conversion de ses graphiques.
   Guide `docs/CONSOLE-MODULES.md`, tests API et navigateur sur ordinateur et mobile.
 
-### Corrigé
-
-- Publication de console : refus des mises à jour automatiques qui laisseraient une
-  copie du backend ou des chemins web personnalisés désalignés. L'installation native
-  et Docker embarquent l'outil Indicateurs ; le lookup de guidance suit le chemin
-  configuré. Conservation des pages locales pendant une mise à jour et son retour arrière.
-- Contrôle de qualité : un exécutable ShellCheck ou Ruff absent provoque désormais
-  un refus explicite, au lieu de laisser apparaître un résultat de lint incomplet.
-
-### Ajouté (autres évolutions en attente de publication)
-
 - Console SOC, Administration > Mises à jour : détection d'une nouvelle révision sur `main` du dépôt GitHub (timer quotidien `omni-console-update-check.timer` et bouton « Rechercher maintenant » via `omni-console-update-check.path`, `git fetch` du remote attendu sans toucher l'arbre de travail, URL du remote contrôlée), plan et vérifications affichés avant toute action (arbre propre, avance rapide, candidat sur `main`, verrou, unités en démarrage ou en échec, OpenSearch, API Graylog, sauvegarde de moins de 26 h, disque, tests hors ligne du candidat dans une copie temporaire sous un compte non privilégié, plan omni-deploy, classement des changements, refus si revue manuelle requise), options (console, redémarrages en liste blanche, modules d'intégration non installés), application par `omni-console-update.service` (`git merge --ff-only`, omni-deploy robots/unités/APT et console, redémarrages ciblés, contrôle de santé) avec retour arrière automatique complet en cas d'échec et retour arrière manuel de la dernière mise à jour. Action d'impact « élevé » en libre-service (un administrateur, motif et confirmation de la révision courte), seule exception à la double validation, revérifiée par `omni-soc-admin-exec` (file root `SOC_UPDATE_QUEUE`). Nouveaux fichiers `omni_update/console.py`, `tools/omni-console-update.py`, `deploye/systemd/omni-console-update*.{service,timer,path}`, `mobile/systemd/omni-console-update.default.example` ; route `GET /m/api/admin/update` ; service worker `soc-v9-2026112302`. Documentation `docs/UPDATES.md` (section 13) et `docs/CONSOLE-SOC.md#mises-à-jour`, tests `tests/test_console_update.py` et `tests/test_console_update_admin.py`.
 - Console SOC, Administration > Apparence : nom affiché, sous-titre, logo (PNG, JPEG ou WebP, 512 Ko, signature binaire et dimensions contrôlées, SVG refusé), couleurs des modes sombre et clair limitées aux variables existantes de `app-professional.css` avec refus sous 4,5:1 de contraste, thème par défaut, aperçu local et retour aux valeurs d'origine. Routes `GET /m/api/appearance`, `GET /m/api/appearance/logo` (utilisateur authentifié, `nosniff`), `GET`/`POST /m/api/admin/appearance` (administrateur, garde-fous et audit existants) ; stockage sous `SOC_APPEARANCE_DIR` ; nouveau module `mobile/soc/app-theme.js`, service worker `soc-v8-2026112301`. Documentation `docs/CONSOLE-SOC.md#apparence`, tests `tests/test_console_appearance.py`.
 - `tools/maj-detections-2026-11.py` et `tools/maj-detections-2026-11/cibles.json` : mise à jour des définitions corrigées en production. Plan par défaut en lecture seule (diff production -> cible et `_count` OpenSearch avant/après sur 30 jours) ; `--apply` sauvegarde chaque définition puis applique par PUT une définition à la fois (planification conservée, relecture, arrêt au premier échec), idempotent, dérive bloquante sauf `--forcer`, seule désactivation possible celle listée (ZON-001) ; `--rollback`. Tests `tests/test_maj_detections.py`.
@@ -87,6 +76,13 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - Qualité : `SC2034` n'est plus exclu globalement de ShellCheck (8 constats restants listés dans `tools/shellcheck-baseline.txt`), 16 `cd` vers le répertoire du script sortent explicitement en cas d'échec (SC2164, scripts ponctuels et outils), `lib-graylog.sh` déclare son shell, l'exclusion Ruff `F821` de `seal/graylog/provision_seal.py` est supprimée (import de `NoReturn`), imports inutilisés retirés de quatre fichiers non déployés.
 
 ### Corrigé
+
+- Publication de console : refus des mises à jour automatiques qui laisseraient une
+  copie du backend ou des chemins web personnalisés désalignés. L'installation native
+  et Docker embarquent l'outil Indicateurs ; le lookup de guidance suit le chemin
+  configuré. Conservation des pages locales pendant une mise à jour et son retour arrière.
+- Contrôle de qualité : un exécutable ShellCheck ou Ruff absent provoque désormais
+  un refus explicite, au lieu de laisser apparaître un résultat de lint incomplet.
 
 - `30-backup-config.sh` : l'en-tête LUKS de `/data` est enfin archivé. Le script testait `/dev/sda1` (`/boot/efi`) ; il détecte désormais le périphérique sous-jacent de `/data` (`findmnt` ou `/etc/fstab`, puis `cryptsetup status`, `lsblk`, `/etc/crypttab` ; surcharge `LUKS_DEVICE`), copie l'en-tête par `cryptsetup luksHeaderBackup` dans `luks/data-header.img` de l'archive chiffrée, contrôle sa signature et son UUID et joint `luks/data-header.txt`. Un échec n'empêche pas l'envoi mais émet `backup_config_echec`.
 - `30-backup-config.sh` : `mongodb_uri` lu sur la dernière ligne non commentée de `server.conf`, comme Graylog (les 4 lignes de production étaient concaténées) ; arrêt explicite si aucune ligne n'est trouvée.
