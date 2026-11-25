@@ -36,10 +36,10 @@ def main():
     call([sys.executable, "-m", "venv", str(ROOT / "mobile/.venv")])
     unit.write_text("[Unit]\nDescription=Isolated adoption acceptance fixture\n[Service]\nType=simple\nUser=nobody\nExecStart="
                     + str(ROOT / "mobile/.venv/bin/python") + " "
-                    + str(ROOT / "tests/fixtures/adoption-service.py") + "\n")
+                    + str(ROOT / "tests/fixtures/adoption-service.py") + "\n[Install]\nWantedBy=multi-user.target\n")
     unit.chmod(0o644)
     call(["systemctl", "daemon-reload"])
-    call(["systemctl", "start", unit.name])
+    call(["systemctl", "enable", "--now", unit.name])
     record = {"passed": False, "checks": []}
     try:
         plan = json.loads(call(["omni-siem", "adopt", "--from", str(ROOT), "--plan"]))
@@ -68,7 +68,7 @@ def main():
         record["failure"] = str(error)
         raise
     finally:
-        call(["systemctl", "stop", unit.name])
+        call(["systemctl", "disable", "--now", unit.name])
         unit.unlink()
         call(["systemctl", "daemon-reload"])
         output.write_text(json.dumps(record, indent=2) + "\n")

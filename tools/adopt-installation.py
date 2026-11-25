@@ -20,6 +20,7 @@ STATE = Path("/var/lib/omni-siem-adoption")
 MARKERS = ("install.sh", "lib-graylog.sh", "mobile/omni-mobile-api.py", "tools/omni-deploy.py")
 VENVS = {"mobile", "oms-xdr", "oms-graph", "oms-ml"}
 PATH_KEYS = {"MITRE_LOOKUP", "OMS_GRAPH_DIR", "OMNI_SIEM_HOME", "OMNI_REPO_DIR", "UPDATE_REPO"}
+UNIT_PATTERN = r"(?:(?:omni|oms)-[A-Za-z0-9@_.-]+|siem-backup)\.service"
 
 
 def load(name, relative):
@@ -136,6 +137,12 @@ def plan(source, target, system_root=Path("/")):
         for path in candidates:
             if not path.is_file():
                 continue
+            if path.is_symlink() and path.parent.name.endswith((".wants", ".requires")):
+                resolved = path.resolve()
+                unit_roots = (system_root / "etc/systemd/system", system_root / "usr/lib/systemd/system")
+                if resolved.name == path.name and any(resolved.is_relative_to(p) for p in unit_roots):
+                    # Enablement links stay in place; inspect their actual unit.
+                    continue
             try:
                 data = read(path)
             except ValueError:
@@ -149,7 +156,7 @@ def plan(source, target, system_root=Path("/")):
             if not old_path.search(meaningful(data)):
                 continue
             unit = next((part[:-2] if part.endswith(".d") else part for part in path.relative_to(directory).parts
-                         if re.fullmatch(r"(?:(?:omni|oms)-[A-Za-z0-9@_.-]+|siem-backup)\.service(?:\.d)?", part)), None)
+                         if re.fullmatch(UNIT_PATTERN + r"(?:\.d)?", part)), None)
             supported = relative_root == "etc/systemd/system" and unit is not None
             if supported:
                 services.add(unit)
@@ -192,6 +199,28 @@ def plan(source, target, system_root=Path("/")):
             files.append({"path": str(path), "before_sha256": sha(data), "after_sha256": sha(after),
                           "mode": details.st_mode & 0o777, "uid": details.st_uid, "gid": details.st_gid,
                           "_before": data, "_after": after})
+    # Units reading a changed EnvironmentFile/robot must reload their in-memory
+    # settings even when their unit text does not contain the old checkout path.
+    changed_runtime = {"/" + Path(item["path"]).relative_to(system_root).as_posix()
+                       for item in files if "/etc/default/" in item["path"] or "/usr/local/sbin/" in item["path"]}
+    if changed_runtime:
+        for relative_root in ("etc/systemd/system", "usr/lib/systemd/system"):
+            directory = system_root / relative_root
+            if not directory.is_dir():
+                continue
+            for path in directory.rglob("*"):
+                if not path.is_file() or path.is_symlink() or path.suffix not in (".service", ".conf"):
+                    continue
+                data = meaningful(read(path)).decode(errors="replace")
+                if not any(re.search(r"(?m)^\s*(?:EnvironmentFile|ExecStart|ExecStartPre|ExecStartPost)=.*"
+                                     + re.escape(runtime) + r"(?=[\s\"';]|$)", data) for runtime in changed_runtime):
+                    continue
+                name = next((part[:-2] if part.endswith(".d") else part for part in path.relative_to(directory).parts
+                             if part.endswith((".service", ".service.d"))), "")
+                if re.fullmatch(UNIT_PATTERN, name):
+                    services.add(name)
+                else:
+                    blockers.append("custom service reads a changed runtime file; review required: " + str(path))
     # A partial installation keeps its completed phases and instance identity.
     for relative in ("etc/omni-siem/instance.json", "var/lib/omni-siem/install-state.json"):
         path = system_root / relative

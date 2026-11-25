@@ -157,6 +157,33 @@ def test_native_backup_keeps_its_timer_and_receives_the_moved_private_config(sit
     assert str(old / "00-vars.env") in unit.read_text()
 
 
+def test_enabled_unit_alias_is_kept_and_target_unit_is_repointed(site):
+    old, target, root, state = site
+    unit = write(root, "etc/systemd/system/oms-demo.service", f"[Service]\nExecStart=/bin/bash {old}/install.sh\n")
+    enabled = root / "etc/systemd/system/multi-user.target.wants/oms-demo.service"
+    enabled.parent.mkdir()
+    enabled.symlink_to(unit)
+    report = adoption.plan(old, target, root)
+    assert report["blockers"] == [] and len(report["files"]) == 1
+    adoption.apply(report, state, run=lambda _: None,
+                   status=lambda _: {"ActiveState": "active", "Type": "simple"})
+    assert enabled.is_symlink() and enabled.resolve() == unit and str(target) in unit.read_text()
+
+
+def test_service_reading_changed_environment_is_restarted_even_with_external_backend(site):
+    old, target, root, state = site
+    write(root, "etc/default/omni-mobile", "OMNI_REPO_DIR=" + str(old) + "\n")
+    unit = write(root, "etc/systemd/system/omni-mobile-api.service", "[Service]\nEnvironmentFile=-/etc/default/omni-mobile\nExecStart=/opt/site-console/python /opt/site-console/api.py\n")
+    before = unit.read_bytes()
+    report = adoption.plan(old, target, root)
+    assert not report["blockers"] and report["services"] == [unit.name]
+    commands = []
+    adoption.apply(report, state, run=commands.append,
+                   status=lambda _: {"ActiveState": "active", "Type": "simple"})
+    assert unit.read_bytes() == before
+    assert ["systemctl", "restart", unit.name] in commands
+
+
 def test_python_environment_is_prepared_before_any_service_path_changes(site):
     old, target, root, state = site
     unit = write(root, "etc/systemd/system/omni-mobile-api.service", f"[Service]\nExecStart={old}/mobile/.venv/bin/python {old}/mobile/omni-mobile-api.py\n")
