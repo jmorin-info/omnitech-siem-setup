@@ -77,6 +77,14 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Corrigé
 
+- Mise à jour depuis la console : les tests du candidat disposent d'un dépôt Git
+  autonome issu de l'archive, sans accès aux métadonnées ni aux secrets du dépôt actif.
+  Les inventaires, contrôles de manifeste et de cohérence fonctionnent sous le compte
+  non privilégié ; HOME et TMP sont isolés. Les preuves de test portent la version du
+  banc pour invalider les anciens résultats. Le contrôle de santé gère une CA dont le
+  répertoire est inaccessible sans interrompre le rapport. Documentation de
+  l'actualisation du statut après publication manuelle.
+
 - Publication de console : refus des mises à jour automatiques qui laisseraient une
   copie du backend ou des chemins web personnalisés désalignés. L'installation native
   et Docker embarquent l'outil Indicateurs ; le lookup de guidance suit le chemin

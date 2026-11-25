@@ -10,9 +10,12 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
+import time
 
 import pytest
 
@@ -339,6 +342,69 @@ def test_failing_candidate_tests_block(env):
     report = env["updater"].check()
     assert report["tests"]["status"] == "echec" and report["can_apply"] is False
     assert "suite factice" in "\n".join(report["tests"]["tail"])
+
+
+@pytest.mark.parametrize("drop_privileges", [False, True])
+def test_archived_candidate_has_an_independent_git_snapshot_and_private_test_environment(env, monkeypatch, drop_privileges):
+    if drop_privileges and (os.geteuid() != 0 or not shutil.which("setpriv")):
+        pytest.skip("requires root and setpriv to verify the nobody boundary")
+    expected_uid = os.geteuid()
+    if drop_privileges:
+        import pwd
+        expected_uid = pwd.getpwnam("nobody").pw_uid
+        env["cfg"]["test_user"] = "nobody"
+    write(env["work"], "tracked-but-ignored.txt", "fixture\n")
+    commit(env["work"], "tracked fixture")
+    write(env["work"], ".gitignore", ".home/\n.tmp/\ntracked-but-ignored.txt\n00-vars.env\n")
+    script = '''#!/usr/bin/env bash
+set -euo pipefail
+"$OMNI_TEST_PYTHON" - <<'PY'
+import os, pathlib, subprocess
+def git(*args):
+    return subprocess.check_output(["git",*args], text=True).strip()
+assert os.geteuid() == EXPECTED_UID
+assert "tracked-but-ignored.txt" in git("ls-files").splitlines()
+assert "manifeste-deploye.txt" in git("ls-files").splitlines()
+assert git("remote") == ""
+assert git("config", "core.hooksPath") == "/dev/null"
+assert git("status", "--porcelain") == ""
+assert not pathlib.Path(".git/objects/info/alternates").exists()
+assert not pathlib.Path("00-vars.env").exists()
+assert "OMNI_CALLER_PRIVATE_VALUE" not in os.environ
+workspace=pathlib.Path(os.environ["TMPDIR"])
+assert not workspace.is_relative_to(pathlib.Path.cwd())
+assert workspace.stat().st_mode & 0o777 == 0o700
+assert pathlib.Path(os.environ["HOME"]).is_relative_to(workspace)
+assert len(str(workspace)) < 30
+assert workspace.stat().st_uid == os.geteuid()
+print("isolated Git inventory verified")
+PY
+'''.replace("EXPECTED_UID", str(expected_uid))
+    write(env["work"], "run-tests.sh", script, 0o755)
+    target = commit(env["work"], "exercise isolated inventory")
+    git(env["work"], "push", "-q", str(env["mirror"]), "main")
+    console.fetch(env["cfg"])
+    monkeypatch.setenv("OMNI_CALLER_PRIVATE_VALUE", "dummy-private-value")
+    installed = git(env["home"], "rev-parse", "HEAD")
+    with tempfile.TemporaryDirectory(prefix="omni-console-update-") as temporary:
+        candidate = Path(temporary) / "candidat"
+        candidate.mkdir()
+        console.extract(env["cfg"], target, candidate)
+        result = env["updater"].run_tests(target, candidate)
+    assert result["status"] == "ok", result["tail"]
+    assert "isolated Git inventory verified" in result["tail"]
+    log = env["cfg"]["state"] / "tests" / (target + ".log")
+    assert "isolated Git inventory verified" in log.read_text()
+    assert log.stat().st_mode & 0o777 == 0o600
+    assert git(env["home"], "rev-parse", "HEAD") == installed
+
+
+def test_tests_cached_before_the_current_harness_are_not_reused(env):
+    path = env["cfg"]["state"] / "tests" / (env["v2"] + ".json")
+    console.write_json(path, {"target":env["v2"], "status":"echec", "ts":time.time()})
+    assert env["updater"].cached_tests(env["v2"]) is None
+    console.write_json(path, {"target":env["v2"], "status":"ok", "ts":time.time(), "harness_version":console.TEST_HARNESS_VERSION})
+    assert env["updater"].cached_tests(env["v2"])["status"] == "ok"
 
 
 @pytest.mark.parametrize("path", ["requirements.txt", "python-locks/mobile.txt", "stack-versions.env", "migrations/001.sql"])

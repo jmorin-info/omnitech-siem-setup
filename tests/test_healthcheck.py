@@ -69,6 +69,7 @@ class FakeProbes(health.Probes):
 
 
 CONFIG = {"SIEM_FQDN": "siem.example.test", "GRAYLOG_ADMIN_PASS": SECRET,
+          "GRAYLOG_API_CA": "/nonexistent/test-ca.pem",
           "GRAYLOG_API_URL": "https://siem.example.test:9000"}
 
 
@@ -95,6 +96,19 @@ def test_yellow_cluster_passes_red_fails():
     assert by_name(run(FakeProbes(cluster="yellow")))["opensearch:sante"]["status"] == "ok"
     report = run(FakeProbes(cluster="red"))
     assert not report["passed"] and by_name(report)["opensearch:sante"]["status"] == "echec"
+
+
+def test_inaccessible_ca_does_not_abort_the_health_report(monkeypatch):
+    original = Path.is_file
+    def inaccessible(path):
+        if str(path) == "/protected/health-test-ca.pem":
+            raise PermissionError("dummy-private-directory")
+        return original(path)
+    monkeypatch.setattr(Path, "is_file", inaccessible)
+    config = {**CONFIG, "GRAYLOG_API_CA": "/protected/health-test-ca.pem"}
+    report = health.summarize(health.evaluate(config, ROOT, FakeProbes(tls_error=True)))
+    assert report["passed"] and by_name(report)["console:certificat"]["status"] == "avertissement"
+    assert "dummy-private-directory" not in json.dumps(report)
 
 
 def test_stopped_input_is_named():
