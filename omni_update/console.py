@@ -70,7 +70,7 @@ SELF_UNITS = ("omni-console-update", "omni-soc-admin-exec")
 PROD_PREFIXES = ("/var/lib", "/etc", "/var/www", "/var/log", "/usr", "/opt/oms-", "/opt/omni-siem/repository")
 LIST_CAP = 200
 TESTS_MAX_AGE = 24 * 3600
-TEST_HARNESS_VERSION = 2
+TEST_HARNESS_VERSION = 3
 STATUS_MAX_AGE = 24 * 3600
 GiB = 1024 ** 3
 FINAL_STATES = ("terminee", "terminee_avec_avertissements", "annulee", "annulation_incomplete", "refusee",
@@ -546,10 +546,16 @@ class ConsoleUpdater:
         return shutil.which("python3") or "python3"
 
     def run_tests(self, target, directory):
+        # Keep fixtures outside the source tree: recursive repository checks must
+        # not inspect test artifacts, and Unix socket paths need a short prefix.
+        with tempfile.TemporaryDirectory(prefix="ot-", dir="/tmp") as temporary:
+            return self._run_tests(target, directory, Path(temporary))
+
+    def _run_tests(self, target, directory, workspace):
         cache = self.cfg["state"] / "tests" / (target + ".json")
         started = time.time()
         python = self.test_python()
-        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": str(directory / ".home"),
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": str(workspace / "h"),
                "OMNI_TEST_PYTHON": python, "PYTHONDONTWRITEBYTECODE": "1",
                "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
         # git archive intentionally omits .git. Offline inventory/manifest tests
@@ -567,9 +573,8 @@ class ConsoleUpdater:
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
             except (OSError, subprocess.SubprocessError):
                 raise ConsoleUpdateError("préparation du dépôt Git isolé de test impossible") from None
-        (directory / ".home").mkdir(exist_ok=True)
-        (directory / ".tmp").mkdir(exist_ok=True)
-        env["TMPDIR"] = str(directory / ".tmp")
+        (workspace / "h").mkdir(mode=0o700)
+        env["TMPDIR"] = str(workspace)
         argv = ["bash", str(directory / "run-tests.sh")]
         if os.geteuid() == 0 and self.cfg["test_user"] != "aucun":
             import pwd
@@ -581,6 +586,8 @@ class ConsoleUpdater:
                 for name in dirs + files:
                     os.lchown(os.path.join(base, name), account.pw_uid, account.pw_gid)
             os.chown(directory, account.pw_uid, account.pw_gid)
+            os.chown(workspace, account.pw_uid, account.pw_gid)
+            os.chown(workspace / "h", account.pw_uid, account.pw_gid)
             if directory.parent.name.startswith("omni-console-update-"):
                 os.chown(directory.parent, account.pw_uid, account.pw_gid)
             argv = ["setpriv", f"--reuid={account.pw_uid}", f"--regid={account.pw_gid}", "--clear-groups", "--"] + argv
@@ -597,6 +604,10 @@ class ConsoleUpdater:
                 code = 124
         except OSError as exc:
             output, code = ("lancement impossible : " + type(exc).__name__).encode(), 127
+        cache.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        log = cache.with_suffix(".log")
+        log.write_bytes(output)
+        log.chmod(0o600)
         text = output.decode("utf-8", "replace").splitlines()
         result = {"target": target, "harness_version": TEST_HARNESS_VERSION,
                   "status": "ok" if code == 0 else ("delai_depasse" if code == 124 else "echec"),

@@ -708,8 +708,12 @@ La copie temporaire reçoit son propre dépôt Git et son index, construits uniq
 à partir des fichiers archivés du candidat. Les inventaires et contrôles du manifeste
 peuvent ainsi utiliser `git ls-files`. Aucun remote, identifiant, historique, hook ou
 fichier `.git` de la production n'est copié. Le compte de test possède cette copie et
-ses répertoires HOME/TMP privés ; les tests continuent de tourner sans privilèges.
+ses répertoires HOME/TMP privés, placés hors du code et sous un chemin court pour
+les sockets Unix ; les tests continuent de tourner sans privilèges.
 Une ancienne preuve de test n'est pas réutilisée après changement du banc d'exécution.
+La sortie complète est conservée en privé dans
+`/var/lib/omni-console-update/tests/<révision>.log` (droits `0600`) pour le diagnostic ;
+la console présente seulement l'extrait de fin.
 
 Après une **publication manuelle**, actualiser le rapport installé/disponible avec
 **Rechercher maintenant**, ou, si le service de recherche est installé :

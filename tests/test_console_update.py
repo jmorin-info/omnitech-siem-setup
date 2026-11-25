@@ -371,8 +371,12 @@ assert git("status", "--porcelain") == ""
 assert not pathlib.Path(".git/objects/info/alternates").exists()
 assert not pathlib.Path("00-vars.env").exists()
 assert "OMNI_CALLER_PRIVATE_VALUE" not in os.environ
-assert pathlib.Path(os.environ["HOME"]).is_relative_to(pathlib.Path.cwd())
-assert pathlib.Path(os.environ["TMPDIR"]).is_relative_to(pathlib.Path.cwd())
+workspace=pathlib.Path(os.environ["TMPDIR"])
+assert not workspace.is_relative_to(pathlib.Path.cwd())
+assert workspace.stat().st_mode & 0o777 == 0o700
+assert pathlib.Path(os.environ["HOME"]).is_relative_to(workspace)
+assert len(str(workspace)) < 30
+assert workspace.stat().st_uid == os.geteuid()
 print("isolated Git inventory verified")
 PY
 '''.replace("EXPECTED_UID", str(expected_uid))
@@ -389,6 +393,9 @@ PY
         result = env["updater"].run_tests(target, candidate)
     assert result["status"] == "ok", result["tail"]
     assert "isolated Git inventory verified" in result["tail"]
+    log = env["cfg"]["state"] / "tests" / (target + ".log")
+    assert "isolated Git inventory verified" in log.read_text()
+    assert log.stat().st_mode & 0o777 == 0o600
     assert git(env["home"], "rev-parse", "HEAD") == installed
 
 
