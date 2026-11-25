@@ -190,6 +190,12 @@ if [[ "$DRILL_ENABLED" == 1 ]]; then
     ssh "${SSH[@]}" 'cat /root/drill-report/rapport-restauration.json' > "$WORK/drill.json" 2> "$WORK/drill-errors.log" || true
   fi
 fi
+ADOPTION_CODE=0
+if [[ "${OMNI_VM_PACKAGE:-0}" == 1 && "$INSTALL_CODE" == 0 && "$VERIFY_CODE" == 0 && "$INTEGRATION_CODE" == 0 && "$DRILL_CODE" == 0 ]]; then
+  STAGE=adoption
+  ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && OMNI_ISOLATED_VM_TEST=1 python3 tools/test-adoption-vm.py' > "$WORK/adoption.log" 2>&1 || ADOPTION_CODE=$?
+  ssh "${SSH[@]}" 'cat /root/adoption-acceptance.json' > "$WORK/adoption.json" 2> "$WORK/adoption-errors.log" || true
+fi
 if [[ "$INSTALL_CODE" != 0 || "$VERIFY_CODE" != 0 || "$INTEGRATION_CODE" != 0 || "$DRILL_CODE" != 0 ]]; then
   # Only the disposable test guest's redacted diagnostics may leave the VM.
   ssh "${SSH[@]}" 'cd /opt/omni-siem-setup && python3 -' > "$WORK/diagnose.log" 2>&1 <<'DIAG' || true
@@ -255,11 +261,19 @@ import json, sys
 if json.load(open(sys.argv[1])).get("passed") is not True:
     raise SystemExit("The aggregated Ubuntu VM report did not pass")
 PY
-python3 - "$REPORT" "${OMNI_VM_PACKAGE:-0}" <<'PY'
+python3 - "$REPORT" "${OMNI_VM_PACKAGE:-0}" "$ADOPTION_CODE" "$WORK/adoption.json" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 report = json.loads(path.read_text())
 report["distribution_package"] = sys.argv[2] == "1"
+if report["distribution_package"]:
+    try:
+        report["adoption"] = json.loads(pathlib.Path(sys.argv[4]).read_text())
+    except (OSError, ValueError):
+        report["adoption"] = {"passed": False, "missing_report": True}
+    report["passed"] = report["passed"] and sys.argv[3] == "0" and report["adoption"].get("passed") is True
 path.write_text(json.dumps(report, indent=2) + "\n")
+if not report["passed"]:
+    raise SystemExit("Package/adoption acceptance failed; inspect the sanitized report")
 PY
 echo "Ubuntu 26.04 fresh installation passed; report: $REPORT"

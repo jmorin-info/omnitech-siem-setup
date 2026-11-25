@@ -1,6 +1,9 @@
 Première distribution complète du dépôt : archive source avec révision Git réelle,
 paquet Debian/Ubuntu, paquet RPM, catalogue de tous les fichiers et commande `omni-siem`.
 Les paquets ne contiennent aucun secret de site ni bases de données préremplies.
+Le parcours `adopt` prépare une installation existante dans le chemin canonique,
+avec détection bornée, conservation de la révision et des secrets, adaptation des
+références reconnues et retour arrière. Les données des bases ne sont pas déplacées.
 
 Le socle serveur (MongoDB, OpenSearch, Graylog, collecte de base, détections,
 dashboards, console SOC et sauvegarde) s'installe explicitement après configuration.

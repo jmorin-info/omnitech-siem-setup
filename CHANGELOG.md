@@ -25,6 +25,11 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
   arrière et récupération. Le RPM ne porte pas l'installation serveur sur RHEL.
   Workflow de paquets, recette VM facultative depuis le `.deb`, brouillon de
   préversion et guide `docs/DISTRIBUTION.md`.
+- Adoption d'une installation existante : recherche bornée des dépôts, copie à
+  révision identique vers le chemin canonique, configuration privée et phases
+  conservées, adaptation des références système reconnues et retour arrière.
+  Les composants absents restent inactifs ; les configurations non reconnues
+  bloquent l'automatisme et les données MongoDB/OpenSearch restent sur leur stockage.
 
 - Console SOC, **Visibilité > Modules** : pages propres au site, choix des streams et
   dashboards Graylog, filtres, rôle minimum et widgets compteur, évolution, répartition

@@ -121,6 +121,66 @@ du retour arrière ; seuls les fichiers gérés et l'état du service sont resta
 
 ## Mise à jour d'un environnement existant
 
+### Installation sous `/home`, `/root` ou un autre chemin
+
+Le parcours `adopt` prépare un dépôt dans `/opt/omni-siem/repository` à partir de la
+**révision réellement installée**, sans mise à jour simultanée du code :
+
+```bash
+sudo omni-siem adopt --plan
+# Si plusieurs dépôts sont trouvés, sélectionner celui qui sert réellement :
+sudo omni-siem adopt --from /home/administrateur/omnitech-siem-setup --plan
+# Continuer uniquement après lecture du plan, sans blockers :
+sudo omni-siem adopt --from /home/administrateur/omnitech-siem-setup --apply
+sudo omni-siem health --json
+```
+
+La recherche automatique est bornée sous `/home`, `/root`, `/opt` et `/srv`. Pour
+un autre emplacement, utiliser `--from`. Plusieurs candidats, un chemin symbolique,
+une destination existante ou des modifications locales non réconciliées bloquent
+l'application : aucun dépôt n'est choisi au hasard et aucune fusion n'est forcée.
+
+L'outil copie le code suivi et la configuration privée reconnue, reconstruit les
+venvs référencés, adapte les unités `omni-/oms-` existantes, les paramètres de
+chemins reconnus et les robots identiques à leur source versionnée. Il conserve
+les droits/propriétaires des fichiers système, sauvegarde les fragments modifiés,
+recharge systemd et redémarre uniquement les services concernés qui étaient actifs.
+Il n'active aucun composant absent. Une installation partielle garde ses phases
+terminées et son identité ; sa reprise suit les mêmes options et prérequis.
+Un service ponctuel en cours d'exécution doit d'abord terminer.
+
+Les références cron/nginx/Logstash non gérées, les unités personnalisées, les
+fichiers de fonctionnement non suivis ou les états locaux stockés dans l'ancien
+dépôt demandent une migration explicite et bloquent le parcours automatique.
+Ce n'est pas un remplacement global de `/home` dans les fichiers de la machine.
+La recherche porte sur les emplacements système reconnus, pas sur tout fichier
+personnalisé qu'un administrateur aurait pu créer ailleurs.
+
+**Les données MongoDB/OpenSearch et les montages ne sont pas déplacés.** Un
+`dbPath` sous `/home` ou un volume de données dédié reste à son emplacement ; le
+déplacer exige une procédure propre au moteur avec sauvegarde et arrêt contrôlé.
+L'ancienne copie du projet reste intacte, sans suppression ni lien de substitution.
+Vérifier collecte, console et un cycle complet des tâches avant son retrait.
+
+Le journal privé est dans `/var/lib/omni-siem-adoption/<transaction>/`. En cas
+d'échec de reconfiguration, la restauration est tentée automatiquement ; un état
+`rollback_incomplete` demande une intervention. Pour revenir en arrière :
+
+```bash
+sudo omni-siem adopt --rollback TRANSACTION --plan
+sudo omni-siem adopt --rollback TRANSACTION --apply
+# Si le processus a été interrompu pendant l'application :
+sudo omni-siem adopt --recover TRANSACTION --plan
+sudo omni-siem adopt --recover TRANSACTION --apply
+```
+
+Le retour arrière refuse d'écraser des changements postérieurs de configuration
+ou de révision. La nouvelle copie préparée reste disponible pour diagnostic ;
+elle n'est pas effacée. Faire cette opération dans une fenêtre de maintenance,
+sans mise à jour concurrente du SIEM.
+
+### Appliquer une nouvelle révision
+
 1. Sauvegarder configuration et données, vérifier leur restauration.
 2. Installer le nouveau `.deb`/`.rpm` local avec APT/DNF.
 3. Lancer `sudo omni-siem --root /chemin/du/depot status` : révision du paquet et
@@ -176,7 +236,8 @@ Le workflow **Distribution packages** construit les deux formats, vérifie le
 bootstrap, la réinstallation/désinstallation sans perte du fichier de site, les
 échecs et retours arrière du collecteur. Le workflow **Ubuntu 26.04 fresh VM**,
 option `package_install`, effectue l'installation réelle depuis le `.deb` dans
-une VM isolée, puis teste socle, console, intégrations et sauvegarde.
+une VM isolée, puis teste socle, console, intégrations, sauvegarde et une adoption
+avec service en fonctionnement et retour arrière.
 Le RPM n'est pas une preuve de compatibilité serveur sur une distribution RPM.
 
 Une étiquette `v0.1.0-rc.1` doit correspondre à `distribution/version.json` ; elle

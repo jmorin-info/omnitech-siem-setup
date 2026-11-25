@@ -45,9 +45,10 @@ def snapshot(source, destination, revision):
         count += 1
     git(destination, "init", "--quiet", "--template=", "--initial-branch=main")
     objects = [revision.encode(), *(line.split(b" ", 1)[0] for line in git(source, "rev-list", "--objects", revision + "^{tree}").splitlines())]
-    pack = subprocess.run(["git", "-C", str(source), "pack-objects", "--stdout"],
+    pack = subprocess.run(["git", "--no-replace-objects", "-c", "safe.directory=" + str(source),
+                           "-C", str(source), "pack-objects", "--stdout"],
                           input=b"\n".join(objects) + b"\n", capture_output=True, check=True).stdout
-    subprocess.run(["git", "-C", str(destination), "index-pack", "--stdin"], input=pack,
+    subprocess.run(["git", "-c", "safe.directory=" + str(destination), "-C", str(destination), "index-pack", "--stdin"], input=pack,
                    stdout=subprocess.DEVNULL, check=True, umask=0o022)
     (destination / ".git/shallow").write_text(revision + "\n")
     git(destination, "update-ref", "refs/heads/main", revision)
