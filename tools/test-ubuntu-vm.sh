@@ -261,7 +261,7 @@ import json, sys
 if json.load(open(sys.argv[1])).get("passed") is not True:
     raise SystemExit("The aggregated Ubuntu VM report did not pass")
 PY
-python3 - "$REPORT" "${OMNI_VM_PACKAGE:-0}" "$ADOPTION_CODE" "$WORK/adoption.json" <<'PY'
+python3 - "$REPORT" "${OMNI_VM_PACKAGE:-0}" "${ADOPTION_CODE:-0}" "$WORK/adoption.json" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 report = json.loads(path.read_text())
