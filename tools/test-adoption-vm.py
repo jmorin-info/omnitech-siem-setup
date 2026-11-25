@@ -32,7 +32,10 @@ def main():
         raise ValueError("the isolated adoption fixture destination must be absent")
     original_sha = call(["git", "-C", str(ROOT), "rev-parse", "HEAD"]).strip()
     secret_hash = hashlib.sha256((ROOT / "00-vars.env").read_bytes()).hexdigest()
-    unit.write_text("[Unit]\nDescription=Isolated adoption acceptance fixture\n[Service]\nType=simple\nUser=nobody\nExecStart=/usr/bin/python3 "
+    # Force a real venv reconstruction rather than merely testing a system Python path.
+    call([sys.executable, "-m", "venv", str(ROOT / "mobile/.venv")])
+    unit.write_text("[Unit]\nDescription=Isolated adoption acceptance fixture\n[Service]\nType=simple\nUser=nobody\nExecStart="
+                    + str(ROOT / "mobile/.venv/bin/python") + " "
                     + str(ROOT / "tests/fixtures/adoption-service.py") + "\n")
     unit.chmod(0o644)
     call(["systemctl", "daemon-reload"])
@@ -51,6 +54,7 @@ def main():
         assert hashlib.sha256((target / "00-vars.env").read_bytes()).hexdigest() == secret_hash
         assert ROOT.is_dir() and not ROOT.is_symlink()
         assert str(target) in unit.read_text()
+        call([str(target / "mobile/.venv/bin/python"), "-c", "import pywebpush"])
         call(["systemctl", "is-active", "--quiet", unit.name])
         call([sys.executable, str(target / "tools/verify-installation.py"), "--output", "/root/adopted-platform.json"])
         record["checks"].append("same revision, private configuration, old checkout retained and platform acceptance passed")

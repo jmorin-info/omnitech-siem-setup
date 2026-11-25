@@ -140,6 +140,39 @@ def test_running_oneshot_is_not_interrupted(site):
     assert not target.exists()
 
 
+def test_python_environment_is_prepared_before_any_service_path_changes(site):
+    old, target, root, state = site
+    unit = write(root, "etc/systemd/system/omni-mobile-api.service", f"[Service]\nExecStart={old}/mobile/.venv/bin/python {old}/mobile/omni-mobile-api.py\n")
+    report = adoption.plan(old, target, root)
+    assert report["venvs"] == ["mobile"]
+    before = unit.read_bytes()
+    commands = []
+    def fail_build(argv):
+        commands.append(argv)
+        assert unit.read_bytes() == before
+        if "venvs" in argv:
+            raise RuntimeError("venv dependency unavailable")
+    with pytest.raises(RuntimeError):
+        adoption.apply(report, state, run=fail_build,
+                       status=lambda _: {"ActiveState": "inactive", "Type": "simple"})
+    assert unit.read_bytes() == before
+    assert commands[0][1].endswith("tools/omni-deploy.py") and "--no-verify" in commands[0]
+
+
+def test_user_state_inside_old_checkout_is_not_repointed_to_an_empty_directory(site):
+    old, target, root, _ = site
+    write(root, "etc/default/omni-mobile", "SOC_MODULES_DIR='" + str(old / "local-state/modules") + "'\n")
+    assert adoption.plan(old, target, root)["blockers"]
+
+
+def test_similar_directory_names_are_not_rewritten(site):
+    old, target, root, _ = site
+    unit = write(root, "etc/systemd/system/oms-demo.service", f"[Service]\nExecStart=/bin/bash {old}-other/install.sh\n")
+    report = adoption.plan(old, target, root)
+    assert report["files"] == [] and report["services"] == []
+    assert str(old) + "-other" in unit.read_text()
+
+
 def test_rollback_refuses_site_changes_after_success(site):
     old, target, root, state = site
     result = adoption.apply(adoption.plan(old, target, root), state)
