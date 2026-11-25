@@ -1,0 +1,16 @@
+{
+  "version": "0.1.0-rc.1",
+  "channel": "prerelease",
+  "server": {
+    "platforms": ["ubuntu:22.04", "ubuntu:24.04", "debian:12", "debian:13"],
+    "experimental": ["ubuntu:26.04"],
+    "architecture": "amd64",
+    "profile": "core-soc",
+    "minimum_ram_gib": 16,
+    "cpu_avx_required": true
+  },
+  "rpm": {
+    "scope": "Full project distribution and administration tools; native SIEM server provisioning is refused on RPM systems.",
+    "server_qualified": false
+  }
+}

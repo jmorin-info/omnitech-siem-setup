@@ -26,6 +26,15 @@ MongoDB, used for detection and incident response at OMNITECH SECURITY.**
 
 ## Overview
 
+A [first full-project release candidate](docs/DISTRIBUTION.md) adds source archives,
+`.deb`/`.rpm` packages and an `omni-siem` SSH entry point for configuration, core
+installation, modules and update review. Every tracked project file is included;
+site-specific extensions still require their own credentials and explicit setup.
+Package installation/upgrades preserve the active checkout and databases.
+Native server provisioning targets Ubuntu/Debian; Ubuntu 26.04 is experimental.
+The RPM distributes tools and collectors and does **not** qualify a native SIEM
+server on RHEL/Rocky/Fedora. See the linked guide for commands and recovery.
+
 OMNI SIEM collects logs from the whole information system (Windows
 workstations and servers, Fortinet firewalls on three sites, Microsoft 365
 and Entra ID, virtualisation, antivirus, WAF, Linux, switches, physical

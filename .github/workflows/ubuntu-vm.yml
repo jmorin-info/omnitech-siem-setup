@@ -6,12 +6,18 @@ on:
         description: 'Ajouter l''exercice de restauration complète (sauvegardes factices, sinistre simulé)'
         type: boolean
         default: false
+      package_install:
+        description: 'Installer le socle via le paquet .deb et omni-siem dans la VM isolée'
+        type: boolean
+        default: false
   push:
     branches: [main, fix/ubuntu2604-validation]
     paths:
       - '.github/workflows/ubuntu-vm.yml'
       - 'tools/test-ubuntu-vm.sh'
       - 'tools/install-platform.py'
+      - 'tools/build-release.py'
+      - 'distribution/**'
       - 'tools/verify-installation.py'
       - 'tools/test-integration-vm.py'
       - 'tools/mongo-restore-test.py'
@@ -55,6 +61,7 @@ jobs:
       - name: Install and verify in a fresh Ubuntu 26.04 VM
         env:
           OMNI_VM_RESTORE_DRILL: ${{ inputs.restore_drill && '1' || '0' }}
+          OMNI_VM_PACKAGE: ${{ inputs.package_install && '1' || '0' }}
         run: bash tools/test-ubuntu-vm.sh
       - name: Upload sanitized acceptance report
         if: always()

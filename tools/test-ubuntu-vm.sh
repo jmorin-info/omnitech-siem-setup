@@ -80,6 +80,10 @@ EOF
 printf 'instance-id: omni-ubuntu-test\nlocal-hostname: siem-lab\n' > "$WORK/meta-data"
 cloud-localds "$WORK/seed.img" "$WORK/user-data" "$WORK/meta-data"
 git -C "$ROOT" bundle create "$WORK/source.bundle" HEAD > "$WORK/bundle.log" 2>&1
+if [[ "${OMNI_VM_PACKAGE:-0}" == 1 ]]; then
+  STAGE=package_build
+  python3 "$ROOT/tools/build-release.py" --format deb --output "$WORK/packages" > "$WORK/package-build.log" 2>&1
+fi
 STAGE=boot
 echo 'Ubuntu VM: booting the isolated guest.'
 qemu-system-x86_64 -enable-kvm -cpu host -smp 2 -m 16384 -display none \
@@ -98,6 +102,9 @@ done
 [[ "$READY" == 1 ]] || { echo 'The isolated VM did not become reachable.' >&2; exit 1; }
 ssh "${SSH[@]}" 'timeout 300 cloud-init status --wait >/dev/null && apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git python3' > "$WORK/bootstrap.log" 2>&1
 scp -q -i "$WORK/id_vm" -P 22026 -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$WORK/known_hosts" "$WORK/source.bundle" root@127.0.0.1:/root/source.bundle > "$WORK/copy.log" 2>&1
+if [[ "${OMNI_VM_PACKAGE:-0}" == 1 ]]; then
+  scp -q -i "$WORK/id_vm" -P 22026 -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$WORK/known_hosts" "$WORK"/packages/*.deb root@127.0.0.1:/root/omni-siem.deb > "$WORK/package-copy.log" 2>&1
+fi
 
 STAGE=installation
 echo 'Ubuntu VM: applying the complete fresh installation.'
@@ -105,12 +112,22 @@ INSTALL_CODE=0
 ssh "${SSH[@]}" 'bash -s' > "$WORK/install.log" 2>&1 <<'GUEST' || INSTALL_CODE=$?
 set -euo pipefail
 umask 077
-mkdir -p /opt/omni-siem-setup
-cd /opt/omni-siem-setup
-git init -q
-git fetch -q /root/source.bundle HEAD
-git checkout -q -b main FETCH_HEAD
-cp 00-vars.env.example 00-vars.env
+if [[ -f /root/omni-siem.deb ]]; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /root/omni-siem.deb
+  omni-siem --root /opt/omni-siem-setup init --apply >/root/package-init.json
+  cd /opt/omni-siem-setup
+else
+  mkdir -p /opt/omni-siem-setup
+  cd /opt/omni-siem-setup
+  git init -q
+  git fetch -q /root/source.bundle HEAD
+  git checkout -q -b main FETCH_HEAD
+  cp 00-vars.env.example 00-vars.env
+fi
+installer() {
+  if [[ -f /root/omni-siem.deb ]]; then omni-siem --root /opt/omni-siem-setup install "$@";
+  else bash install.sh "$@"; fi
+}
 python3 - <<'PY'
 import pathlib, re, secrets, shlex, subprocess
 path = pathlib.Path("00-vars.env")
@@ -128,15 +145,19 @@ for key, value in updates.items():
 path.write_text(text)
 path.chmod(0o600)
 PY
-bash install.sh --generate-secrets >/root/generated-keys.json
-bash install.sh --plan --experimental-ubuntu-2604 >/root/install-plan.json
+installer --generate-secrets >/root/generated-keys.json
+installer --plan --experimental-ubuntu-2604 >/root/install-plan.json
 python3 - <<'PY'
 import json
 plan = json.load(open("/root/install-plan.json"))
 if plan["blockers"]:
     raise SystemExit("Fresh installation plan has blockers")
 PY
-timeout 1800 bash install.sh --apply --experimental-ubuntu-2604 >/root/install-output.log 2>&1
+if [[ -f /root/omni-siem.deb ]]; then
+  timeout 1800 omni-siem --root /opt/omni-siem-setup install --apply --experimental-ubuntu-2604 >/root/install-output.log 2>&1
+else
+  timeout 1800 bash install.sh --apply --experimental-ubuntu-2604 >/root/install-output.log 2>&1
+fi
 GUEST
 
 STAGE=verification
@@ -230,5 +251,12 @@ python3 - "$REPORT" <<'PY'
 import json, sys
 if json.load(open(sys.argv[1])).get("passed") is not True:
     raise SystemExit("The aggregated Ubuntu VM report did not pass")
+PY
+python3 - "$REPORT" "${OMNI_VM_PACKAGE:-0}" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+report = json.loads(path.read_text())
+report["distribution_package"] = sys.argv[2] == "1"
+path.write_text(json.dumps(report, indent=2) + "\n")
 PY
 echo "Ubuntu 26.04 fresh installation passed; report: $REPORT"

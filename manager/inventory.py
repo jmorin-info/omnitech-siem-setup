@@ -17,6 +17,10 @@ GROUPS = {
 
 
 def group(path):
+    if path.startswith("distribution/") or path == "tools/build-release.py":
+        return "updates"
+    if path == "tools/install-linux-agent.py":
+        return "collectors"
     if path.startswith("seal/") or path == "seal_graylog_setup.py":
         return "seal"
     if path.startswith(("manager/", "omni_integrations/", "integrations/")) or path == "tools/omni-integrations.py":

@@ -1,6 +1,8 @@
 # Installer une nouvelle instance
 
 Pour les commandes Ubuntu ligne par ligne, suivre [UBUNTU-DEMARRAGE.md](UBUNTU-DEMARRAGE.md).
+Le parcours depuis un paquet `.deb`/`.rpm`, son périmètre et ses limites figurent
+dans [DISTRIBUTION.md](DISTRIBUTION.md) ; il délègue au même installateur.
 
 Le point d'entrée est `bash install.sh`. Sans option, ou avec `--plan`, il affiche
 un plan sans installer de paquet, modifier de service ni appeler l'API Graylog.

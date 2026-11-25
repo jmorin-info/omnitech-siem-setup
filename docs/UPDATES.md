@@ -1,5 +1,9 @@
 # Mises à jour de la plateforme OMNI SIEM
 
+Les [paquets de distribution](DISTRIBUTION.md) livrent une copie de référence du
+projet. Leur mise à jour avec APT/DNF conserve le dépôt actif, les réglages et les
+bases ; le déploiement réel suit les couches et les contrôles décrits ci-dessous.
+
 Ce guide couvre **toutes les couches** de mise à jour du SIEM : code du dépôt, paquets
 du système et correctifs de sécurité, pile Graylog / OpenSearch / MongoDB (et Logstash),
 dépendances Python des services, contenus de détection et intégrations. Pour chaque

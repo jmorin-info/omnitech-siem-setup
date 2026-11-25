@@ -4,8 +4,9 @@ Toutes les évolutions notables du dépôt et de la plateforme SIEM OMNITECH son
 consignées ici. Le format suit les principes de
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) : entrées les plus
 récentes en premier, regroupées par date de livraison, sections « Ajouté »,
-« Modifié », « Corrigé », « Supprimé » pour les nouvelles entrées. Le dépôt ne
-publie pas de versions numérotées : chaque livraison est identifiée par sa date.
+« Modifié », « Corrigé », « Supprimé » pour les nouvelles entrées. Les livraisons
+historiques sont identifiées par date ; la distribution commence en préversion
+numérotée `0.1.0-rc.1`.
 
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
@@ -15,6 +16,15 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - Console SOC : logo personnalisé agrandi (56 px à côté du nom, logo large placé au-dessus du nom) ; adresse cliente réelle derrière le proxy FortiGate (`deploye/nginx/omni-real-ip.conf`), qui rétablit les écritures d'administration depuis les réseaux autorisés et des limites de débit par poste.
 
 ### Ajouté
+
+- Distribution complète : construction de `.deb`, `.rpm`, archive source et
+  SHA-256 à partir de tous les fichiers suivis d'un commit propre. Commande
+  `omni-siem` pour le bootstrap, la configuration, le socle, les modules et le
+  catalogue ; dépôt actif, secrets et bases conservés lors des opérations APT/DNF.
+  Collecteur Linux auth/authpriv avec plan, contrôle rsyslog, transaction, retour
+  arrière et récupération. Le RPM ne porte pas l'installation serveur sur RHEL.
+  Workflow de paquets, recette VM facultative depuis le `.deb`, brouillon de
+  préversion et guide `docs/DISTRIBUTION.md`.
 
 - Console SOC, **Visibilité > Modules** : pages propres au site, choix des streams et
   dashboards Graylog, filtres, rôle minimum et widgets compteur, évolution, répartition
