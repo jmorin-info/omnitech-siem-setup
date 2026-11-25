@@ -404,9 +404,10 @@ function renderTimeline(w,d){const items=(d&&d.items)||[];if(!w)return;if(!items
   const row=x=>{let icon,cls,txt;
     if(x.kind==="detection"){cls="tl-"+(x.sev?sevClass(x.sev):"medium");icon=ic("warning");txt='<b>'+nice(x.label)+'</b> '+(x.tech?'<span class="srcb">'+esc(x.tech)+'</span>':'')+(x.src?'<span class="src">'+esc(x.src)+'</span>':'');}
     else if(x.kind==="m365"){cls=x.ok?"tl-ok":"tl-high";icon=ic("globe");txt='<b>M365</b> '+(x.ok?'<span style="color:var(--grn)">'+t("tl_ok")+'</span>':'<span style="color:#f5a623">'+esc(x.detail||codeLabel(x.code))+'</span>')+' '+(x.ip?'<span class="mono">'+esc(x.ip)+'</span> '+(x.cc?flagOf(x.cc):''):'');}
-    else {cls="tl-high";icon=ic("alert");txt='<b>Windows</b> <span style="color:#f5a623">'+t("tl_fail")+'</span> '+(x.ip?'<span class="mono">'+esc(x.ip)+'</span>':'');}
+    else {cls=x.ok?"tl-ok":"tl-high";icon=ic("alert");txt='<b>Windows</b> <span style="color:'+(x.ok?'var(--grn)':'#f5a623')+'">'+t(x.ok?"tl_ok":"tl_fail")+'</span> '+(x.ip?'<span class="mono">'+esc(x.ip)+'</span>':'');}
     return '<div class="tlrow '+cls+'"><span class="tlt">'+ago(x.ts)+'</span><span class="tli">'+icon+'</span><span class="tlx">'+txt+'</span></div>';};
-  w.innerHTML='<div class="blk"><div class="lbl">'+ic("bars")+' '+t("tl_title")+' <span class="muted" style="font-weight:400">'+t("tl_sub")+'</span></div><div class="tl">'+items.map(row).join("")+'</div></div>';}
+  w.innerHTML='<div class="blk"><div class="lbl">'+ic("bars")+' '+t("tl_title")+' <span class="muted" style="font-weight:400">'+t("tl_sub")+'</span></div><div class="tl">'+items.map(row).join("")+'</div></div>';
+  if(window.bindSocEvidenceRows)bindSocEvidenceRows(w,items,".tlrow");}
 function renderSentinelPosture(d){const c=$("#sentinelCard"),b=$("#sentinelBody");if(!c||!b||!d||d.error)return;
   const EN=LANG==="en";const jx=d.jewel_exposure||[];const minh=jx.length?jx[0].min_hops:null;
   const spof=(d.single_points_of_failure||[]).length;const chk=(d.chokepoints||[]).length;

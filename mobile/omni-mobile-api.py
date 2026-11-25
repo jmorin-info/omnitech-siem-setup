@@ -1237,10 +1237,10 @@ def get_investigation(name, days=14, kind="user"):
 
 
 def get_entity_timeline(name, days=14, limit=60, kind="user"):
-    """Chronologie UNIFIÉE d'une entité (tous comptes liés) : le RÉCIT — détections,
-    échecs d'authentification Windows (4625) et sign-ins M365 fusionnés et triés par
-    date. On exclut les logons Windows RÉUSSIS (4624) = bruit routinier ; on garde le
-    signal (détections + échecs + auth cloud) pour raconter ce qui s'est passé."""
+    """Observed detections, Windows successes/failures and M365 sign-ins.
+
+    The bounded time-ordered sample does not establish a causal attack sequence.
+    """
     if not name:
         return {"items": [], "linked": []}
     name = _RD_REV.get(name, name)
