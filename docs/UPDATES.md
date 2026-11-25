@@ -700,9 +700,29 @@ refusée et la procédure manuelle des sections 4, 6 et 7 s'applique) ; plan omn
 blocage (une modification des préférences APT est bloquante) ; suite `run-tests.sh` verte sur le
 candidat, exécutée dans une copie temporaire (`git archive`, jamais dans le dépôt actif) sous le
 compte `UPDATE_TEST_USER` (`nobody` par défaut, via `setpriv`), résultat conservé 24 h par
-révision ; aucune unité `omni-*`/`oms-*`/`siem-*` en `activating` (hors unités de la mise à jour
+révision et version du banc de test ; aucune unité `omni-*`/`oms-*`/`siem-*` en `activating` (hors unités de la mise à jour
 elle-même) ; OpenSearch vert ; API Graylog `lbstatus` 200 ; sauvegarde de configuration vérifiée
 de moins de 26 h (`omni-backup-config` en succès) ; 2 Gio libres sur `/` et 1 Gio sur `/var`.
+
+La copie temporaire reçoit son propre dépôt Git et son index, construits uniquement
+à partir des fichiers archivés du candidat. Les inventaires et contrôles du manifeste
+peuvent ainsi utiliser `git ls-files`. Aucun remote, identifiant, historique, hook ou
+fichier `.git` de la production n'est copié. Le compte de test possède cette copie et
+ses répertoires HOME/TMP privés ; les tests continuent de tourner sans privilèges.
+Une ancienne preuve de test n'est pas réutilisée après changement du banc d'exécution.
+
+Après une **publication manuelle**, actualiser le rapport installé/disponible avec
+**Rechercher maintenant**, ou, si le service de recherche est installé :
+
+```bash
+sudo systemctl start --no-block omni-console-update-check.service
+```
+
+Attendre la fin de la recherche puis recharger l'onglet. Un ancien rapport peut encore
+décrire la révision précédente et ses blocages, même si le code est déjà déployé.
+Ne pas modifier `status.json` à la main pour supprimer une erreur. Un changement
+Docker, de pile ou de dépendances peut légitimement exiger une revue manuelle ; un
+échec de test doit être corrigé puis rejoué, sans supprimer ce contrôle.
 
 Avertissements (non bloquants) : unités en échec, fichiers non suivis, scripts numérotés modifiés
 (**jamais lancés automatiquement** : à examiner et lancer à la main si nécessaire), composants
