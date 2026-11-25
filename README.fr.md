@@ -25,6 +25,16 @@ d'OMNITECH SECURITY.**
 
 ## Présentation
 
+Une [première distribution complète en préversion](docs/DISTRIBUTION.md) est
+préparée : archive du dépôt, paquets `.deb`/`.rpm` et commande `omni-siem` pour
+configurer, installer le socle, gérer les modules et examiner les mises à jour
+depuis SSH. Tous les composants sont livrés ; les extensions demandant des comptes
+ou un paramétrage propre au site restent à activer explicitement. Les paquets ne
+modifient pas une installation existante à leur installation/mise à jour.
+Le serveur natif cible Ubuntu/Debian ; Ubuntu 26.04 reste expérimental et le RPM
+ne qualifie pas le serveur sur RHEL/Rocky/Fedora. Voir les
+[commandes ligne par ligne, limites et procédures de reprise](docs/DISTRIBUTION.md).
+
 OMNI SIEM centralise les journaux du système d'information (postes et
 serveurs Windows, pare-feu Fortinet de trois sites, Microsoft 365 et Entra ID,
 virtualisation, antivirus, WAF, Linux, commutateurs, contrôle d'accès
