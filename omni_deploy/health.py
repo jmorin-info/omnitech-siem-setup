@@ -141,7 +141,15 @@ def graylog_api(config, graylog_conf=Path("/etc/graylog/server/server.conf")):
         except OSError:
             pass
         api = f"https://{config.get('SIEM_FQDN', 'localhost')}:9000/api" if tls else "http://127.0.0.1:9000/api"
-    return api, (ca if api.startswith("https:") and ca and Path(ca).is_file() else None)
+    return api, (existing_ca(ca) if api.startswith("https:") else None)
+
+
+def existing_ca(path):
+    """An unreadable parent directory must not abort an entire health report."""
+    try:
+        return path if path and Path(path).is_file() else None
+    except OSError:
+        return None
 
 
 def evaluate(config, source: Path, probes: Probes | None = None):
@@ -250,7 +258,7 @@ def evaluate(config, source: Path, probes: Probes | None = None):
     def console_page():
         fqdn = config.get("SIEM_FQDN") or "localhost"
         ca_console = config.get("GRAYLOG_API_CA") or DEFAULT_API_CA
-        ca_console = ca_console if Path(ca_console).is_file() else None
+        ca_console = existing_ca(ca_console)
         try:
             status, _ = probes.http("https://127.0.0.1/soc/", headers={"Host": fqdn}, server_name=fqdn,
                                     ca=ca_console)
