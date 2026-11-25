@@ -167,6 +167,10 @@ Le journal privé est dans `/var/lib/omni-siem-adoption/<transaction>/`. En cas
 d'échec de reconfiguration, la restauration est tentée automatiquement ; un état
 `rollback_incomplete` demande une intervention. Pour revenir en arrière :
 
+Si la préparation d'un venv échoue, aucun service n'est redémarré. Le champ
+`stage` du journal identifie l'étape ; le diagnostic de la commande est conservé
+dans un fichier privé `command-*.log` (mode `600`) de cette transaction.
+
 ```bash
 sudo omni-siem adopt --rollback TRANSACTION --plan
 sudo omni-siem adopt --rollback TRANSACTION --apply

@@ -200,7 +200,19 @@ def test_python_environment_is_prepared_before_any_service_path_changes(site):
         adoption.apply(report, state, run=fail_build,
                        status=lambda _: {"ActiveState": "inactive", "Type": "simple"})
     assert unit.read_bytes() == before
-    assert commands[0][1].endswith("tools/omni-deploy.py") and "--no-verify" in commands[0]
+    assert commands[0][1] == str(target / "tools/omni-deploy.py") and "--no-verify" in commands[0]
+    assert len(commands) == 1  # No service restart when preparation failed before reconfiguration.
+
+
+def test_failed_child_has_a_private_diagnostic_without_dumping_output(tmp_path, monkeypatch):
+    def failure(*_args, **_kwargs):
+        return subprocess.CompletedProcess([], 1, stdout=b"fixture-private-output", stderr=b"private-error")
+    monkeypatch.setattr(adoption.subprocess, "run", failure)
+    with pytest.raises(RuntimeError) as error:
+        adoption.command(["python3", "example.py"], log_dir=tmp_path)
+    assert "fixture-private-output" not in str(error.value)
+    path = next(tmp_path.glob("command-*.log"))
+    assert path.stat().st_mode & 0o777 == 0o600 and b"private-error" in path.read_bytes()
 
 
 def test_user_state_inside_old_checkout_is_not_repointed_to_an_empty_directory(site):

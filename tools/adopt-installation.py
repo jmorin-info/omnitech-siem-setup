@@ -273,10 +273,15 @@ def atomic(path, data, mode, owner=None):
         temporary.unlink(missing_ok=True)
 
 
-def command(argv):
+def command(argv, log_dir=None):
     result = subprocess.run(argv, capture_output=True, timeout=1200)
     if result.returncode:
-        raise RuntimeError("adoption command failed: " + Path(argv[0]).name + " (exit " + str(result.returncode) + ")")
+        detail = ""
+        if log_dir is not None:
+            path = log_dir / ("command-" + dt.datetime.now(dt.timezone.utc).strftime("%H%M%S%f") + ".log")
+            atomic(path, (result.stdout + b"\n" + result.stderr)[-100000:], 0o600)
+            detail = "; private diagnostic: " + str(path)
+        raise RuntimeError("adoption command failed: " + Path(argv[0]).name + " (exit " + str(result.returncode) + ")" + detail)
 
 
 def service_state(unit):
@@ -312,6 +317,7 @@ def apply(report, state=STATE, run=command, status=service_state):
         journal = {**public(report), "id": stamp, "status": "preparing", "active": active, "applied_files": []}
         journal["site_config_sha256"] = sha(read(source / "00-vars.env"))
         save = lambda: atomic(backup / "transaction.json", (json.dumps(journal, indent=2) + "\n").encode(), 0o600)
+        execute = (lambda argv: command(argv, log_dir=backup)) if run is command else run
         save()
         # Private configuration and each runtime fragment are backed up before any reconfiguration.
         for i, item in enumerate(report["files"]):
@@ -333,7 +339,9 @@ def apply(report, state=STATE, run=command, status=service_state):
             shutil.rmtree(temporary)
         try:
             for project in report["venvs"]:
-                run([sys.executable, str(ROOT / "tools/omni-deploy.py"), "--home", str(target),
+                journal["stage"] = "venvs:" + project
+                save()
+                execute([sys.executable, str(target / "tools/omni-deploy.py"), "--home", str(target),
                      "deploy", "venvs", "--filtre", str(target / project / ".venv"), "--apply", "--no-verify"])
             journal["status"] = "applying"
             save()
@@ -361,10 +369,11 @@ def apply(report, state=STATE, run=command, status=service_state):
                     continue
                 atomic(path, item["_before"], item["mode"], (item["uid"], item["gid"]))
             try:
-                if report["services"]:
-                    run(["systemctl", "daemon-reload"])
-                for unit in active:
-                    run(["systemctl", "restart", unit])
+                if journal["applied_files"]:
+                    if report["services"]:
+                        run(["systemctl", "daemon-reload"])
+                    for unit in active:
+                        run(["systemctl", "restart", unit])
             except Exception:
                 failures.append("service restoration")
             journal.update(status="rollback_incomplete" if failures else "rolled_back", restoration_problems=failures)
