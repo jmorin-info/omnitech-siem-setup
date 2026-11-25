@@ -61,7 +61,7 @@ def test_site_configuration_is_atomic_persistent_and_revision_guarded(configured
 
 
 @pytest.mark.parametrize("change", [
-    lambda c: c.update(schema_version=2), lambda c: c.update(revision=True),
+    lambda c: c.update(schema_version=99), lambda c: c.update(revision=True),
     lambda c: c["pages"][0].update(stream_ids=[]), lambda c: c["pages"][0].update(stream_ids=["../private"]),
     lambda c: c["pages"][0].update(min_role="all"), lambda c: c["pages"][0].update(days=31),
     lambda c: c["pages"][0].update(index="*"), lambda c: c["pages"][0].update(graylog_dashboard_id="https://other.test"),
@@ -202,3 +202,46 @@ def test_http_session_role_csrf_and_simulation_guards(tmp_path):
         assert console.audit()["chain_ok"]
     finally:
         console.close()
+
+
+def test_schema_two_filters_preserve_page_scope_and_backup_previous_configuration(configured,monkeypatch):
+    publish(configured)
+    raw=configured.load_modules_config();raw["schema_version"]=2
+    raw["pages"][0]["widgets"]=[raw["pages"][0]["widgets"][0]]
+    raw["pages"][0]["widgets"][0]["filter"]=[{"field":"event_action","values":["deny","drop"]}]
+    publish(configured,raw)
+    backup=Path(configured.SOC_MODULES_DIR)/"config.schema1-r1.json"
+    assert json.loads(backup.read_text())["schema_version"]==1
+    calls=[]
+    monkeypatch.setattr(configured,"os_search",lambda index,body:(calls.append(body) or {"_shards":{"failed":0},"hits":{"total":{"value":2,"relation":"eq"}}}))
+    result=configured.modules_page("watchguard","bob")
+    filters=calls[0]["query"]["bool"]["filter"]
+    assert {"terms":{"event_action":["deny","drop"]}} in filters
+    assert {"terms":{"streams":["a"*24]}} in filters
+    assert result["widgets"][0]["data"]["value"]==2
+
+
+def test_enhanced_options_require_explicit_schema_migration(configured):
+    raw=config();raw["pages"][0]["widgets"][0]["filter"]=[]
+    with pytest.raises(configured.AdminError,match="migration"):
+        configured.modules_validate_config(raw)
+
+
+def test_fourth_manifest_adds_a_soc_template_without_changing_javascript(configured,tmp_path,monkeypatch):
+    root=tmp_path/"catalog";(root/"fourth").mkdir(parents=True)
+    (root/"catalog.json").write_text(json.dumps({"schema_version":1,"modules":[{"id":"fourth","manifest":"fourth/manifest.json"}]}))
+    (root/"fourth/manifest.json").write_text(json.dumps({"schema_version":1,"id":"fourth","name":"Fourth firewall","revision":1,
+        "soc":{"revision":3,"fields":[{"name":"event_action","type":"keyword","required":True}],
+               "preset":{"widgets":[{"id":"denied","title":"Denied","type":"count","filter":[{"field":"event_action","values":["deny"]}]}]}}}))
+    monkeypatch.setenv("SOC_INTEGRATIONS_DIR",str(root))
+    templates=configured._modules_templates()
+    assert templates[0]["id"]=="fourth" and templates[0]["template_revision"]==3
+    assert templates[0]["preset"]["widgets"][0]["filter"][0]["values"]==["deny"]
+
+
+def test_shipped_watchguard_template_has_specific_traffic_and_quality_widgets(configured):
+    template=next(t for t in configured._modules_templates() if t["id"]=="watchguard")
+    widgets={w["id"]:w for w in template["preset"]["widgets"]}
+    assert widgets["refuses"]["filter"]==[{"field":"event_action","values":["deny","drop"]}]
+    assert widgets["non-parses"]["filter"][0]["field"]=="omni_parse_status"
+    assert "dest_port" in widgets["journaux"]["columns"]

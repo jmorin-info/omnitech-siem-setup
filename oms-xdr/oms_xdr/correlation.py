@@ -7,6 +7,9 @@
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -35,7 +38,7 @@ class Incident:
         return f"{self.rule_id}:{','.join(sorted(self.entities)) or 'global'}"
 
     def to_gelf(self) -> dict[str, Any]:
-        return {
+        result = {
             "host": self.entities[0] if self.entities else "oms-xdr",
             "short_message": f"[{self.severity.upper()}] {self.title}",
             "full_message": self.evidence.get("narrative", self.title),
@@ -50,18 +53,26 @@ class Incident:
             "_signals": ",".join(self.signals),
             "_remediation": self.evidence.get("remediation_text", ""),
         }
+        snapshot = self.evidence.get("snapshot")
+        if isinstance(snapshot, dict):
+            encoded = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+            if len(encoded.encode()) <= 24000:
+                result["_xdr_evidence"] = encoded
+        return result
 
 
 class Correlator:
     def __init__(self, rules_path: str, gl: GraylogClient, window_minutes: int) -> None:
-        with Path(rules_path).open(encoding="utf-8") as fh:
-            data = yaml.safe_load(fh)
+        rules_bytes = Path(rules_path).read_bytes()
+        data = yaml.safe_load(rules_bytes)
         self.signals: dict[str, dict] = data.get("signals", {})
         self.rules: dict[str, dict] = data.get("rules", {})
         self.sessions_cfg: dict[str, dict] = data.get("sessions", {})
         self.gl = gl
         self.window = window_minutes
         self._sessions: dict[str, dict] = {}
+        self.signal_windows: dict[str, dict] = {}
+        self.rule_version = hashlib.sha256(rules_bytes).hexdigest()
 
     def _build_sessions(self) -> dict[str, dict]:
         """Cartes de session user<->host depuis les logons (4624) pour les règles
@@ -100,9 +111,11 @@ class Correlator:
             # {entite: nb de valeurs DISTINCTES de distinct_field} >= threshold
             # (discriminant spray : 1 IP -> N comptes distincts, vs rotation = 1 compte)
             agg = self.gl.distinct_aggregate(query, stream, ef, sig["distinct_field"], window)
+            self.signal_windows[sid] = dict(getattr(self.gl, "last_window", {}))
             thr = int(sig.get("threshold", 1))
             return {k: v for k, v in agg.items() if v >= thr}
         agg = self.gl.aggregate(query, stream, ef, window)
+        self.signal_windows[sid] = dict(getattr(self.gl, "last_window", {}))
         if sig["type"] == "count_by":
             thr = int(sig.get("threshold", 1))
             return {k: v for k, v in agg.items() if v >= thr}
@@ -137,6 +150,7 @@ class Correlator:
     def evaluate(self) -> list[Incident]:
         # cache des signaux (évite de réinterroger Graylog plusieurs fois)
         fired: dict[str, dict[str, int]] = {}
+        self.signal_windows = {}
         failed: list[str] = []
         for sid in self.signals:
             try:
@@ -154,10 +168,44 @@ class Correlator:
         incidents: list[Incident] = []
         for rid, rule in self.rules.items():
             inc = self._eval_rule(rid, rule, fired)
+            for item in inc:
+                self._snapshot(item, rule, fired)
             incidents.extend(inc)
         # tri par sévérité décroissante (sévérité inconnue -> -1, jamais de KeyError)
         incidents.sort(key=lambda i: _SEV_ORDER.get(i.severity, -1), reverse=True)
         return incidents
+
+    def _snapshot(self, incident, rule, fired):
+        mode = "user_host_observation" if rule.get("bridge") else "shared_entity" if rule.get("join_entity") else "global_window"
+        relevant = set(incident.entities)
+        signals = []
+        for sid in incident.signals[:32]:
+            definition = self.signals[sid]
+            counts = {entity: count for entity, count in fired.get(sid, {}).items() if entity in relevant}
+            if not counts:
+                continue
+            signal = {"id": sid, "query": str(definition.get("query", ""))[:2000],
+                      "stream": str(definition.get("stream", ""))[:100], "entity_field": definition.get("entity_field", ""),
+                      "window_minutes": int(definition.get("window", self.window)), "threshold": int(definition.get("threshold", 1)),
+                      "type": definition.get("type", "count"), "counts": dict(list(counts.items())[:24])}
+            if self.signal_windows.get(sid):
+                signal["window"] = self.signal_windows[sid]
+            signals.append(signal)
+        incident.signals = [signal["id"] for signal in signals]
+        windows = [s["window"] for s in signals if s.get("window")]
+        snapshot = {"schema_version": 1, "mode": mode, "rule_id": incident.rule_id,
+                    "rule_version": self.rule_version, "evaluated_at": datetime.now(timezone.utc).isoformat(),
+                    "signals": signals, "limitations": ["Comptages dans une fenêtre : ordre temporel et causalité non démontrés."]}
+        if windows:
+            snapshot["window"] = {"from": min(w["from"] for w in windows), "to": max(w["to"] for w in windows)}
+        else:
+            snapshot["limitations"].append("Bornes absolues des recherches non disponibles.")
+        if mode == "user_host_observation":
+            snapshot["limitations"].append("Rapprochement par logons observés, sans preuve de session encore active ni de causalité.")
+        if mode == "global_window":
+            snapshot["limitations"].append("Pas de jointure commune d'entité exigée par cette règle.")
+        if len(json.dumps(snapshot, ensure_ascii=False).encode()) <= 24000:
+            incident.evidence["snapshot"] = snapshot
 
     def _eval_rule(self, rid: str, rule: dict,
                    fired: dict[str, dict[str, int]]) -> list[Incident]:

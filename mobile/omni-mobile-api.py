@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import fnmatch
+import ipaddress
 import hmac
 import html as _eh
 import http.client
@@ -298,6 +300,222 @@ def save_subs(subs: list) -> None:
 
 
 # ----------------------------------------------------------------------- requêtes
+_EVIDENCE_LOCK = threading.Lock()
+_EVIDENCE_REFS = {}
+EVIDENCE_TTL = 7200
+EVIDENCE_MAX_REFS = 8192
+_EVIDENCE_FIELDS = (
+    "timestamp source host user upn identity src_ip dest_ip dst_ip src_port dest_port dst_port "
+    "event_source event_id event_action action alert_tag risk_severity risk_score priority "
+    "message short_message full_message rule_id rule_name rule_name_disp rule policy policy_name "
+    "process_name process_path command_line parent_process failure_reason logon_type_label "
+    "status_code m365_fail_label net_segment src_zone dest_zone src_interface dest_interface "
+    "src_intf dst_intf interface in_interface out_interface protocol application app transport "
+    "aruba_client_ip remip entities signals mitre tactic mitre_technique mitre_tactic remediation "
+    "event_definition_id event_definition_title timerange_start timerange_end replay_info fields "
+    "xdr_evidence severity incident_entity entity_type incident_score incident_severity "
+    "incident_first_seen incident_last_seen incident_kill_chain incident_techniques"
+).split()
+
+
+class EvidenceError(Exception):
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.status = status
+
+
+def _evidence_index_allowed(index):
+    return (isinstance(index, str) and not index.startswith((".", "_"))
+            and bool(re.fullmatch(r"[a-zA-Z0-9_-]{1,200}", index))
+            and any(fnmatch.fnmatchcase(index, pattern) for pattern in
+                    LOG_INDICES.split(",") + ["gl-events*"]))
+
+
+def evidence_ref(hit, scope="", page_id=""):
+    """Opaque, process-local capability. HMAC binds the document and optional page.
+
+    References expire after two hours or a service restart; no index/id is exposed.
+    Page restrictions are rechecked when the reference is used, not at issuance only.
+    """
+    scope = page_id or scope
+    index, identifier = hit.get("_index"), hit.get("_id")
+    if not _evidence_index_allowed(index) or not isinstance(identifier, str) or not 0 < len(identifier) <= 512:
+        return ""
+    now = time.time()
+    nonce = base64.urlsafe_b64encode(os.urandom(24)).decode().rstrip("=")
+    item = {"index": index, "id": identifier, "scope": scope, "expires": now + EVIDENCE_TTL}
+    payload = json.dumps([nonce, index, identifier, scope, item["expires"]], separators=(",", ":"))
+    signature = hmac.new(SECRET, ("evidence|" + payload).encode(), hashlib.sha256).hexdigest()
+    with _EVIDENCE_LOCK:
+        for key in [key for key, val in _EVIDENCE_REFS.items() if val["expires"] <= now]:
+            del _EVIDENCE_REFS[key]
+        while len(_EVIDENCE_REFS) >= EVIDENCE_MAX_REFS:
+            del _EVIDENCE_REFS[next(iter(_EVIDENCE_REFS))]
+        _EVIDENCE_REFS[nonce] = dict(item, signature=signature)
+    return nonce + "." + signature
+
+
+def _evidence_text(value, maximum=2000):
+    value = str(value or "")[:maximum]
+    value = re.sub(r"(?i)\bauthorization\s*[:=]\s*(?:Basic|Bearer)\s+[^\s,;]+", "authorization=[expurgé]", value)
+    # Apply in normal mode as well: a journal message may contain credentials.
+    value = re.sub(r"(?i)\b((?:[\w.-]*[_-])?(?:password|passwd|pwd|secret|token|api[_-]?key|authorization|cookie))\b\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;]+)",
+                   r"\1=[expurgé]", value)
+    value = re.sub(r"(?i)\bBearer\s+[\w.+/=-]+", "Bearer [expurgé]", value)
+    value = re.sub(r"(https?://)[^\s/@]+:[^\s/@]+@", r"\1[expurgé]@", value)
+    return _scrub(value)
+
+
+def _evidence_values(value, maximum=50):
+    values = value if isinstance(value, list) else str(value or "").split(",")
+    return [_evidence_text(v, 256) for v in values[:maximum] if isinstance(v, (str, int, float)) and str(v).strip()]
+
+
+def evidence_entities(source):
+    output, seen = [], set()
+    for kind, role, fields in (("user", "account", ("user", "upn", "identity")),
+                               ("host", "host", ("host", "source")),
+                               ("ip", "source", ("src_ip", "aruba_client_ip", "remip")),
+                               ("ip", "destination", ("dest_ip", "dst_ip"))):
+        for field in fields:
+            value = source.get(field)
+            if not isinstance(value, str) or not value.strip() or len(value) > 256:
+                continue
+            if kind == "ip":
+                try:
+                    ipaddress.ip_address(value)
+                except ValueError:
+                    continue
+            key = (kind, value, role)
+            if key not in seen:
+                seen.add(key)
+                output.append({"kind": kind, "value": _rd(value), "role": role})
+    return output[:24]
+
+
+def get_evidence(ref, user=""):
+    if not isinstance(ref, str) or not re.fullmatch(r"[A-Za-z0-9_-]{32}\.[a-f0-9]{64}", ref):
+        raise EvidenceError("evidence_ref_invalid")
+    nonce, signature = ref.split(".", 1)
+    with _EVIDENCE_LOCK:
+        item = dict(_EVIDENCE_REFS.get(nonce, {}))
+    if not item or item["expires"] <= time.time() or not hmac.compare_digest(signature, item["signature"]):
+        raise EvidenceError("evidence_ref_invalid")
+    if not _evidence_index_allowed(item["index"]):
+        raise EvidenceError("evidence_ref_invalid")
+    filters = [{"ids": {"values": [item["id"]]}}]
+    if item["scope"]:
+        try:
+            page = next((p for p in load_modules_config()["pages"] if p["id"] == item["scope"]), None)
+        except AdminError:
+            raise EvidenceError("evidence_scope_unavailable", 503) from None
+        if not page or not page["enabled"] or not role_at_least(user, page["min_role"]):
+            raise EvidenceError("evidence_scope_forbidden", 403)
+        filters.append(_module_scope(page))
+    result = os_search(item["index"], {"size": 1, "query": {"bool": {"filter": filters}},
+                                      "_source": _EVIDENCE_FIELDS})
+    hits = result.get("hits", {}).get("hits", [])
+    if not hits:
+        raise EvidenceError("evidence_not_found", 404)
+    source = hits[0].get("_source", {})
+    document = _evidence_document(source, ref)
+    identifier = item["id"].replace("\\", "\\\\").replace('"', '\\"')
+    document["graylog"]["query"] = '_index:"' + item["index"] + '" AND _id:"' + identifier + '"'
+    # The direct source record is distinct from the signals' correlation window.
+    if document["kind"] != "graylog_event":
+        document["graylog"]["message_path"] = "/messages/" + urllib.parse.quote(item["index"], safe="") + "/" + urllib.parse.quote(item["id"], safe="")
+    return document
+
+
+def _evidence_document(source, ref):
+    origin = source.get("event_source", "")
+    kind = ("attack_group" if origin == "incident" else "incident" if origin == "xdr_incident" else
+            "graylog_event" if source.get("event_definition_id") or source.get("event_definition_title") else
+            "detection" if source.get("alert_tag") else "message")
+    context = {}
+    excluded = {"message", "short_message", "full_message", "xdr_evidence", "replay_info", "remediation", "fields"}
+    for key in _EVIDENCE_FIELDS:
+        value = source.get(key)
+        if key in excluded or value in (None, ""):
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            context[key] = _evidence_text(value)
+        elif isinstance(value, list):
+            context[key] = _evidence_values(value, 24)
+    if isinstance(source.get("fields"), dict):
+        for key, value in list(source["fields"].items())[:50]:
+            if key in _EVIDENCE_FIELDS and key not in excluded and isinstance(value, (str, int, float, bool)):
+                context["fields." + key] = _evidence_text(value)
+    details = {}
+    raw = source.get("xdr_evidence")
+    if isinstance(raw, str) and len(raw.encode("utf-8")) <= 24000:
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            raw = None
+    if isinstance(raw, dict) and type(raw.get("schema_version")) is int and raw["schema_version"] == 1:
+        # Structural size bound followed by field-specific validation; never expose arbitrary keys.
+        if len(json.dumps(raw, ensure_ascii=False).encode("utf-8")) <= 24000:
+            details = _evidence_snapshot(raw)
+    mode = details.get("mode", "unknown")
+    limitations = ["Une proximité temporelle ou une entité commune ne démontre pas une séquence ni une causalité."]
+    if kind in ("incident", "attack_group") and not details:
+        limitations.append("Preuves historiques détaillées non conservées pour cet incident ; aucune reconstruction présentée comme preuve.")
+    replay = source.get("replay_info") if isinstance(source.get("replay_info"), dict) else {}
+    window = details.get("window") or {"from": source.get("timerange_start") or replay.get("timerange_start"),
+                                         "to": source.get("timerange_end") or replay.get("timerange_end")}
+    window = {k: _evidence_text(v, 80) for k, v in window.items() if k in ("from", "to") and isinstance(v, str)}
+    # Exact document search, distinct from any broad contextual investigation.
+    entities = evidence_entities(source)
+    for value in _evidence_values(source.get("entities"), 24):
+        if not any(e["value"] == _rd(value) for e in entities):
+            entities.append({"kind": "unknown", "value": _rd(value), "role": "correlated"})
+    message = source.get("full_message") if kind in ("incident", "attack_group") else source.get("message")
+    return {"schema_version": 1, "ref": ref, "kind": kind,
+            "title": _evidence_text(source.get("event_definition_title") or source.get("short_message") or source.get("alert_tag") or "Événement", 300),
+            "ts": source.get("timestamp"), "severity": _evidence_text(source.get("severity") or source.get("risk_severity") or source.get("incident_severity"), 30),
+            "message": _evidence_text(message or source.get("short_message"), 8000),
+            "context": context, "entities": entities[:24],
+            "provenance": {"source": _evidence_text(origin, 100), "rule_id": _evidence_text(source.get("rule_id") or source.get("event_definition_id"), 100),
+                           "signals": _evidence_values(source.get("signals")), "window": window or None},
+            "correlation": {"mode": mode, "proof_available": bool(details), "details": details, "limitations": limitations},
+            "graylog": {"query": "", "from": window.get("from"), "to": window.get("to")}}
+
+
+def _evidence_snapshot(raw):
+    """Read only the versioned, bounded XDR snapshot contract."""
+    if (raw.get("mode") not in ("shared_entity", "user_host_observation", "global_window")
+            or not isinstance(raw.get("rule_id"), str) or not raw["rule_id"] or not isinstance(raw.get("signals"), list)):
+        return {}
+    output = {"schema_version": 1, "mode": _evidence_text(raw.get("mode", "unknown"), 40)}
+    for key in ("evaluated_at", "rule_id", "rule_version"):
+        if isinstance(raw.get(key), str):
+            output[key] = _evidence_text(raw[key], 100)
+    window = raw.get("window")
+    if isinstance(window, dict):
+        output["window"] = {k: _evidence_text(v, 80) for k, v in window.items() if k in ("from", "to") and isinstance(v, str)}
+    output["signals"] = []
+    signals = raw.get("signals")
+    for signal in (signals[:32] if isinstance(signals, list) else []):
+        if not isinstance(signal, dict):
+            continue
+        record = {k: _evidence_text(signal[k], 2000 if k == "query" else 100) for k in
+                  ("id", "description", "query", "stream", "entity_field", "type") if isinstance(signal.get(k), str)}
+        for key in ("window_minutes", "threshold"):
+            if isinstance(signal.get(key), int) and not isinstance(signal[key], bool):
+                record[key] = signal[key]
+        if isinstance(signal.get("window"), dict):
+            record["window"] = {k: _evidence_text(v, 80) for k, v in signal["window"].items()
+                                if k in ("from", "to") and isinstance(v, str)}
+        counts = signal.get("counts")
+        if isinstance(counts, dict):
+            record["counts"] = {_rd(_evidence_text(k, 256)): v for k, v in list(counts.items())[:24]
+                                if isinstance(k, str) and isinstance(v, (int, float)) and not isinstance(v, bool)}
+        output["signals"].append(record)
+    output["limitations"] = _evidence_values(raw.get("limitations"), 12)
+    return output if any(s.get("counts") for s in output["signals"]) else {}
+
+
 def get_alerts(limit: int = 50) -> list:
     res = os_search("gl-events*", {
         "size": limit, "sort": [{"timestamp": {"order": "desc"}}],
@@ -309,6 +527,7 @@ def get_alerts(limit: int = 50) -> list:
     for h in res.get("hits", {}).get("hits", []):
         s = h.get("_source", {})
         out.append({
+            "ref": evidence_ref(h),
             "ts": s.get("timestamp"),
             "title": s.get("event_definition_title") or s.get("message"),
             "priority": s.get("priority"),
@@ -332,6 +551,7 @@ def get_incidents(limit: int = 30) -> list:
         s = h.get("_source", {})
         out.append({
             "id": h.get("_id"),
+            "ref": evidence_ref(h),
             "ts": s.get("timestamp"),
             "title": s.get("short_message"),
             "severity": s.get("severity"),
@@ -490,6 +710,8 @@ def get_cases():
         i["assignée"] = c.get("assignée", "")
         i["notes"] = c.get("notes", [])
         i["disposition"] = c.get("disposition", "")
+        i["history"] = c.get("history", [])
+        i["closed_ts"] = c.get("closed_ts")
     return incs
 
 
@@ -735,44 +957,24 @@ _ID_SUFFIX = re.compile(r"[-_.](adm|admin)$", re.I)
 
 
 def _identity_key(name):
-    s = str(name or "").strip()
-    if not s:
-        return ""
-    if "\\" in s:
-        s = s.rsplit("\\", 1)[-1]
-    if "@" in s:
-        s = s.split("@", 1)[0]
-    s = s.strip().lower()
-    if not s or s.endswith("$"):          # compte machine -> identité = lui-même
-        return s
-    s = _ID_PREFIX.sub("", s)
-    s = _ID_SUFFIX.sub("", s)
-    return s
+    # A naming resemblance is not an identity proof. Preserve domain/UPN/admin scope.
+    return str(name or "").strip().lower()
 
 
 def _linked_accounts(name, days=14):
-    """Comptes réels partageant l'identité logique de `name` (variantes domaine/admin)."""
     real = _RD_REV.get(name, name)
-    key = _identity_key(real)
-    if not key or key.endswith("$") or len(key) < 3:
-        return [real] if real else []
-    try:
-        res = os_search("omni-*", {"size": 0,
-            "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": f"now-{days}d"}}}],
-                               "must": [{"wildcard": {"user": {"value": f"*{key}*", "case_insensitive": True}}}]}},
-            "aggs": {"u": {"terms": {"field": "user", "size": 50}}}})
-        out = [b["key"] for b in res.get("aggregations", {}).get("u", {}).get("buckets", [])
-               if b.get("key") and _identity_key(b["key"]) == key]
-    except SearchBackendError:
-        raise
-    except Exception:
-        out = []
-    if real and real not in out:
-        out.append(real)
-    return out or [real]
+    return [real] if real else []
 
 
-def get_entity(name, size=20, frm=0):
+def _entity_filter(name, kind="user"):
+    kind = kind if kind in ("user", "host", "ip") else "user"
+    fields = {"user": ("user", "upn", "identity"), "host": ("host", "source"),
+              "ip": ("src_ip", "dest_ip", "dst_ip", "aruba_client_ip", "remip")}[kind]
+    return {"bool": {"minimum_should_match": 1,
+                     "should": [{"term": {field: name}} for field in fields]}}
+
+
+def get_entity(name, size=20, frm=0, kind="user"):
     if not name:
         return {"name": "", "total": 0, "techniques": [], "tactics": [], "events": [], "linked": [],
                 "from": 0, "size": size, "loaded": 0, "has_more": False,
@@ -780,8 +982,8 @@ def get_entity(name, size=20, frm=0):
     name = _RD_REV.get(name, name)   # mode rédigé : pseudo -> réel pour la requête
     size = max(1, min(int(size), 200))
     frm = max(0, int(frm))
-    linked = _linked_accounts(name, 7)   # vue UNIFIÉE : tous les comptes de la personne
-    q = {"bool": {"must": [{"terms": {"user": linked}}, {"exists": {"field": "alert_tag"}}],
+    linked = _linked_accounts(name, 7)
+    q = {"bool": {"must": [_entity_filter(name, kind), {"exists": {"field": "alert_tag"}}],
                   "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}}
     res = os_search("omni-*", {"size": size, "from": frm, "track_total_hits": True,
         "sort": [{"timestamp": {"order": "desc"}}], "query": q,
@@ -796,14 +998,14 @@ def get_entity(name, size=20, frm=0):
     ev = []
     for h in res.get("hits", {}).get("hits", []):
         s = h.get("_source", {})
-        ev.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
+        ev.append({"ref": evidence_ref(h), "ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
                    "msg": s.get("short_message") or s.get("message")})
     th = res.get("hits", {}).get("total", {})
     th = th.get("value", 0) if isinstance(th, dict) else (th or 0)
     scores = _entity_scores(name)
     sev_counts = {b["key"]: b["doc_count"] for b in ag.get("sev", {}).get("buckets", [])}
     sev_recent = {b["key"]: b["doc_count"] for b in ag.get("sev_recent", {}).get("s", {}).get("buckets", [])}
-    return {"name": _rd(name), "total": ag.get("tot", {}).get("value", 0),
+    return {"name": _rd(name), "kind": kind, "total": ag.get("tot", {}).get("value", 0),
             "from": frm, "size": size, "loaded": frm + len(ev), "has_more": (frm + len(ev)) < th,
             "scores": scores, "risk": _fused_risk(scores, sev_counts, th, sev_recent), "watched": is_watched(name),
             "linked": [_rd(u) for u in linked] if len(linked) > 1 else [],
@@ -925,7 +1127,7 @@ def get_search(q, frm=0, size=25, days=2):
     return {"q": q, "total": total, "from": frm, "size": size, "results": out}
 
 
-def get_investigation(name, days=14):
+def get_investigation(name, days=14, kind="user"):
     """Pivot d'investigation par entité (utilisateur M365 / compte AD / hôte).
 
     Répond à « d'où ça vient » sur un compte ciblé (ex. spray M365 distribué) :
@@ -942,10 +1144,7 @@ def get_investigation(name, days=14):
     # vue UNIFIÉE : on agrège sur TOUS les comptes de la personne (DOMAINE\X, ADM-X…)
     linked = _linked_accounts(name, days)
     key = _identity_key(name)
-    ent = {"bool": {"minimum_should_match": 1, "should": (
-        [{"term": {"user": u}} for u in linked]
-        + [{"match_phrase": {"upn": key or name}}, {"term": {"identity": name}},
-           {"term": {"source": name}}])}}   # + upn (email par base), identity, source (hôte)
+    ent = _entity_filter(name, kind)
 
     # --- A. Authentification M365 (sign-in) : géo, codes, IP, chronologie -------
     auth = {}
@@ -988,7 +1187,7 @@ def get_investigation(name, days=14):
     w = os_search("omni-*", {"size": 0, "track_total_hits": True,
         "query": {"bool": {"must": [{"term": {"event_source": "windows_security"}},
                                     {"terms": {"event_id": ["4624", "4625"]}},
-                                    {"term": {"source": name}}],
+                                    ent],
                            "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
         "aggs": {
             "ok": {"filter": {"term": {"event_id": "4624"}}},
@@ -1037,7 +1236,7 @@ def get_investigation(name, days=14):
             "linked": [_rd(u) for u in linked] if len(linked) > 1 else []}
 
 
-def get_entity_timeline(name, days=14, limit=60):
+def get_entity_timeline(name, days=14, limit=60, kind="user"):
     """Chronologie UNIFIÉE d'une entité (tous comptes liés) : le RÉCIT — détections,
     échecs d'authentification Windows (4625) et sign-ins M365 fusionnés et triés par
     date. On exclut les logons Windows RÉUSSIS (4624) = bruit routinier ; on garde le
@@ -1049,12 +1248,10 @@ def get_entity_timeline(name, days=14, limit=60):
     limit = max(10, min(int(limit), 200))
     linked = _linked_accounts(name, days)
     key = _identity_key(name)
-    ent = {"bool": {"minimum_should_match": 1, "should": (
-        [{"term": {"user": u}} for u in linked]
-        + [{"match_phrase": {"upn": key or name}}, {"term": {"source": name}}])}}
+    ent = _entity_filter(name, kind)
     sig = {"bool": {"minimum_should_match": 1, "should": [
         {"exists": {"field": "alert_tag"}},                 # détections
-        {"term": {"event_id": "4625"}},                     # logon Windows échoué
+        {"terms": {"event_id": ["4624", "4625"]}},           # succès et échecs Windows
         {"term": {"m365_type": "signin"}}]}}                # sign-in M365 (succès/échec)
     res = os_search("omni-*", {"size": limit, "sort": [{"timestamp": {"order": "desc"}}],
         "query": {"bool": {"must": [ent, sig], "filter": [{"range": {"timestamp": {"gte": f"now-{days}d"}}}]}},
@@ -1066,16 +1263,16 @@ def get_entity_timeline(name, days=14, limit=60):
         s = h.get("_source", {})
         tag, eid = s.get("alert_tag"), str(s.get("event_id") or "")
         if tag:
-            out.append({"ts": s.get("timestamp"), "kind": "detection", "sev": s.get("risk_severity") or "",
+            out.append({"ref": evidence_ref(h), "ts": s.get("timestamp"), "kind": "detection", "sev": s.get("risk_severity") or "",
                         "label": tag, "tech": s.get("mitre_technique") or "", "src": s.get("event_source") or "",
                         "detail": (s.get("short_message") or s.get("message") or "")[:140]})
         elif s.get("m365_type") == "signin":
             ok = str(s.get("status_code")) == "0"
-            out.append({"ts": s.get("timestamp"), "kind": "m365", "ok": ok, "label": "M365 sign-in",
+            out.append({"ref": evidence_ref(h), "ts": s.get("timestamp"), "kind": "m365", "ok": ok, "label": "M365 sign-in",
                         "ip": _rd(s.get("src_ip") or ""), "cc": s.get("src_ip_country_code") or "",
                         "code": s.get("status_code"), "detail": s.get("m365_fail_label") or ""})
-        elif eid == "4625":
-            out.append({"ts": s.get("timestamp"), "kind": "winlogon", "ok": False, "label": "Windows logon",
+        elif eid in ("4624", "4625"):
+            out.append({"ref": evidence_ref(h), "ts": s.get("timestamp"), "kind": "winlogon", "ok": eid == "4624", "label": "Windows logon",
                         "ip": _rd(s.get("src_ip") or ""), "detail": ""})
     return {"items": out, "linked": [_rd(u) for u in linked] if len(linked) > 1 else []}
 
@@ -1088,7 +1285,7 @@ def get_entities_browse(days=7):
     gte = f"now-{days}d"
 
     def _bare(s):
-        return str(s or "").split("\\")[-1].split("@")[0].strip().lower()
+        return str(s or "").strip().lower()
 
     def _scoremap(src, score_field, key_field):
         r = os_search("omni-*", {"size": 0,
@@ -1183,21 +1380,27 @@ def get_detections(tactic="", source="", tag="", technique=""):
     if technique:
         must.append({"term": {"mitre_technique": technique}})
     res = os_search("omni-*", {"size": 60, "sort": [{"timestamp": {"order": "desc"}}],
+        "track_total_hits": True,
         "query": {"bool": {"must": must, "filter": [{"range": {"timestamp": {"gte": "now-24h"}}}]}},
         "_source": ["timestamp", "alert_tag", "mitre_technique", "mitre_tactic", "event_source",
-                    "user", "key", "short_message", "message", "priority", "risk_severity", "risk_score"],
+                    "user", "key", "host", "source", "src_ip", "dest_ip", "short_message", "message", "priority", "risk_severity", "risk_score"],
         "aggs": {"tac": {"terms": {"field": "mitre_tactic", "size": 14}},
                  "src": {"terms": {"field": "event_source", "size": 15}}}})
     items = []
     for h in res.get("hits", {}).get("hits", []):
         s = h.get("_source", {})
-        items.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
+        items.append({"ref": evidence_ref(h), "entities": evidence_entities(s),
+                      "entity_kind": "user" if s.get("user") or s.get("key") else "host" if s.get("host") or s.get("source") else "ip",
+                      "ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
                       "tactic": s.get("mitre_tactic"), "source": s.get("event_source"),
-                      "entity": _rd(s.get("user") or s.get("key")), "priority": s.get("priority"),
+                      "entity": _rd(s.get("user") or s.get("key") or s.get("host") or s.get("source") or s.get("src_ip")), "priority": s.get("priority"),
                       "sev": s.get("risk_severity"), "score": s.get("risk_score"),
                       "msg": s.get("short_message") or s.get("message")})
     ag = res.get("aggregations", {})
-    return {"items": items,
+    total = res.get("hits", {}).get("total", {})
+    exact = total.get("value") if isinstance(total, dict) and total.get("relation", "eq") == "eq" else None
+    return {"items": items, "total": exact, "returned": len(items), "limit": 60, "window_hours": 24,
+            "truncated": exact is None or exact > len(items),
             "tactics": [b["key"] for b in ag.get("tac", {}).get("buckets", [])],
             "sources": [b["key"] for b in ag.get("src", {}).get("buckets", [])]}
 
@@ -1423,7 +1626,7 @@ def get_risk():
                                                "aggs": {"s": {"terms": {"field": "risk_severity", "size": 6}}}}}}}})
     # Classement par RISQUE FUSIONNÉ (ML+UEBA+sévérité), pas par simple volume de détections.
     def _bare(s):
-        return str(s or "").split("\\")[-1].split("@")[0].strip().lower()
+        return str(s or "").strip().lower()
 
     def _smap(src, sf, kf):
         r = os_search("omni-*", {"size": 0,
@@ -3191,6 +3394,26 @@ _MODULE_SLUG = re.compile(r"^[a-z][a-z0-9_-]{0,47}$")
 _MODULE_FIELD = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$")
 _MODULE_SOURCE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 _MODULE_WIDGET_TYPES = frozenset({"count", "timeseries", "terms", "messages"})
+_MODULE_COLUMNS = frozenset({"timestamp", "source", "message", "event_id", "event_action", "event_source",
+    "omni_parse_status", "src_ip", "dest_ip", "src_port", "dest_port", "network_protocol", "host", "user",
+    "src_zone", "dest_zone", "network_rule", "network_application", "event_category"})
+
+
+def _module_filter(raw):
+    """Exact field/value filters only; always ANDed with the saved page scope."""
+    if not isinstance(raw, list) or len(raw) > 8:
+        raise AdminError("huit filtres de widget au maximum")
+    output = []
+    for item in raw:
+        if (not isinstance(item, dict) or set(item) != {"field", "values"}
+                or not isinstance(item["field"], str) or item["field"] not in _MODULE_COLUMNS - {"message"}
+                or not isinstance(item["values"], list) or not 1 <= len(item["values"]) <= 15):
+            raise AdminError("filtre de widget invalide")
+        values = [_module_text(value, 100, "valeur de filtre", False) for value in item["values"]]
+        if len(set(values)) != len(values):
+            raise AdminError("valeurs de filtre en double")
+        output.append({"field": item["field"], "values": values})
+    return output
 
 
 def _module_text(value, maximum, label, empty=True):
@@ -3212,7 +3435,7 @@ def _module_strings(raw, pattern, maximum, label, nonempty=False):
 def modules_validate_config(raw):
     if not isinstance(raw, dict) or set(raw) - {"schema_version", "revision", "pages"}:
         raise AdminError("configuration de modules invalide")
-    if type(raw.get("schema_version")) is not int or raw["schema_version"] != 1:
+    if type(raw.get("schema_version")) is not int or raw["schema_version"] not in (1, 2):
         raise AdminError("version de configuration de modules non prise en charge")
     revision = raw.get("revision")
     if type(revision) is not int or not 0 <= revision < 2147483647:
@@ -3222,10 +3445,12 @@ def modules_validate_config(raw):
         raise AdminError("vingt pages de modules au maximum")
     normalized, seen = [], set()
     page_keys = {"id", "title", "description", "enabled", "min_role", "stream_ids", "event_sources",
-                 "integration_ids", "query", "days", "graylog_dashboard_id", "widgets"}
+                 "integration_ids", "query", "days", "graylog_dashboard_id", "widgets", "template_id", "template_revision"}
     for page in pages:
         if not isinstance(page, dict) or set(page) - page_keys:
             raise AdminError("page de module invalide")
+        if raw["schema_version"] == 1 and any(k in page for k in ("template_id", "template_revision")):
+            raise AdminError("la provenance des modèles demande une migration vers le schéma 2")
         identifier = page.get("id")
         if not isinstance(identifier, str) or not _MODULE_SLUG.fullmatch(identifier) or identifier in seen:
             raise AdminError("identifiant de page invalide ou en double")
@@ -3246,8 +3471,10 @@ def modules_validate_config(raw):
             raise AdminError("une à douze widgets sont requis par page")
         output, widget_ids = [], set()
         for widget in widgets:
-            if not isinstance(widget, dict) or set(widget) - {"id", "title", "type", "field", "size"}:
+            if not isinstance(widget, dict) or set(widget) - {"id", "title", "type", "field", "size", "filter", "columns"}:
                 raise AdminError("widget de module invalide")
+            if raw["schema_version"] == 1 and any(k in widget for k in ("filter", "columns")):
+                raise AdminError("les nouveaux réglages de widgets demandent une migration vers le schéma 2")
             wid, kind = widget.get("id"), widget.get("type")
             if not isinstance(wid, str) or not _MODULE_SLUG.fullmatch(wid) or wid in widget_ids:
                 raise AdminError("identifiant de widget invalide ou en double")
@@ -3260,8 +3487,19 @@ def modules_validate_config(raw):
             size = widget.get("size", 10)
             if type(size) is not int or not 1 <= size <= 50:
                 raise AdminError("taille du widget : entre 1 et 50")
-            output.append({"id": wid, "title": _module_text(widget.get("title", ""), 100, "titre du widget", False),
-                           "type": kind, "field": field, "size": size})
+            item = {"id": wid, "title": _module_text(widget.get("title", ""), 100, "titre du widget", False),
+                    "type": kind, "field": field, "size": size}
+            # Optional schema-1 extensions: old pages round-trip without new keys.
+            if "filter" in widget:
+                item["filter"] = _module_filter(widget["filter"])
+            if "columns" in widget:
+                columns = widget["columns"]
+                if (kind != "messages" or not isinstance(columns, list) or not 1 <= len(columns) <= 12
+                        or any(not isinstance(c, str) or c not in _MODULE_COLUMNS for c in columns)
+                        or len(set(columns)) != len(columns)):
+                    raise AdminError("colonnes de journaux invalides")
+                item["columns"] = list(columns)
+            output.append(item)
         normalized.append({"id": identifier, "title": _module_text(page.get("title", ""), 100, "titre de page", False),
             "description": _module_text(page.get("description", ""), 500, "description"),
             "enabled": page.get("enabled", False), "min_role": role,
@@ -3270,7 +3508,12 @@ def modules_validate_config(raw):
             "integration_ids": _module_strings(page.get("integration_ids", []), _MODULE_SOURCE, 30, "intégrations"),
             "query": _module_text(page.get("query", ""), 1000, "recherche"), "days": days,
             "graylog_dashboard_id": dashboard, "widgets": output})
-    result = {"schema_version": 1, "revision": revision, "pages": normalized}
+        if "template_id" in page or "template_revision" in page:
+            if (not isinstance(page.get("template_id"), str) or not _MODULE_SLUG.fullmatch(page["template_id"])
+                    or type(page.get("template_revision")) is not int or not 1 <= page["template_revision"] <= 100000):
+                raise AdminError("provenance du modèle invalide")
+            normalized[-1].update(template_id=page["template_id"], template_revision=page["template_revision"])
+    result = {"schema_version": raw["schema_version"], "revision": revision, "pages": normalized}
     if len(json.dumps(result, ensure_ascii=False).encode()) > MODULES_MAX_BODY - 2048:
         raise AdminError("configuration de modules trop volumineuse", 413)
     return result
@@ -3304,7 +3547,7 @@ def _a_modules(p, actor):
 def _p_modules(c):
     before = load_modules_config()
     after = dict(c["config"], revision=before["revision"] + 1)
-    return {"before": before, "after": after, "impact": "normal", "refus": "",
+    return {"before": before, "after": after, "schema_migration": before["schema_version"] != after["schema_version"], "impact": "normal", "refus": "",
             "effects": ["Configuration de pages et widgets du site uniquement ; aucune écriture dans Graylog.",
                         "Les rôles SOC autorisés voient uniquement les pages explicitement activées."]}
 
@@ -3322,6 +3565,11 @@ def _x_modules(c, actor, motif, rid):
             if c["config"]["revision"] != previous["revision"]:
                 raise AdminError("la configuration a changé ; recharger les modules avant d'enregistrer", 409)
             updated = dict(c["config"], revision=previous["revision"] + 1)
+            if previous["schema_version"] > updated["schema_version"]:
+                raise AdminError("restaurer explicitement une sauvegarde compatible ; rétrogradation de schéma refusée", 409)
+            if previous["schema_version"] < updated["schema_version"]:
+                backup = os.path.join(SOC_MODULES_DIR, "config.schema1-r" + str(previous["revision"]) + ".json")
+                _atomic_write_json(backup, previous)
             _atomic_write_json(MODULES_CONFIG_FILE, updated)
     return {"ok": True, "revision": updated["revision"], "message": "Pages et widgets enregistrés."}
 
@@ -3332,8 +3580,15 @@ def _module_public(page):
 
 def modules_public(user):
     config = load_modules_config()
-    return {"revision": config["revision"], "pages": [_module_public(p) for p in config["pages"]
-            if p["enabled"] and role_at_least(user, p["min_role"])]}
+    result = {"revision": config["revision"], "pages": [_module_public(p) for p in config["pages"]
+              if p["enabled"] and role_at_least(user, p["min_role"])]}
+    if soc_is_admin(user):
+        try:
+            result["integrations"] = _modules_templates()
+        except (OSError, ValueError, TypeError, KeyError, AdminError):
+            result["integrations"] = []
+            result["catalog_error"] = "Catalogue des intégrations indisponible ; vérifier son installation."
+    return result
 
 
 def _module_scope(page):
@@ -3357,14 +3612,18 @@ def _module_count(value):
 def _module_widget(page, widget):
     kind = widget["type"]
     body = {"query": _module_scope(page), "size": 0, "track_total_hits": True, "timeout": "10s"}
+    for clause in widget.get("filter", []):
+        body["query"]["bool"]["filter"].append({"terms": {clause["field"]: clause["values"]}})
     if kind == "terms":
         body["aggs"] = {"items": {"terms": {"field": widget["field"], "size": widget["size"]}}}
+        body["aggs"]["missing_field"] = {"filter": {"bool": {"must_not": [{"exists": {"field": widget["field"]}}]}}}
     elif kind == "timeseries":
         body["aggs"] = {"items": {"date_histogram": {"field": "timestamp", "fixed_interval": "1h" if page["days"] <= 2 else "1d",
                                                     "min_doc_count": 1}}}
     elif kind == "messages":
+        columns = widget.get("columns", ["timestamp", "source", "message"])
         body.update(size=min(widget["size"], 20), sort=[{"timestamp": {"order": "desc"}}],
-                    _source=["timestamp", "source", "message", "short_message"])
+                    _source=list(dict.fromkeys(columns + ["timestamp", "source", "message", "short_message"])))
     result = os_search(LOG_INDICES, body)
     shards = result.get("_shards")
     if not isinstance(shards, dict) or type(shards.get("failed")) is not int or shards["failed"] != 0:
@@ -3380,9 +3639,15 @@ def _module_widget(page, widget):
             source = hit.get("_source") if isinstance(hit, dict) else None
             if not isinstance(source, dict):
                 raise SearchBackendError(502)
-            output.append({"timestamp": source.get("timestamp"), "source": _rd(source.get("source", "")),
-                           "message": _scrub(str(source.get("message") or source.get("short_message") or "")[:4000])})
-        return {"messages": output[:20]}
+            item = {"timestamp": source.get("timestamp"), "source": _rd(source.get("source", "")),
+                    "message": _scrub(str(source.get("message") or source.get("short_message") or "")[:4000])}
+            item["fields"] = {field: (item[field] if field in item else _scrub(str(source[field])[:1000]))
+                              for field in columns if field in source or field in item}
+            reference = globals().get("evidence_ref")
+            if reference:
+                item["evidence_ref"] = reference(hit, scope=page["id"])
+            output.append(item)
+        return {"columns": columns, "messages": output[:20]}
     buckets = result.get("aggregations", {}).get("items", {}).get("buckets")
     if not isinstance(buckets, list) or len(buckets) > (widget["size"] if kind == "terms" else 800):
         raise SearchBackendError(502)
@@ -3396,7 +3661,15 @@ def _module_widget(page, widget):
         if not isinstance(key, (str, int, float)) or isinstance(key, bool):
             raise SearchBackendError(502)
         output.append({"key": _scrub(key) if isinstance(key, str) else key, "count": _module_count(bucket.get("doc_count"))})
-    return {"buckets": output}
+    data = {"buckets": output}
+    if kind == "terms":
+        missing = result.get("aggregations", {}).get("missing_field", {}).get("doc_count")
+        total = result.get("hits", {}).get("total", {}).get("value")
+        if type(missing) is int and type(total) is int and 0 <= missing <= total:
+            data["documents_without_field"] = missing
+            if total and missing == total:
+                data["availability"] = "field_absent"
+    return data
 
 
 def modules_page(identifier, user):
@@ -3501,7 +3774,230 @@ def admin_modules():
         catalog["sources"] = [{"source": str(b["key"]), "count": _module_count(b["doc_count"])} for b in buckets]
     except Exception:
         catalog["errors"].append("Sources observées indisponibles ; aucune absence ne peut être conclue.")
+    try:
+        catalog["integrations"] = _modules_templates()
+    except (OSError, ValueError, TypeError, KeyError, AdminError):
+        catalog["integrations"] = []
+        catalog["errors"].append("Catalogue des intégrations indisponible ; vérifier son installation.")
     return {"config": load_modules_config(), "catalog": catalog}
+
+
+def _modules_manifest_dir():
+    explicit = _setting("SOC_INTEGRATIONS_DIR", "")
+    if explicit:
+        return explicit
+    local = os.path.dirname(os.path.abspath(__file__))
+    # Managed backend keeps its own data; repo/mobile and Docker use the parent.
+    beside = os.path.join(local, "integrations")
+    return beside if os.path.isdir(beside) else os.path.join(os.path.dirname(local), "integrations")
+
+
+def _modules_json(path):
+    with open(path, encoding="utf-8") as handle:
+        content = handle.read(MODULES_MAX_BODY + 1)
+    if len(content.encode()) > MODULES_MAX_BODY:
+        raise ValueError("oversized integration metadata")
+    return json.loads(content)
+
+
+def _modules_templates():
+    """Read vendor-owned templates only. Never merge them into saved site pages."""
+    directory = _modules_manifest_dir()
+    catalog = _modules_json(os.path.join(directory, "catalog.json"))
+    if catalog.get("schema_version") != 1 or not isinstance(catalog.get("modules"), list) or len(catalog["modules"]) > 20:
+        raise ValueError("unsupported integration catalog")
+    result, seen = [], set()
+    for entry in catalog["modules"]:
+        identifier = entry.get("id")
+        if (not isinstance(identifier, str) or not _MODULE_SLUG.fullmatch(identifier) or identifier in seen
+                or entry.get("manifest") != identifier + "/manifest.json"):
+            raise ValueError("invalid integration catalog entry")
+        seen.add(identifier)
+        module = _modules_json(os.path.join(directory, identifier, "manifest.json"))
+        if module.get("id") != identifier or module.get("schema_version") != 1:
+            raise ValueError("invalid integration manifest")
+        revision = module.get("revision")
+        if type(revision) is not int or revision < 1:
+            raise ValueError("invalid integration revision")
+        soc = module.get("soc", {})
+        if not isinstance(soc, dict):
+            raise ValueError("invalid SOC metadata")
+        fields = soc.get("fields", [])
+        if not isinstance(fields, list) or len(fields) > 40:
+            raise ValueError("invalid integration fields")
+        normalized = []
+        for field in fields:
+            if (not isinstance(field, dict) or field.get("name") not in _MODULE_COLUMNS
+                    or field.get("type") not in ("keyword", "ip", "long", "date")
+                    or type(field.get("required", False)) is not bool):
+                raise ValueError("invalid integration field contract")
+            normalized.append({"name": field["name"], "type": field["type"], "required": field.get("required", False),
+                               "description": _module_text(field.get("description", ""), 300, "description du champ")})
+        if len({field["name"] for field in normalized}) != len(normalized):
+            raise ValueError("duplicate integration fields")
+        preset = soc.get("preset", {})
+        if not isinstance(preset, dict):
+            raise ValueError("invalid integration preset")
+        widgets = preset.get("widgets", [
+            {"id": "volume", "title": "Événements", "type": "count"},
+            {"id": "activity", "title": "Activité", "type": "timeseries"},
+            {"id": "sources", "title": "Équipements émetteurs", "type": "terms", "field": "source"},
+            {"id": "logs", "title": "Derniers journaux", "type": "messages"}])
+        page = modules_validate_config({"schema_version": 2, "revision": 0, "pages": [{
+            "id": identifier, "title": module.get("name", identifier), "description": preset.get("description", ""),
+            "stream_ids": ["0" * 24], "integration_ids": [identifier], "min_role": "administrateur", "widgets": widgets
+        }]})["pages"][0]
+        limitations = soc.get("limitations", [])
+        if not isinstance(limitations, list) or len(limitations) > 12:
+            raise ValueError("invalid integration limitations")
+        preset_revision = soc.get("revision", 1)
+        if type(preset_revision) is not int or not 1 <= preset_revision <= 100000:
+            raise ValueError("invalid SOC template revision")
+        result.append({"id": identifier, "name": page["title"], "revision": revision, "template_revision": preset_revision,
+            "qualification": _module_text(module.get("status", "preview"), 40, "qualification"),
+            "format": _module_text(module.get("supported_format", ""), 1000, "format"),
+            "fields": normalized, "limitations": [_module_text(v, 500, "limite") for v in limitations],
+            "preset": {"description": page["description"], "widgets": page["widgets"]}})
+    return result
+
+
+def _module_probe(call):
+    """Do not turn authorization, transport or invalid responses into absence."""
+    try:
+        return call(), None
+    except urllib.error.HTTPError as exc:
+        return None, {"status": "forbidden" if exc.code in (401, 403) else "unknown",
+                      "message": "Accès Graylog refusé ; vérifier le compte de service et ses partages." if exc.code in (401, 403)
+                      else "Vérification Graylog impossible (HTTP " + str(exc.code) + ")."}
+    except Exception:
+        return None, {"status": "unknown", "message": "Vérification indisponible ; aucune absence ne peut être conclue."}
+
+
+def _module_observation(identifier, fields, stream_ids=None):
+    filters = [{"term": {"omni_integration_id": identifier}}]
+    if stream_ids:
+        filters.append({"terms": {"streams": stream_ids}})
+    base = {"bool": {"filter": filters}}
+    recent = {"bool": {"filter": filters + [{"range": {"timestamp": {"gte": "now-24h", "lte": "now"}}}]}}
+    aggs = {"recent": {"filter": recent, "aggs": {"unparsed": {"filter": {"term": {"omni_parse_status": "unparsed"}}},
+             "parsed": {"filter": {"term": {"omni_parse_status": "parsed"}}},
+             "fields": {"filters": {"filters": {f["name"]: {"exists": {"field": f["name"]}} for f in fields}}}}}}
+    if not fields:
+        del aggs["recent"]["aggs"]["fields"]
+    result = os_search(LOG_INDICES, {"query": base, "size": 1, "sort": [{"timestamp": {"order": "desc"}}],
+        "_source": ["timestamp"], "track_total_hits": True, "timeout": "10s", "aggs": aggs})
+    if (result.get("timed_out") or result.get("_shards", {}).get("failed") != 0
+            or result.get("hits", {}).get("total", {}).get("relation", "eq") != "eq"):
+        raise ValueError("partial integration observation")
+    total = _module_count(result["hits"]["total"]["value"])
+    data = result["aggregations"]["recent"]
+    count = _module_count(data["doc_count"])
+    parsed, unparsed = _module_count(data["parsed"]["doc_count"]), _module_count(data["unparsed"]["doc_count"])
+    if parsed + unparsed > count:
+        raise ValueError("invalid parse counts")
+    hits = result["hits"]["hits"]
+    last = hits[0].get("_source", {}).get("timestamp") if hits else None
+    if total and not isinstance(last, str):
+        raise ValueError("last observation unavailable")
+    threshold = EXPECTED_SOURCES.get(identifier)
+    freshness = "not_configured"
+    if threshold and last:
+        from datetime import datetime, timezone
+        instant = datetime.fromisoformat(last.replace("Z", "+00:00"))
+        if instant.tzinfo is None:
+            instant = instant.replace(tzinfo=timezone.utc)  # Graylog timestamp mapping stores UTC.
+        age = max(0, (datetime.now(timezone.utc) - instant).total_seconds() / 60)
+        freshness = "ok" if age <= threshold else "stale"
+    elif threshold:
+        freshness = "never_observed"
+    coverage = []
+    for field in fields:
+        present = _module_count(data["fields"]["buckets"][field["name"]]["doc_count"])
+        if present > count:
+            raise ValueError("invalid field coverage")
+        coverage.append(dict(field, count=present, status="no_data" if count == 0 else "present" if present else "absent"))
+    return {"status": "observed" if count else "no_recent_data" if total else "never_observed", "window_hours": 24,
+        "count": count, "total_retained": total, "last_seen": last, "parsed": parsed, "unparsed": unparsed,
+        "parse_unknown": count - parsed - unparsed, "fields": coverage,
+        "freshness": {"status": freshness, "threshold_minutes": threshold},
+        "message": "Zéro décrit les journaux accessibles dans la période ; il ne prouve pas la santé de la collecte."}
+
+
+def modules_status(identifier, user):
+    if not soc_is_admin(user):
+        raise AdminError("diagnostic réservé à l'administration SOC", 403)
+    try:
+        module = next((m for m in _modules_templates() if m["id"] == identifier), None)
+    except (OSError, ValueError, TypeError, KeyError, AdminError):
+        raise AdminError("catalogue des intégrations indisponible", 503) from None
+    if not module:
+        raise AdminError("intégration inconnue", 404)
+    import uuid
+    namespace = uuid.UUID("7a7acf1c-15bc-43fa-b650-0f10909f8a56")
+    stable = lambda role: str(uuid.uuid5(namespace, identifier + ":" + role))
+    result = {"module": module, "generated": _now_iso(), "components": {}, "pages": [],
+        "collection_plan": ["Ouvrir le gestionnaire SSH : python3 tools/omni-manager.py, puis Intégrations.",
+            "Préparer un plan avec tools/omni-integrations.py plan " + identifier + " --api <URL_API> --bind <IP_COLLECTE> --port <PORT>.",
+            "Configurer explicitement le réseau et l'envoi syslog du constructeur, puis recetter les vrais journaux.",
+            "Créer un brouillon SOC, sélectionner les streams et les droits, simuler puis publier."],
+        "limitations": ["Lecture seule ; aucune installation, reprise d'entrée ou activation de détection.",
+            "La visibilité du compte de service limite le diagnostic ; le temps affiché est celui de réception."]}
+    components = result["components"]
+    inventory, error = _module_probe(lambda: _graylog("GET", "/system/content_packs/" + stable("pack") + "/installations"))
+    installations = inventory.get("installations") if isinstance(inventory, dict) else None
+    if error:
+        components["pack"] = error
+    elif not isinstance(installations, list):
+        components["pack"] = {"status": "unknown", "message": "Réponse d'installation invalide."}
+    elif not installations:
+        components["pack"] = {"status": "absent", "message": "Aucune installation déclarée par Graylog."}
+    else:
+        revisions = [i.get("content_pack_revision") for i in installations]
+        components["pack"] = {"status": "ambiguous" if len(installations) != 1 else
+            "ok" if revisions == [module["revision"]] else "different_revision", "revisions": revisions,
+            "message": "Installation déclarée ; les personnalisations vivantes ne sont pas comparées au pack."}
+    owned = {}
+    if isinstance(installations, list) and len(installations) == 1:
+        entities = installations[0].get("entities", [])
+        if isinstance(entities, list):
+            for kind in ("input", "stream", "pipeline", "dashboard"):
+                matches = [e for e in entities if isinstance(e, dict) and e.get("content_pack_entity_id") == stable(kind)
+                           and e.get("type", {}).get("name") == kind and _GL_ID_RE.fullmatch(str(e.get("id", "")))]
+                if len(matches) == 1:
+                    owned[kind] = matches[0]["id"]
+    for kind, path in (("input", "/system/inputs/"), ("stream", "/streams/"), ("pipeline", "/system/pipelines/pipeline/")):
+        if kind not in owned:
+            components[kind] = {"status": "unknown", "message": "Entité non résolue par l'installation ; vérifier Content Packs."}
+            continue
+        data, error = _module_probe(lambda: _graylog("GET", path + owned[kind]))
+        if error:
+            components[kind] = error
+        elif not isinstance(data, dict):
+            components[kind] = {"status": "unknown", "message": "Réponse technique invalide."}
+        elif kind == "stream":
+            paused = data.get("disabled")
+            components[kind] = {"id": owned[kind], "status": "paused" if paused is True else "ok" if paused is False else "unknown",
+                                "index_set_id": data.get("index_set_id"), "message": "État déclaré du stream."}
+        elif kind == "input":
+            runtime, failure = _module_probe(lambda: _graylog("GET", "/system/inputstates/" + owned[kind]))
+            state = runtime.get("state") if isinstance(runtime, dict) else None
+            components[kind] = failure or {"id": owned[kind], "runtime": state,
+                "status": "ok" if state == "RUNNING" else "failure" if state == "FAILED" else
+                          "stopped" if state in ("STOPPED", "TERMINATED") else "unknown", "message": "État d'exécution de l'entrée."}
+        else:
+            connections, failure = _module_probe(lambda: _graylog("GET", "/system/pipelines/connections"))
+            if isinstance(connections, list) and "stream" in owned:
+                connected = any(c.get("stream_id") == owned["stream"] and owned[kind] in c.get("pipeline_ids", [])
+                                for c in connections if isinstance(c, dict))
+                components[kind] = {"id": owned[kind], "status": "ok" if connected else "disconnected", "message": "Connexion du pipeline au stream."}
+            else:
+                components[kind] = failure or {"status": "unknown", "message": "Connexions de pipeline indisponibles."}
+    result["resources"] = owned
+    observation, error = _module_probe(lambda: _module_observation(identifier, module["fields"], [owned["stream"]] if "stream" in owned else None))
+    result["observation"] = error or observation
+    result["pages"] = [{"id": p["id"], "title": p["title"], "enabled": p["enabled"], "min_role": p["min_role"]}
+                       for p in load_modules_config()["pages"] if identifier in p["integration_ids"]]
+    return result
 
 
 # ------------------------------------------------------------------ mise à jour de l'environnement
@@ -4080,13 +4576,21 @@ class H(BaseHTTPRequestHandler):
             return self._json({"user": u, "role": role_of(u)} if u else {"user": None}, 200 if u else 401)
         if not self._user():
             return self._json({"error": "auth"}, 401)
+        if p == "/m/api/evidence":
+            params = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            try:
+                return self._json(get_evidence(params.get("ref", [""])[0], self._user()))
+            except EvidenceError as exc:
+                return self._json({"error": str(exc)}, exc.status)
         if p.startswith("/m/api/admin/"):
             return self._admin_get(p)
-        if p in ("/m/api/modules", "/m/api/modules/page"):
+        if p in ("/m/api/modules", "/m/api/modules/page", "/m/api/modules/status"):
             try:
                 if p == "/m/api/modules":
                     return self._json_raw(modules_public(self._user()))
                 params = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+                if p == "/m/api/modules/status":
+                    return self._json_raw(modules_status(params.get("id", [""])[0], self._user()))
                 return self._json_raw(modules_page(params.get("id", [""])[0], self._user()))
             except AdminError as ex:
                 return self._json_raw({"error": str(ex)}, ex.code)
@@ -4169,7 +4673,7 @@ class H(BaseHTTPRequestHandler):
                     return max(0, int(qs.get(k, [str(d)])[0]))
                 except (ValueError, TypeError):
                     return d
-            return self._json(get_entity(qs.get("u", [""])[0], _qi("size", 20), _qi("from", 0)))
+            return self._json(get_entity(qs.get("u", [""])[0], _qi("size", 20), _qi("from", 0), qs.get("kind", ["user"])[0]))
         if p == "/m/api/investigate":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
@@ -4177,7 +4681,7 @@ class H(BaseHTTPRequestHandler):
                 _days = max(1, min(90, int(qs.get("days", ["14"])[0])))
             except (ValueError, TypeError):
                 _days = 14
-            return self._json(get_investigation(qs.get("u", [""])[0], _days))
+            return self._json(get_investigation(qs.get("u", [""])[0], _days, qs.get("kind", ["user"])[0]))
         if p == "/m/api/entity-timeline":
             import urllib.parse as _up
             qs = _up.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
@@ -4185,7 +4689,7 @@ class H(BaseHTTPRequestHandler):
                 _days = max(1, min(90, int(qs.get("days", ["14"])[0])))
             except (ValueError, TypeError):
                 _days = 14
-            return self._json(get_entity_timeline(qs.get("u", [""])[0], _days))
+            return self._json(get_entity_timeline(qs.get("u", [""])[0], _days, kind=qs.get("kind", ["user"])[0]))
         if p == "/m/api/entities":
             return self._json(get_entities_browse())
         if p == "/m/api/guidance":

@@ -390,16 +390,16 @@ function toggleWatch(){var who=(ENT_CUR&&(ENT_CUR.full||ENT_CUR.label));if(!who)
 function rkChip(r){if(!r||r.score==null)return '';var c=r.score>=80?"rk-c":r.score>=60?"rk-h":r.score>=35?"rk-m":"rk-l";
   return '<span class="rkchip '+c+'" title="'+t("risk_"+(r.label||"minimal"))+' — '+t("risk_fused")+'">'+r.score+'</span>';}
 function entRow(e,k,i){return '<div class="entrow" data-onclick="openEntB(\''+k+'\','+i+')">'+rkChip(e.risk)+'<span class="entk">'+(k==='m'?ic("cpu"):'👤')+'</span><span class="entn mono">'+esc(e.entity)+(e.watched?' <span class="weye" title="'+t("watch_on")+'">👁</span>':'')+'</span><span class="entn2 mono">'+((e.n||0).toLocaleString('fr'))+'</span></div>';}
-function openEntB(k,i){const e=(k==='m'?ENTB.machines:ENTB.users)[i];if(e)openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
-function openEntS(i){const e=ENTS[i];if(e)openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
+function openEntB(k,i){const e=(k==='m'?ENTB.machines:ENTB.users)[i];if(e)openEntity(e.entity,e.entity,20,k==='m'?"host":"user");}
+function openEntS(i){const e=ENTS[i];if(e)openEntity(e.entity,e.entity,20,e.kind||"user");}
 function entSearchDo(q){q=(q||"").trim();const r=$("#entResults");if(!r)return;
   if(q.length<2){r.innerHTML="";return;}
   j("/entity-search?q="+encodeURIComponent(q)).then(d=>{ENTS=d.results||[];
     r.innerHTML=ENTS.length?'<div class="lbl2">'+t("ent_res")+'</div>'+ENTS.map((e,i)=>'<div class="entrow" data-onclick="openEntS('+i+')"><span class="entk">'+(e.kind==='host'?ic("cpu"):'👤')+'</span><span class="entn mono">'+esc(e.entity)+'</span><span class="entn2 mono">'+(e.n||0).toLocaleString('fr')+' '+t("pal_evts")+'</span></div>').join(""):'<div class="muted gpad">'+t("ent_nores")+'</div>';
   }).catch(()=>{});}
 // --- Chronologie unifiée (timeline d'entité, dans le dossier) ---
-function loadTimeline(who){const w=$("#tlWrap");if(!w)return;w.innerHTML="";
-  fetch(API+"/entity-timeline?u="+encodeURIComponent(who)+"&days=14",{credentials:"same-origin"}).then(r=>r.json()).then(d=>renderTimeline(w,d)).catch(()=>{});}
+function loadTimeline(who,kind){const w=$("#tlWrap");if(!w)return;w.innerHTML="";
+  fetch(API+"/entity-timeline?kind="+encodeURIComponent(kind||"user")+"&u="+encodeURIComponent(who)+"&days=14",{credentials:"same-origin"}).then(r=>r.json()).then(d=>renderTimeline(w,d)).catch(()=>{});}
 function renderTimeline(w,d){const items=(d&&d.items)||[];if(!w)return;if(!items.length){w.innerHTML="";return;}
   const row=x=>{let icon,cls,txt;
     if(x.kind==="detection"){cls="tl-"+(x.sev?sevClass(x.sev):"medium");icon=ic("warning");txt='<b>'+nice(x.label)+'</b> '+(x.tech?'<span class="srcb">'+esc(x.tech)+'</span>':'')+(x.src?'<span class="src">'+esc(x.src)+'</span>':'');}
@@ -596,12 +596,13 @@ function buildGraphView(view){
     ],layout:GCFG});
   cy.on('tap','node[type="entity"]',e=>openEntity(e.target.data('full'),e.target.data('label')));
 }
-function openEntity(full,label,size){
-  size=size||20;ENT_CUR={full:full,label:label};ENT_SIZE=size;
+function openEntity(full,label,size,kind){
+  kind=kind||"user";
+  size=size||20;ENT_CUR={full:full,label:label,kind:kind};ENT_SIZE=size;
   // Ouverture IMMEDIATE avec placeholder (evite l'attente + l'affichage de donnees perimees)
   $("#emc").innerHTML='<div class="grip"></div><p class="muted" style="padding:28px 0;text-align:center">'+((LANG==="en")?"Loading dossier ":"Chargement du dossier ")+esc(label||"")+'…</p>';
   $("#emodal").classList.add("on");
-  fetch(API+"/entity?u="+encodeURIComponent(full||label)+"&size="+size,{credentials:"same-origin"}).then(r=>r.json()).then(d=>{
+  fetch(API+"/entity?u="+encodeURIComponent(full||label)+"&kind="+encodeURIComponent(kind)+"&size="+size,{credentials:"same-origin"}).then(r=>r.json()).then(d=>{
     const techs=(d.techniques||[]).map(t=>`<span class="pchip">${esc(t.k)} · ${t.n}</span>`).join(" ")||'<span class="muted">—</span>';
     const tacs=(d.tactics||[]).map(t=>`<span class="pchip tac">${esc(t.k)}</span>`).join(" ");
     const evs=(d.events||[]).map(e=>`<div class="erow"><span class="ts">${ago(e.ts)}</span> <b>${nice(e.tag)}</b> <em>${esc(e.tech||"")}</em><div class="emsg">${esc((e.msg||"").slice(0,150))}</div></div>`).join("")||'<div class="muted">'+t("empty_event")+'</div>';
@@ -621,7 +622,8 @@ function openEntity(full,label,size){
       <div class="blk"><div class="lbl">${t("ent_techniques")}</div><div>${techs}</div></div>
       <div class="blk"><div class="lbl">${t("ent_events")}</div>${evs}${more}</div>`;
     $("#emodal").classList.add("on");
-    loadInvestigation(full||label);loadTimeline(full||label);loadExposure(full||label);loadEntityEms(full||label);loadEntityNetwork(full||label);
+    if(window.bindSocEvidenceRows)bindSocEvidenceRows($("#emc .blk:last-child"),d.events||[],".erow");
+    loadInvestigation(full||label,kind);loadTimeline(full||label,kind);loadExposure(full||label);loadEntityEms(full||label);loadEntityNetwork(full||label);
   }).catch(()=>{});
 }
 function loadEntityNetwork(u){const w=$("#netEntWrap");if(!w)return;w.innerHTML="";
@@ -671,9 +673,9 @@ const M365CODE={
  fr:{"0":"Succès","50053":"Compte verrouillé (lockout)","50055":"Mot de passe expiré","50057":"Compte désactivé","50074":"MFA requise","50076":"MFA requise (CA)","50079":"MFA à enregistrer","50126":"Identifiants invalides","50158":"Conditional Access","53003":"Bloqué (Conditional Access)","500121":"MFA refusée / timeout"},
  en:{"0":"Success","50053":"Account locked (lockout)","50055":"Password expired","50057":"Account disabled","50074":"MFA required","50076":"MFA required (CA)","50079":"MFA registration required","50126":"Invalid credentials","50158":"Conditional Access","53003":"Blocked (Conditional Access)","500121":"MFA denied / timeout"}};
 function codeLabel(c){return (M365CODE[LANG]||M365CODE.fr)[String(c)]||("code "+esc(String(c)));}
-function loadInvestigation(who){const w=$("#invWrap");if(!w)return;
+function loadInvestigation(who,kind){const w=$("#invWrap");if(!w)return;
   w.innerHTML=`<div class="blk inv"><div class="lbl">${ic("globe")} ${t("inv_title")}</div><div class="muted">${t("inv_analyzing")}</div></div>`;
-  fetch(API+"/investigate?u="+encodeURIComponent(who)+"&days=14",{credentials:"same-origin"})
+  fetch(API+"/investigate?kind="+encodeURIComponent(kind||"user")+"&u="+encodeURIComponent(who)+"&days=14",{credentials:"same-origin"})
     .then(r=>r.json()).then(renderInvestigation).catch(()=>{});}
 const LTYPE={"2":"Interactive","3":"Network","4":"Batch","5":"Service","7":"Unlock","8":"NetworkCleartext","9":"NewCredentials","10":"RDP","11":"CachedInteractive"};
 function ltype(k){return (LTYPE[String(k)]||"type")+" ("+esc(String(k))+")";}
@@ -775,7 +777,7 @@ function palSearchLogs(q){const tok=++PALTOK;
         +'<div class="muted mono" style="font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc((e.msg||'').slice(0,150))+'</div></div>';}).join('');
     $("#palList").innerHTML=head+(rows||'<div class="muted" style="padding:12px">'+(LANG==="en"?"No result.":"Aucun résultat.")+'</div>');
   }).catch(()=>{$("#palList").innerHTML='<div class="muted" style="padding:12px">'+(LANG==="en"?"Search error.":"Erreur de recherche.")+'</div>';});}
-function openPalEnt(i){const e=PALENT[i];if(!e)return;closePal();openEntity(e.entity,((e.entity||"")+"").split("\\").pop());}
+function openPalEnt(i){const e=PALENT[i];if(!e)return;closePal();openEntity(e.entity,e.entity,20,e.kind||"user");}
 document.addEventListener("keydown",e=>{
   if((e.metaKey||e.ctrlKey)&&(e.key==="k"||e.key==="K")){e.preventDefault();openPal();return;}
   if(e.key==="Escape"){closePal();closeEnt();closeHelp();closeSim();}
@@ -920,7 +922,7 @@ function gFocusEntity(q){
 function gClear(){if($("#gTactic"))$("#gTactic").value="";if($("#gMinVol"))$("#gMinVol").value=0;if($("#gSearch"))$("#gSearch").value="";gMinLbl();applyGraphFilter();}
 // ===== Entite-360 : scores + pagination =====
 var ENT_CUR=null,ENT_SIZE=20;
-function entMore(){ENT_SIZE+=20;if(ENT_CUR)openEntity(ENT_CUR.full,ENT_CUR.label,ENT_SIZE);}
+function entMore(){ENT_SIZE+=20;if(ENT_CUR)openEntity(ENT_CUR.full,ENT_CUR.label,ENT_SIZE,ENT_CUR.kind);}
 function entScoreBanner(d){
   var r=d.risk||null, out="";
   var ml=d.scores&&d.scores.ml?d.scores.ml:null;
@@ -1152,18 +1154,18 @@ function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{},mt=d.mainten
     const age=i.age_min==null?(EN?"never":"jamais"):(i.age_min<60?i.age_min+" min":Math.round(i.age_min/60)+" h");
     return `<span class="pchip" style="border:1px solid ${c}66;color:${c}" title="${EN?'threshold':'seuil'} ${i.threshold_min} min">${esc(i.k)} · ${SL[i.status]||i.status} · ${age}</span>`;
   }).join("")||'<div class="empty">'+(EN?'No expected sources configured':'Aucune source attendue configurée')+'</div>';}
-let DETI=[],DETV=[],detF={tactic:"",source:"",technique:""},detQ="";
+let DETI=[],DETV=[],DET_TOTAL=null,detF={tactic:"",source:"",technique:""},detQ="";
 function onFilter(){detF.tactic=$("#fTactic").value;detF.source=$("#fSource").value;detF.technique="";loadDetections();}
 function clearFilter(){detF={tactic:"",source:"",technique:""};detQ="";if($("#detSearch"))$("#detSearch").value="";if($("#fTactic"))$("#fTactic").value="";if($("#fSource"))$("#fSource").value="";loadDetections();}
 function openTech(id){detF={tactic:"",source:"",technique:id};if($("#fTactic"))$("#fTactic").value="";if($("#fSource"))$("#fSource").value="";goNav("detections");loadDetections();}
 function loadDetections(){j("/detections?tactic="+encodeURIComponent(detF.tactic)+"&source="+encodeURIComponent(detF.source)+"&technique="+encodeURIComponent(detF.technique||"")).then(d=>renderDetections(d)).catch(()=>{});}
-function renderDetections(d){d=d||{};DETI=d.items||[];
+function renderDetections(d){d=d||{};DETI=d.items||[];DET_TOTAL=Number.isInteger(d.total)?d.total:null;
   const ft=$("#fTactic");if(ft&&ft.options.length<=1)(d.tactics||[]).forEach(t=>ft.add(new Option(t,t)));
   const fs=$("#fSource");if(fs&&fs.options.length<=1)(d.sources||[]).forEach(s=>fs.add(new Option(s,s)));
   renderDetRows();}
 function renderDetRows(){
   DETV=detQ?DETI.filter(x=>JSON.stringify([x.tag,x.entity,x.tech,x.tactic,x.source,x.msg]).toLowerCase().includes(detQ)):DETI.slice();
-  if($("#detCount"))$("#detCount").textContent=(detF.technique?"▸ "+detF.technique+" · ":"")+DETV.length+" détection(s)"+(detQ?' · « '+detQ+' »':'');
+  if($("#detCount"))$("#detCount").textContent=(detF.technique?"▸ "+detF.technique+" · ":"")+DETV.length+" événement(s) affiché(s) / "+(DET_TOTAL===null?"total inconnu":DET_TOTAL)+" sur 24 h"+(detQ?' · « '+detQ+' »':'');
   $("#detFeed").innerHTML=DETV.length?DETV.map((x,i)=>{const c=x.sev?sevClass(x.sev):(x.priority==3?"critical":x.priority==2?"high":"medium");
     const who=((x.entity||"")+"").split("\\").pop();
     const sevLbl=((LANG==="en")?{critical:'CRIT',high:'HIGH',medium:'MED',low:'LOW'}:{critical:'CRIT',high:'HAUT',medium:'MOY',low:'BAS'})[c]||((c||'').toUpperCase());
@@ -1185,7 +1187,7 @@ function exportDetections(){const rows=DETV.length?DETV:DETI;if(!rows.length){to
   const csv=[cols.join(",")].concat(rows.map(r=>cols.map(k=>'"'+((r[k]==null?"":r[k])+"").replace(/"/g,'""')+'"').join(","))).join("\n");
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));a.download="detections_omni_soc.csv";a.click();
   toastOk("Export CSV généré — "+rows.length.toLocaleString("fr")+" détection"+(rows.length>1?"s":"")+".",{title:"Export"});}
-function openDet(i){const x=DETV[i];if(!x||!x.entity)return;openEntity(x.entity,((x.entity||"")+"").split("\\").pop());}
+function openDet(i){const x=DETV[i];if(!x)return;if(x.ref&&window.openSocEvidence){openSocEvidence(x.ref);return;}if(x.entity)openEntity(x.entity,x.entity,20,x.entity_kind||"user");}
 // deep-link depuis un mail : #e=<entite> -> ouvre directement le dossier 360
 function deepLink(){var h=location.hash||"";var m=h.match(/[#&]e=([^&]+)/);if(!m)return;try{var ent=decodeURIComponent(m[1]);if(ent)openEntity(ent,((ent||"")+"").split("\\").pop());}catch(e){}}
 var LEAK_CATS=[
@@ -1274,6 +1276,7 @@ function openCase(i){const x=CASES[i];if(!x)return;
     <div class="blk"><div class="lbl">Notes</div>${notes}
       <textarea id="caseNote" placeholder="Ajouter une note d'investigation…" rows="2"></textarea>
       <button class="stb" data-onclick="caseAct('${x.id}','note',document.getElementById('caseNote').value)">Ajouter la note</button></div>`;
+  if(window.bindSocEvidenceRows)bindSocEvidenceRows($("#emc"),[x],"h2");
   $("#emodal").classList.add("on");}
 function caseAct(id,action,value){
   // Qualification OBLIGATOIRE avant clôture : un cas clôturé sans disposition = label perdu
@@ -1300,7 +1303,7 @@ function renderAlerts(list){list=list||[];$("#alFeed").innerHTML=list.length?lis
   const ctx=fchips||(a.entity?`<span style="${fcss}">${esc(a.entity)}</span>`:"");
   return `<div class="inc sev-${c}"><div class="top"><span class="chip ${c=='high'?'h':c=='medium'?'m':''}">P${a.priority||'-'}</span>
     <span class="ttl">${esc(a.title)}</span><span class="ts">${ago(a.ts)}</span></div>
-    ${ctx?`<div class="meta" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${ctx}</div>`:""}</div>`;}).join(""):'<div class="empty">RAS</div>';}
+    ${ctx?`<div class="meta" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${ctx}</div>`:""}</div>`;}).join(""):'<div class="empty">RAS</div>';if(window.bindSocEvidenceRows)bindSocEvidenceRows($("#alFeed"),list,".inc");}
 
 setInterval(()=>{$("#clock")&&($("#clock").textContent=new Date().toLocaleTimeString("fr"))},1000);
 document.documentElement.lang=LANG;applyI18n();updateLangBtn();
