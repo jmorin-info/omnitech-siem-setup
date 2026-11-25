@@ -93,6 +93,8 @@ def payload(snapshot_root, root):
     docs = root / "usr/share/doc/omni-siem"
     docs.mkdir(parents=True)
     shutil.copyfile(snapshot_root / "LICENSE", docs / "copyright")
+    (docs / "copyright").chmod(0o644)
+    root.chmod(0o755)
     for directory in root.rglob("*"):
         if directory.is_dir():
             directory.chmod(0o755)
@@ -123,6 +125,7 @@ def build(source, out, formats):
         if "deb" in formats:
             control = root / "DEBIAN"
             control.mkdir()
+            control.chmod(0o755)
             debversion = version.replace("-rc.", "~rc.")
             (control / "control").write_text(
                 "Package: omni-siem\nVersion: " + debversion + "\nArchitecture: all\n"
@@ -132,6 +135,7 @@ def build(source, out, formats):
                 "Description: Complete OMNI SIEM project and explicit deployment tools\n"
                 " Full source, console, modules, collectors and administration catalogue.\n"
                 " Server deployment is explicit and separate from package installation.\n")
+            (control / "control").chmod(0o644)
             artifact = out / ("omni-siem_" + debversion + "_all.deb")
             subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(root), str(artifact)], check=True, env=env)
             artifacts.append(artifact)

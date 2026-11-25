@@ -82,7 +82,10 @@ cloud-localds "$WORK/seed.img" "$WORK/user-data" "$WORK/meta-data"
 git -C "$ROOT" bundle create "$WORK/source.bundle" HEAD > "$WORK/bundle.log" 2>&1
 if [[ "${OMNI_VM_PACKAGE:-0}" == 1 ]]; then
   STAGE=package_build
-  python3 "$ROOT/tools/build-release.py" --format deb --output "$WORK/packages" > "$WORK/package-build.log" 2>&1
+  if ! python3 "$ROOT/tools/build-release.py" --format deb --output "$WORK/packages" > "$WORK/package-build.log" 2>&1; then
+    tail -n 20 "$WORK/package-build.log" >&2
+    exit 1
+  fi
 fi
 STAGE=boot
 echo 'Ubuntu VM: booting the isolated guest.'

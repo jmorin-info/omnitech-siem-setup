@@ -2,8 +2,11 @@
 import importlib.util
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
+import tarfile
+import io
 
 import pytest
 
@@ -43,6 +46,8 @@ def packaged(tmp_path):
     (source / "00-vars.env.example").write_text("GRAYLOG_ADMIN_PASS='CHANGEME'\n")
     (source / "distribution").mkdir()
     (source / "distribution/version.json").write_text('{"version":"0.1.0-rc.1"}')
+    (source / "distribution/launcher.py").write_text("# release launcher fixture\n")
+    (source / "LICENSE").write_text("GPL fixture\n")
     git(source, "add", "--all")
     git(source, "add", "--force", "tracked.log")
     git(source, "commit", "-qm", "Release fixture")
@@ -94,6 +99,23 @@ def test_package_status_distinguishes_payload_and_active_checkout(packaged, tmp_
     _, snap, sha, _, _ = packaged
     result = launcher.status(tmp_path / "absent", snap)
     assert not result["initialized"] and result["package_revision"] == sha
+
+
+@pytest.mark.skipif(not shutil.which("dpkg-deb"), reason="Debian package builder required")
+def test_package_build_with_private_operator_umask_has_public_payload_modes(packaged, tmp_path):
+    source, _, _, _, _ = packaged
+    out = tmp_path / "artifacts"
+    previous = os.umask(0o077)
+    try:
+        builder.build(source, out, ["deb"])
+    finally:
+        os.umask(previous)
+    package = next(out.glob("*.deb"))
+    raw = subprocess.check_output(["dpkg-deb", "--fsys-tarfile", str(package)])
+    with tarfile.open(fileobj=io.BytesIO(raw)) as archive:
+        assert archive.getmember(".").mode == 0o755
+        assert archive.getmember("./usr/share/doc/omni-siem/copyright").mode == 0o644
+        assert archive.getmember("./usr/share/omni-siem/source/distribution").mode == 0o755
 
 
 @pytest.mark.parametrize("target", ['192.0.2.1" bad="yes', "$(touch /tmp/no)", "host;true", "999.999.1.1", "host..test", "-host", "2001:db8::1"])
