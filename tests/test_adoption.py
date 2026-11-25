@@ -140,6 +140,23 @@ def test_running_oneshot_is_not_interrupted(site):
     assert not target.exists()
 
 
+def test_native_backup_keeps_its_timer_and_receives_the_moved_private_config(site):
+    old, target, root, state = site
+    unit = write(root, "etc/systemd/system/siem-backup.service", '[Service]\nType=oneshot\nEnvironment="OMNI_CONFIG_FILE='
+                 + str(old / "00-vars.env") + '"\nExecStart=/usr/local/sbin/siem-backup.sh\n')
+    timer = write(root, "etc/systemd/system/siem-backup.timer", "[Timer]\nOnCalendar=*-*-* 02:30:00\n")
+    before = timer.read_bytes()
+    report = adoption.plan(old, target, root)
+    assert not report["blockers"] and report["services"] == ["siem-backup.service"]
+    commands = []
+    result = adoption.apply(report, state, run=commands.append,
+                            status=lambda _: {"ActiveState": "inactive", "Type": "oneshot"})
+    assert str(target / "00-vars.env") in unit.read_text()
+    assert timer.read_bytes() == before and commands == [["systemctl", "daemon-reload"]]
+    adoption.rollback(result["transaction"], True, state=state, run=commands.append)
+    assert str(old / "00-vars.env") in unit.read_text()
+
+
 def test_python_environment_is_prepared_before_any_service_path_changes(site):
     old, target, root, state = site
     unit = write(root, "etc/systemd/system/omni-mobile-api.service", f"[Service]\nExecStart={old}/mobile/.venv/bin/python {old}/mobile/omni-mobile-api.py\n")

@@ -141,7 +141,8 @@ une destination existante ou des modifications locales non réconciliées bloque
 l'application : aucun dépôt n'est choisi au hasard et aucune fusion n'est forcée.
 
 L'outil copie le code suivi et la configuration privée reconnue, reconstruit les
-venvs référencés, adapte les unités `omni-/oms-` existantes, les paramètres de
+venvs référencés, adapte les unités `omni-/oms-` existantes et la sauvegarde native
+`siem-backup.service`, les paramètres de
 chemins reconnus et les robots identiques à leur source versionnée. Il conserve
 les droits/propriétaires des fichiers système, sauvegarde les fragments modifiés,
 recharge systemd et redémarre uniquement les services concernés qui étaient actifs.

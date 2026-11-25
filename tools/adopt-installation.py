@@ -149,7 +149,7 @@ def plan(source, target, system_root=Path("/")):
             if not old_path.search(meaningful(data)):
                 continue
             unit = next((part[:-2] if part.endswith(".d") else part for part in path.relative_to(directory).parts
-                         if re.fullmatch(r"(?:omni|oms)-[A-Za-z0-9@_.-]+\.service(?:\.d)?", part)), None)
+                         if re.fullmatch(r"(?:(?:omni|oms)-[A-Za-z0-9@_.-]+|siem-backup)\.service(?:\.d)?", part)), None)
             supported = relative_root == "etc/systemd/system" and unit is not None
             if supported:
                 services.add(unit)
