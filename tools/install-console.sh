@@ -25,6 +25,13 @@ if ! systemctl cat omni-mobile-api.service >/dev/null 2>&1; then
   install -d -m 755 "$APP/lookups"
   install -m 644 "$ROOT/lookups/mitre-attack.csv" "$APP/lookups/mitre-attack.csv"
   install -m 644 "$ROOT/lookups/alert-guidance.json" "$APP/lookups/alert-guidance.json"
+  install -d -m 755 "$APP/integrations"
+  install -m 644 "$ROOT/integrations/catalog.json" "$APP/integrations/catalog.json"
+  for integration_manifest in "$ROOT"/integrations/*/manifest.json; do
+    integration_name="$(basename "$(dirname "$integration_manifest")")"
+    install -d -m 755 "$APP/integrations/$integration_name"
+    install -m 644 "$integration_manifest" "$APP/integrations/$integration_name/manifest.json"
+  done
   if [[ ! -f /etc/default/omni-mobile ]]; then
     API=http://127.0.0.1:9000/api
     CA="${GRAYLOG_API_CA:-/etc/graylog/certs/omnitech-rootca.crt}"
