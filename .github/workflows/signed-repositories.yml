@@ -21,6 +21,11 @@ concurrency:
 jobs:
   prepare:
     if: github.ref == 'refs/heads/main'
+    environment: release-signing
+    permissions:
+      # GitHub hides draft releases from callers without push access.
+      contents: write
+      actions: read
     runs-on: ubuntu-24.04
     outputs:
       release_id: ${{ steps.download.outputs.release_id }}
