@@ -17,6 +17,12 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Ajouté
 
+- Préparation hors ligne d’un contexte commun aux alertes mail et au SOC : faits
+  conservant leur événement et champ d’origine, rôles distincts, périodes et
+  échantillons explicites, rendus texte/HTML communs et aperçu privé sans envoi.
+  Audit et guide de raccordement immédiat/lot/récapitulatif. Aucun expéditeur ni
+  manifeste de production modifié pendant le chantier mail parallèle.
+
 - Confiance de publication : refus d’un fichier contenant plusieurs certificats
   publics, même lorsque le premier porte l’empreinte attendue. Contrôle ajouté
   aux commandes clientes et test avec un certificat supplémentaire non autorisé.

@@ -53,6 +53,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 | [Procédure d'exploitation](exploitation/PROCEDURE-EXPLOITATION-SIEM.md) | Contrôles quotidiens et périodiques, maintenance, capacité |
 | [Exploitation et résilience](OPERATIONS.md) | Robots, supervision, sauvegardes (en anglais) |
 | [Alerting et triage](ALERTING-AND-TRIAGE.md) | Chaîne de notification et triage des alertes (en anglais) |
+| [Contexte commun des alertes mail](ALERTES-CONTEXTE-COMMUN.md) | Audit de dérive, contexte sourcé, aperçu hors ligne et raccordement prévu après le chantier mail parallèle ; non déployé |
 | [Guide de dépannage](exploitation/GUIDE-DEPANNAGE.md) | Symptôme, cause, solution |
 | [Intégration de nouvelles sources](sources/INTEGRATION-SOURCES.md) | ESET PROTECT, NPS, BunkerWeb |
 | [Inventaire des sources](sources/INVENTAIRE-SOURCES.md) | Sources surveillées, volumes, criticité |
