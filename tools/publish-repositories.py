@@ -57,6 +57,16 @@ def checked_inputs(directory, signed=False):
     return metadata, files
 
 
+def verify_public_key(home, public_key, fingerprint):
+    info = run(["gpg", "--no-options", "--homedir", str(home), "--batch", "--with-colons", "--show-keys", str(public_key)]).decode()
+    records = [line.split(":") for line in info.splitlines()]
+    if len([row for row in records if row[0] == "pub"]) != 1:
+        raise ValueError("exactly one public certificate is required")
+    actual = next((row[9] for row in records if row[0] == "fpr"), "")
+    if actual != fingerprint:
+        raise ValueError("public key does not match the pinned release fingerprint")
+
+
 def signing_args(home, fingerprint):
     return ["gpg", "--no-options", "--homedir", str(home), "--batch", "--yes", "--pinentry-mode", "loopback",
             "--passphrase-fd", "0", "--local-user", fingerprint, "--digest-algo", "SHA256", "--armor"]
@@ -101,9 +111,7 @@ def prepare(source, output, home, public_key, fingerprint, base_url, *, suite="t
     if not home.is_dir() or home.is_symlink():
         raise ValueError("private GPG home is missing or linked")
     password = password or b"\n"
-    key_info = run(["gpg", "--no-options", "--homedir", str(home), "--batch", "--with-colons", "--show-keys", str(public_key)]).decode()
-    if next((line.split(":")[9] for line in key_info.splitlines() if line.startswith("fpr:")), "") != fingerprint:
-        raise ValueError("public key does not match the pinned release fingerprint")
+    verify_public_key(home, public_key, fingerprint)
     secret = run(["gpg", "--no-options", "--homedir", str(home), "--batch", "--with-colons", "--list-secret-keys", fingerprint]).decode()
     if fingerprint not in secret:
         raise ValueError("matching signing key is not available")
@@ -179,10 +187,7 @@ def verify_signed(source, public_key, fingerprint):
         raise ValueError("linked release data is refused")
     with tempfile.TemporaryDirectory(prefix="omni-verify-") as directory:
         home = Path(directory)
-        info = run(["gpg", "--no-options", "--homedir", str(home), "--batch", "--with-colons", "--show-keys", str(public_key)]).decode()
-        actual = next((line.split(":")[9] for line in info.splitlines() if line.startswith("fpr:")), "")
-        if actual != fingerprint:
-            raise ValueError("public fingerprint mismatch")
+        verify_public_key(home, public_key, fingerprint)
         keyring = home / "trusted.gpg"
         run(["gpg", "--batch", "--dearmor", "--output", str(keyring), str(public_key)])
         # Authenticate the checksum manifest before trusting its filenames/data.

@@ -123,5 +123,11 @@ def test_real_release_signatures_and_repository_metadata(packaged, tmp_path):
         assert rejected.returncode != 0
         assert "gpgcheck=1\nrepo_gpgcheck=1" in (output / "site/omni-siem.repo").read_text()
         assert "Signed-By:" in (output / "site/omni-siem.sources").read_text()
+        # Appending an unrelated certificate must never expand the pinned trust root.
+        publisher.run(gpg + ["--quick-generate-key", "Unrelated public fixture", "rsa2048", "sign", "1d"], password=password)
+        combined = tmp_path / "combined.asc"
+        combined.write_bytes(publisher.run(gpg + ["--armor", "--export"]))
+        with pytest.raises(ValueError, match="exactly one public certificate"):
+            publisher.verify_signed(renewed / "signed-release", combined, fingerprint)
     finally:
         subprocess.run(["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"], capture_output=True)

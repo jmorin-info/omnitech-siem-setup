@@ -17,6 +17,11 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Ajouté
 
+- Confiance de publication : refus d’un fichier contenant plusieurs certificats
+  publics, même lorsque le premier porte l’empreinte attendue. Contrôle ajouté
+  aux commandes clientes et test avec un certificat supplémentaire non autorisé.
+  La candidate `rc.3` reste non publiée ; `rc.4` porte cette correction.
+
 - Publication de préversions signées sous l’identité Julien Morin : catalogue APT
   `InRelease`, paquets RPM et métadonnées DNF signés, manifeste et signatures
   détachées. Déploiement des fichiers publics sur GitHub Pages, contrôles CI/VM
