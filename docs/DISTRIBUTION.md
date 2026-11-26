@@ -1,6 +1,6 @@
 # Installer et mettre à jour depuis une release
 
-La préversion `0.1.0-rc.1` distribue **tous les fichiers suivis du dépôt**, à la
+La préversion `0.1.0-rc.2` distribue **tous les fichiers suivis du dépôt**, à la
 révision indiquée dans `release.json` : scripts, bases du serveur, console, modules,
 collecteurs, moteurs d'analyse, tests et documentation. Elle ne contient ni secrets
 de site ni données MongoDB/OpenSearch. Les dépendances externes sont téléchargées
@@ -47,7 +47,7 @@ Le dépôt peut demander une authentification GitHub ; utiliser le navigateur ou
 cd ~/Téléchargements                 # adapter au dossier contenant les deux fichiers
 sha256sum --ignore-missing --check SHA256SUMS
 sudo apt update
-sudo apt install ./omni-siem_0.1.0~rc.1_all.deb
+sudo apt install ./omni-siem_0.1.0-rc.2_all.deb
 omni-siem version
 omni-siem init --plan
 sudo omni-siem init --apply
@@ -104,8 +104,8 @@ simple installation de paquet.
 Sur un poste Linux APT/DNF, installer le paquet local correspondant puis :
 
 ```bash
-# Ubuntu/Debian : sudo apt install ./omni-siem_0.1.0~rc.1_all.deb
-# DNF : sudo dnf install ./omni-siem-0.1.0-0.1.rc.noarch.rpm
+# Ubuntu/Debian : sudo apt install ./omni-siem_0.1.0-rc.2_all.deb
+# DNF : sudo dnf install ./omni-siem-0.1.0-0.2.rc.noarch.rpm
 sudo omni-siem agent --receiver siem.exemple.fr --plan
 sudo omni-siem agent --receiver siem.exemple.fr --apply
 ```
@@ -245,7 +245,7 @@ une VM isolée, puis teste socle, console, intégrations, sauvegarde et une adop
 avec service en fonctionnement et retour arrière.
 Le RPM n'est pas une preuve de compatibilité serveur sur une distribution RPM.
 
-Une étiquette `v0.1.0-rc.1` doit correspondre à `distribution/version.json` ; elle
+Une étiquette `v0.1.0-rc.2` doit correspondre à `distribution/version.json` ; elle
 prépare un **brouillon de préversion** avec les artefacts et SHA-256. Ne publier le
 brouillon qu'après contrôle des résultats du commit retenu et de la recette VM.
 Les changements du SOC encore en cours sur d'autres branches ne font pas partie
