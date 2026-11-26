@@ -43,6 +43,24 @@ Suivre [le guide des pages et widgets](CONSOLE-MODULES.md),
 [les intégrations](INTEGRATIONS-MODULAIRES.md) et
 [le périmètre des indices](CONSOLE-DEPLOIEMENT.md#identité-du-site-et-journaux-affichés).
 
+## Choisir la période de la carte mondiale
+
+Dans **Visibilité > Carte mondiale**, les boutons **3 h, 12 h, 24 h, 48 h et 72 h**
+sélectionnent une fenêtre glissante commune aux flux, menaces, pays et derniers
+événements. Le bouton actif est mis en évidence. Le choix est conservé dans le
+navigateur et repris lors d’une actualisation ou d’une nouvelle ouverture.
+
+Les compteurs couvrent tous les événements géolocalisés correspondant à la période.
+Pour garder une carte lisible, le dessin affiche au plus 150 positions, le classement
+12 pays et la liste les 16 dernières menaces, datées en UTC. Les IP privées ou sans
+géolocalisation n’apparaissent pas sur cette vue ; consulter les journaux et les
+pages Modules pour une recherche complète. « Menace » reprend la classification
+des événements et ne constitue pas, à elle seule, la preuve d’une compromission.
+
+En cas d’erreur de lecture, la carte affiche **indisponible** et retire les anciens
+compteurs. Utiliser le rafraîchissement ou recliquer sur la période pour réessayer.
+Cette sélection ne change ni la rétention des index ni la collecte.
+
 ## Lire les états de disponibilité
 
 La date d’actualisation concerne le dernier chargement réussi des données

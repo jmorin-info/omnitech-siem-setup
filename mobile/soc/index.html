@@ -131,6 +131,8 @@
   .gctrl-btn{background:rgba(7,11,19,.7);border:1px solid var(--bd);color:var(--mut);border-radius:8px;
     padding:6px 11px;font-size:12px;cursor:pointer;backdrop-filter:blur(6px);transition:.15s}
   .gctrl-btn:hover{color:var(--fg);border-color:var(--cy)}
+  .globe-period{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .globe-period button[aria-pressed="true"]{background:var(--cy);color:#07111e;border-color:var(--cy);font-weight:700}
   .globe-rail{display:flex;flex-direction:column;gap:14px;min-height:0;overflow:auto}
   .gflag{font-size:13px;font-variant-emoji:emoji}
 
@@ -910,6 +912,17 @@
       <div id="depWrap"><div class="card"><p class="muted" data-i18n="dep_loading">Chargement du centre de déploiement…</p></div></div>
     </section>
     <section class="page" id="p-globe">
+      <div class="card" style="margin-bottom:12px">
+        <div class="globe-period" role="group" aria-labelledby="globePeriodLabel">
+          <span id="globePeriodLabel" data-i18n="globe_period">Période d’analyse</span>
+          <button class="gctrl-btn" data-globe-hours="3" data-onclick="setGlobeHours(3)" aria-pressed="true">3 h</button>
+          <button class="gctrl-btn" data-globe-hours="12" data-onclick="setGlobeHours(12)" aria-pressed="false">12 h</button>
+          <button class="gctrl-btn" data-globe-hours="24" data-onclick="setGlobeHours(24)" aria-pressed="false">24 h</button>
+          <button class="gctrl-btn" data-globe-hours="48" data-onclick="setGlobeHours(48)" aria-pressed="false">48 h</button>
+          <button class="gctrl-btn" data-globe-hours="72" data-onclick="setGlobeHours(72)" aria-pressed="false">72 h</button>
+        </div>
+        <span id="globeStatus" class="muted" role="status" aria-live="polite"></span>
+      </div>
       <div class="globe-wrap">
         <div class="globe-stage">
           <div id="globeCanvas"></div>
@@ -927,7 +940,7 @@
         </div>
         <div class="globe-rail">
           <div class="grid" id="globeKpis" style="grid-template-columns:1fr 1fr;gap:10px"></div>
-          <div class="card"><h3><svg class="svi"><use href="#i-globe"></use></svg> <span data-i18n="globe_topc">Top pays · menace</span><span class="tag" data-i18n="globe_win">3 h</span></h3><div id="globeTop"></div></div>
+          <div class="card"><h3><svg class="svi"><use href="#i-globe"></use></svg> <span data-i18n="globe_topc">Top pays · menace</span><span class="tag" id="globeWindow">3 h</span></h3><div id="globeTop"></div></div>
           <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column"><h3><svg class="svi"><use href="#i-pulse"></use></svg> <span data-i18n="globe_live">Flux en direct</span></h3><div class="feed" id="globeFeed" style="overflow:auto"></div></div>
         </div>
       </div>
@@ -1016,9 +1029,9 @@
   </div>
 </div>
 
-<script src="/soc/app.js?v=2026112401"></script>
+<script src="/soc/app.js?v=2026112601"></script>
 <script src="/soc/app-soar.js?v=2026112301"></script>
-<script src="/soc/app-v3.js?v=2026112301"></script><script src="/soc/app-handlers.js?v=2026112101"></script>
+<script src="/soc/app-v3.js?v=2026112301"></script><script src="/soc/app-handlers.js?v=2026112601"></script>
 <script src="/soc/app-professional.js?v=2026112401"></script>
 <script src="/soc/app-admin.js?v=2026112302"></script>
 <script src="/soc/app-kpi.js?v=2026112201"></script>

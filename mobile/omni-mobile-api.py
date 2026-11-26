@@ -1310,11 +1310,15 @@ def get_geo_flows(hours=3, top=150):
     Agrege par coordonnee (src_ip_geolocation, top N), separe menace/trafic, +
     detail des derniers evenements de menace + top pays attaquants. Donnees REELLES
     (GeoIP DB-IP sur les IP publiques : fortigate/m365/bunkerweb)."""
-    since = f"now-{int(hours)}h"
-    res = os_search("omni-*", {"size": 0,
+    if type(hours) is not int or hours not in (3, 12, 24, 48, 72):
+        raise ValueError("unsupported map time window")
+    end_ms = int(time.time() * 1000)
+    window = {"gte": end_ms - hours * 3600000, "lte": end_ms, "format": "epoch_millis"}
+    res = os_search("omni-*", {"size": 0, "track_total_hits": True,
         "query": {"bool": {"filter": [{"exists": {"field": "src_ip_geolocation"}},
-                                       {"range": {"timestamp": {"gte": since}}}]}},
-        "aggs": {"loc": {"terms": {"field": "src_ip_geolocation", "size": int(top)},
+                                       {"range": {"timestamp": window}}]}},
+        "aggs": {"threat_total": {"filter": _MENACE},
+                 "loc": {"terms": {"field": "src_ip_geolocation", "size": int(top)},
                          "aggs": {"men": {"filter": _MENACE},
                                   "cc": {"terms": {"field": "src_ip_country_code", "size": 1}},
                                   "src": {"terms": {"field": "event_source", "size": 1}}}}}})
@@ -1333,7 +1337,7 @@ def get_geo_flows(hours=3, top=150):
     # detail des derniers evenements de MENACE (geolocalises)
     rd = os_search("omni-*", {"size": 16, "sort": [{"timestamp": {"order": "desc"}}],
         "query": {"bool": {"filter": [{"exists": {"field": "src_ip_geolocation"}},
-                                      {"range": {"timestamp": {"gte": since}}}], "must": [_MENACE]}},
+                                      {"range": {"timestamp": window}}], "must": [_MENACE]}},
         "_source": ["timestamp", "src_ip", "src_ip_country_code", "src_ip_city_name", "user",
                     "event_source", "event_action", "alert_tag", "http_status", "src_ip_geolocation"]})
     recent = []
@@ -1350,15 +1354,18 @@ def get_geo_flows(hours=3, top=150):
                        "lat": la, "lng": lo})
     # top pays attaquants (menace)
     tc = os_search("omni-*", {"size": 0,
-        "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": since}}}], "must": [_MENACE]}},
+        "query": {"bool": {"filter": [{"exists": {"field": "src_ip_geolocation"}},
+                                      {"range": {"timestamp": window}}], "must": [_MENACE]}},
         "aggs": {"c": {"terms": {"field": "src_ip_country_code", "size": 12}}}})
     topc = [{"cc": b["key"], "n": b["doc_count"]}
             for b in tc.get("aggregations", {}).get("c", {}).get("buckets", [])
             if b.get("key") not in (None, "", "Reserved", "Private", "-")]
-    return {"oms": OMS_GEO, "hours": int(hours), "arcs": arcs, "recent": recent,
+    return {"oms": OMS_GEO, "hours": hours, "window": window, "arcs": arcs, "recent": recent,
             "top_countries": topc,
-            "totals": {"arcs": len(arcs), "menace": sum(a["threat"] for a in arcs),
-                       "flux": sum(a["n"] for a in arcs)}}
+            "coverage": {"locations_limit": int(top), "recent_limit": 16,
+                         "omitted_flows": res["aggregations"]["loc"].get("sum_other_doc_count", 0)},
+            "totals": {"arcs": len(arcs), "menace": res["aggregations"]["threat_total"]["doc_count"],
+                       "flux": res["hits"]["total"]["value"]}}
 
 
 def get_geo_threats():
@@ -4152,7 +4159,11 @@ class H(BaseHTTPRequestHandler):
         if p == "/m/api/geo":
             return self._json(get_geo_threats())
         if p == "/m/api/geo-flows":
-            return self._json(get_geo_flows())
+            qs = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
+            values = qs.get("hours", ["3"])
+            if len(values) != 1 or values[0] not in ("3", "12", "24", "48", "72"):
+                return self._json({"error": "Période attendue : 3, 12, 24, 48 ou 72 heures"}, 400)
+            return self._json(get_geo_flows(int(values[0])))
         if p == "/m/api/report":
             return self._json(get_report())
         if p == "/m/api/detections":

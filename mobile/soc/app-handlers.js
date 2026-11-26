@@ -18,6 +18,7 @@ window.__socH={
   get gFocusEntity(){return typeof gFocusEntity!=="undefined"?gFocusEntity:undefined},
   get globeFocusCC(){return typeof globeFocusCC!=="undefined"?globeFocusCC:undefined},
   get globeMenace(){return typeof globeMenace!=="undefined"?globeMenace:undefined},
+  get setGlobeHours(){return typeof setGlobeHours!=="undefined"?setGlobeHours:undefined},
   get globeReset(){return typeof globeReset!=="undefined"?globeReset:undefined},
   get globeToggleDay(){return typeof globeToggleDay!=="undefined"?globeToggleDay:undefined},
   get gMinLbl(){return typeof gMinLbl!=="undefined"?gMinLbl:undefined},

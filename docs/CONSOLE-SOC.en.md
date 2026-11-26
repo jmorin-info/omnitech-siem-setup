@@ -9,6 +9,20 @@ The responsive SOC console is also an installable PWA. On mobile, use the bottom
 navigation and menu. A legacy `/m/` app may remain available or redirect to `/soc/`,
 depending on the site. Accept **Reload** when a new service worker is available.
 
+## World map time window
+
+Under **Visibility > World map**, select **3 h, 12 h, 24 h, 48 h or 72 h**.
+The active button is highlighted and remembered in the browser. Refresh uses
+the same period for flows, threats, countries and recent events.
+
+Counters include all matching geolocated events. The map displays at most
+150 locations, the ranking 12 countries and the feed the 16 latest threats,
+with UTC dates. Private or ungeolocated addresses are outside this view;
+use journals or Modules for a complete investigation. The threat classification
+alone does not establish a compromise. Failed requests display an unavailable
+state instead of stale or zero totals; refresh or select a period to retry.
+This setting does not change log retention or collection.
+
 ## Find information
 
 Navigation groups cover operations, investigations, visibility and administration.
