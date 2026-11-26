@@ -162,5 +162,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         print(json.dumps(download(args.mode, args.output, args.vm_run), indent=2))
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError, zipfile.BadZipFile):
+    except ValueError as error:
+        # These precondition messages contain public IDs/constant diagnostics only.
+        raise SystemExit("Release precondition refused: " + str(error)) from None
+    except (OSError, KeyError, subprocess.SubprocessError, zipfile.BadZipFile):
         raise SystemExit("Release qualification or download refused. No release or repository was published.")

@@ -63,6 +63,8 @@ def test_signing_workflow_never_receives_secrets_from_a_pull_request():
     triggers = workflow.get("on", workflow.get(True))
     assert set(triggers) == {"workflow_dispatch", "schedule"}
     assert workflow["jobs"]["prepare"]["if"] == "github.ref == 'refs/heads/main'"
+    assert workflow["jobs"]["prepare"]["environment"] == "release-signing"
+    assert workflow["jobs"]["prepare"]["permissions"] == {"contents":"write", "actions":"read"}
     assert workflow["jobs"]["sign"]["needs"] == "prepare"
     assert workflow["jobs"]["sign"]["environment"] == "release-signing"
     cleanup = workflow["jobs"]["sign"]["steps"][-1]
