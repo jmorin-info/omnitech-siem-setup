@@ -1,4 +1,4 @@
-Première distribution complète du dépôt : archive source avec révision Git réelle,
+Distribution complète du dépôt : archive source avec révision Git réelle,
 paquet Debian/Ubuntu, paquet RPM, catalogue de tous les fichiers et commande `omni-siem`.
 Les paquets ne contiennent aucun secret de site ni bases de données préremplies.
 Le parcours `adopt` prépare une installation existante dans le chemin canonique,

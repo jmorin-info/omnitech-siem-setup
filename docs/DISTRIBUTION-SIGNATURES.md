@@ -95,8 +95,8 @@ Parcours de publication :
 3. Déclencher Ubuntu 26.04 fresh VM sur la **même révision**, avec
    `package_install=true`, et attendre sa réussite.
 4. Depuis `main`, déclencher Signed package repositories en mode `publish` avec
-   l’identifiant de ce passage VM. Le workflow conserve ces preuves dans les
-   métadonnées signées.
+   l’identifiant de ce passage VM. Le workflow conserve les identifiants des preuves et l’empreinte du rapport
+   JSON normalisé (clés triées, séparateurs compacts) dans les métadonnées signées.
 5. Le workflow signe, vérifie, remplace les fichiers du **brouillon uniquement**,
    déploie les catalogues via GitHub Pages, puis vérifie les octets hébergés et les
    empreintes GitHub avant de publier la préversion. Un échec laisse le brouillon
@@ -193,6 +193,36 @@ OS RPM ni une plateforme SIEM complète sur ces systèmes.
 Les tests utilisent une clé temporaire distincte de celle du projet et couvrent
 APT, signatures RPM, installation DNF, intégrité, refus d’une recette incomplète,
 rejet d’une clé primaire privée en CI et conservation des octets en renouvellement.
+
+## Renouveler ou révoquer la clé
+
+Sur le poste de publication, consulter les échéances et les empreintes :
+
+```bash
+gpg --homedir /CHEMIN/PRIVE/gnupg --list-keys --with-subkey-fingerprint 2668CC327A9ADCB1AE585187AE984C65217DB120
+```
+
+Avant expiration, le responsable utilise la clé principale hors CI pour prolonger
+la sous-clé sélectionnée ou en certifier une nouvelle. Exemple de prolongation,
+en remplaçant `EMPREINTE_SOUS_CLE` par la valeur complète relevée ci-dessus :
+
+```bash
+gpg --homedir /CHEMIN/PRIVE/gnupg --quick-set-expire 2668CC327A9ADCB1AE585187AE984C65217DB120 1y EMPREINTE_SOUS_CLE
+```
+
+Exporter le certificat public mis à jour et l’export chiffré des sous-clés ;
+actualiser le dépôt, la politique et les secrets de l’environnement GitHub,
+puis vérifier une publication. Les clients doivent réimporter le certificat
+actualisé après contrôle de l’empreinte primaire. La clé principale privée
+reste hors CI.
+
+Une nouvelle clé primaire demande une migration explicite des clients et de la
+politique de confiance ; ne pas ajouter plusieurs certificats dans le fichier
+public. En cas de compromission, suspendre la publication, révoquer la clé avec
+le certificat conservé séparément et diffuser la révocation aux utilisateurs.
+Conserver une sauvegarde chiffrée externe et tester sa récupération.
+
+Référence : [gestion des clés GnuPG](https://www.gnupg.org/documentation/manuals/gnupg/OpenPGP-Key-Management.html).
 
 ## Conditions avant une 1.0 stable
 
