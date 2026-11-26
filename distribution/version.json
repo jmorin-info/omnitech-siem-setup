@@ -1,9 +1,16 @@
 {
-  "version": "0.1.0-rc.2",
+  "version": "0.1.0-rc.3",
   "channel": "prerelease",
   "server": {
-    "platforms": ["ubuntu:22.04", "ubuntu:24.04", "debian:12", "debian:13"],
-    "experimental": ["ubuntu:26.04"],
+    "platforms": [
+      "ubuntu:22.04",
+      "ubuntu:24.04",
+      "debian:12",
+      "debian:13"
+    ],
+    "experimental": [
+      "ubuntu:26.04"
+    ],
     "architecture": "amd64",
     "profile": "core-soc",
     "minimum_ram_gib": 16,

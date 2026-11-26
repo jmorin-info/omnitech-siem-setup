@@ -1,0 +1,123 @@
+name: Signed package repositories
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'publish: signer un nouveau brouillon qualifié ; refresh: renouveler les catalogues existants'
+        type: choice
+        options: [refresh, publish]
+        default: refresh
+      vm_run:
+        description: 'Identifiant de recette VM avec package_install sur la révision exacte (publish uniquement)'
+        type: string
+  schedule:
+    - cron: '17 6 * * 2'
+permissions:
+  contents: read
+concurrency:
+  group: signed-package-repositories
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      release_id: ${{ steps.download.outputs.release_id }}
+      tag: ${{ steps.download.outputs.tag }}
+      revision: ${{ steps.download.outputs.revision }}
+      mode: ${{ steps.download.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Download and qualify the configured release
+        id: download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode || 'refresh' }}
+          VM_RUN: ${{ inputs.vm_run }}
+        run: python3 tools/release-channel.py --mode "$MODE" --vm-run "$VM_RUN" --output "$RUNNER_TEMP/packages"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qualified-packages
+          path: ${{ runner.temp }}/packages/*
+          if-no-files-found: error
+          retention-days: 7
+  sign:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    environment: release-signing
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: qualified-packages
+          path: packages
+      - name: Install signing tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gnupg rpm apt-utils createrepo-c
+      - name: Import encrypted signing subkey
+        env:
+          OMNI_RELEASE_SUBKEY: ${{ secrets.OMNI_RELEASE_SUBKEY }}
+          OMNI_RELEASE_PASSPHRASE: ${{ secrets.OMNI_RELEASE_PASSPHRASE }}
+        run: python3 tools/import-release-key.py
+      - name: Sign release or renew repository catalogues
+        env:
+          MODE: ${{ needs.prepare.outputs.mode }}
+        run: |
+          python3 - "$MODE" <<'PY'
+          import json, os, subprocess, sys
+          policy=json.load(open('distribution/repository.json'))
+          args=['python3','tools/publish-repositories.py','--artifacts','packages',
+                '--output',os.environ['RUNNER_TEMP']+'/publication','--gpg-home',os.environ['GNUPGHOME'],
+                '--fingerprint',policy['fingerprint'],'--base-url',policy['base_url'],'--suite',policy['suite'],'--apply']
+          if sys.argv[1]=='refresh':args.append('--refresh')
+          subprocess.run(args,check=True)
+          PY
+      - name: Verify signed catalogues before hosting
+        run: |
+          gpg --batch --dearmor --output "$RUNNER_TEMP/public.gpg" distribution/keys/omni-siem-release.asc
+          gpgv --keyring "$RUNNER_TEMP/public.gpg" "$RUNNER_TEMP/publication/site/apt/dists/testing/InRelease"
+          gpgv --keyring "$RUNNER_TEMP/public.gpg" "$RUNNER_TEMP/publication/site/dnf/testing/repodata/repomd.xml.asc" "$RUNNER_TEMP/publication/site/dnf/testing/repodata/repomd.xml"
+          cd "$RUNNER_TEMP/publication/signed-release"
+          gpgv --keyring "$RUNNER_TEMP/public.gpg" SHA256SUMS.asc SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Store signed files on the unpublished draft
+        if: needs.prepare.outputs.mode == 'publish'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          release=json.loads(subprocess.check_output(['gh','api','repos/'+os.environ['GITHUB_REPOSITORY']+'/releases/'+os.environ['RELEASE_ID']]))
+          assert release['draft'] and release['tag_name']==os.environ['RELEASE_TAG'], 'Published releases are immutable'
+          PY
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/publication/signed-release/"* --clobber
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/publication/site
+      - name: Deploy signed catalogues
+        uses: actions/deploy-pages@v5
+        id: deployment
+      - name: Verify hosted files and publish the signed prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ needs.prepare.outputs.mode }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_REVISION: ${{ needs.prepare.outputs.revision }}
+        run: python3 tools/verify-hosted-repository.py --site "$RUNNER_TEMP/publication/site" --release "$RUNNER_TEMP/publication/signed-release"
+      - name: Remove private signing material
+        if: always()
+        run: python3 tools/import-release-key.py --cleanup

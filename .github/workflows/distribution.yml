@@ -4,6 +4,14 @@ on:
     paths:
       - 'distribution/**'
       - 'tools/build-release.py'
+      - 'tools/publish-repositories.py'
+      - 'tools/release-channel.py'
+      - 'tools/import-release-key.py'
+      - 'tools/verify-hosted-repository.py'
+      - 'tests/test_signed_repositories.py'
+      - 'tests/test_release_publication.py'
+      - 'tests/test_release_key.py'
+      - '.github/workflows/signed-repositories.yml'
       - 'tools/install-linux-agent.py'
       - 'tools/adopt-installation.py'
       - 'tests/test_adoption.py'
@@ -27,10 +35,14 @@ jobs:
       - name: Build prerequisites
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq rpm rsyslog
-          python -m pip install pytest
+          sudo apt-get install -y -qq rpm rsyslog gnupg apt-utils createrepo-c
+          python -m pip install pytest pyyaml
       - name: Distribution failure and preservation tests
         run: python -m pytest tests/test_distribution.py tests/test_adoption.py -q
+      - name: Qualify signatures, APT and DNF repositories with an isolated test key
+        env:
+          OMNI_TEST_DNF: '1'
+        run: python -m pytest tests/test_signed_repositories.py tests/test_release_publication.py tests/test_release_key.py -q
       - name: Check release tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |

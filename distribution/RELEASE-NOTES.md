@@ -17,5 +17,7 @@ outils ; il ne qualifie pas le serveur SIEM sur RHEL/Rocky/Fedora.
 
 Cette livraison est une préversion. La publication du brouillon attend les
 contrôles du commit retenu et la recette VM avec l'option `package_install`.
-Un téléchargement GitHub n'est pas encore un dépôt APT/DNF signé ; aucune commande
-`apt install omni-siem` sans fichier local n'est annoncée.
+Le canal de préversion APT/DNF signé est préparé par un workflow séparé, qui exige
+les preuves du commit exact et vérifie les fichiers hébergés avant publication.
+Suivre `docs/DISTRIBUTION-SIGNATURES.md` après sa réussite. Les versions publiques
+antérieures restent inchangées. Cette signature ne qualifie pas une version 1.0 stable.

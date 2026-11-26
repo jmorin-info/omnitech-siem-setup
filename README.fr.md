@@ -34,6 +34,9 @@ modifient pas une installation existante à leur installation/mise à jour.
 Le serveur natif cible Ubuntu/Debian ; Ubuntu 26.04 reste expérimental et le RPM
 ne qualifie pas le serveur sur RHEL/Rocky/Fedora. Voir les
 [commandes ligne par ligne, limites et procédures de reprise](docs/DISTRIBUTION.md).
+La chaîne de [publication APT/DNF signée](docs/DISTRIBUTION-SIGNATURES.md) vérifie
+les preuves CI/VM, signe les paquets et renouvelle les catalogues ; elle conserve
+le statut de préversion et n’active pas automatiquement les services.
 Le parcours `omni-siem adopt` détecte aussi une copie installée sous `/home` ou un
 autre chemin et propose sa remise en place, avec plan, sauvegarde et retour arrière
 pour les références reconnues ; les données des bases restent sur leur stockage.

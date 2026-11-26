@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "tag": "v0.1.0-rc.3",
+  "suite": "testing",
+  "base_url": "https://jmorin-info.github.io/omnitech-siem-setup",
+  "fingerprint": "2668CC327A9ADCB1AE585187AE984C65217DB120"
+}
