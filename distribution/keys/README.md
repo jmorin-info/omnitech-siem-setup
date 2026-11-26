@@ -5,8 +5,9 @@ Identité : **Julien Morin (OMNI SIEM releases)**.
 Empreinte primaire : `2668CC327A9ADCB1AE585187AE984C65217DB120`.
 
 La clé publique est dans [omni-siem-release.asc](omni-siem-release.asc). La clé
-primaire RSA 4096 sert à certifier une sous-clé RSA 4096 de signature ; elle n'est
-pas distribuée aux machines clientes. Les clients vérifient cette empreinte avant
+primaire RSA 4096 sert à certifier une sous-clé RSA 4096 de signature. La partie
+privée de la clé primaire reste hors du dépôt et des machines clientes ; le
+certificat public contient la clé primaire et la sous-clé publique. Les clients vérifient cette empreinte avant
 de faire confiance au dépôt. Les durées de validité et les sous-clés sont
 consultables avec `gpg --show-keys --with-fingerprint omni-siem-release.asc`.
 
