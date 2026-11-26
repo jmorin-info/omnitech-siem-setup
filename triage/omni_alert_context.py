@@ -192,7 +192,8 @@ def build_context(payload):
     ordered = window["start"]["utc"] and window["end"]["utc"] and window["start"]["utc"] <= window["end"]["utc"]
     conditions = event.get("aggregation_conditions")
     count = conditions.get("count") if isinstance(conditions, dict) else None
-    real_count = count if type(count) in (int, float) and math.isfinite(count) and count >= 0 else None
+    valid_count = type(count) in (int, float) and 0 <= count <= 2**63-1
+    real_count = count if valid_count else None
     return {"schema_version":SCHEMA_VERSION,
             "title":clean(event.get("event_definition_title") or payload.get("event_definition_title") or "Alerte")[:MAX_TEXT],
             "records":rows, "window":{**window, "status":"known" if ordered else "unknown"},

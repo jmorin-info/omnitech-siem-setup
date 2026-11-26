@@ -156,12 +156,12 @@ def test_absence_of_backlog_never_becomes_zero_events_or_full_evidence():
     assert any("Aucun événement" in text for text in result["limitations"])
 
 
-@pytest.mark.parametrize("count", [0, 124, None, -1, True, "124", float("inf")])
+@pytest.mark.parametrize("count", [0, 124, None, -1, True, "124", float("inf"), 10**1000])
 def test_real_aggregation_count_is_distinct_from_backlog_size(count):
     raw = payload({"host":"lab"})
     raw["event"]["aggregation_conditions"] = {"count":count}
     result = context.build_context(raw)
-    expected = count if type(count) in (int, float) and count >= 0 and count != float("inf") else None
+    expected = 0 if type(count) is int and count == 0 else 124 if type(count) is int and count == 124 else None
     assert result["occurrences"]["value"] == expected
     assert result["coverage"]["attached"] == 1
 
