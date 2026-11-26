@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 import subprocess
@@ -113,7 +114,7 @@ def test_package_build_with_private_operator_umask_has_public_payload_modes(pack
     package = next(out.glob("*.deb"))
     assert package.name == "omni-siem_0.1.0-rc.1_all.deb"
     assert subprocess.check_output(["dpkg-deb", "-f", str(package), "Version"]).strip() == b"0.1.0~rc.1"
-    assert all(__import__("re").fullmatch(r"[A-Za-z0-9_.-]+", artifact.name) for artifact in out.iterdir())
+    assert all(re.fullmatch(r"[A-Za-z0-9_.-]+", artifact.name) for artifact in out.iterdir())
     raw = subprocess.check_output(["dpkg-deb", "--fsys-tarfile", str(package)])
     with tarfile.open(fileobj=io.BytesIO(raw)) as archive:
         assert archive.getmember(".").mode == 0o755
