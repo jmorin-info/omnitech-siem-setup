@@ -156,6 +156,16 @@ def test_absence_of_backlog_never_becomes_zero_events_or_full_evidence():
     assert any("Aucun événement" in text for text in result["limitations"])
 
 
+@pytest.mark.parametrize("count", [0, 124, None, -1, True, "124", float("inf")])
+def test_real_aggregation_count_is_distinct_from_backlog_size(count):
+    raw = payload({"host":"lab"})
+    raw["event"]["aggregation_conditions"] = {"count":count}
+    result = context.build_context(raw)
+    expected = count if type(count) in (int, float) and count >= 0 and count != float("inf") else None
+    assert result["occurrences"]["value"] == expected
+    assert result["coverage"]["attached"] == 1
+
+
 @pytest.mark.skipif(os.name != "posix", reason="Unix preview permissions")
 def test_preview_cli_is_private_offline_and_refuses_overwriting(tmp_path):
     source, output = tmp_path / "input.json", tmp_path / "preview"

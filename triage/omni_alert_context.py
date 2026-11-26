@@ -190,11 +190,15 @@ def build_context(payload):
     replay = event.get("replay_info") if isinstance(event.get("replay_info"), dict) else {}
     window = {key:_timestamp(replay.get(name)) for key, name in (("start", "timerange_start"), ("end", "timerange_end"))}
     ordered = window["start"]["utc"] and window["end"]["utc"] and window["start"]["utc"] <= window["end"]["utc"]
+    conditions = event.get("aggregation_conditions")
+    count = conditions.get("count") if isinstance(conditions, dict) else None
+    real_count = count if type(count) in (int, float) and math.isfinite(count) and count >= 0 else None
     return {"schema_version":SCHEMA_VERSION,
             "title":clean(event.get("event_definition_title") or payload.get("event_definition_title") or "Alerte")[:MAX_TEXT],
             "records":rows, "window":{**window, "status":"known" if ordered else "unknown"},
             "coverage":{"attached":len(backlog), "included":len(rows)-1, "invalid":invalid,
                         "omitted":max(0,len(backlog)-MAX_RECORDS), "value_truncations":truncations},
+            "occurrences":{"value":real_count, "origin":"event.aggregation_conditions.count" if real_count is not None else None},
             "missing":missing, "limitations":limits, "causal_chain_proven":False}
 
 
@@ -206,6 +210,11 @@ def _rows(context):
     coverage = context["coverage"]
     yield ("Échantillon joint", str(coverage["included"]) + " événement(s) présenté(s) sur "
            + str(coverage["attached"]) + " joint(s) ; ce nombre ne décrit pas le volume total détecté")
+    count = context["occurrences"]["value"]
+    if count is not None:
+        yield ("Occurrences agrégées déclarées", str(count) + " [event.aggregation_conditions.count]")
+    else:
+        yield ("Occurrences agrégées", "Non fournies ; ne pas les déduire de la taille de l’échantillon")
     if coverage["omitted"] or coverage["invalid"]:
         yield ("Échantillon incomplet", str(coverage["omitted"]) + " omis ; " + str(coverage["invalid"]) + " invalide(s)")
     for record in context["records"]:
