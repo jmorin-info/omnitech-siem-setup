@@ -8,14 +8,14 @@
  * - Mise à jour : la nouvelle version attend ; la page propose « Recharger » (message skip-waiting).
  */
 "use strict";
-const VERSION = "soc-v10-2026112401";
+const VERSION = "soc-v11-2026112601";
 const SHELL_CACHE = "soc-shell-" + VERSION;
 const DATA_CACHE = "soc-data-v1";
 const CFG_CACHE = "soc-cfg";
 const DATA_MAX_AGE_MS = 24 * 3600 * 1000;
 const SHELL = [
   "/soc/", "/soc/manifest.webmanifest", "/soc/chart.min.js",
-  "/soc/app-boot.js?v=2026112101", "/soc/app-theme.js?v=2026112302", "/soc/app-csp.js?v=2026112101", "/soc/app-loader.js?v=2026112101", "/soc/app.js?v=2026112401", "/soc/app-soar.js?v=2026112301", "/soc/app-v3.js?v=2026112301", "/soc/app-handlers.js?v=2026112101",
+  "/soc/app-boot.js?v=2026112101", "/soc/app-theme.js?v=2026112302", "/soc/app-csp.js?v=2026112101", "/soc/app-loader.js?v=2026112101", "/soc/app.js?v=2026112601", "/soc/app-soar.js?v=2026112301", "/soc/app-v3.js?v=2026112301", "/soc/app-handlers.js?v=2026112601",
   "/soc/app-professional.css?v=2026112302", "/soc/app-professional.js?v=2026112401", "/soc/app-admin.js?v=2026112302", "/soc/app-kpi.js?v=2026112201", "/soc/app-modules.js?v=2026112401", "/soc/app-modules.css?v=2026112401",
   "/soc/icons/icon-192.png", "/soc/icons/icon-512.png", "/soc/icons/maskable-192.png",
   "/soc/icons/badge-96.png", "/soc/icons/favicon-32.png", "/soc/icons/apple-touch-180.png"

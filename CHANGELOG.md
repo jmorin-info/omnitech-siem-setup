@@ -17,6 +17,11 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Ajouté
 
+- Carte mondiale SOC : boutons de période 3 h, 12 h, 24 h, 48 h et 72 h,
+  mémorisation du choix, actualisation sur la période sélectionnée, dates UTC.
+  Compteurs complets indépendants de la limite des positions dessinées et
+  retrait des anciennes données en cas d’échec. Guide français et anglais.
+
 - Distribution : noms de pièces jointes compatibles avec GitHub, vérification des
   noms et empreintes après téléversement ; la version Debian interne conserve le
   suffixe `~rc` pour l'ordre des versions. Le brouillon `rc.1` reste non publié.

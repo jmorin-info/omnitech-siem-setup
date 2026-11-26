@@ -7,7 +7,7 @@ import argparse
 import json, mimetypes
 import tempfile
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 from playwright.sync_api import sync_playwright
 
 ROOT=Path(__file__).resolve().parents[2] / 'mobile' / 'soc'
@@ -43,10 +43,20 @@ with sync_playwright() as p:
   for theme in ['dark','light']:
    context=browser.new_context(viewport={'width':width,'height':height},service_workers='block')
    context.add_init_script('localStorage.setItem("soc_theme",'+json.dumps(theme)+');localStorage.setItem("soc_lang","fr");')
-   page=context.new_page(); errors=[]; mode={'value':'ok'}
+   page=context.new_page(); errors=[]; mode={'value':'ok'}; geo_requests=[]; delayed=[]
    page.on('pageerror',lambda e:errors.append(str(e)))
    def route(r):
     path=urlsplit(r.request.url).path
+    if path=='/soc/globe.gl.min.js':
+     # Test the controls/data lifecycle independently of GPU availability.
+     return r.fulfill(content_type='application/javascript',body='window.Globe=()=>()=>{const globe=new Proxy({},{get:(o,k)=>k in o?o[k]:(...args)=>k==="controls"?{}:globe,set:(o,k,v)=>(o[k]=v,true)});return globe;};')
+    if path=='/m/api/geo-flows':
+     hours=int(parse_qs(urlsplit(r.request.url).query)['hours'][0]);geo_requests.append(hours)
+     data={'hours':hours,'arcs':[],'recent':[],'top_countries':[],'totals':{'menace':hours*10,'flux':hours*100}}
+     if mode['value']=='geo_error':return r.fulfill(status=503,content_type='application/json',body='{}')
+     if mode['value']=='geo_delayed' and hours==24:
+      delayed.append((r,data));return
+     return r.fulfill(content_type='application/json',body=json.dumps(data))
     if path.startswith('/m/api/'):
      if mode['value']=='error' and path=='/m/api/risk':return r.fulfill(status=503,content_type='application/json',body='{"available":false}')
      if mode['value']=='network_error' and path=='/m/api/network':return r.fulfill(status=503,content_type='application/json',body='{"available":false}')
@@ -144,6 +154,38 @@ with sync_playwright() as p:
    mode['value']='cached';page.locator('#refBtn').click();page.wait_for_timeout(180)
    assert page.locator('body').evaluate('(e)=>e.classList.contains("data-stale")')
    assert 'cached' in page.locator('.pro-context').inner_text().lower()
+   mode['value']='ok'
+   page.evaluate('goNav("globe")')
+   page.wait_for_function('document.querySelector("#globeKpis").textContent.includes("3 h")')
+   assert page.locator('[data-globe-hours]').count()==5
+   for hours in (12,24,48,72):
+    page.locator(f'[data-globe-hours="{hours}"]').click()
+    page.wait_for_function('(h)=>document.querySelector("#globeWindow").textContent===h+" h"',arg=hours)
+    assert page.locator(f'[data-globe-hours="{hours}"]').get_attribute('aria-pressed')=='true'
+    assert f'{hours} h' in page.locator('#globeKpis').inner_text()
+    assert geo_requests[-1]==hours
+   mode['value']='geo_delayed'
+   page.locator('[data-globe-hours="24"]').click()
+   page.wait_for_function('document.querySelector("#p-globe").getAttribute("aria-busy")==="true"')
+   page.wait_for_timeout(80)
+   page.locator('[data-globe-hours="72"]').click()
+   page.wait_for_function('document.querySelector("#globeWindow").textContent==="72 h"')
+   assert delayed, 'delayed request was not exercised'
+   for request,data in delayed:request.fulfill(content_type='application/json',body=json.dumps(data))
+   page.wait_for_timeout(100)
+   assert '72 h' in page.locator('#globeKpis').inner_text(), 'older request replaced selected period'
+   mode['value']='geo_error';page.locator('[data-globe-hours="48"]').click()
+   page.wait_for_function('document.querySelector("#globeStatus").textContent.includes("unavailable")')
+   assert page.locator('#globeKpis').inner_text()=='—', 'failed query displayed zero or old totals'
+   mode['value']='ok';page.locator('[data-globe-hours="48"]').click()
+   page.wait_for_function('document.querySelector("#globeKpis").textContent.includes("48 h")')
+   page.screenshot(path=str(OUT/f'globe-{width}-{theme}.png'),full_page=True)
+   assert page.locator('main').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1'), 'map period controls overflow on mobile'
+   page.locator('[data-globe-hours="72"]').click()
+   page.wait_for_function('document.querySelector("#globeWindow").textContent==="72 h"')
+   page.reload();page.wait_for_selector('#app',state='visible');page.evaluate('goNav("globe")')
+   page.wait_for_function('document.querySelector("#globeKpis").textContent.includes("72 h")')
+   assert page.locator('[data-globe-hours="72"]').get_attribute('aria-pressed')=='true'
    assert not page.evaluate('window.fixtureErrors'), page.evaluate('window.fixtureErrors')
    assert not errors, errors
    checks.append({'width':width,'theme':theme,'errors':errors,'passed':True})
