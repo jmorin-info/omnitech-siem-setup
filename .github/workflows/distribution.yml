@@ -5,6 +5,8 @@ on:
       - 'distribution/**'
       - 'tools/build-release.py'
       - 'tools/install-linux-agent.py'
+      - 'tools/adopt-installation.py'
+      - 'tests/test_adoption.py'
       - 'tests/test_distribution.py'
       - '.github/workflows/distribution.yml'
   push:
@@ -28,7 +30,7 @@ jobs:
           sudo apt-get install -y -qq rpm rsyslog
           python -m pip install pytest
       - name: Distribution failure and preservation tests
-        run: python -m pytest tests/test_distribution.py -q
+        run: python -m pytest tests/test_distribution.py tests/test_adoption.py -q
       - name: Check release tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -67,6 +69,20 @@ jobs:
         run: |
           rpm -qip "$RUNNER_TEMP"/packages/*.rpm
           test -z "$(rpm -qp --scripts "$RUNNER_TEMP"/packages/*.rpm)"
+      - name: Exercise DNF tools in Rocky Linux 9 container
+        run: |
+          docker run --rm -v "$RUNNER_TEMP/packages:/packages:ro" rockylinux/rockylinux:9 bash -ec '
+            dnf install -y /packages/*.rpm
+            omni-siem version
+            omni-siem catalogue > /tmp/catalogue.json
+            omni-siem agent --receiver 192.0.2.10 --plan > /tmp/agent-plan.json
+            test ! -e /opt/omni-siem/repository
+            omni-siem init --apply
+            omni-siem install --plan > /tmp/install-plan.json
+            python3 -c "import json; p=json.load(open(\"/tmp/install-plan.json\")); assert p[\"blockers\"]; assert p[\"platform\"].startswith(\"rocky:\")"
+            dnf remove -y omni-siem
+            test -f /opt/omni-siem/repository/00-vars.env
+          '
       - uses: actions/upload-artifact@v4
         with:
           name: omni-siem-distribution

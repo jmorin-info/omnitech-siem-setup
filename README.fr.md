@@ -34,6 +34,9 @@ modifient pas une installation existante à leur installation/mise à jour.
 Le serveur natif cible Ubuntu/Debian ; Ubuntu 26.04 reste expérimental et le RPM
 ne qualifie pas le serveur sur RHEL/Rocky/Fedora. Voir les
 [commandes ligne par ligne, limites et procédures de reprise](docs/DISTRIBUTION.md).
+Le parcours `omni-siem adopt` détecte aussi une copie installée sous `/home` ou un
+autre chemin et propose sa remise en place, avec plan, sauvegarde et retour arrière
+pour les références reconnues ; les données des bases restent sur leur stockage.
 
 OMNI SIEM centralise les journaux du système d'information (postes et
 serveurs Windows, pare-feu Fortinet de trois sites, Microsoft 365 et Entra ID,

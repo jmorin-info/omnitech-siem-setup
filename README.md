@@ -34,6 +34,9 @@ Package installation/upgrades preserve the active checkout and databases.
 Native server provisioning targets Ubuntu/Debian; Ubuntu 26.04 is experimental.
 The RPM distributes tools and collectors and does **not** qualify a native SIEM
 server on RHEL/Rocky/Fedora. See the linked guide for commands and recovery.
+`omni-siem adopt` can discover and rehome an existing checkout, preserving its
+revision and site configuration, with guarded runtime path changes and rollback.
+Database data directories remain on their configured storage.
 
 OMNI SIEM collects logs from the whole information system (Windows
 workstations and servers, Fortinet firewalls on three sites, Microsoft 365

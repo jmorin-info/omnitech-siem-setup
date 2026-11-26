@@ -48,6 +48,16 @@ def safe_root(root):
     return root
 
 
+def public_parents(path):
+    missing = []
+    while not path.exists():
+        missing.append(path)
+        path = path.parent
+    for parent in reversed(missing):
+        parent.mkdir(mode=0o755)
+        parent.chmod(0o755)
+
+
 def initialize(root, apply=False, payload=PAYLOAD):
     root = safe_root(root)
     target = git(payload, "rev-parse", "HEAD")
@@ -60,14 +70,7 @@ def initialize(root, apply=False, payload=PAYLOAD):
         return plan
     if os.geteuid() != 0:
         raise DistributionError("initialization requires root")
-    missing = []
-    parent = root.parent
-    while not parent.exists():
-        missing.append(parent)
-        parent = parent.parent
-    for parent in reversed(missing):
-        parent.mkdir(mode=0o755)
-        parent.chmod(0o755)
+    public_parents(root.parent)
     temporary = Path(tempfile.mkdtemp(prefix=".omni-init-", dir=root.parent))
     try:
         # A new shallow checkout with the real upstream commit, never a synthetic commit.
@@ -100,7 +103,7 @@ def status(root, payload=PAYLOAD):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="active site checkout; preserved across package upgrades")
-    parser.add_argument("command", choices=("version", "status", "init", "configure", "install", "update", "modules", "catalogue", "health", "agent"))
+    parser.add_argument("command", choices=("version", "status", "init", "adopt", "configure", "install", "update", "modules", "catalogue", "health", "agent"))
     args, rest = parser.parse_known_args(argv)
     root = safe_root(args.root)
     if args.command in {"version", "status", "init"}:
@@ -117,6 +120,8 @@ def main(argv=None):
     if args.command in {"configure", "install", "update", "modules", "health"} and not root.is_dir():
         raise DistributionError("run omni-siem init --plan then sudo omni-siem init --apply, or select an existing checkout with --root")
     source = root if root.is_dir() else PAYLOAD
+    if args.command == "adopt":
+        return subprocess.call([sys.executable, str(PAYLOAD / "tools/adopt-installation.py"), "--to", str(root), *rest])
     commands = {"configure": ["tools/omni-manager.py"], "update": ["tools/omni-manager.py"],
                 "install": ["tools/install-platform.py"], "modules": ["tools/omni-integrations.py"],
                 "catalogue": ["tools/omni-manager.py", "--inventory"],

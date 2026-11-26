@@ -17,6 +17,8 @@ on:
       - 'tools/test-ubuntu-vm.sh'
       - 'tools/install-platform.py'
       - 'tools/build-release.py'
+      - 'tools/adopt-installation.py'
+      - 'tools/test-adoption-vm.py'
       - 'distribution/**'
       - 'tools/verify-installation.py'
       - 'tools/test-integration-vm.py'
