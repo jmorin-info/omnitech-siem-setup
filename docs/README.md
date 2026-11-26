@@ -17,7 +17,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 | Document | Objet |
 |---|---|
 | [README du dépôt](../README.fr.md) | Présentation, capacités en service, architecture, limites |
-| [Bilan de livraison du 26/11/2026](BILAN-2026-11-26.md) | Travaux livrés, production vérifiée, limites et préparation des signatures pour la 1.0 bêta |
+| [Bilan de livraison du 26/11/2026](BILAN-2026-11-26.md) | Préversion signée, preuves, dernier état vérifié de production et critères avant 1.0 |
 | [Comprendre le SIEM en 15 minutes](demarrage/GUIDE.md) | Explication en langage simple des flux, des écrans et des analyses |
 | [Aperçu visuel](demarrage/APERCU-VISUEL.md) | Captures de la console SOC, de la PWA et des tableaux de bord Graylog |
 | [Synthèse exécutive](demarrage/SYNTHESE-EXECUTIVE.md) | Une page pour la direction (rédigée le 12/06/2026) |
