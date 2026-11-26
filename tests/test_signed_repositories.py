@@ -60,9 +60,10 @@ def test_real_release_signatures_and_repository_metadata(packaged, tmp_path):
     gpg = ["gpg", "--no-options", "--homedir", str(home), "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0"]
     password = b"temporary-test-key-only\n"
     try:
-        publisher.run(gpg + ["--quick-generate-key", "Repository signature fixture", "rsa2048", "sign", "1d"], password=password)
+        publisher.run(gpg + ["--quick-generate-key", "Repository signature fixture", "rsa2048", "cert", "1d"], password=password)
         info = publisher.run(gpg + ["--with-colons", "--list-keys"]).decode()
         fingerprint = next(line.split(":")[9] for line in info.splitlines() if line.startswith("fpr:"))
+        publisher.run(gpg + ["--quick-add-key", fingerprint, "rsa2048", "sign", "1d"], password=password)
         public = tmp_path / "public.asc"
         public.write_bytes(publisher.run(gpg + ["--armor", "--export", fingerprint]))
         output = tmp_path / "publication"

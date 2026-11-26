@@ -48,7 +48,7 @@ nombre de règles.
 | Fait | Détection de secrets côté serveur (intégration continue), en complément du crochet local | `scan-depot.sh --arbre`, `.github/workflows/check.yml` |
 | Fait | Tests de non-régression de la récupération Git (`git fetch`) de l'outil de mise à jour dans des conditions dégradées | `tests/test_updater_fetch.py` |
 | À faire | Manifeste d'ordre d'exécution des scripts de provisioning et renumérotation par domaine | [SCRIPTS-PROVISIONING.md](reference/SCRIPTS-PROVISIONING.md#plan-de-renumérotation-et-de-regroupement-proposition-non-appliquée) |
-| En cours | Migration vers un emplacement unique : outil et drop-ins disponibles, bascule des services de production encore à effectuer | `tools/migrer-chemin-canonique.sh`, [audit de cohérence](AUDIT-COHERENCE-2026-11-21.md) |
+| Fait | Huit services de référence basculés vers le dépôt canonique ; quelques références anciennes restent signalées par la santé et interdisent de supprimer aveuglément les anciennes copies | [Bilan du 26/11](BILAN-2026-11-26.md), `tools/migrer-chemin-canonique.sh` |
 
 ## 3. Réponse automatisée sûre
 
@@ -90,8 +90,8 @@ simulation et une validation humaine.
 | Fait | Supervision de la collecte, des sources silencieuses et des robots d'analyse | `39-collect-health.sh`, `74-source-watchdog.sh`, `46-self-health.sh` |
 | Fait | Tableaux de bord « OMNI - Analytics » et « OMNI - Triage & Multi-site » ; rapports hebdomadaire et mensuel | `82-graylog-analytics-dashboard.sh`, `84-dashboards-triage-site.sh`, `34-weekly-report.sh`, `45-monthly-report.sh` |
 | Fait | Couverture ATT&CK calculée depuis la table de correspondance | `57-mitre-coverage.sh` |
-| À faire | MTTD et MTTR mesurés (horodatage de l'événement, de l'alerte, de la prise en charge et de la clôture) | |
-| À faire | Taux d'alertes utiles et de faux positifs par détection, à partir des décisions d'analyste | |
+| Fait | Page Indicateurs et outil commun MTTD/MTTR ; disponibilité et limites des horodatages explicites, sans déduire une durée si une date manque | `tools/omni-soc-kpi.py`, [console SOC](CONSOLE-SOC.md) |
+| Fait | Indicateurs de faux positifs à partir des décisions enregistrées ; leur représentativité dépend du travail de qualification des analystes | `tools/omni-soc-kpi.py` |
 | À faire | Disponibilité des robots et couverture des sources exprimées en indicateurs suivis dans le temps | |
 
 ## 6. Modèle de données commun
@@ -121,3 +121,19 @@ sans repartir de zéro.
 | Fait | `83-retention-consolidee.sh` révisé : seul le compteur de rétention peut augmenter ; période et stratégie conservées, état relu avant écriture | [SCRIPTS-PROVISIONING.md](reference/SCRIPTS-PROVISIONING.md#note-sur-le-script-83) |
 | Fait | Scripts retirés 15, 22, 31, 44 et ancien outil de synchronisation archivés | `tools/ponctuel/README.md` |
 | En cours | Source Cert Orchestrator réinstallée le 22/11/2026 ; réception et normalisation des premiers journaux encore à vérifier | `99-cert-orchestrator.sh` |
+
+## 8. Distribution et version 1.0
+
+| État | Élément | Référence |
+|---|---|---|
+| Fait | Paquets contenant tout le projet, installation explicite, reprise et adoption de chemins reconnus sans déplacement des bases | [Distribution](DISTRIBUTION.md) |
+| Fait | Modules natifs WatchGuard, UniFi et Palo Alto et pages SOC configurables par site | [Modules SOC](CONSOLE-MODULES.md), [intégrations](INTEGRATIONS-MODULAIRES.md) |
+| En cours | Préversion rc.3 signée : clé de publication, contrôles APT/DNF, environnement GitHub limité à main, hébergement et renouvellement hebdomadaire ; publication soumise aux preuves de la révision exacte | [Signatures et dépôts](DISTRIBUTION-SIGNATURES.md) |
+| En cours | Preuves détaillées d’alertes et corrélations, extensions des pages et diagnostics WatchGuard ; branches distinctes encore à qualifier et non déployées par la chaîne de paquets | PR #12 et #14 |
+| À faire | Assistant complet de configuration des sources, émission des agents et vérification de leur réception, avec liaison aux pages SOC | [Distribution](DISTRIBUTION.md) |
+| À faire | Sauvegarde externe vérifiée de la clé de publication, exercice de reprise complet et critères documentés avant toute promotion 1.0 stable | [Signatures et dépôts](DISTRIBUTION-SIGNATURES.md), [reprise](exploitation/RESTAURATION-COMPLETE.md) |
+
+État consolidé le 26/11/2026. Les changements en cours sur l’alerting mail et le
+contrôleur de domaine relèvent d’un chantier parallèle ; ils ne sont pas modifiés
+par cette livraison de distribution. Le statut opérationnel de ces fonctions doit
+être revalidé à l’issue de ce chantier.
