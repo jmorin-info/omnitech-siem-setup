@@ -9,6 +9,163 @@
   "vendor_documentation": "https://help.ui.com/hc/en-us/articles/33349041044119-UniFi-System-Logs-SIEM-Integration",
   "parser": {
     "type": "cef",
-    "mapping": {"device_event_class_id": "event_id", "name": "event_action", "src": "src_ip", "dst": "dest_ip", "spt": "src_port", "dpt": "dest_port", "proto": "network_protocol", "UNIFIadmin": "user", "UNIFIhost": "host", "UNIFIcategory": "event_category"}
+    "mapping": {
+      "device_event_class_id": "event_id",
+      "name": "event_action",
+      "src": "src_ip",
+      "dst": "dest_ip",
+      "spt": "src_port",
+      "dpt": "dest_port",
+      "proto": "network_protocol",
+      "UNIFIadmin": "user",
+      "UNIFIhost": "host",
+      "UNIFIcategory": "event_category"
+    }
+  },
+  "soc": {
+    "revision": 1,
+    "fields": [
+      {
+        "name": "source",
+        "type": "keyword",
+        "required": true,
+        "description": "source"
+      },
+      {
+        "name": "omni_parse_status",
+        "type": "keyword",
+        "required": true,
+        "description": "omni parse status"
+      },
+      {
+        "name": "event_id",
+        "type": "keyword",
+        "required": false,
+        "description": "event id"
+      },
+      {
+        "name": "event_action",
+        "type": "keyword",
+        "required": true,
+        "description": "event action"
+      },
+      {
+        "name": "src_ip",
+        "type": "ip",
+        "required": false,
+        "description": "src ip"
+      },
+      {
+        "name": "dest_ip",
+        "type": "ip",
+        "required": false,
+        "description": "dest ip"
+      },
+      {
+        "name": "src_port",
+        "type": "long",
+        "required": false,
+        "description": "src port"
+      },
+      {
+        "name": "dest_port",
+        "type": "long",
+        "required": false,
+        "description": "dest port"
+      },
+      {
+        "name": "network_protocol",
+        "type": "keyword",
+        "required": false,
+        "description": "network protocol"
+      },
+      {
+        "name": "user",
+        "type": "keyword",
+        "required": false,
+        "description": "user"
+      },
+      {
+        "name": "host",
+        "type": "keyword",
+        "required": false,
+        "description": "host"
+      },
+      {
+        "name": "event_category",
+        "type": "keyword",
+        "required": false,
+        "description": "event category"
+      }
+    ],
+    "preset": {
+      "description": "Trafic et qualité de collecte. Consulter les limites de formats du module avant de conclure sur sa couverture.",
+      "widgets": [
+        {
+          "id": "volume",
+          "title": "Événements reçus",
+          "type": "count"
+        },
+        {
+          "id": "activite",
+          "title": "Activité de collecte",
+          "type": "timeseries"
+        },
+        {
+          "id": "non-parses",
+          "title": "Formats non reconnus",
+          "type": "count",
+          "filter": [
+            {
+              "field": "omni_parse_status",
+              "values": [
+                "unparsed"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "actions",
+          "title": "Actions observées",
+          "type": "terms",
+          "field": "event_action"
+        },
+        {
+          "id": "equipements",
+          "title": "Équipements émetteurs",
+          "type": "terms",
+          "field": "source"
+        },
+        {
+          "id": "ips-sources",
+          "title": "IP sources",
+          "type": "terms",
+          "field": "src_ip"
+        },
+        {
+          "id": "journaux",
+          "title": "Journaux et contexte réseau",
+          "type": "messages",
+          "columns": [
+            "timestamp",
+            "source",
+            "event_action",
+            "src_ip",
+            "src_port",
+            "dest_ip",
+            "dest_port",
+            "network_protocol",
+            "omni_parse_status",
+            "message"
+          ],
+          "size": 10
+        }
+      ]
+    },
+    "limitations": [
+      "Les formats non reconnus restent dans les messages bruts : ils ne sont pas assimilés à du trafic normal.",
+      "Aucune détection ni corrélation n’est activée par ce modèle de page.",
+      "Le timestamp représente la réception, sans remplacement par le temps constructeur."
+    ]
   }
 }

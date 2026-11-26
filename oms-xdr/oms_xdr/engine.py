@@ -104,6 +104,11 @@ def run_cycle(cfg: dict, gl: GraylogClient, corr: Correlator, resp: Responder) -
         inc.evidence["remediation_text"] = rem["text"]
         # narration LLM
         inc.evidence["narrative"] = enrich(inc, cfg)
+        # Keep an auditable incident before attempting a response. Failed delivery
+        # neither marks deduplication nor repeats unrecorded response actions.
+        if gl.send_gelf(inc.to_gelf()) is False:
+            log.error("Incident %s non reçu par le SIEM ; conservation de la possibilité de réémission.", key)
+            continue
         # réponse (dry-run par défaut)
         action_log: list[str] = []
         for action in dict.fromkeys(rem["actions"]):
@@ -111,7 +116,6 @@ def run_cycle(cfg: dict, gl: GraylogClient, corr: Correlator, resp: Responder) -
         inc.evidence["actions"] = action_log
 
         # réinjection SIEM + Teams
-        gl.send_gelf(inc.to_gelf())
         _notify_teams(cfg, inc)
         state[key] = now
         processed += 1

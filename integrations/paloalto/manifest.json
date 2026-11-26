@@ -9,7 +9,210 @@
   "vendor_documentation": "https://docs.paloaltonetworks.com/pan-os/11-1/pan-os-admin/monitoring/use-syslog-for-monitoring/syslog-field-descriptions/traffic-log-fields",
   "parser": {
     "type": "csv",
-    "fields": ["future_use_0", "receive_time", "serial", "log_type", "subtype", "future_use_5", "generated_time", "src_ip", "dest_ip", "nat_src_ip", "nat_dest_ip", "rule", "src_user", "dest_user", "application", "vsys", "src_zone", "dest_zone", "in_interface", "out_interface", "log_action", "future_use_21", "session_id", "repeat_count", "src_port", "dest_port", "nat_src_port", "nat_dest_port", "flags", "protocol", "action"],
-    "mapping": {"subtype": "event_id", "action": "event_action", "src_ip": "src_ip", "dest_ip": "dest_ip", "src_port": "src_port", "dest_port": "dest_port", "protocol": "network_protocol", "src_user": "user", "src_zone": "src_zone", "dest_zone": "dest_zone", "application": "network_application", "rule": "network_rule"}
+    "fields": [
+      "future_use_0",
+      "receive_time",
+      "serial",
+      "log_type",
+      "subtype",
+      "future_use_5",
+      "generated_time",
+      "src_ip",
+      "dest_ip",
+      "nat_src_ip",
+      "nat_dest_ip",
+      "rule",
+      "src_user",
+      "dest_user",
+      "application",
+      "vsys",
+      "src_zone",
+      "dest_zone",
+      "in_interface",
+      "out_interface",
+      "log_action",
+      "future_use_21",
+      "session_id",
+      "repeat_count",
+      "src_port",
+      "dest_port",
+      "nat_src_port",
+      "nat_dest_port",
+      "flags",
+      "protocol",
+      "action"
+    ],
+    "mapping": {
+      "subtype": "event_id",
+      "action": "event_action",
+      "src_ip": "src_ip",
+      "dest_ip": "dest_ip",
+      "src_port": "src_port",
+      "dest_port": "dest_port",
+      "protocol": "network_protocol",
+      "src_user": "user",
+      "src_zone": "src_zone",
+      "dest_zone": "dest_zone",
+      "application": "network_application",
+      "rule": "network_rule"
+    }
+  },
+  "soc": {
+    "revision": 1,
+    "fields": [
+      {
+        "name": "source",
+        "type": "keyword",
+        "required": true,
+        "description": "source"
+      },
+      {
+        "name": "omni_parse_status",
+        "type": "keyword",
+        "required": true,
+        "description": "omni parse status"
+      },
+      {
+        "name": "event_id",
+        "type": "keyword",
+        "required": false,
+        "description": "event id"
+      },
+      {
+        "name": "event_action",
+        "type": "keyword",
+        "required": true,
+        "description": "event action"
+      },
+      {
+        "name": "src_ip",
+        "type": "ip",
+        "required": false,
+        "description": "src ip"
+      },
+      {
+        "name": "dest_ip",
+        "type": "ip",
+        "required": false,
+        "description": "dest ip"
+      },
+      {
+        "name": "src_port",
+        "type": "long",
+        "required": false,
+        "description": "src port"
+      },
+      {
+        "name": "dest_port",
+        "type": "long",
+        "required": false,
+        "description": "dest port"
+      },
+      {
+        "name": "network_protocol",
+        "type": "keyword",
+        "required": false,
+        "description": "network protocol"
+      },
+      {
+        "name": "user",
+        "type": "keyword",
+        "required": false,
+        "description": "user"
+      },
+      {
+        "name": "src_zone",
+        "type": "keyword",
+        "required": false,
+        "description": "src zone"
+      },
+      {
+        "name": "dest_zone",
+        "type": "keyword",
+        "required": false,
+        "description": "dest zone"
+      },
+      {
+        "name": "network_application",
+        "type": "keyword",
+        "required": false,
+        "description": "network application"
+      },
+      {
+        "name": "network_rule",
+        "type": "keyword",
+        "required": false,
+        "description": "network rule"
+      }
+    ],
+    "preset": {
+      "description": "Trafic et qualité de collecte. Consulter les limites de formats du module avant de conclure sur sa couverture.",
+      "widgets": [
+        {
+          "id": "volume",
+          "title": "Événements reçus",
+          "type": "count"
+        },
+        {
+          "id": "activite",
+          "title": "Activité de collecte",
+          "type": "timeseries"
+        },
+        {
+          "id": "non-parses",
+          "title": "Formats non reconnus",
+          "type": "count",
+          "filter": [
+            {
+              "field": "omni_parse_status",
+              "values": [
+                "unparsed"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "actions",
+          "title": "Actions observées",
+          "type": "terms",
+          "field": "event_action"
+        },
+        {
+          "id": "equipements",
+          "title": "Équipements émetteurs",
+          "type": "terms",
+          "field": "source"
+        },
+        {
+          "id": "ips-sources",
+          "title": "IP sources",
+          "type": "terms",
+          "field": "src_ip"
+        },
+        {
+          "id": "journaux",
+          "title": "Journaux et contexte réseau",
+          "type": "messages",
+          "columns": [
+            "timestamp",
+            "source",
+            "event_action",
+            "src_ip",
+            "src_port",
+            "dest_ip",
+            "dest_port",
+            "network_protocol",
+            "omni_parse_status",
+            "message"
+          ],
+          "size": 10
+        }
+      ]
+    },
+    "limitations": [
+      "Les formats non reconnus restent dans les messages bruts : ils ne sont pas assimilés à du trafic normal.",
+      "Aucune détection ni corrélation n’est activée par ce modèle de page.",
+      "Le timestamp représente la réception, sans remplacement par le temps constructeur."
+    ]
   }
 }
