@@ -67,3 +67,16 @@ def test_signing_workflow_never_receives_secrets_from_a_pull_request():
     assert workflow["jobs"]["sign"]["environment"] == "release-signing"
     cleanup = workflow["jobs"]["sign"]["steps"][-1]
     assert cleanup["if"] == "always()" and "--cleanup" in cleanup["run"]
+
+
+def test_a_matching_revision_cannot_hide_modified_draft_bytes(tmp_path):
+    (tmp_path / "release.json").write_bytes(b'claimed-source-revision')
+    (tmp_path / "package.deb").write_bytes(b'qualified-build')
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as z:
+        for path in tmp_path.iterdir():
+            z.writestr(path.name, path.read_bytes())
+    gate.compare_build_archive(tmp_path, archive.getvalue())
+    (tmp_path / "package.deb").write_bytes(b'changed-package')
+    with pytest.raises(ValueError, match="build bytes"):
+        gate.compare_build_archive(tmp_path, archive.getvalue())

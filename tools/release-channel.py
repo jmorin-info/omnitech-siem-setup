@@ -68,6 +68,35 @@ def z_bytes(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
 
+def compare_build_archive(directory, archive):
+    """Bind draft bytes to the successful build artifact, not just its claimed SHA."""
+    local = {p.name:p for p in directory.iterdir()}
+    with zipfile.ZipFile(io.BytesIO(archive)) as z:
+        members = [member for member in z.infolist() if not member.is_dir()]
+        if len(members) != len(local) or {m.filename for m in members} != set(local):
+            raise ValueError("draft differs from the qualified build inventory")
+        for member in members:
+            path = local[member.filename]
+            if member.file_size != path.stat().st_size:
+                raise ValueError("draft differs from the qualified build size")
+            with z.open(member) as stream:
+                digest = hashlib.sha256()
+                while chunk := stream.read(1024 * 1024):
+                    digest.update(chunk)
+            if digest.hexdigest() != hashlib.sha256(path.read_bytes()).hexdigest():
+                raise ValueError("draft differs from the qualified build bytes")
+
+
+def prove_build_bytes(directory, run_id):
+    artifacts = api("/actions/runs/" + str(run_id) + "/artifacts")["artifacts"]
+    matches = [a for a in artifacts if a["name"] == "omni-siem-distribution" and not a["expired"]]
+    if len(matches) != 1 or matches[0].get("size_in_bytes", 0) > 512 * 1024 * 1024:
+        raise ValueError("unique unexpired package build artifact required")
+    archive = subprocess.check_output(["gh", "api", "repos/" + REPO + "/actions/artifacts/"
+                                      + str(matches[0]["id"]) + "/zip"], timeout=180)
+    compare_build_archive(directory, archive)
+
+
 def download(mode, output, vm_run=""):
     policy = json.loads((ROOT / "distribution/repository.json").read_text())
     tag = policy["tag"]
@@ -102,6 +131,7 @@ def download(mode, output, vm_run=""):
     if metadata.get("revision") != revision or metadata.get("version") != tag[1:]:
         raise ValueError("downloaded source does not match the pinned tag")
     if mode == "publish":
+        prove_build_bytes(output, proofs["distribution.yml"])
         # Validate the original manifest before adding signed qualification metadata.
         import importlib.util
         spec = importlib.util.spec_from_file_location("publication", ROOT / "tools/publish-repositories.py")
