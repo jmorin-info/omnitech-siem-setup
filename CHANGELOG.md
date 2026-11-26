@@ -17,6 +17,14 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Ajouté
 
+- Publication de préversions signées sous l’identité Julien Morin : catalogue APT
+  `InRelease`, paquets RPM et métadonnées DNF signés, manifeste et signatures
+  détachées. Déploiement des fichiers publics sur GitHub Pages, contrôles CI/VM
+  sur la révision exacte et contrôle des octets hébergés avant publication.
+  Renouvellement hebdomadaire des catalogues sans modifier les paquets publiés.
+  Guide complet, essais APT/DNF et refus des clés primaires privées en CI.
+
+
 - Carte mondiale SOC : boutons de période 3 h, 12 h, 24 h, 48 h et 72 h,
   mémorisation du choix, actualisation sur la période sélectionnée, dates UTC.
   Compteurs complets indépendants de la limite des positions dessinées et

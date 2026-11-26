@@ -1,6 +1,6 @@
 # Installer et mettre à jour depuis une release
 
-La préversion `0.1.0-rc.2` distribue **tous les fichiers suivis du dépôt**, à la
+La préversion `0.1.0-rc.3` distribue **tous les fichiers suivis du dépôt**, à la
 révision indiquée dans `release.json` : scripts, bases du serveur, console, modules,
 collecteurs, moteurs d'analyse, tests et documentation. Elle ne contient ni secrets
 de site ni données MongoDB/OpenSearch. Les dépendances externes sont téléchargées
@@ -47,7 +47,7 @@ Le dépôt peut demander une authentification GitHub ; utiliser le navigateur ou
 cd ~/Téléchargements                 # adapter au dossier contenant les deux fichiers
 sha256sum --ignore-missing --check SHA256SUMS
 sudo apt update
-sudo apt install ./omni-siem_0.1.0-rc.2_all.deb
+sudo apt install ./omni-siem_0.1.0-rc.3_all.deb
 omni-siem version
 omni-siem init --plan
 sudo omni-siem init --apply
@@ -104,8 +104,8 @@ simple installation de paquet.
 Sur un poste Linux APT/DNF, installer le paquet local correspondant puis :
 
 ```bash
-# Ubuntu/Debian : sudo apt install ./omni-siem_0.1.0-rc.2_all.deb
-# DNF : sudo dnf install ./omni-siem-0.1.0-0.2.rc.noarch.rpm
+# Ubuntu/Debian : sudo apt install ./omni-siem_0.1.0-rc.3_all.deb
+# DNF : sudo dnf install ./omni-siem-0.1.0-0.3.rc.noarch.rpm
 sudo omni-siem agent --receiver siem.exemple.fr --plan
 sudo omni-siem agent --receiver siem.exemple.fr --apply
 ```
@@ -201,11 +201,12 @@ un contrôle avant une vraie modification de production. La désinstallation du
 paquet retire la distribution, pas l'installation active ni ses données.
 Le paquet ne rend pas les migrations de bases automatiques ni universellement réversibles.
 
-**GitHub Releases n'est pas un dépôt APT/DNF.** Cette préversion s'installe avec un
-fichier local (`apt install ./...deb`, `dnf install ./...rpm`). Un futur dépôt
-nécessitera index APT/repodata RPM, signature et gestion des clés. Les SHA-256
-contrôlent l'intégrité par rapport au manifeste téléchargé ; ce ne sont pas des
-signatures de confiance indépendantes.
+Le téléchargement direct GitHub et le canal APT/DNF sont deux parcours distincts.
+La préversion `rc.3` prépare le [canal signé](DISTRIBUTION-SIGNATURES.md), publié
+uniquement après validation du workflow dédié. Les anciennes préversions restent
+inchangées : un fichier SHA-256 téléchargé avec ses paquets vérifie leur intégrité,
+mais ne fournit pas une signature indépendante. Utiliser les commandes du canal
+après sa publication réussie, sans désactiver la vérification des signatures.
 
 ## Échec, reprise et retour arrière
 
@@ -245,7 +246,7 @@ une VM isolée, puis teste socle, console, intégrations, sauvegarde et une adop
 avec service en fonctionnement et retour arrière.
 Le RPM n'est pas une preuve de compatibilité serveur sur une distribution RPM.
 
-Une étiquette `v0.1.0-rc.2` doit correspondre à `distribution/version.json` ; elle
+Une étiquette `v0.1.0-rc.3` doit correspondre à `distribution/version.json` ; elle
 prépare un **brouillon de préversion** avec les artefacts et SHA-256. Ne publier le
 brouillon qu'après contrôle des résultats du commit retenu et de la recette VM.
 Les changements du SOC encore en cours sur d'autres branches ne font pas partie
@@ -254,3 +255,7 @@ de cette release tant qu'ils ne sont pas fusionnés et qualifiés.
 Références : [installation locale APT](https://wiki.debian.org/AptCLI),
 [règles Debian sur les scripts de paquet](https://www.debian.org/doc/debian-policy/ch-maintainerscripts),
 [gestion des services dans les paquets Fedora](https://fedoraproject.org/wiki/Packaging%3ASystemd).
+
+Pour le canal APT/DNF signé et la vérification des signatures, suivre
+[le guide de publication et de confiance](DISTRIBUTION-SIGNATURES.md). Le téléchargement
+direct des anciennes préversions conserve les garanties annoncées à leur publication.

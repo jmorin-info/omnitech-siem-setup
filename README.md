@@ -56,6 +56,11 @@ detections mapped to MITRE ATT&CK, and adds in-house services:
 - **ISO/IEC 27001:2022 evidence**: tiered retention, integrity chain, monthly
   evidence packs.
 
+Signed APT/DNF publication, key verification, catalogue renewal and client commands
+are documented in the [signing guide](docs/DISTRIBUTION-SIGNATURES.md). The workflow
+requires matching source/package checks and VM acceptance before a prerelease is
+published. Package installation does not automatically upgrade the active SIEM.
+
 ## Capabilities in service
 
 Read-only snapshot of the reference installation taken on 2026-11-21
