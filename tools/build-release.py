@@ -137,7 +137,9 @@ def build(source, out, formats):
                 " Full source, console, modules, collectors and administration catalogue.\n"
                 " Server deployment is explicit and separate from package installation.\n")
             (control / "control").chmod(0o644)
-            artifact = out / ("omni-siem_" + debversion + "_all.deb")
+            # GitHub normalizes '~' in asset names. Keep Debian's version ordering
+            # in control metadata and use the portable upstream version in filenames.
+            artifact = out / ("omni-siem_" + version + "_all.deb")
             subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(root), str(artifact)], check=True, env=env)
             artifacts.append(artifact)
             shutil.rmtree(control)

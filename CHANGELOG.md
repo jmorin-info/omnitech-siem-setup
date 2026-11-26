@@ -6,7 +6,7 @@ consignées ici. Le format suit les principes de
 récentes en premier, regroupées par date de livraison, sections « Ajouté »,
 « Modifié », « Corrigé », « Supprimé » pour les nouvelles entrées. Les livraisons
 historiques sont identifiées par date ; la distribution commence en préversion
-numérotée `0.1.0-rc.1`.
+numérotée `0.1.0-rc.2`.
 
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
@@ -16,6 +16,10 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - Console SOC : logo personnalisé agrandi (56 px à côté du nom, logo large placé au-dessus du nom) ; adresse cliente réelle derrière le proxy FortiGate (`deploye/nginx/omni-real-ip.conf`), qui rétablit les écritures d'administration depuis les réseaux autorisés et des limites de débit par poste.
 
 ### Ajouté
+
+- Distribution : noms de pièces jointes compatibles avec GitHub, vérification des
+  noms et empreintes après téléversement ; la version Debian interne conserve le
+  suffixe `~rc` pour l'ordre des versions. Le brouillon `rc.1` reste non publié.
 
 - Distribution complète : construction de `.deb`, `.rpm`, archive source et
   SHA-256 à partir de tous les fichiers suivis d'un commit propre. Commande

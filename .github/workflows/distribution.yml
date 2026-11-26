@@ -108,3 +108,15 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           gh release create "$RELEASE_TAG" packages/* --verify-tag --draft --prerelease --title "OMNI SIEM $RELEASE_TAG" --notes-file distribution/RELEASE-NOTES.md
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          endpoint = 'repos/' + os.environ['GITHUB_REPOSITORY'] + '/releases/tags/' + os.environ['RELEASE_TAG']
+          release = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          local = {p.name:p for p in pathlib.Path('packages').iterdir() if p.is_file()}
+          remote = {a['name']:a for a in release['assets']}
+          assert set(local) == set(remote), 'GitHub renamed or omitted a release artifact; keep the draft unpublished'
+          for name, path in local.items():
+              assert remote[name]['state'] == 'uploaded' and remote[name]['size'] == path.stat().st_size
+              if remote[name].get('digest'):
+                  assert remote[name]['digest'] == 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest()
+          PY

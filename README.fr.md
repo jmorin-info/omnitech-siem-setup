@@ -25,8 +25,8 @@ d'OMNITECH SECURITY.**
 
 ## Présentation
 
-Une [première distribution complète en préversion](docs/DISTRIBUTION.md) est
-préparée : archive du dépôt, paquets `.deb`/`.rpm` et commande `omni-siem` pour
+La [distribution complète en préversion](docs/DISTRIBUTION.md) comprend une
+archive du dépôt, des paquets `.deb`/`.rpm` et la commande `omni-siem` pour
 configurer, installer le socle, gérer les modules et examiner les mises à jour
 depuis SSH. Tous les composants sont livrés ; les extensions demandant des comptes
 ou un paramétrage propre au site restent à activer explicitement. Les paquets ne
