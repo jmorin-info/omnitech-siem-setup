@@ -130,8 +130,10 @@ set -e
 base=https://jmorin-info.github.io/omnitech-siem-setup
 key=$(mktemp)
 curl --fail --silent --show-error "$base/keys/omni-siem-release.asc" -o "$key"
-test "$(gpg --batch --show-keys --with-colons "$key" | grep -c '^pub:')" = 1
-fingerprint=$(gpg --batch --show-keys --with-colons "$key" | awk -F: '$1=="fpr" {print $10; exit}')
+listing=$(gpg --batch --show-keys --with-colons "$key")
+test "$(printf '%s\n' "$listing" | grep -c '^pub:')" = 1
+test "$(printf '%s\n' "$listing" | grep -E -c '^(sec|ssb):')" = 0
+fingerprint=$(printf '%s\n' "$listing" | awk -F: '$1=="fpr" {print $10; exit}')
 test "$fingerprint" = 2668CC327A9ADCB1AE585187AE984C65217DB120
 sudo install -d -m 0755 /etc/apt/keyrings
 sudo install -m 0644 "$key" /etc/apt/keyrings/omni-siem.asc
@@ -154,8 +156,10 @@ set -e
 base=https://jmorin-info.github.io/omnitech-siem-setup
 key=$(mktemp)
 curl --fail --silent --show-error "$base/keys/omni-siem-release.asc" -o "$key"
-test "$(gpg --batch --show-keys --with-colons "$key" | grep -c '^pub:')" = 1
-fingerprint=$(gpg --batch --show-keys --with-colons "$key" | awk -F: '$1=="fpr" {print $10; exit}')
+listing=$(gpg --batch --show-keys --with-colons "$key")
+test "$(printf '%s\n' "$listing" | grep -c '^pub:')" = 1
+test "$(printf '%s\n' "$listing" | grep -E -c '^(sec|ssb):')" = 0
+fingerprint=$(printf '%s\n' "$listing" | awk -F: '$1=="fpr" {print $10; exit}')
 test "$fingerprint" = 2668CC327A9ADCB1AE585187AE984C65217DB120
 sudo rpm --import "$key"
 rm -- "$key"
