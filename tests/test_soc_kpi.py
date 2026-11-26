@@ -485,7 +485,9 @@ def test_kpi_page_is_wired_csp_compatible_and_cached():
     js = (SOC / "app-kpi.js").read_text(encoding="utf-8")
     scripts = re.findall(r'<script src="(/soc/[^"]+)"', html)
     assert "/soc/app-kpi.js?v=2026112201" in scripts and '"/soc/app-kpi.js?v=2026112201"' in sw
-    assert scripts.index("/soc/app-kpi.js?v=2026112201") > scripts.index("/soc/app.js?v=2026112401")
+    core = [script for script in scripts if script.startswith("/soc/app.js?v=")]
+    assert len(core) == 1 and f'"{core[0]}"' in sw
+    assert scripts.index("/soc/app-kpi.js?v=2026112201") > scripts.index(core[0])
     assert 'data-p="kpi"' in html and 'id="p-kpi"' in html and 'id="kpiRoot"' in html
     assert not re.search(r"\son(click|input|change|keydown|submit)\s*=", js)
     assert "innerHTML" not in js and "eval(" not in js and "new Function" not in js
