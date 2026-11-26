@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "identity": "Julien Morin (OMNI SIEM releases)",
+  "fingerprint": "2668CC327A9ADCB1AE585187AE984C65217DB120",
+  "public_key": "omni-siem-release.asc",
+  "primary_role": "certification",
+  "release_role": "signing-subkey",
+  "primary_validity": "2 years",
+  "signing_subkey_validity": "1 year",
+  "private_material": "outside-repository"
+}

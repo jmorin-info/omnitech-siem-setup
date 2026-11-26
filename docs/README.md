@@ -33,6 +33,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 |---|---|
 | [Installation et périmètre du socle](INSTALLATION.md) | Prérequis, phases, composants installés, contrôles de réception |
 | [Distribution complète : paquets et releases](DISTRIBUTION.md) | `.deb`/`.rpm`, commande `omni-siem`, installation pas à pas, périmètre, reprise et limites |
+| [Signature et dépôts APT/DNF](DISTRIBUTION-SIGNATURES.md) | Identité publique, préparation des signatures, vérifications et conditions avant publication |
 | [Installation Ubuntu ligne par ligne](UBUNTU-DEMARRAGE.md) | Parcours pas à pas sur une machine neuve |
 | [Qualification Ubuntu 26.04](QUALIFICATION-UBUNTU2604.md) | Recette sur VM isolée et rapports |
 | [Déploiement](DEPLOYMENT.md) | Vue d'ensemble installation, mises à jour, reprise |

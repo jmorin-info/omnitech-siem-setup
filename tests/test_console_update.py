@@ -523,6 +523,31 @@ def test_rollback_requires_matching_confirmation(env):
     assert result["status"] == "refusee" and git(env["home"], "rev-parse", "HEAD") == env["v2"]
 
 
+def test_schema_two_blocks_manual_and_automatic_code_rollback_before_changes(env):
+    env["updater"].check()
+    assert submit(env)["status"] == "terminee"
+    path = env["root"] / "var/lib/omni-mobile/modules/config.json"
+    path.parent.mkdir(parents=True)
+    path.write_text('{"schema_version":2,"revision":3,"pages":[]}')
+    before = path.read_bytes()
+    assert "incompatible" in console.modules_rollback_refusal(env["cfg"], env["v1"])
+    result = submit(env, "update_rollback", RID2, {"run_id": RID, "confirm": env["v1"][:12]})
+    assert result["status"] == "refusee" and git(env["home"], "rev-parse", "HEAD") == env["v2"]
+    assert path.read_bytes() == before and robot(env).endswith("echo v2\n")
+    original = env["updater"].last_run()
+    problems = env["updater"]._restore({"id": RID2, "prev_rev": env["v1"], "steps": []})
+    assert problems and path.read_bytes() == before and git(env["home"], "rev-parse", "HEAD") == env["v2"]
+
+
+def test_schema_one_remains_compatible_and_invalid_site_config_fails_closed(env):
+    path = env["root"] / "var/lib/omni-mobile/modules/config.json"
+    path.parent.mkdir(parents=True)
+    path.write_text('{"schema_version":1,"revision":2,"pages":[]}')
+    assert console.modules_rollback_refusal(env["cfg"], env["v1"]) == ""
+    path.write_text("not-json")
+    assert "invalides" in console.modules_rollback_refusal(env["cfg"], env["v1"])
+
+
 @pytest.mark.parametrize("change", [
     {"request": {"self_service": False}},
     {"request": {"status": "en_attente"}},

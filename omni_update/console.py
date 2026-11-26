@@ -1151,6 +1151,11 @@ class ConsoleUpdater:
 
     # --------------------------------------------------------------- retour arrière
     def _restore(self, run):
+        reason = modules_rollback_refusal(self.cfg, run.get("prev_rev"))
+        if reason:
+            step = self._step(run, "rb:compatibilite", "Compatibilité des réglages du site")
+            self._end(run, step, "echec", reason)
+            return [reason]
         problems = []
         steps = []
         for transaction in reversed(run.get("deploy_transactions", [])):
@@ -1269,6 +1274,59 @@ def rollback_refusal(cfg, original, last, params):
         return "mise à jour dans l'état « " + str(status) + " » : retour arrière sans objet"
     if not original.get("prev_rev") or params.get("confirm") != str(original.get("prev_rev"))[:12]:
         return "confirmation différente de la révision à restaurer"
+    return modules_rollback_refusal(cfg, original["prev_rev"])
+
+
+def modules_rollback_refusal(cfg, target):
+    """A code rollback must not strand a newer local site configuration."""
+    if not target:
+        return "révision de restauration manquante"
+    root = cfg.get("deploy_root", Path("/"))
+    def physical(path):
+        value = Path(path)
+        return value if root == Path("/") else root / str(value).lstrip("/")
+    values = {}
+    try:
+        text = physical(cfg.get("console_config", Path("/etc/default/omni-mobile"))).read_text()
+        for line in text.splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                key, value = line.split("=", 1)
+                values[key.strip()] = value.strip().strip('"').strip("'")
+    except FileNotFoundError:
+        pass
+    except (OSError, UnicodeError):
+        return "configuration console illisible : vérifier la compatibilité avant restauration"
+    data_dir = Path(values.get("MOBILE_SUBS_FILE", "/var/lib/omni-mobile/subscriptions.json")).parent
+    directory = Path(values.get("SOC_MODULES_DIR", str(data_dir / "modules")))
+    if not directory.is_absolute() or ".." in directory.parts:
+        return "chemin des réglages du site indéterminé : restauration manuelle requise"
+    config = physical(directory / "config.json")
+    try:
+        if config.is_symlink():
+            return "réglages du site en lien symbolique : restauration manuelle requise"
+        with config.open(encoding="utf-8") as stream:
+            raw = stream.read(128 * 1024 + 1)
+        data = json.loads(raw) if len(raw) <= 128 * 1024 else None
+        if not isinstance(data, dict) or type(data.get("schema_version")) is not int:
+            raise ValueError("invalid schema")
+    except FileNotFoundError:
+        return ""
+    except (OSError, ValueError, UnicodeError):
+        return "réglages du site illisibles ou invalides : les conserver et restaurer une sauvegarde compatible"
+    try:
+        exists = git(cfg, "ls-tree", "--name-only", target, "--", "mobile/soc-compatibility.json").strip()
+        supported = [1]
+        if exists:
+            capabilities = json.loads(git(cfg, "show", target + ":mobile/soc-compatibility.json"))
+            supported = capabilities["modules_schemas"]
+            if (capabilities.get("schema_version") != 1 or not isinstance(supported, list)
+                    or not supported or any(type(v) is not int or v < 1 for v in supported)):
+                raise ValueError("invalid capabilities")
+        if data["schema_version"] not in supported:
+            return ("schéma " + str(data["schema_version"]) + " des pages SOC incompatible avec la révision à restaurer ; "
+                    "conserver les réglages actuels et restaurer explicitement une sauvegarde compatible avant le retour de code")
+    except (OU.UpdateError, ConsoleUpdateError, ValueError, KeyError, TypeError):
+        return "compatibilité des réglages indéterminée : restauration refusée avant modification"
     return ""
 
 
