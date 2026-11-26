@@ -68,6 +68,14 @@ l’inventaire. La notification mail native existait mais n’était liée à au
 214 définitions examinées. La rendre active partout provoquerait un changement
 de politique de notification qui n’est pas demandé ici.
 
+Les 182 définitions de triage demandaient un backlog de 3 à 25 journaux ; 88
+n’avaient pas de champs personnalisés dans leur définition. Cela ne signifie pas
+que leurs journaux sont vides. En revanche, la fonction actuelle `fields_of`
+fusionne les champs des premiers journaux par `setdefault`, sans conserver leur
+provenance. Une IP prise dans un journal et un compte pris dans un autre peuvent
+ainsi être présentés côte à côte. Le contexte préparé conserve les observations
+séparées ; seule une règle avec preuves pourra les relier explicitement.
+
 | Parcours | Raccordement préparé | État |
 |---|---|---|
 | Mail immédiat du triage | Construire le contexte depuis les champs de l’alerte et chaque événement joint ; compléter la charte existante, en HTML et texte | À intégrer après le chantier parallèle |
