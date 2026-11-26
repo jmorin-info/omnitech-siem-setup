@@ -60,6 +60,8 @@ def checked_inputs(directory, signed=False):
 def verify_public_key(home, public_key, fingerprint):
     info = run(["gpg", "--no-options", "--homedir", str(home), "--batch", "--with-colons", "--show-keys", str(public_key)]).decode()
     records = [line.split(":") for line in info.splitlines()]
+    if any(row[0] in ("sec", "ssb") for row in records):
+        raise ValueError("private material is forbidden in the public certificate file")
     if len([row for row in records if row[0] == "pub"]) != 1:
         raise ValueError("exactly one public certificate is required")
     actual = next((row[9] for row in records if row[0] == "fpr"), "")

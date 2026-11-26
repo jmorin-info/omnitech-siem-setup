@@ -20,7 +20,7 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - Confiance de publication : refus d’un fichier contenant plusieurs certificats
   publics, même lorsque le premier porte l’empreinte attendue. Contrôle ajouté
   aux commandes clientes et test avec un certificat supplémentaire non autorisé.
-  La candidate `rc.3` reste non publiée ; `rc.4` porte cette correction.
+  Les candidates `rc.3` et `rc.4` restent non publiées ; `rc.5` regroupe les contrôles de confiance, dont le refus de données privées dans le fichier public.
 
 - Publication de préversions signées sous l’identité Julien Morin : catalogue APT
   `InRelease`, paquets RPM et métadonnées DNF signés, manifeste et signatures

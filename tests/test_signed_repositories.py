@@ -129,5 +129,13 @@ def test_real_release_signatures_and_repository_metadata(packaged, tmp_path):
         combined.write_bytes(publisher.run(gpg + ["--armor", "--export"]))
         with pytest.raises(ValueError, match="exactly one public certificate"):
             publisher.verify_signed(renewed / "signed-release", combined, fingerprint)
+        private = publisher.run(gpg + ["--armor", "--export-secret-keys", fingerprint], password=password)
+        mixed = tmp_path / "mixed-key.asc"
+        mixed.write_bytes(public.read_bytes() + private)
+        with pytest.raises(ValueError, match="private material is forbidden"):
+            publisher.verify_signed(renewed / "signed-release", mixed, fingerprint)
+        mixed.write_bytes(private)
+        with pytest.raises(ValueError, match="private material is forbidden"):
+            publisher.verify_signed(renewed / "signed-release", mixed, fingerprint)
     finally:
         subprocess.run(["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"], capture_output=True)

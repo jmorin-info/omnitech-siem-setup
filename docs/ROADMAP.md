@@ -128,7 +128,7 @@ sans repartir de zéro.
 |---|---|---|
 | Fait | Paquets contenant tout le projet, installation explicite, reprise et adoption de chemins reconnus sans déplacement des bases | [Distribution](DISTRIBUTION.md) |
 | Fait | Modules natifs WatchGuard, UniFi et Palo Alto et pages SOC configurables par site | [Modules SOC](CONSOLE-MODULES.md), [intégrations](INTEGRATIONS-MODULAIRES.md) |
-| En cours | Préversion rc.4 signée : clé de publication, contrôles APT/DNF, environnement GitHub limité à main, hébergement et renouvellement hebdomadaire ; publication soumise aux preuves de la révision exacte | [Signatures et dépôts](DISTRIBUTION-SIGNATURES.md) |
+| En cours | Préversion signée : clé de publication, contrôles APT/DNF, environnement GitHub limité à main, hébergement et renouvellement hebdomadaire ; publication soumise aux preuves de la révision exacte | [Signatures et dépôts](DISTRIBUTION-SIGNATURES.md) |
 | En cours | Preuves détaillées d’alertes et corrélations, extensions des pages et diagnostics WatchGuard ; branches distinctes encore à qualifier et non déployées par la chaîne de paquets | PR #12 et #14 |
 | À faire | Assistant complet de configuration des sources, émission des agents et vérification de leur réception, avec liaison aux pages SOC | [Distribution](DISTRIBUTION.md) |
 | À faire | Sauvegarde externe vérifiée de la clé de publication, exercice de reprise complet et critères documentés avant toute promotion 1.0 stable | [Signatures et dépôts](DISTRIBUTION-SIGNATURES.md), [reprise](exploitation/RESTAURATION-COMPLETE.md) |
