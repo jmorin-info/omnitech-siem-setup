@@ -17,7 +17,7 @@ def execute(script):
     return json.loads(process.stdout)
 
 
-@pytest.mark.parametrize("mode", ["success", "failed", "cached", "risk_failed", "health_failed", "risk_cached"])
+@pytest.mark.parametrize("mode", ["success", "failed", "cached", "risk_failed", "health_failed", "risk_cached", "globe_success", "globe_failed"])
 def test_actual_refresh_only_records_a_success_after_fresh_required_requests(mode):
     source = (ROOT / "mobile/soc/app.js").read_text(encoding="utf-8")
     controller = source[source.index("async function loadAll(){"):source.index("\nlet TOPE=")]
@@ -30,15 +30,18 @@ function renderKpis(){} function renderTs(){} function renderTac(){} function re
 function renderSrc(){} function renderMatrix(){} function renderCases(){} function loadDetections(){}
 function renderLeaks(){} function renderHealth(){} function renderRisk(){} function renderKpiTrend(){}
 function renderGeo(){} function renderSentinelPosture(){}
+function $(id){return mode.startsWith('globe_')?{classList:{contains(){return true;}}}:null;}
+function loadGlobe(){return Promise.resolve(mode!=='globe_failed');}
 ''' + 'const mode=' + json.dumps(mode) + ''';
 function j(path){if(mode==='failed'||(mode==='risk_failed'&&path==='/risk')||(mode==='health_failed'&&path==='/health'))return Promise.reject(new Error('HTTP503'));return Promise.resolve(mode==='cached'||(mode==='risk_cached'&&path==='/risk')?{_socCachedAt:100}:{});}
 ''' + controller + '\nloadAll().then(()=>console.log(JSON.stringify({marks,UPD_AT,LAST_REFRESH_FAILED,stale,event:events[0]})));'
     result = execute(script)
-    assert result["marks"] == (1 if mode == "success" else 0)
-    assert result["UPD_AT"] == (999 if mode == "success" else 123)
-    assert result["stale"] == (mode != "success")
-    assert result["LAST_REFRESH_FAILED"] == (mode != "success")
-    assert result["event"]["ok"] == (mode == "success")
+    success = mode in ("success", "globe_success")
+    assert result["marks"] == (1 if success else 0)
+    assert result["UPD_AT"] == (999 if success else 123)
+    assert result["stale"] == (not success)
+    assert result["LAST_REFRESH_FAILED"] == (not success)
+    assert result["event"]["ok"] == success
 
 
 def test_missing_threat_level_cannot_default_to_nominal():
