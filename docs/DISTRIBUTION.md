@@ -202,7 +202,7 @@ paquet retire la distribution, pas l'installation active ni ses données.
 Le paquet ne rend pas les migrations de bases automatiques ni universellement réversibles.
 
 Le téléchargement direct GitHub et le canal APT/DNF sont deux parcours distincts.
-La préversion `rc.3` prépare le [canal signé](DISTRIBUTION-SIGNATURES.md), publié
+La chaîne de publication prépare le [canal signé](DISTRIBUTION-SIGNATURES.md), publié
 uniquement après validation du workflow dédié. Les anciennes préversions restent
 inchangées : un fichier SHA-256 téléchargé avec ses paquets vérifie leur intégrité,
 mais ne fournit pas une signature indépendante. Utiliser les commandes du canal
