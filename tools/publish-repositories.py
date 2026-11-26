@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""Prepare signed release files and APT/DNF repositories. Never upload anything."""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import email.utils
+import gzip
+import hashlib
+import html
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+from urllib.parse import urlsplit
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def run(argv, *, password=None, cwd=None, env=None):
+    result = subprocess.run(argv, input=password, capture_output=True, cwd=cwd, env=env, timeout=300)
+    if result.returncode:
+        # GPG/rpm/pip may print credentials from environment configuration.
+        raise ValueError("publication command failed: " + Path(argv[0]).name + " (exit " + str(result.returncode) + ")")
+    return result.stdout
+
+
+def checked_inputs(directory):
+    if directory.is_symlink():
+        raise ValueError("linked artifact directory is refused")
+    metadata = json.loads((directory / "release.json").read_text())
+    version = metadata.get("version", "")
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)\.[0-9]+)?", version):
+        raise ValueError("unsupported release version")
+    if not re.fullmatch(r"[0-9a-f]{40}", metadata.get("revision", "")):
+        raise ValueError("pinned source revision required")
+    files = {}
+    for line in (directory / "SHA256SUMS").read_text().splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9_.-]+)", line)
+        if not match or match[2] in files:
+            raise ValueError("invalid or duplicate checksum entry")
+        path = directory / match[2]
+        if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != match[1]:
+            raise ValueError("artifact checksum mismatch")
+        files[path.name] = path
+    expected = set(metadata.get("artifacts", [])) | {"release.json"}
+    if expected != set(files) or set(p.name for p in directory.iterdir()) != expected | {"SHA256SUMS"}:
+        raise ValueError("artifact manifest is incomplete or contains unexpected files")
+    for suffix in (".deb", ".rpm", ".tar.gz"):
+        if len([name for name in files if name.endswith(suffix)]) != 1:
+            raise ValueError("exactly one artifact of each supported format is required")
+    return metadata, files
+
+
+def signing_args(home, fingerprint):
+    return ["gpg", "--no-options", "--homedir", str(home), "--batch", "--yes", "--pinentry-mode", "loopback",
+            "--passphrase-fd", "0", "--local-user", fingerprint, "--digest-algo", "SHA256", "--armor"]
+
+
+def release_file(distribution, suite, version, now):
+    lines = ["Origin: OMNI SIEM", "Label: OMNI SIEM", "Suite: " + suite, "Codename: " + suite,
+             "Version: " + version, "Date: " + email.utils.format_datetime(now, usegmt=True),
+             "Valid-Until: " + email.utils.format_datetime(now + dt.timedelta(days=30), usegmt=True),
+             "Architectures: amd64", "Components: main", "Description: OMNI SIEM signed project distribution"]
+    for algorithm in ("sha256", "sha512"):
+        lines.append(algorithm.upper() + ":")
+        for path in sorted(distribution.rglob("Packages*")):
+            data = path.read_bytes()
+            lines.append(" " + hashlib.new(algorithm, data).hexdigest() + " " + str(len(data)) + " " + path.relative_to(distribution).as_posix())
+    return ("\n".join(lines) + "\n").encode()
+
+
+def prepare(source, output, home, public_key, fingerprint, base_url, *, suite="testing", password=None, apply=False):
+    source, output, home, public_key = map(Path, (source, output, home, public_key))
+    if output.exists() or output.is_symlink() or output.resolve() == source.resolve() or source.resolve() in output.resolve().parents:
+        raise ValueError("choose a new output directory outside the input artifacts")
+    if not re.fullmatch(r"[A-F0-9]{40,64}", fingerprint):
+        raise ValueError("full uppercase public fingerprint required")
+    parsed = urlsplit(base_url)
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+            or parsed.query or parsed.fragment or any(c.isspace() for c in base_url)):
+        raise ValueError("publication URL must use HTTPS without credentials")
+    if suite not in ("testing", "stable"):
+        raise ValueError("unsupported repository suite")
+    metadata, files = checked_inputs(source)
+    if suite == "stable" and "-" in metadata["version"]:
+        raise ValueError("a prerelease cannot enter the stable repository")
+    report = {"mode": "apply" if apply else "plan", "version": metadata["version"], "revision": metadata["revision"],
+              "fingerprint": fingerprint, "base_url": base_url.rstrip("/"), "suite": suite,
+              "outputs": ["signed-release", "site/apt", "site/dnf", "site/keys"], "uploaded": False}
+    if not apply:
+        return report
+    for tool in ("gpg", "rpmsign", "apt-ftparchive", "createrepo_c"):
+        if not shutil.which(tool):
+            raise ValueError("missing publication tool: " + tool)
+    if not home.is_dir() or home.is_symlink():
+        raise ValueError("private GPG home is missing or linked")
+    password = password or b"\n"
+    key_info = run(["gpg", "--no-options", "--homedir", str(home), "--batch", "--with-colons", "--show-keys", str(public_key)]).decode()
+    if next((line.split(":")[9] for line in key_info.splitlines() if line.startswith("fpr:")), "") != fingerprint:
+        raise ValueError("public key does not match the pinned release fingerprint")
+    secret = run(["gpg", "--no-options", "--homedir", str(home), "--batch", "--with-colons", "--list-secret-keys", fingerprint]).decode()
+    if fingerprint not in secret:
+        raise ValueError("matching signing key is not available")
+    output.mkdir(parents=True)
+    signed, site = output / "signed-release", output / "site"
+    signed.mkdir()
+    for name, path in files.items():
+        shutil.copyfile(path, signed / name)
+    args = signing_args(home, fingerprint)
+    # Unlock only the signing subkey in the private agent. rpmsign then uses the
+    # cached key; its argv never contains a passphrase or private-key material.
+    with tempfile.TemporaryDirectory(prefix="omni-sign-") as temporary:
+        probe = Path(temporary) / "probe"
+        probe.write_bytes(b"OMNI SIEM signing-key availability probe\n")
+        run(args + ["--detach-sign", str(probe)], password=password)
+    rpm = next(signed.glob("*.rpm"))
+    env = {**os.environ, "GNUPGHOME": str(home)}
+    run(["rpmsign", "--define", "__gpg " + shutil.which("gpg"),
+         "--define", "_gpg_name " + fingerprint, "--define", "_gpg_path " + str(home),
+         "--define", "_gpg_digest_algo sha256", "--addsign", str(rpm)], env=env)
+    metadata["signing"] = {"fingerprint": fingerprint, "suite": suite, "digest": "SHA256"}
+    (signed / "release.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    for path in sorted(signed.iterdir()):
+        run(args + ["--detach-sign", str(path)], password=password)
+    checksums = "".join(hashlib.sha256(p.read_bytes()).hexdigest() + "  " + p.name + "\n" for p in sorted(signed.iterdir()))
+    (signed / "SHA256SUMS").write_text(checksums)
+    run(args + ["--detach-sign", str(signed / "SHA256SUMS")], password=password)
+    keys = site / "keys"
+    keys.mkdir(parents=True)
+    shutil.copyfile(public_key, keys / "omni-siem-release.asc")
+    apt = site / "apt"
+    pool = apt / "pool/main/o/omni-siem"
+    pool.mkdir(parents=True)
+    shutil.copyfile(next(signed.glob("*.deb")), pool / next(signed.glob("*.deb")).name)
+    dist = apt / "dists" / suite
+    package_dir = dist / "main/binary-amd64"
+    package_dir.mkdir(parents=True)
+    packages = run(["apt-ftparchive", "packages", "pool"], cwd=apt)
+    (package_dir / "Packages").write_bytes(packages)
+    (package_dir / "Packages.gz").write_bytes(gzip.compress(packages, mtime=0))
+    (dist / "Release").write_bytes(release_file(dist, suite, metadata["version"], dt.datetime.now(dt.timezone.utc)))
+    run(args + ["--clearsign", "--output", str(dist / "InRelease"), str(dist / "Release")], password=password)
+    dnf = site / "dnf" / suite
+    dnf.mkdir(parents=True)
+    shutil.copyfile(rpm, dnf / rpm.name)
+    run(["createrepo_c", "--checksum", "sha256", str(dnf)])
+    run(args + ["--detach-sign", str(dnf / "repodata/repomd.xml")], password=password)
+    url = base_url.rstrip("/")
+    (site / "omni-siem.repo").write_text(
+        "[omni-siem-" + suite + "]\nname=OMNI SIEM " + suite + "\nbaseurl=" + url + "/dnf/" + suite
+        + "\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\nsslverify=1\ngpgkey=" + url + "/keys/omni-siem-release.asc\n")
+    (site / "omni-siem.sources").write_text("Types: deb\nURIs: " + url + "/apt\nSuites: " + suite
+        + "\nComponents: main\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/omni-siem.asc\n")
+    (site / "index.html").write_text('<!doctype html><html lang="fr"><meta charset="utf-8"><title>OMNI SIEM — paquets signés</title>'
+        '<h1>OMNI SIEM</h1><p>Version ' + html.escape(metadata["version"]) + ' · canal ' + suite
+        + '</p><p>Empreinte : <code>' + fingerprint + '</code></p>'
+        '<p><a href="keys/omni-siem-release.asc">Clé publique</a> · <a href="omni-siem.sources">Source APT</a>'
+        ' · <a href="omni-siem.repo">Dépôt DNF</a></p><p>Importer la clé après vérification indépendante de son empreinte.</p></html>\n')
+    report.update(signed=True, site_bytes=sum(p.stat().st_size for p in site.rglob("*") if p.is_file()))
+    (output / "publication.json").write_text(json.dumps(report, indent=2) + "\n")
+    return report
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--artifacts", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--gpg-home", type=Path, required=True)
+    parser.add_argument("--public-key", type=Path, default=ROOT / "distribution/keys/omni-siem-release.asc")
+    parser.add_argument("--fingerprint", required=True)
+    parser.add_argument("--base-url", required=True)
+    parser.add_argument("--suite", choices=("testing", "stable"), default="testing")
+    parser.add_argument("--apply", action="store_true")
+    args = parser.parse_args()
+    try:
+        secret_file = os.environ.get("OMNI_SIGNING_PASSPHRASE_FILE")
+        password = None
+        if args.apply and secret_file:
+            path = Path(secret_file)
+            if path.is_symlink() or path.stat().st_mode & 0o077:
+                raise ValueError("passphrase file must be private and not linked")
+            password = path.read_bytes().rstrip(b"\r\n") + b"\n"
+        print(json.dumps(prepare(args.artifacts, args.output, args.gpg_home, args.public_key, args.fingerprint,
+                                 args.base_url, suite=args.suite, password=password, apply=args.apply), indent=2))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        raise SystemExit("Signed publication refused; verify artifacts, private key access and repository tools. No upload performed.")

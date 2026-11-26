@@ -17,6 +17,13 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Ajouté
 
+- Préparation locale de paquets et catalogues APT/DNF signés, certificat public de
+  publication et guide de signature. Vérification des signatures et rejet des
+  altérations avec une clé de test isolée ; aucun téléversement automatique.
+  Les préversions publiques existantes restent inchangées et non signées.
+- Protection des pages SOC locales : refus d’un retour arrière manuel ou
+  automatique vers une console incompatible avec leur schéma enregistré.
+
 - Distribution : noms de pièces jointes compatibles avec GitHub, vérification des
   noms et empreintes après téléversement ; la version Debian interne conserve le
   suffixe `~rc` pour l'ordre des versions. Le brouillon `rc.1` reste non publié.

@@ -254,3 +254,7 @@ de cette release tant qu'ils ne sont pas fusionnés et qualifiés.
 Références : [installation locale APT](https://wiki.debian.org/AptCLI),
 [règles Debian sur les scripts de paquet](https://www.debian.org/doc/debian-policy/ch-maintainerscripts),
 [gestion des services dans les paquets Fedora](https://fedoraproject.org/wiki/Packaging%3ASystemd).
+
+Pour préparer les signatures et les catalogues APT/DNF, consulter
+[la chaîne de signature](DISTRIBUTION-SIGNATURES.md). Elle prépare les fichiers
+localement ; l’hébergement et la publication protégée restent à configurer.

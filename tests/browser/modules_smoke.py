@@ -88,7 +88,7 @@ with sync_playwright() as p:
             page.locator("#nav a").click()
             page.get_by_text("Données indisponibles. Ce résultat ne vaut pas zéro.", exact=True).wait_for()
             assert page.locator(".modules-value").inner_text() == "42"
-            assert page.locator(".modules-table td").last.inner_text().startswith("<img")
+            assert page.locator(".modules-table td").filter(has_text='<img src=x onerror="window.injected=true">').count() == 1
             assert page.locator("#modulesRoot img").count() == 0 and not page.evaluate("window.injected === true")
             assert page.locator("main").evaluate("e=>e.scrollWidth <= e.clientWidth+1")
             page.screenshot(path=str(out / f"modules-{width}-{theme}.png"), full_page=True)

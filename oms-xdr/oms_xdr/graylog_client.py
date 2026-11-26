@@ -10,6 +10,7 @@ import json
 import logging
 import socket
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -35,15 +36,25 @@ class GraylogClient:
         try:
             r = requests.post(f"{self.os_url}/{self.index}/_search", json=body, timeout=60)
             r.raise_for_status()
-            return r.json()
+            result = r.json()
         except requests.RequestException as exc:
-            log.error("Recherche OpenSearch échouée: %s", exc)
-            return {}
+            log.error("Recherche OpenSearch indisponible (%s)", type(exc).__name__)
+            raise RuntimeError("OpenSearch search unavailable") from None
+        if (not isinstance(result, dict) or result.get("error") or result.get("timed_out")
+                or not isinstance(result.get("_shards"), dict) or result["_shards"].get("failed") != 0):
+            raise RuntimeError("OpenSearch search incomplete")
+        return result
 
     def _filters(self, query: str, stream_key: str, minutes: int) -> dict[str, Any]:
         must = [{"query_string": {"query": query, "analyze_wildcard": True}}]
-        filt: list[dict] = [{"range": {"timestamp": {"gte": f"now-{minutes}m"}}}]
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(minutes=minutes)
+        self.last_window = {"from": start.isoformat(timespec="milliseconds"), "to": end.isoformat(timespec="milliseconds")}
+        filt: list[dict] = [{"range": {"timestamp": {"gte": int(start.timestamp()*1000),
+                                                   "lte": int(end.timestamp()*1000), "format": "epoch_millis"}}}]
         sid = self.streams.get(stream_key) if stream_key else None
+        if stream_key and not sid:
+            raise ValueError("Configured stream alias is missing")
         if sid:
             filt.append({"term": {"streams": sid}})
         return {"bool": {"must": must, "filter": filt}}
