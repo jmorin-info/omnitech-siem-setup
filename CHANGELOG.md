@@ -119,6 +119,13 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ### Corrigé
 
+- Migration de chemins : prise en charge d'un ancien chemin déjà lié au dépôt
+  canonique, avec archive des fichiers réels. Seules les unités installées, leurs
+  environnements Python et les robots portant un simple changement de chemin sont
+  concernés ; les autres composants, sites nginx et configurations sont conservés.
+  Les changements locaux non réconciliés bloquent la bascule et un verrou empêche
+  deux migrations simultanées.
+
 - Mise à jour depuis la console : les tests du candidat disposent d'un dépôt Git
   autonome issu de l'archive, sans accès aux métadonnées ni aux secrets du dépôt actif.
   Les inventaires, contrôles de manifeste et de cohérence fonctionnent sous le compte

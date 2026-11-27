@@ -13,7 +13,8 @@
 #   étape 3 : drop-ins 50-depot-reference.conf, UNE transaction par service, du moins
 #             critique au plus critique ; arrêt au premier échec (celui-ci est annulé
 #             automatiquement, les précédents restent annulables un par un) ;
-#   puis robots (lecture de 00-vars.env dans le dépôt canonique) et droits 0644 des unités.
+#   puis seuls les robots déjà installés dont le seul écart est le chemin du dépôt.
+# Aucune unité absente, configuration nginx, console ou intégration n'est installée ici.
 # Les étapes 4 (lien de transition) et 5 (retrait des copies) sont affichées, jamais exécutées.
 # L'ancienne copie n'est ni déplacée ni supprimée : elle reste le filet de sécurité.
 # Variables : OMNI_SIEM_HOME, MIGRATION_ANCIEN (ancienne copie),
@@ -27,6 +28,10 @@ ARCHIVES="${MIGRATION_ARCHIVES:-/var/backups/omni-siem}"
 MODE="${1:-}"
 case "$MODE" in ""|--plan|--apply) ;; *) echo "usage : $0 [--plan|--apply]" >&2; exit 2 ;; esac
 BLOCAGES=0
+SERVICES=()
+VENVS=()
+ROBOTS=()
+ARCHIVER="$ANCIEN"
 ok()   { echo "  OK      $*"; }
 info() { echo "  INFO    $*"; }
 bloc() { echo "  BLOCAGE $*"; BLOCAGES=$((BLOCAGES + 1)); }
@@ -66,14 +71,69 @@ else
 fi
 
 echo "[3] Ancienne copie (conservée telle quelle)"
+if [[ -L "$ANCIEN" ]]; then
+  if [[ "$(readlink -f -- "$ANCIEN")" == "$(readlink -f -- "$CANON")" ]]; then
+    ARCHIVER="$CANON"
+    info "l'ancien chemin est déjà un lien vers le dépôt canonique ; le lien est conservé"
+    info "l'archive portera sur les fichiers du dépôt réel, pas seulement sur le lien"
+  else
+    bloc "l'ancien chemin est un lien vers un autre dossier : aucune migration automatique"
+  fi
+fi
 if [[ -d "$ANCIEN" ]]; then
   if git -C "$ANCIEN" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     MODIFIES=$(git -C "$ANCIEN" status --porcelain --untracked-files=no | wc -l)
     info "$MODIFIES fichier(s) suivi(s) modifié(s) non commités : ils seront archivés, pas recopiés"
+    [[ "$MODIFIES" -eq 0 ]] || bloc "réconcilier les fichiers suivis de l'ancienne copie avant la bascule"
   fi
   info "archive prévue : $ARCHIVES/ancienne-copie-<date>.tar.gz (venvs et caches exclus)"
 else
   info "ancienne copie absente : rien à archiver"
+fi
+
+echo "[3b] Périmètre de migration : composants déjà installés seulement"
+for service in omni-iso-evidence oms-graph oms-graph-respond oms-ml-anomaly oms-ml-fp oms-xdr omni-backup-config omni-disk-guard omni-mobile-api; do
+  etat="$(systemctl show "$service.service" -p LoadState --value 2>/dev/null || true)"
+  if [[ "$etat" == loaded ]]; then
+    SERVICES+=("$service")
+    case "$service" in
+      omni-mobile-api) VENVS+=(mobile) ;;
+      oms-xdr) VENVS+=(oms-xdr) ;;
+      oms-graph|oms-graph-respond) VENVS+=(oms-graph) ;;
+      oms-ml-anomaly|oms-ml-fp) VENVS+=(oms-ml) ;;
+    esac
+    info "drop-in prévu pour $service.service (unité existante)"
+  else
+    info "$service.service absent ou non chargé : ignoré"
+  fi
+done
+if [[ -f "$CANON/manifeste-deploye.txt" ]]; then
+  while read -r cible source reste; do
+    [[ "$cible" == /usr/local/sbin/omni-* || "$cible" == /usr/local/sbin/oms-* ]] || continue
+    [[ -z "${reste:-}" && -f "$cible" && ! -L "$cible" ]] || continue
+    # Un commentaire historique n'est pas une référence utilisée par le programme.
+    grep -v '^[[:space:]]*#' "$cible" | grep -F -- "$ANCIEN" >/dev/null || continue
+    if python3 - "$cible" "$CANON/$source" "$ANCIEN" "$CANON" <<'PY'
+import pathlib, sys
+target, source, old, new = sys.argv[1:]
+try:
+    previous = pathlib.Path(target).read_bytes()
+    candidate = pathlib.Path(source).read_bytes()
+    old, new = old.encode(), new.encode()
+    candidate = candidate.replace(b'/opt/omni-siem/repository', new)
+    # Ne pas déployer une autre évolution fonctionnelle sous couvert d'une migration.
+    active = b'\n'.join(line for line in candidate.splitlines() if not line.lstrip().startswith(b'#'))
+    raise SystemExit(0 if old not in active and previous.replace(old, new) == candidate else 1)
+except OSError:
+    raise SystemExit(1)
+PY
+    then
+      ROBOTS+=("$cible")
+      info "robot déjà installé, seul chemin modifié : $cible"
+    else
+      bloc "robot $cible : autres écarts de code ; réconcilier avant la migration"
+    fi
+  done < "$CANON/manifeste-deploye.txt"
 fi
 
 echo "[4] Prérequis du dépôt (plan de cohérence, étape 1)"
@@ -98,9 +158,21 @@ fi
 
 echo "[6] Plan de déploiement délégué à omni-deploy"
 if [[ -f "$CANON/tools/omni-deploy.py" ]]; then
-  if ! OMNI_SIEM_HOME="$CANON" python3 "$CANON/tools/omni-deploy.py" --home "$CANON" deploy all | sed 's/^/    /'; then
+  # Valider le manifeste même s'il n'y a aucune unité à repointer.
+  if ! OMNI_SIEM_HOME="$CANON" python3 "$CANON/tools/omni-deploy.py" --home "$CANON" deploy systemd --filtre '/etc/systemd/system/__omni_migration_sans_cible__' | sed 's/^/    /'; then
     bloc "le plan de déploiement a échoué : corriger ses blocages avant toute migration"
   fi
+  for projet in $(printf '%s\n' "${VENVS[@]}" | sort -u); do
+    if ! OMNI_SIEM_HOME="$CANON" python3 "$CANON/tools/omni-deploy.py" --home "$CANON" deploy venvs --filtre "$CANON/$projet/.venv" | sed 's/^/    /'; then
+      bloc "le plan du venv $projet a échoué"
+    fi
+  done
+  # Les exécutables sont vérifiés après construction des venvs, avant le repointage.
+  for cible in "${ROBOTS[@]}"; do
+    if ! OMNI_SIEM_HOME="$CANON" python3 "$CANON/tools/omni-deploy.py" --home "$CANON" deploy robots --filtre "$cible" | sed 's/^/    /'; then
+      bloc "le plan du robot $cible a échoué"
+    fi
+  done
 fi
 
 echo
@@ -110,12 +182,16 @@ if [[ "$MODE" != --apply ]]; then
 fi
 [[ $BLOCAGES -eq 0 ]] || { echo "Migration refusée : $BLOCAGES blocage(s)." >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "--apply exige root." >&2; exit 1; }
+command -v flock >/dev/null 2>&1 || { echo "flock requis pour sérialiser la migration." >&2; exit 2; }
+install -d -m 700 "$ARCHIVES"
+exec {migration_verrou}>"$ARCHIVES/migration.lock"
+flock -n "$migration_verrou" || { echo "Une autre migration est en cours ; rien n'est basculé." >&2; exit 2; }
 
-if [[ -d "$ANCIEN" ]]; then
+if [[ -d "$ARCHIVER" ]]; then
   install -d -m 700 "$ARCHIVES"
   ARCHIVE="$ARCHIVES/ancienne-copie-$(date +%Y%m%d-%H%M%S).tar.gz"
   ( umask 077; tar czf "$ARCHIVE" --exclude='.venv' --exclude='__pycache__' --exclude='.pytest_cache' \
-      --exclude='.ruff_cache' -C "$(dirname "$ANCIEN")" "$(basename "$ANCIEN")" )
+      --exclude='.ruff_cache' -C "$(dirname "$ARCHIVER")" "$(basename "$ARCHIVER")" )
   echo "Archive de l'ancienne copie : $ARCHIVE"
 fi
 if [[ $COPIER_ENV -eq 1 ]]; then
@@ -125,19 +201,23 @@ fi
 STAMP=$(date +%Y%m%d-%H%M%S)
 install -d -m 700 "$ARCHIVES"
 ( umask 077; tar czf "$ARCHIVES/systemd-$STAMP.tar.gz" -C /etc/systemd system; tar czf "$ARCHIVES/nginx-$STAMP.tar.gz" -C /etc nginx )
-if [[ -f /etc/default/omni-mobile ]] && ! grep -q '^MITRE_LOOKUP=' /etc/default/omni-mobile; then
+if [[ " ${SERVICES[*]} " == *' omni-mobile-api '* && -f /etc/default/omni-mobile ]] && ! grep -q '^MITRE_LOOKUP=' /etc/default/omni-mobile; then
   cp -p /etc/default/omni-mobile "$ARCHIVES/omni-mobile-$STAMP.default"
   echo "MITRE_LOOKUP=$CANON/lookups/mitre-attack.csv" >> /etc/default/omni-mobile
   echo "MITRE_LOOKUP ajouté à /etc/default/omni-mobile (copie : $ARCHIVES/omni-mobile-$STAMP.default)."
 fi
 DEPLOY=(env OMNI_SIEM_HOME="$CANON" python3 "$CANON/tools/omni-deploy.py" --home "$CANON")
-"${DEPLOY[@]}" deploy venvs --apply --no-verify
-for service in omni-iso-evidence oms-graph oms-graph-respond oms-ml-anomaly oms-ml-fp oms-xdr omni-backup-config omni-disk-guard omni-mobile-api; do
+for projet in $(printf '%s\n' "${VENVS[@]}" | sort -u); do
+  "${DEPLOY[@]}" deploy venvs --filtre "$CANON/$projet/.venv" --apply --no-verify
+done
+for service in "${SERVICES[@]}"; do
   echo "== Repointage de $service"
   "${DEPLOY[@]}" deploy systemd --filtre "/etc/systemd/system/$service.service.d/50-depot-reference.conf" --apply --no-verify
 done
-"${DEPLOY[@]}" deploy robots --apply --no-verify
-"${DEPLOY[@]}" deploy systemd --apply
+for cible in "${ROBOTS[@]}"; do
+  "${DEPLOY[@]}" deploy robots --filtre "$cible" --apply --no-verify
+done
+"${DEPLOY[@]}" verify
 cat <<EOF
 Migration appliquée. Transactions : ${DEPLOY[*]} history
 L'ancienne copie $ANCIEN est conservée pour le retour arrière.

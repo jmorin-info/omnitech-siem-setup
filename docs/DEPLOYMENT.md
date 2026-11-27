@@ -155,15 +155,30 @@ bash tools/migrer-chemin-canonique.sh             # plan, lecture seule
 sudo bash tools/migrer-chemin-canonique.sh --apply
 ```
 
+Cette commande migre les chemins de composants **déjà installés**. Elle ne sert
+pas à installer toute la plateforme ni à publier la console. Les unités absentes
+sont ignorées ; aucun timer n'est activé et nginx n'est pas modifié.
+
 `--apply` : archive l'ancienne copie, `/etc/systemd/system` et `/etc/nginx` dans
 `/var/backups/omni-siem` ; ajoute `MITRE_LOOKUP` à `/etc/default/omni-mobile` s'il
-manque ; construit et vérifie les venvs **avant tout repointage** ; pose les drop-ins
+manque et que le backend est installé ; construit et vérifie les seuls venvs requis
+**avant tout repointage** ; pose les drop-ins
 `50-depot-reference.conf` **une transaction par service** (omni-iso-evidence, oms-graph,
 oms-graph-respond, oms-ml-anomaly, oms-ml-fp, oms-xdr, omni-backup-config,
-omni-disk-guard, omni-mobile-api), avec arrêt au premier échec ; déploie les robots ;
-remet les unités en 0644 ; lance le contrôle de santé. Les services `oneshot`
+omni-disk-guard, omni-mobile-api), pour les unités présentes, avec arrêt au premier
+échec ; repointe seulement les robots déjà présents dont le seul écart de code est
+le chemin du dépôt ; lance le contrôle de santé. Un robot modifié autrement ou une
+ancienne copie avec des changements suivis bloque la migration : réconcilier le
+code auparavant. Les services `oneshot`
 repointés ne sont pas démarrés : les tester avec `systemctl start <service>` puis
 `journalctl -u <service>`.
+
+Si l'ancien chemin est déjà un lien symbolique vers le dépôt canonique, il n'y a
+pas deux copies à fusionner : le lien est conservé et l'archive porte sur les
+fichiers du dépôt réel. Les références des services peuvent encore passer par cet
+alias ; le même plan permet de les repointer. Un lien vers une autre destination
+est refusé. Cette opération ne déplace aucune base de données et conserve les
+sites nginx voisins, leurs certificats et les paramètres de collecte du client.
 
 Non traité automatiquement :
 

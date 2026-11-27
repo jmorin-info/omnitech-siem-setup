@@ -20,9 +20,10 @@ def git_repo(path: Path, files: dict[str, str]):
         subprocess.run(["git", "-C", str(path), *argv], check=True, env=env, capture_output=True)
 
 
-def run(tmp_path, *args):
+def run(tmp_path, *args, extra_env=None):
     env = {**os.environ, "OMNI_SIEM_HOME": str(tmp_path / "canon"), "MIGRATION_ANCIEN": str(tmp_path / "ancien"),
            "MIGRATION_ARCHIVES": str(tmp_path / "archives")}
+    env.update(extra_env or {})
     return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True, text=True, env=env)
 
 
@@ -120,3 +121,72 @@ def test_logstash_waits_for_graylog_gelf_input_with_a_bounded_delay():
     assert "/dev/tcp/127.0.0.1/12202" in pre and "$$i -lt 60" in pre and "sleep 5" in pre
     assert pre.rstrip("'").endswith("exit 0")
     assert "TimeoutStartSec=420" in dropin
+
+
+def ready_canonical(tmp_path):
+    canon = tmp_path / "canon"
+    evidence_readme = "/".join(("docs", "archives", "preuves-iso", "README.md"))
+    git_repo(canon, {
+        "omni_deploy/engine.py": "", "mobile/requirements.txt": "pywebpush\n",
+        "lib-platform.sh": (ROOT / "lib-platform.sh").read_text(),
+        evidence_readme: "fixture\n",
+        "tools/omni-deploy.py": "import json,sys\nprint('DELEGATED='+json.dumps(sys.argv[1:]))\n",
+    })
+    (canon / "00-vars.env").write_text("PRIVATE_SITE_SETTING='not-for-output'\n")
+    (canon / "00-vars.env").chmod(0o600)
+    return canon
+
+
+def test_existing_alias_to_canonical_is_preserved_and_archive_targets_real_files(tmp_path):
+    canon = ready_canonical(tmp_path)
+    alias = tmp_path / "ancien"
+    alias.symlink_to(canon, target_is_directory=True)
+    before = snapshot(canon)
+    result = run(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "déjà un lien vers le dépôt canonique" in result.stdout
+    assert "fichiers du dépôt réel" in result.stdout
+    assert alias.is_symlink() and alias.resolve() == canon
+    assert snapshot(canon) == before
+    assert not (tmp_path / "archives").exists()
+    assert "not-for-output" not in result.stdout + result.stderr
+
+
+def test_alias_to_another_checkout_blocks_before_any_write(tmp_path):
+    ready_canonical(tmp_path)
+    git_repo(tmp_path / "other", {"README": "other checkout\n"})
+    (tmp_path / "ancien").symlink_to(tmp_path / "other", target_is_directory=True)
+    before = snapshot(tmp_path)
+    result = run(tmp_path, "--apply")
+    assert result.returncode == 2 and "lien vers un autre dossier" in result.stdout
+    assert snapshot(tmp_path) == before and not (tmp_path / "archives").exists()
+
+
+def test_uncommitted_old_code_blocks_even_when_site_configuration_matches(tmp_path):
+    canon = ready_canonical(tmp_path)
+    git_repo(tmp_path / "ancien", {"README": "original\n"})
+    (tmp_path / "ancien/README").write_text("local correction must be retained\n")
+    (tmp_path / "ancien/00-vars.env").write_bytes((canon / "00-vars.env").read_bytes())
+    result = run(tmp_path, "--apply")
+    assert result.returncode == 2 and "réconcilier les fichiers suivis" in result.stdout
+    assert "local correction must be retained" in (tmp_path / "ancien/README").read_text()
+    assert not (tmp_path / "archives").exists()
+
+
+def test_partial_install_only_plans_required_virtual_environments(tmp_path):
+    canon = ready_canonical(tmp_path)
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    systemctl = binaries / "systemctl"
+    systemctl.write_text("#!/bin/sh\ncase \"$2\" in omni-mobile-api.service|oms-xdr.service) echo loaded;; *) echo not-found;; esac\n")
+    systemctl.chmod(0o755)
+    result = run(tmp_path, extra_env={"PATH": str(binaries) + os.pathsep + os.environ["PATH"]})
+    assert result.returncode == 0, result.stdout + result.stderr
+    commands = [line.strip().removeprefix("DELEGATED=") for line in result.stdout.splitlines()
+                if line.strip().startswith("DELEGATED=")]
+    import json
+    commands = [json.loads(line) for line in commands]
+    virtual_environments = [args[args.index("--filtre") + 1] for args in commands if "venvs" in args]
+    assert virtual_environments == [str(canon / "mobile/.venv"), str(canon / "oms-xdr/.venv")]
+    assert all("all" not in args and "console" not in args and "nginx" not in args for args in commands)
+    assert "oms-graph.service absent ou non chargé : ignoré" in result.stdout
