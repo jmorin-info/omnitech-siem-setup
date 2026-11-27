@@ -21,6 +21,11 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - Console SOC : logo personnalisé agrandi (56 px à côté du nom, logo large placé au-dessus du nom) ; adresse cliente réelle derrière le proxy FortiGate (`deploye/nginx/omni-real-ip.conf`), qui rétablit les écritures d'administration depuis les réseaux autorisés et des limites de débit par poste.
 
 ### Ajouté
+- Tri des alertes v5 (`triage/omni-alert-triage`, `deploye/lib/omni-siem/omni_v5_tri.py`) : rodage des
+  nouvelles détections (`OMNI_RODAGE_*`), priorité relevée pour une machine exposée à une vulnérabilité
+  KEV (`OMNI_V5_KEV*`), juge de la zone grise `cloud`, `local` ou `off` (`OMNI_V5_JUGE*`) ; réglages du
+  juge distant neutres lus dans le `.env` (`OMNI_LLM_CLE`, `OMNI_LLM_URL`, `OMNI_LLM_ENTETE`,
+  `OMNI_TRIAGE_LLM_MODEL`) ; modèle `triage/omni-alert-triage.env.example` complété.
 - SIEM v5 (27/11/2026), couches additives en rodage jusqu'au 04/12/2026 (définitions « OMNI v5 - »
   regroupées dans le récapitulatif quotidien, sans mail unitaire). Chaque règle de détection a été
   vérifiée au simulateur Graylog et rejouée sur 30 jours de données réelles avant activation.
