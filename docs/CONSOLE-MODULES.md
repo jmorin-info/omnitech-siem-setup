@@ -17,8 +17,9 @@ ils restent hors du dépôt Git et ne sont pas remplacés par une mise à jour d
 5. Vérifier les filtres facultatifs : sources normalisées (`event_source`),
    identifiants d'intégration (`omni_integration_id`) et expression Lucene supplémentaire.
    Ils s'ajoutent au périmètre des streams ; ils ne le remplacent pas.
-6. Ajouter, renommer, retirer ou réordonner les widgets. Choisir éventuellement un
-   **dashboard Graylog associé** pour proposer son ouverture depuis la page.
+6. Ajouter, renommer, retirer ou réordonner les widgets. Associer un ou plusieurs
+   **dashboards Graylog natifs** ; les préréglages proposent tous les dashboards du
+   catalogue dont le nom correspond au produit. La vue Graylog conserve ses graphiques.
 7. Renseigner un motif, **Simuler le changement**, vérifier le résultat puis
    **Publier ces réglages**. Actualiser les pages publiées pour consulter la vue.
 
@@ -66,8 +67,9 @@ ne sont pas convertis automatiquement en widgets SOC.
 
 Installer d'abord le module et configurer l'envoi des journaux avec
 [le guide des intégrations](INTEGRATIONS-MODULAIRES.md).
-Dans l'éditeur SOC, choisir le préréglage, sélectionner son stream et associer son
-dashboard. Les préréglages appliquent un filtre `omni_integration_id` : le conserver pour
+Dans l'éditeur SOC, choisir le préréglage, sélectionner son stream et associer les
+dashboards WatchGuard visibles dans le catalogue. Le lien n'active ni le stream ni le
+pipeline Graylog. Les préréglages appliquent un filtre `omni_integration_id` : le conserver pour
 les modules natifs correspondants. Pour un autre collecteur qui ne renseigne pas ce
 champ, retirer ce filtre et choisir les champs réellement présents dans ses journaux.
 

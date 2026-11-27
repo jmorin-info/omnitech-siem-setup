@@ -1,5 +1,7 @@
 [
   {"message": "firebox-test 0000000000000 (2026-01-01T12:00:00) firewall: msg_id=\"3000-0148\" Allow External Trusted 44 tcp 20 238 203.0.113.10 192.0.2.20 50000 443 offset 6 S", "expected": {"event_id": "3000-0148", "event_action": "allow", "src_ip": "203.0.113.10", "dest_ip": "192.0.2.20", "src_port": 50000, "dest_port": 443}},
   {"message": "2026-01-01 12:00:00 Deny 192.0.2.10 203.0.113.80 https/tcp 42017 443 Trusted External Blocked (Example-Policy) proc_id=\"firewall\" rc=\"100\" msg_id=\"3000-0148\"", "expected": {"event_action": "deny", "src_ip": "192.0.2.10", "dest_ip": "203.0.113.80", "dest_port": 443}},
-  {"message": "firebox-test unsupported diagnostic message", "expected": {"omni_parse_status": "unparsed"}}
+  {"message": "firebox-test unsupported diagnostic message", "expected": {"omni_parse_status": "unparsed"}},
+  {"message": "firebox-test syslog envelope", "fields": {"msg_id": "3000-0148", "srcip": "203.0.113.10", "dstip": "192.0.2.20", "srcport": "50000", "dstport": "443", "action": "Allow", "policy_name": "External-Web", "protocol": "TCP"}, "expected": {"event_source": "watchguard", "event_id": "3000-0148", "event_action": "allow", "src_ip": "203.0.113.10", "dest_ip": "192.0.2.20", "src_port": 50000, "dest_port": 443, "network_rule": "External-Web", "network_protocol": "tcp"}},
+  {"message": "firebox-test syslog envelope", "fields": {"msg_id": "3000-0148", "srcip": "999.1.1.1", "dstip": "192.0.2.20", "srcport": "65536", "dstport": "443", "action": "Allow", "protocol": "TCP"}, "expected": {"event_source": "watchguard", "event_id": "3000-0148", "event_action": "allow", "dest_ip": "192.0.2.20", "dest_port": 443}}
 ]

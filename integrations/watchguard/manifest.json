@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "watchguard",
   "name": "WatchGuard Firebox",
-  "revision": 2,
+  "revision": 3,
   "status": "preview",
   "default_port": 1521,
   "supported_format": "Fireware traffic messages: syslog firewall msg_id form or Traffic Monitor form; IPv4 TCP/UDP only",
@@ -19,6 +19,7 @@
         "fields": ["action", "src_ip", "dest_ip", "protocol", "src_port", "dest_port", "event_id"]
       }
     ],
-    "mapping": {"event_id": "event_id", "action": "event_action", "src_ip": "src_ip", "dest_ip": "dest_ip", "src_port": "src_port", "dest_port": "dest_port", "protocol": "network_protocol", "src_zone": "src_zone", "dest_zone": "dest_zone"}
+    "mapping": {"event_id": "event_id", "action": "event_action", "src_ip": "src_ip", "dest_ip": "dest_ip", "src_port": "src_port", "dest_port": "dest_port", "protocol": "network_protocol", "src_zone": "src_zone", "dest_zone": "dest_zone"},
+    "existing_fields": {"msg_id": "event_id", "srcip": "src_ip", "dstip": "dest_ip", "srcport": "src_port", "dstport": "dest_port", "action": "event_action", "policy_name": "network_rule", "protocol": "network_protocol"}
   }
 }

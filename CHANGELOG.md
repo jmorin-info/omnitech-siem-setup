@@ -13,6 +13,11 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ## [Non publié]
 
+- Intégration WatchGuard : normalisation complémentaire des champs Fireware déjà
+  extraits (`srcip`, `dstip`, `msg_id`, `action`, `policy_name`, ports et protocole),
+  en préservant les champs d'origine et sans activer de stream historique. La console
+  SOC peut associer plusieurs dashboards Graylog découverts par son catalogue ; le
+  préréglage WatchGuard les propose tous sans recréer leurs vues.
 - Console SOC : logo personnalisé agrandi (56 px à côté du nom, logo large placé au-dessus du nom) ; adresse cliente réelle derrière le proxy FortiGate (`deploye/nginx/omni-real-ip.conf`), qui rétablit les écritures d'administration depuis les réseaux autorisés et des limites de débit par poste.
 
 ### Ajouté
