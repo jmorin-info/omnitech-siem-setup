@@ -104,6 +104,24 @@ def test_catalog_reads_native_dashboard_widgets_without_changing_graylog(configu
     assert all(method == "GET" for method, _ in calls)
 
 
+def test_multiple_native_dashboard_links_are_validated_and_published(configured):
+    raw = config()
+    raw["pages"][0]["graylog_dashboard_ids"] = ["c" * 24, "d" * 24]
+    clean = configured.modules_validate_config(raw)
+    assert clean["pages"][0]["graylog_dashboard_ids"] == ["b" * 24, "c" * 24, "d" * 24]
+    publish(configured, raw)
+    page = configured.modules_public("bob")["pages"][0]
+    assert page["graylog_dashboard_ids"] == ["b" * 24, "c" * 24, "d" * 24]
+
+
+@pytest.mark.parametrize("ids", [["../bad"], ["a" * 24] * 2, ["a" * 24] * 11])
+def test_invalid_native_dashboard_links_are_rejected(configured, ids):
+    raw = config()
+    raw["pages"][0]["graylog_dashboard_ids"] = ids
+    with pytest.raises(configured.AdminError):
+        configured._a_modules(raw, "alice")
+
+
 def test_partial_catalog_failure_keeps_saved_configuration(configured, monkeypatch):
     publish(configured)
     saved = Path(configured.MODULES_CONFIG_FILE).read_bytes()

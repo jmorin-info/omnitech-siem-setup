@@ -68,7 +68,10 @@
       target.appendChild(node("h2", "", p.title || "Module"));
       if (p.description) message(target, p.description);
       message(target, "Période : " + p.days + " jour(s). Streams configurés : " + (p.stream_ids || []).length + ".");
-      if (p.graylog_dashboard_id) target.appendChild(graylogLink(p.graylog_dashboard_id));
+      (p.graylog_dashboard_ids || (p.graylog_dashboard_id ? [p.graylog_dashboard_id] : [])).forEach(function (id) {
+        var dashboard = ((state.catalog && state.catalog.dashboards) || []).find(function (item) { return item.id === id; });
+        target.appendChild(graylogLink(id, dashboard ? "Ouvrir " + dashboard.title + " dans Graylog" : "Ouvrir le dashboard Graylog"));
+      });
       var grid = node("div", "modules-widgets"); (result.widgets || []).forEach(function (w) { grid.appendChild(drawWidget(w)); });
       target.appendChild(grid); if (result.generated) message(target, "Lecture : " + result.generated);
     }).catch(function (e) { if (request === state.serial) { target.replaceChildren(); message(target, e.message, true); } });
@@ -117,9 +120,10 @@
     });
     var id = preset + "-" + Date.now().toString(36);
     var p = {id:id,title:name,description:"",enabled:true,min_role:"administrateur",stream_ids:suggested.length === 1 ? [suggested[0].id] : [],
-      event_sources:[],integration_ids:[],query:"",days:1,graylog_dashboard_id:"",widgets:[widget("count","Événements"),widget("timeseries","Activité"),widget("terms","Sources","source"),widget("messages","Derniers journaux")]};
+      event_sources:[],integration_ids:[],query:"",days:1,graylog_dashboard_id:"",graylog_dashboard_ids:[],widgets:[widget("count","Événements"),widget("timeseries","Activité"),widget("terms","Sources","source"),widget("messages","Derniers journaux")]};
     if (["watchguard","unifi","paloalto"].indexOf(preset) >= 0) p.integration_ids = [preset];
     var dashboards = (state.catalog.dashboards || []).filter(function (d) { return d.title.toLowerCase().indexOf(preset === "vuln" ? "vuln" : preset) >= 0; });
+    p.graylog_dashboard_ids = dashboards.map(function (dashboard) { return dashboard.id; });
     if (dashboards.length === 1) p.graylog_dashboard_id = dashboards[0].id;
     state.draft.pages.push(p); state.preview = null; renderEditor(p.id);
   }
@@ -146,7 +150,18 @@
       input(fields,"Sources normalisées, séparées par des virgules",p.event_sources.join(", "),function (v) { p.event_sources = csv(v); });
       input(fields,"Identifiants d'intégration",p.integration_ids.join(", "),function (v) { p.integration_ids = csv(v); });
       input(fields,"Filtre Graylog/Lucene supplémentaire",p.query,function (v) { p.query = v; });
-      choice(fields,"Dashboard Graylog associé",p.graylog_dashboard_id,[["","Aucun"]].concat((state.catalog.dashboards || []).map(function (d) { return [d.id,d.title+" ("+d.widgets+" widgets)"]; })),function (v) { p.graylog_dashboard_id = v; });
+      var dashboardField = node("fieldset", "modules-streams"); dashboardField.appendChild(node("legend", "", "Dashboards Graylog natifs associés"));
+      var dashboardIds = p.graylog_dashboard_ids || (p.graylog_dashboard_id ? [p.graylog_dashboard_id] : []);
+      (state.catalog.dashboards || []).forEach(function (d) {
+        var label = node("label"), check = node("input"); check.type = "checkbox"; check.checked = dashboardIds.indexOf(d.id) >= 0;
+        check.addEventListener("change", function () {
+          p.graylog_dashboard_ids = (p.graylog_dashboard_ids || (p.graylog_dashboard_id ? [p.graylog_dashboard_id] : [])).filter(function (id) { return id !== d.id; });
+          if (check.checked) p.graylog_dashboard_ids.push(d.id);
+          p.graylog_dashboard_id = p.graylog_dashboard_ids[0] || ""; state.preview = null;
+        });
+        label.appendChild(check); label.appendChild(document.createTextNode(" " + d.title + " (" + d.widgets + " widgets)")); dashboardField.appendChild(label);
+      });
+      fields.appendChild(dashboardField);
       form.appendChild(fields); var streams = node("fieldset", "modules-streams"); streams.appendChild(node("legend","","Streams inclus dans la page"));
       (state.catalog.streams || []).forEach(function (s) {
         var label = node("label"), check = node("input"); check.type = "checkbox"; check.checked = p.stream_ids.indexOf(s.id) >= 0;

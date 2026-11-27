@@ -3229,7 +3229,7 @@ def modules_validate_config(raw):
         raise AdminError("vingt pages de modules au maximum")
     normalized, seen = [], set()
     page_keys = {"id", "title", "description", "enabled", "min_role", "stream_ids", "event_sources",
-                 "integration_ids", "query", "days", "graylog_dashboard_id", "widgets"}
+                 "integration_ids", "query", "days", "graylog_dashboard_id", "graylog_dashboard_ids", "widgets"}
     for page in pages:
         if not isinstance(page, dict) or set(page) - page_keys:
             raise AdminError("page de module invalide")
@@ -3248,6 +3248,9 @@ def modules_validate_config(raw):
         dashboard = page.get("graylog_dashboard_id", "")
         if not isinstance(dashboard, str) or (dashboard and not _GL_ID_RE.fullmatch(dashboard)):
             raise AdminError("identifiant de dashboard Graylog invalide")
+        dashboards = _module_strings(page.get("graylog_dashboard_ids", []), _GL_ID_RE, 10, "dashboards")
+        if dashboard and dashboard not in dashboards:
+            dashboards.insert(0, dashboard)
         widgets = page.get("widgets")
         if not isinstance(widgets, list) or not 1 <= len(widgets) <= 12:
             raise AdminError("une à douze widgets sont requis par page")
@@ -3276,7 +3279,7 @@ def modules_validate_config(raw):
             "event_sources": _module_strings(page.get("event_sources", []), _MODULE_SOURCE, 30, "sources"),
             "integration_ids": _module_strings(page.get("integration_ids", []), _MODULE_SOURCE, 30, "intégrations"),
             "query": _module_text(page.get("query", ""), 1000, "recherche"), "days": days,
-            "graylog_dashboard_id": dashboard, "widgets": output})
+            "graylog_dashboard_id": dashboard, "graylog_dashboard_ids": dashboards, "widgets": output})
     result = {"schema_version": 1, "revision": revision, "pages": normalized}
     if len(json.dumps(result, ensure_ascii=False).encode()) > MODULES_MAX_BODY - 2048:
         raise AdminError("configuration de modules trop volumineuse", 413)
@@ -3334,7 +3337,8 @@ def _x_modules(c, actor, motif, rid):
 
 
 def _module_public(page):
-    return {key: page[key] for key in ("id", "title", "description", "min_role", "days", "stream_ids", "graylog_dashboard_id")}
+    return {key: page[key] for key in ("id", "title", "description", "min_role", "days", "stream_ids",
+                                        "graylog_dashboard_id", "graylog_dashboard_ids")}
 
 
 def modules_public(user):

@@ -37,6 +37,7 @@ def load_module(module_id):
         raise ValueError("Unsupported parser or revision")
     field_names = list(data["parser"]["mapping"]) + list(data["parser"]["mapping"].values())
     field_names += data["parser"].get("fields", [])
+    field_names += list(data["parser"].get("existing_fields", {}))
     field_names += [field for pattern in data["parser"].get("patterns", []) for field in pattern["fields"]]
     if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", field) for field in field_names):
         raise ValueError("Mapping/parse fields must be valid pipeline identifiers")
@@ -88,6 +89,11 @@ def pipeline_rules(module):
                 *[f'set_field({json.dumps(prefix + field)}, parsed[{json.dumps(field)}]);' for field in pattern["fields"]],
             ]))
         success = f'has_field("{prefix}event_id") AND has_field("{prefix}action")'
+        if parser.get("existing_fields"):
+            event_id_field = next((field for field, target in parser["existing_fields"].items() if target == "event_id"), None)
+            action_field = next((field for field, target in parser["existing_fields"].items() if target == "event_action"), None)
+            if event_id_field and action_field:
+                success = f'({success}) OR (has_field("{event_id_field}") AND has_field("{action_field}"))'
     elif parser["type"] == "cef":
         expression = r"(?s)(CEF:[0-9]+\|Ubiquiti\|UniFi Network\|.*)"
         call = f'regex({json.dumps(expression)}, to_string($message.message))'
@@ -119,6 +125,23 @@ def pipeline_rules(module):
         elif canonical in ("event_action", "network_protocol", "event_category"):
             expression = f'lowercase(regex_replace(" +", {expression}, "_", true))'
         stages[3].append(_rule(stem + "-map-" + raw.lower(), condition, [f'set_field("{canonical}", {expression});']))
+    # Some collectors or vendor extractors already populate raw Graylog fields.
+    # Preserve those fields and fill the common model only when it is absent.
+    for raw, canonical in parser.get("existing_fields", {}).items():
+        field = prefix + "existing-" + raw
+        condition = f'has_field("{raw}") AND to_string($message.{raw}) != "" AND !has_field("{canonical}")'
+        expression = f"to_string($message.{raw})"
+        if canonical in ("src_ip", "dest_ip"):
+            condition += f" AND is_ip(to_ip({expression}))"
+            expression = f"to_ip({expression})"
+        elif canonical in ("src_port", "dest_port"):
+            condition += f' AND regex("^[0-9]+$", to_string($message.{raw})).matches == true'
+            condition += f" AND to_long($message.{raw}) >= 0 AND to_long($message.{raw}) <= 65535"
+            expression = f"to_long($message.{raw})"
+        elif canonical in ("event_action", "network_protocol"):
+            expression = f'lowercase(regex_replace(" +", {expression}, "_", true))'
+        stages[3].append(_rule(stem + "-existing-" + raw.lower(), condition,
+                               [f'set_field("{canonical}", {expression});']))
     return stages
 
 
@@ -224,7 +247,7 @@ def digest(pack):
     return hashlib.sha256(canonical_pack(pack)).hexdigest()
 
 
-def parse_sample(module, message):
+def parse_sample(module, message, existing_fields=None):
     """Offline format contract, not an emulation of the Graylog runtime."""
     parser, raw = module["parser"], {}
     result = {"event_source": module["id"], "omni_parse_status": "unparsed"}
@@ -248,9 +271,8 @@ def parse_sample(module, message):
             raw = {"device_event_class_id": event_id, "name": name}
             for item in re.finditer(r"(?:^| )([A-Za-z][A-Za-z0-9_]*)=(.*?)(?= [A-Za-z][A-Za-z0-9_]*=|$)", extension):
                 raw[item[1]] = item[2]
-    if not raw:
+    if not raw and not existing_fields:
         return result
-    result["omni_parse_status"] = "parsed"
     for source, target in parser["mapping"].items():
         item = raw.get(source)
         if not item:
@@ -270,13 +292,35 @@ def parse_sample(module, message):
         elif target in ("event_action", "event_category", "network_protocol"):
             item = re.sub(" +", "_", item).lower()
         result[target] = item
+    for source, target in parser.get("existing_fields", {}).items():
+        item = (existing_fields or {}).get(source)
+        if item in (None, "") or result.get(target) not in (None, ""):
+            continue
+        if target in ("src_ip", "dest_ip"):
+            try:
+                item = str(ipaddress.ip_address(str(item)))
+            except ValueError:
+                continue
+        elif target in ("src_port", "dest_port"):
+            try:
+                item = int(item)
+            except (ValueError, TypeError):
+                continue
+            if not 0 <= item <= 65535:
+                continue
+        elif target in ("event_action", "network_protocol"):
+            item = re.sub(" +", "_", str(item)).lower()
+        result[target] = item
+    if any(key in result for key in parser["mapping"].values()) or any(
+            target in result for target in parser.get("existing_fields", {}).values()):
+        result["omni_parse_status"] = "parsed"
     return result
 
 
 def validate_module(module):
     fixtures = json.loads((CATALOG / module["id"] / "fixtures.json").read_text(encoding="utf-8"))
     for fixture in fixtures:
-        result = parse_sample(module, fixture["message"])
+        result = parse_sample(module, fixture["message"], fixture.get("fields"))
         for key, expected in fixture["expected"].items():
             if result.get(key) != expected:
                 raise ValueError(f"{module['id']} fixture mismatch for {key}: {result.get(key)!r} != {expected!r}")

@@ -78,6 +78,25 @@ def test_invalid_ip_and_port_never_become_normalized_values():
     assert "src_ip" not in parsed and "src_port" not in parsed and "dest_port" not in parsed
 
 
+def test_watchguard_maps_existing_vendor_fields_without_removing_them():
+    module = load_module("watchguard")
+    report = validate_module(module)
+    assert report["fixtures"] >= 5
+    pack = build_pack(module)
+    rules = [rule["data"]["source"]["@value"] for rule in pack["entities"]
+             if rule["type"]["name"] == "pipeline_rule"]
+    generated = "\n".join(rules)
+    for raw, common in (("srcip", "src_ip"), ("dstip", "dest_ip"), ("msg_id", "event_id"),
+                        ("policy_name", "network_rule"), ("action", "event_action")):
+        assert f'has_field("{raw}")' in generated
+        assert f'set_field("{common}"' in generated
+    fixture = json.loads((ROOT / "integrations/watchguard/fixtures.json").read_text())[-2]
+    result = parse_sample(module, fixture["message"], fixture["fields"])
+    assert result["omni_parse_status"] == "parsed"
+    assert result["src_ip"] == "203.0.113.10" and result["event_action"] == "allow"
+    assert "remove_field" not in generated
+
+
 @pytest.mark.parametrize("api", ["http://example.test/api", "https://user:secret@example.test/api", "https://example.test/api?secret=x", "https://example.test"])
 def test_api_rejects_unsafe_connection(api):
     with pytest.raises(ValueError):
@@ -360,7 +379,7 @@ def test_export_does_not_require_credentials_or_network(tmp_path):
     output = tmp_path / "watchguard.json"
     command = [sys.executable, str(ROOT / "tools/omni-integrations.py"), "export", "watchguard", "--output", str(output)]
     assert subprocess.run(command, capture_output=True).returncode == 0
-    assert json.loads(output.read_text())["rev"] == 2
+    assert json.loads(output.read_text())["rev"] == 3
     assert subprocess.run(command, capture_output=True).returncode != 0  # preserves local export
 
 
