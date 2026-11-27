@@ -208,7 +208,7 @@ def test_content_layer_reads_catalogue_and_manifest_drift(tmp_path):
 
 def test_graylog_installations_use_get_only(monkeypatch):
     fake = FakeSystem()
-    fake.http["https://127.0.0.1:9000/api/system/content_packs/*"] = (200, json.dumps({"installations": [{"content_pack_revision": 2}]}))
+    fake.http["http://127.0.0.1:9000/api/system/content_packs/*"] = (200, json.dumps({"installations": [{"content_pack_revision": 2}]}))
     result = status.graylog_installations(fake, "tok", source=ROOT)
     assert set(result) == {"watchguard", "unifi", "paloalto"} and set(result.values()) == {2}
     assert all(url.endswith("/installations") for url, _ in fake.http_calls)
