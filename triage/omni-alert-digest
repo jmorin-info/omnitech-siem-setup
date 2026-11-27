@@ -41,6 +41,7 @@ def load_env(path=ENVF):
     return env
 
 E = load_env()
+SOC = E.get("OMNI_SOC_URL", "")
 
 def window_hours(now=None):
     """Heures a couvrir depuis le precedent envoi (lundi=0 ... jeudi=3)."""
@@ -324,11 +325,322 @@ def render(rows, hours, since_txt, prev_rows=None, dropped=0):
     txt += ["", f"Console SOC : {SOC}"]
     return html, "\n".join(txt)
 
+# =============================================================================
+# v4 26/11/2026 : récapitulatif en charte v3 (cohérence avec les rapports DSI) + signatures FP v4 du tri.
+# Retour : OMNI_MAIL_CHARTE=v2 dans /etc/omni-alert-triage.env. Aperçu sans envoi : DIGEST_APERCU=/chemin.html
+# =============================================================================
+sys.path.insert(0, os.environ.get("OMNI_MAIL_LIB", "/usr/local/lib/omni-siem"))
+try:
+    import omni_mail_v3 as M3
+except Exception as _ex:
+    M3 = None; print(f"[v4] charte v3 indisponible ({_ex!r}) -> gabarit v2", file=sys.stderr)
+try:
+    import omni_fp_v4 as FP4
+    FP_LIBELLES.update(FP4.LIBELLES)
+except Exception:
+    FP4 = None
+FPV4 = []
+def collect_fp_v4(hours):
+    """Alertes écartées par une signature v4 du tri (triage_reason=fp_v4:<id>)."""
+    q = {"bool": {"filter": [{"term": {"event_source": "alert_triage"}}, {"prefix": {"triage_reason": "fp_v4:"}},
+                             {"range": {"timestamp": {"gte": f"now-{hours}h"}}}]}}
+    try:
+        r = search({"size": 0, "query": q, "aggs": {"s": {"terms": {"field": "triage_reason", "size": 20}}}})
+        return [(b["key"].split(":", 1)[1], b["doc_count"]) for b in r["aggregations"]["s"]["buckets"]]
+    except Exception:
+        return []
+def count_mails(hours):
+    """Mails réellement envoyés sur la période : immédiats (decision=mail) et alertes mises en lot."""
+    return count_only("mail", f"now-{hours}h"), count_only("lot", f"now-{hours}h")
+
+# =============================================================================
+# v5 27/11/2026 (chantier 2 « tri ») : section « Nouvelles détections en rodage » (décision rodage du tri)
+# et indicateurs sur 7 jours (volume par niveau, faux positifs par détection, MTTA).
+# Retour : OMNI_V5_DIGEST=0 dans /etc/omni-alert-triage.env (sections retirées, le reste inchangé).
+# =============================================================================
+ROD, IND = [], {}
+_DEC_URL = f"{OS_URL}/omni-interne*,omni-m365*/_search"
+def _search_dec(body):
+    req = urllib.request.Request(_DEC_URL, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+def collect_rodage(hours):
+    q = {"bool": {"filter": [{"term": {"event_source": "alert_triage"}}, {"term": {"triage_decision": "rodage"}},
+                             {"range": {"timestamp": {"gte": f"now-{hours}h"}}}]}}
+    try:
+        r = _search_dec({"size": 0, "query": q, "aggs": {"t": {"terms": {"field": "alert_title", "size": 40},
+              "aggs": {"e": {"terms": {"field": "triage_entity", "size": 4}}, "n": {"cardinality": {"field": "triage_entity"}},
+                       "tier": {"terms": {"field": "triage_tier", "size": 3}}, "sc": {"max": {"field": "triage_score"}},
+                       "last": {"max": {"field": "timestamp"}}}}}})
+        out = []
+        for b in r["aggregations"]["t"]["buckets"]:
+            ti = [x["key"] for x in b["tier"]["buckets"]]
+            out.append({"titre": b["key"], "n": b["doc_count"], "ne": int(b["n"]["value"]),
+                        "ents": [x["key"] for x in b["e"]["buckets"]],
+                        "tier": "CRITICAL" if "CRITICAL" in ti else ("GRAY" if "GRAY" in ti else (ti[0] if ti else "")),
+                        "score": int(b["sc"]["value"] or 0), "last": b["last"].get("value_as_string", "")})
+        return out
+    except Exception as ex:
+        print(f"[v5] rodage indisponible ({ex!r})", file=sys.stderr); return []
+
+def _niveaux_aggs():
+    crit = {"bool": {"filter": [{"term": {"triage_decision": "mail"}}],
+                     "should": [{"term": {"triage_tier": "CRITICAL"}}, {"prefix": {"triage_reason": "killchain"}}], "minimum_should_match": 1}}
+    return {"critique": {"filter": crit},
+            "mail_autre": {"filter": {"bool": {"filter": [{"term": {"triage_decision": "mail"}}], "must_not": [crit]}}},
+            "lot": {"filter": {"term": {"triage_decision": "lot"}},
+                    "aggs": {"h": {"date_histogram": {"field": "timestamp", "fixed_interval": "1h", "min_doc_count": 1}}}},
+            "recap": {"filter": {"terms": {"triage_decision": ["digest", "rodage"]}}},
+            "ecartees": {"filter": {"terms": {"triage_decision": ["drop", "dedup", "seal_relance"]}}},
+            "fp": {"filter": {"prefix": {"triage_reason": "fp_"}}},
+            "qa": {"filter": {"term": {"triage_decision": "qa_console"}}}}
+
+def collect_indicateurs(jours=7):
+    """Indicateurs v5 sur `jours` jours glissants. Jamais bloquant : {} si OpenSearch ne répond pas."""
+    # jours COMPLETS (heure de Paris) : J-7 00:00 -> aujourd'hui 00:00
+    base = {"bool": {"filter": [{"term": {"event_source": "alert_triage"}},
+                                {"range": {"timestamp": {"gte": f"now-{jours}d/d", "lt": "now/d", "time_zone": "Europe/Paris"}}}],
+                     "must_not": [{"term": {"triage_decision": "fp_add"}}]}}
+    out = {"jours": jours}
+    try:
+        r = _search_dec({"size": 0, "query": base, "aggs": {
+            "j": {"date_histogram": {"field": "timestamp", "calendar_interval": "1d", "time_zone": "Europe/Paris", "min_doc_count": 1},
+                  "aggs": _niveaux_aggs()},
+            "t": {"terms": {"field": "alert_title", "size": 400},
+                  "aggs": {"fp": {"filter": {"prefix": {"triage_reason": "fp_"}}},
+                           "mail": {"filter": {"terms": {"triage_decision": ["mail", "lot"]}}},
+                           "bruit": {"filter": {"bool": {"filter": [{"term": {"triage_decision": "drop"}}],
+                                                         "must_not": [{"prefix": {"triage_reason": "fp_"}}]}}}}}}})
+        jl = []
+        for b in r["aggregations"]["j"]["buckets"]:
+            jl.append({"jour": b.get("key_as_string", "")[:10], "critique": b["critique"]["doc_count"],
+                       "attention": b["lot"]["doc_count"] + b["mail_autre"]["doc_count"], "recap": b["recap"]["doc_count"],
+                       "ecartees": b["ecartees"]["doc_count"], "qa": b["qa"]["doc_count"],
+                       "mails": b["critique"]["doc_count"] + b["mail_autre"]["doc_count"] + len(b["lot"]["h"]["buckets"])})
+        out["jours_l"] = jl
+        det = []
+        for b in r["aggregations"]["t"]["buckets"]:
+            n, fp = b["doc_count"], b["fp"]["doc_count"]
+            det.append({"titre": b["key"], "n": n, "fp": fp, "taux": round(fp * 100.0 / n, 1) if n else 0.0,
+                        "mail": b["mail"]["doc_count"], "bruit": b["bruit"]["doc_count"]})
+        out["det"] = det
+    except Exception as ex:
+        print(f"[v5] indicateurs indisponibles ({ex!r})", file=sys.stderr); return {}
+    try:   # faux positifs déclarés par un analyste (console /soc/ ou bouton « Marquer faux positif »)
+        q = {"bool": {"filter": [{"term": {"event_source": "alert_triage"}}, {"term": {"triage_decision": "fp_add"}},
+                                 {"range": {"timestamp": {"gte": f"now-{jours}d/d", "lt": "now/d", "time_zone": "Europe/Paris"}}}]}}
+        out["fp_add"] = _search_dec({"size": 0, "query": q, "track_total_hits": True})["hits"]["total"]["value"]
+    except Exception:
+        out["fp_add"] = None
+    # Signatures omni-fp-26 posées AVANT la détection : fp_allowlist_reason commence par l'alert_tag visé
+    # (« admin_share: gMSA Veeam… ») -> taux = événements neutralisés / (neutralisés + restés en détection).
+    try:
+        req = urllib.request.Request(f"{OS_URL}/omni-*/_search", data=json.dumps({"size": 0, "query": {"bool": {"filter": [
+              {"exists": {"field": "fp_signature"}}, {"range": {"timestamp": {"gte": f"now-{jours}d/d", "lt": "now/d", "time_zone": "Europe/Paris"}}}]}},
+              "aggs": {"r": {"terms": {"field": "fp_allowlist_reason", "size": 40}}, "s": {"terms": {"field": "fp_signature", "size": 40}}}}).encode(),
+              headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=90) as rr: res = json.load(rr)
+        tags = {}
+        for b in res["aggregations"]["r"]["buckets"]:
+            tg = str(b["key"]).split(":", 1)[0].strip()
+            tags[tg] = tags.get(tg, 0) + b["doc_count"]
+        rest = {}
+        if tags:
+            req = urllib.request.Request(f"{OS_URL}/omni-*/_search", data=json.dumps({"size": 0, "query": {"bool": {"filter": [
+                  {"terms": {"alert_tag": sorted(tags)}}, {"range": {"timestamp": {"gte": f"now-{jours}d/d", "lt": "now/d", "time_zone": "Europe/Paris"}}}]}},
+                  "aggs": {"t": {"terms": {"field": "alert_tag", "size": 40}}}}).encode(), headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=90) as rr:
+                rest = {b["key"]: b["doc_count"] for b in json.load(rr)["aggregations"]["t"]["buckets"]}
+        out["fp_pipeline"] = sorted(([tg, n, rest.get(tg, 0), round(n * 100.0 / (n + rest.get(tg, 0)), 1)] for tg, n in tags.items()),
+                                    key=lambda x: -x[1])
+        out["fp_pipeline_sig"] = len(res["aggregations"]["s"]["buckets"])
+    except Exception as ex:
+        print(f"[v5] FP pipeline indisponibles ({ex!r})", file=sys.stderr); out["fp_pipeline"] = []
+    # MTTA : il faut une heure d'acquittement par alerte. Les mails n'ont pas encore d'action « pris en charge »
+    # et les dossiers /soc/ (cases.json) ne portent que des notes horodatées, sans lien fiable avec l'alerte.
+    try:
+        mt = os.path.getmtime("/var/lib/omni-mobile/cases.json")
+        out["cases_maj"] = datetime.fromtimestamp(mt).strftime("%d/%m/%Y")
+    except Exception:
+        out["cases_maj"] = ""
+    return out
+
+def v5_txt():
+    """Lignes texte (version texte du mail et gabarit v2)."""
+    t = []
+    if ROD:
+        t += ["", "NOUVELLES DETECTIONS EN RODAGE (sans mail unitaire jusqu'au " + _rodage_fin() + ") :"]
+        t += [f"  {r['n']}x  {re.sub(r'^OMNI\s*v5\s*-\s*', '', r['titre'])}  ({r['ne']} entite(s), {('CRITIQUE' if r['tier'] == 'CRITICAL' else 'a qualifier')})" for r in ROD]
+    if IND.get("jours_l"):
+        t += ["", f"INDICATEURS {IND['jours']} JOURS (jour : critiques / attention / recap / ecartees / mails envoyes) :"]
+        t += [f"  {x['jour'][8:10]}/{x['jour'][5:7]} : {x['critique']} / {x['attention']} / {x['recap']} / {x['ecartees']} / {x['mails']}" for x in IND["jours_l"]]
+        if IND.get("fp_pipeline"):
+            t += ["  Faux positifs par detection (evenements neutralises par signature / total de la detection) :"]
+            t += [f"    {tx:.1f} %  {n}/{n + r}  {tg}" for tg, n, r, tx in IND["fp_pipeline"][:10]]
+        top = [x for x in sorted(IND.get("det", []), key=lambda x: (-x["fp"], -x["n"])) if x["fp"]][:8]
+        n_tot = sum(x["n"] for x in IND.get("det", [])); fp_tot = sum(x["fp"] for x in IND.get("det", []))
+        t += [f"  Faux positifs au tri : {fp_tot}/{n_tot} alertes triees"]
+        t += [f"    {x['taux']:.0f} %  {x['fp']}/{x['n']}  {re.sub(r'^OMNI\s*-\s*', '', x['titre'])}" for x in top]
+        t += ["  MTTA : non mesurable (aucune donnee d'acquittement)."]
+    return t
+
+def _rodage_fin():
+    j = (E.get("OMNI_RODAGE_JUSQUA") or "").strip()
+    return f"{j[8:10]}/{j[5:7]}/{j[:4]} 23:59" if re.fullmatch(r"\d{4}-\d{2}-\d{2}", j) else "(date non fixée)"
+
+def v5_sections_v3():
+    """Sections HTML charte v3 (rodage + indicateurs)."""
+    e3 = M3.esc; h = ""
+    if ROD:
+        lig = []
+        for r in ROD:
+            niv = "CRITIQUE" if r["tier"] == "CRITICAL" else "ATTENTION"
+            ents = ", ".join(str(x).split("=", 1)[-1] for x in r["ents"]) + ("…" if r["ne"] > len(r["ents"]) else "")
+            lig.append([f"<b>{r['n']}</b>", f"<b>{e3(M3.titre_lisible(r['titre'])[0])}</b>",
+                        M3.badge(niv, "CRITIQUE" if niv == "CRITIQUE" else "À QUALIFIER"), e3(f"{r['ne']} : {ents}"),
+                        e3(M3.quand_court(r["last"]))])
+        h += M3.section("Nouvelles détections en rodage", M3.table(["Nb", "Détection", "Gravité prévue", "Entités", "Dernière"], lig),
+                        f"Détections « OMNI v5 » mises en service cette semaine : regroupées ici, sans mail unitaire, jusqu'au "
+                        f"{e3(_rodage_fin())} (hors CRITIQUE à très haute confiance comme DCSync). À relire pour valider ou corriger "
+                        f"chaque règle avant sa sortie de rodage.")
+    if IND.get("jours_l"):
+        jl = IND["jours_l"]
+        tot = {k: sum(x[k] for x in jl) for k in ("critique", "attention", "recap", "ecartees", "mails")}
+        lig = [[e3(f"{x['jour'][8:10]}/{x['jour'][5:7]}"), f"<b>{x['critique']}</b>", str(x["attention"]), str(x["recap"]),
+                str(x["ecartees"]), f"<b>{x['mails']}</b>"] for x in jl]
+        lig.append(["<b>Total</b>", f"<b>{tot['critique']}</b>", f"<b>{tot['attention']}</b>", f"<b>{tot['recap']}</b>",
+                    f"<b>{tot['ecartees']}</b>", f"<b>{tot['mails']}</b>"])
+        h += "<!--v5-ind-->"
+        h += M3.section(f"Indicateurs — volume par niveau sur {IND['jours']} jours",
+                        M3.table(["Jour", "Critique", "Attention", "Récapitulatif", "Écartées", "Mails envoyés"], lig),
+                        "Critique = mail immédiat ; Attention = lot horaire ; Récapitulatif = signaux regroupés et rodage ; "
+                        "Écartées = bruit, doublons, faux positifs. Mails envoyés = immédiats + lots horaires.")
+        det = IND.get("det", [])
+        fpp = IND.get("fp_pipeline") or []
+        lig = [[f"<code>{e3(tg)}</code>", f"<b>{n}</b>", str(r), f"<b>{t:.1f} %</b>"] for tg, n, r, t in fpp[:12]]
+        h += M3.section(f"Indicateurs — faux positifs par détection ({IND['jours']} j)",
+                        M3.table(["Détection (alert_tag)", "Événements neutralisés (signature FP)", "Restés en détection", "Taux FP"], lig,
+                                 "Aucun événement neutralisé par une signature de faux positif sur la période."),
+                        f"Signatures omni-fp-26 du pipeline ({IND.get('fp_pipeline_sig', 0)} actives sur la période), posées avant la détection "
+                        f"(<code>_exists_:fp_signature</code>). Un taux proche de 100 % = détection presque entièrement faite d'activité connue.")
+        top = [x for x in sorted(det, key=lambda x: (-x["fp"], -x["n"])) if x["fp"]][:10]
+        n_tot = sum(x["n"] for x in det); fp_tot = sum(x["fp"] for x in det)
+        lig = [[e3(M3.titre_lisible(x["titre"])[0]), str(x["n"]), str(x["fp"]), f"<b>{x['taux']:.0f} %</b>", str(x["bruit"]), str(x["mail"])] for x in top]
+        note = (f"Décisions du tri : alertes écartées par une signature v4, une règle /soc/ ou la liste d'entités / alertes triées. "
+                f"Global : {fp_tot}/{n_tot} ({(fp_tot * 100.0 / n_tot if n_tot else 0):.1f} %)."
+                + (f" Faux positifs déclarés par un analyste : {IND['fp_add']}." if IND.get("fp_add") is not None else ""))
+        h += M3.section(f"Indicateurs — faux positifs au tri ({IND['jours']} j)",
+                        M3.table(["Détection", "Triées", "Faux positifs", "Taux", "Bruit écarté", "Mail / lot"], lig,
+                                 "Aucune alerte écartée comme faux positif au tri sur la période."), note)
+        h += M3.section("Indicateurs — délai de prise en compte (MTTA)",
+                        "<div style='color:#374151;font-size:13px'>Non mesurable : aucune donnée d'acquittement n'existe encore. "
+                        "Les mails n'ont pas d'action « pris en charge » et les dossiers de la console /soc/ ne sont pas reliés "
+                        "à l'heure de l'alerte" + (f" (dernière mise à jour des dossiers : {e3(IND['cases_maj'])})" if IND.get("cases_maj") else "")
+                        + ".</div>")
+    return h
+
+def render_v3(rows, hours, since_txt, prev_rows=None, dropped=0):
+    e3 = M3.esc
+    prev_rows = prev_rows or []
+    n = len(rows)
+    by_title, by_entity, by_tac, ent_tacs, ent_titles = {}, {}, {}, {}, {}
+    for r in rows:
+        t = r.get("alert_title") or "(sans titre)"
+        d = by_title.setdefault(t, {"n": 0, "score": 0, "tier": "", "why": "", "ents": set(), "last": ""})
+        d["n"] += 1
+        try: sc = int(r.get("triage_score") or 0)
+        except Exception: sc = 0
+        if sc >= d["score"]: d["score"], d["tier"] = sc, r.get("triage_tier") or ""
+        w = clean_reason(r.get("triage_reason"))
+        if w and len(w) > len(d["why"]): d["why"] = w
+        if str(r.get("timestamp", "")) > d["last"]: d["last"] = str(r.get("timestamp", ""))
+        ent = (r.get("triage_entity") or "").strip()
+        if ent and ent != "-":
+            d["ents"].add(ent); by_entity[ent] = by_entity.get(ent, 0) + 1
+            ent_titles.setdefault(ent, set()).add(t)
+        tac = (r.get("triage_tactic") or "").strip()
+        if tac:
+            by_tac[tac] = by_tac.get(tac, 0) + 1
+            if ent and ent != "-": ent_tacs.setdefault(ent, set()).add(tac)
+    crit = sum(1 for r in rows if r.get("triage_tier") == "CRITICAL")
+    chains = sorted(((e, ts, ent_titles.get(e, set())) for e, ts in ent_tacs.items() if len(ts) >= 2), key=lambda x: -len(x[1]))
+    prev_titles = {r.get("alert_title") for r in prev_rows}
+    news = [t for t in by_title if t not in prev_titles] if prev_titles else []
+    pn = len(prev_rows)
+    trend = (f"{'+' if n >= pn else ''}{round((n - pn) / pn * 100)} % par rapport à la période précédente ({pn})" if pn
+             else "première période de référence")
+    total = n + dropped; taux = round(dropped / total * 100) if total else 0
+    n_mail, n_lot = count_mails(hours)
+    titles = sorted(by_title.items(), key=lambda kv: (kv[1]["tier"] != "CRITICAL", -kv[1]["n"], kv[0]))
+    k = M3.kpis([("alertes retenues", n, "ATTENTION" if n else "OK"), ("critiques", crit, "CRITIQUE" if crit else "OK"),
+                 ("mails immédiats", n_mail, None), ("alertes en lot horaire", n_lot, None)])
+    corps = k
+    nu = lambda s: str(s or "").split("=", 1)[-1] if re.match(r"^[a-z_]+=", str(s or "")) else str(s or "")
+    def why_v3(w):
+        w = str(w or "")
+        if w in ("critical", "critique") or w.startswith(("noise", "fp_", "admin_connu", "recapitulatif")): return ""
+        return "Plusieurs détections corrélées sur la même entité." if w.startswith("killchain") else w
+    for d in by_title.values(): d["why"] = why_v3(d["why"])
+    if chains:
+        corps += M3.section("Incidents corrélés — à traiter en priorité", M3.table(["Entité", "Tactiques ATT&CK", "Détections"],
+                 [[f"<b>{e3(nu(e))}</b>", e3(" → ".join(sorted(ts))), e3(", ".join(sorted(M3.titre_lisible(x)[0] for x in tt if x)[:4]))] for e, ts, tt in chains[:6]]),
+                 "Une même entité touchée par plusieurs phases d'attaque décrit une chaîne, pas une répétition.")
+    if news:
+        corps += M3.section("Nouveau depuis la période précédente",
+                            "<div>" + "".join(M3.puce(e3(M3.titre_lisible(t)[0]), "#1d4ed8", "#eff6ff", "#bfdbfe") for t in news[:10]) + "</div>")
+    if n:
+        lig = []
+        for t, d in titles:
+            ents_txt = ", ".join(sorted({nu(x) for x in d["ents"]})[:3]) + ("…" if len(d["ents"]) > 3 else "")
+            niv = "CRITIQUE" if d["tier"] == "CRITICAL" else "ATTENTION"
+            lig.append([f"<b>{d['n']}</b>", f"<b>{e3(M3.titre_lisible(t)[0])}</b>" + (f"<div style='color:#6b7280;font-size:12px'>{e3(d['why'][:200])}</div>" if d["why"] else ""),
+                        M3.badge(niv, "CRITIQUE" if niv == "CRITIQUE" else "ÉLEVÉ"), e3(ents_txt), e3(M3.quand_court(d["last"]))])
+        corps += M3.section("Alertes retenues", M3.table(["Nb", "Détection", "Gravité", "Concerne", "Dernière"], lig))
+    else:
+        corps += M3.section("Alertes retenues", M3.table([], [], "Aucune alerte retenue sur la période."))
+    try:   # v5 27/11/2026 : rodage + indicateurs (une erreur ici ne casse jamais le récapitulatif)
+        _v5 = v5_sections_v3()
+    except Exception as ex:
+        _v5 = ""; print(f"[v5] sections v5 en echec ({ex!r})", file=sys.stderr)
+    _v5_rod, _sep, _v5_ind = _v5.partition("<!--v5-ind-->")
+    corps += _v5_rod
+    if by_tac:
+        corps += M3.section("Phases ATT&CK observées", "<div>" + "".join(M3.puce(f"{e3(kk)} · {v}") for kk, v in sorted(by_tac.items(), key=lambda x: -x[1])) + "</div>")
+    if by_entity:
+        corps += M3.section("Entités les plus concernées", M3.table(["Nb", "Entité"], [[f"<b>{v}</b>", e3(nu(kk))] for kk, v in sorted(by_entity.items(), key=lambda x: -x[1])[:10]]))
+    if RECAP:
+        corps += M3.section("Signaux regroupés (sans mail unitaire)", M3.table(["Nb", "Détection", "Entités"],
+                 [[f"<b>{c}</b>", e3(M3.titre_lisible(t)[0]), e3(f"{ne} : " + ", ".join(es) + ("…" if ne > len(es) else ""))] for t, c, ne, es in RECAP]),
+                 "Détections heuristiques à fort volume et rafales : à parcourir, sans urgence.")
+    fpl = [[f"<b>{c}</b>", e3(fp_lib(sig)), e3(f"{nh} machine(s)")] for sig, c, nh in FPSIG] + \
+          [[f"<b>{c}</b>", e3(fp_lib(sig)), "alertes écartées au tri"] for sig, c in FPV4]
+    if fpl:
+        corps += M3.section("Activité légitime connue écartée (faux positifs)", M3.table(["Nb", "Signature", "Portée"], fpl),
+                            "Reconnue par signature précise (compte + machine + processus). Recherche Graylog : <code>_exists_:fp_signature</code> "
+                            "ou <code>triage_reason:fp_v4*</code>.")
+    corps += _v5_ind
+    corps += f"<div style='margin-top:14px'>{M3.bouton('Ouvrir la console SOC', SOC, True)}</div>"
+    resume = (f"<b>{n} alerte(s) retenue(s)</b>, dont <b>{crit} critique(s)</b>, sur {hours} h. {e3(trend)}. "
+              f"{dropped} signal(aux) écarté(s) comme non pertinents ({taux} % du volume traité)."
+              + (f"<br><b>{len(chains)} incident(s) corrélé(s)</b> à examiner en priorité." if chains else "")
+              + (f"<br><b>{sum(r['n'] for r in ROD)} alerte(s) de {len(ROD)} nouvelle(s) détection(s) en rodage</b> à relire." if ROD else ""))
+    titre = f"Récapitulatif SIEM du {datetime.now().strftime('%d/%m/%Y')}"
+    sujet = M3.objet("INFO", "Récapitulatif quotidien", f"{n} alerte(s) retenue(s), {crit} critique(s)")
+    html = M3.page(titre, since_txt, "INFO", resume, corps,
+                   pied_html="Ne liste que les alertes jugées pertinentes ; le détail complet reste en console. ISO/IEC 27001:2022 — A.8.16.",
+                   generateur="omni-alert-digest")
+    return sujet, html
+
 def main():
     hours = int(os.environ.get("DIGEST_HOURS") or window_hours())
-    global RECAP, FPSIG
+    global RECAP, FPSIG, FPV4, ROD, IND
     RECAP = collect_recap(hours)
     FPSIG = collect_fp(hours)
+    FPV4 = collect_fp_v4(hours)
+    if str(E.get("OMNI_V5_DIGEST", "1")) != "0":   # v5 27/11/2026 : rodage + indicateurs
+        ROD = collect_rodage(hours)
+        IND = collect_indicateurs(int(E.get("OMNI_V5_INDICATEURS_JOURS", "7") or 7))
     rows = collect(hours)
     prev_rows = collect(hours, offset=hours)
     dropped = count_only("drop", f"now-{hours}h")
@@ -336,6 +648,27 @@ def main():
     since_txt = (f"Période du {start.strftime('%d/%m/%Y %H:%M')} au "
                  f"{datetime.now().strftime('%d/%m/%Y %H:%M')}")
     html, txt = render(rows, hours, since_txt, prev_rows, dropped)
+    try:   # v5 : rodage + indicateurs dans la version texte (et donc dans le gabarit v2 de secours)
+        _t5 = v5_txt()
+        if _t5:
+            txt = txt.replace(f"\nConsole SOC : {SOC}", "\n".join(_t5) + f"\n\nConsole SOC : {SOC}", 1)
+            # gabarit v2 de secours : même contenu, en texte préformaté, avant le pied de page
+            html = html.replace(f'<tr><td style="padding:20px 32px 0"><a href="{SOC}"',
+                                f'<tr><td style="padding:18px 32px 0"><pre style="font-size:11.5px;color:{BODY};white-space:pre-wrap">'
+                                + esc("\n".join(_t5).strip()) + f'</pre></td></tr><tr><td style="padding:20px 32px 0"><a href="{SOC}"', 1)
+    except Exception as ex:
+        print(f"[v5] texte v5 en echec ({ex!r})", file=sys.stderr)
+    sujet = f"{E.get('SMTP_SUBJECT_PREFIX','[SIEM OMNITECH]')} Récapitulatif - {len(rows)} alerte(s) retenue(s)"
+    if M3 is not None and E.get("OMNI_MAIL_CHARTE", "v3").lower() != "v2":   # v4 : charte v3
+        try:
+            sujet, html = render_v3(rows, hours, since_txt, prev_rows, dropped)
+            if FPV4:
+                txt += "\n\nECARTEES AU TRI (signatures v4) :\n" + "\n".join(f"  {c}x  {fp_lib(s)}" for s, c in FPV4)
+        except Exception as ex:
+            print(f"[v4] rendu v3 en echec ({ex!r}) -> gabarit v2", file=sys.stderr)
+    if os.environ.get("DIGEST_APERCU"):
+        open(os.environ["DIGEST_APERCU"], "w", encoding="utf-8").write(M3.apercu(html) if M3 else html)
+        print(sujet); return 0
 
     if os.environ.get("DIGEST_DRYRUN"):
         print(txt); print(f"\n[dry-run] {len(rows)} alerte(s) retenue(s) sur {hours} h ; HTML {len(html)} octets")
@@ -344,9 +677,16 @@ def main():
     to = [a.strip() for a in (E.get("MAIL_RECIPIENTS", "")).split(",") if a.strip()]
     if not to:
         print("aucun destinataire (MAIL_RECIPIENTS)", file=sys.stderr); return 2
+    frm = E.get("SMTP_FROM", "siem@example.invalid")
+    if M3 is not None and "cid:" + M3.LOGO_CID in html:   # v4 : html v3 + logo en pièce liée
+        m = M3.message(sujet, frm, to, txt, html)
+        with smtplib.SMTP(E.get("SMTP_HOST", "127.0.0.1"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
+            s.sendmail(frm, to, m.as_string())
+        print(f"recap envoye : {len(rows)} alerte(s) retenue(s) sur {hours} h -> {', '.join(to)}")
+        return 0
     m = EmailMessage()
-    m["Subject"] = f"{E.get('SMTP_SUBJECT_PREFIX','[SIEM OMNITECH]')} Récapitulatif - {len(rows)} alerte(s) retenue(s)"
-    m["From"] = E.get("SMTP_FROM", "no-reply@omnitech-security.fr")
+    m["Subject"] = sujet
+    m["From"] = frm
     m["To"] = ", ".join(to)
     m["Date"] = formatdate(localtime=True)
     m.set_content(txt)

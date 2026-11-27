@@ -15,6 +15,36 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 - Console SOC : logo personnalisé agrandi (56 px à côté du nom, logo large placé au-dessus du nom) ; adresse cliente réelle derrière le proxy FortiGate (`deploye/nginx/omni-real-ip.conf`), qui rétablit les écritures d'administration depuis les réseaux autorisés et des limites de débit par poste.
 
+### Harmonisation production et alertes
+
+- Triage SIEM : ajout du gabarit de courriel commun, du récapitulatif détaillé,
+  des signatures de faux positifs v4 et du ciblage temporel des index. Les
+  exceptions de faux positifs sont maintenant une politique JSON locale,
+  désactivée par défaut ; aucune machine ou adresse propre au site de référence
+  n'est publiée dans cette politique.
+- Triage v5 : séparation du juge local et du relevé KEV dans un module ; les noms
+  d'hôtes tronqués ne sont plus traités comme des identités certaines. La
+  configuration d'exemple n'active ni le juge distant, ni le KEV, ni les
+  exceptions locales, ni le rodage sans paramètres choisis par l'installation.
+- Installation du triage : les bibliothèques sont posées avant le démarrage du
+  service. Le script demande une configuration mail et une URL SOC explicites
+  avant de modifier les notifications Graylog. Les mails sans destinataire
+  configuré échouent sans utiliser une adresse d'exemple.
+- Exploitation : la sentinelle n'embarque plus la liste des pare-feu du site de
+  référence. L'aperçu du lot horaire ne vide pas sa file. Le manifeste suit les
+  bibliothèques Python requises par le triage.
+- Qualification de production du 27/11 : réponse aux incidents en simulation ;
+  pipeline de détections AD/M365 et threat intelligence en rodage ; entrée
+  syslog direct d'Ivry avec réception observée. Le DNS des contrôleurs de domaine
+  et Directory Service ne produisaient pas de documents au moment du contrôle.
+  Cette qualification décrit la production de référence et ne préconfigure
+  aucune autre installation.
+
+### Corrigé
+
+- Triage : ajout de vérifications hors ligne qui interdisent l'envoi de courriel
+  ou l'accès réseau pendant les essais des fonctions importées.
+
 ### Ajouté
 
 - Confiance de publication : refus d’un fichier contenant plusieurs certificats

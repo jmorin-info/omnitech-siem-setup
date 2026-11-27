@@ -18,6 +18,8 @@
 #                             IP active de blocklist.json absente du fichier publié.
 #     5. soar_fg_ne_lit_plus: aucun GET de /kit/soar/blocklist.txt dans le journal
 #                             nginx depuis SOAR_FETCH_MAX_S (les FortiGate lisent toutes les 2 min).
+#                             23/11/2026 : contrôle PAR FortiGate (SOAR_FG_ATTENDUS, nom=IP source),
+#                             un FG muet est signalé même si les autres lisent encore. LC-FW01 ajouté.
 #     6. canal_silencieux   : (horaire) poste/serveur dont le journal Sécurité (winsec)
 #                             est muet depuis 6 h alors que Sysmon/autres journaux arrivent.
 #   Anti-bruit : une alerte par clé et par fenêtre (1 h, 24 h pour canal_silencieux).
@@ -45,6 +47,9 @@ DEF_FAILS = c("DEF_FAILS", 3)
 SOAR_MAX_AGE_S = c("SOAR_MAX_AGE_S", 4500)
 SOAR_FETCH_MAX_S = c("SOAR_FETCH_MAX_S", 900)
 NGINX_LOG = c("NGINX_LOG", "/var/log/nginx/access.log")
+# FortiGate qui doivent lire la blocklist : « nom=IP source » séparés par des virgules (surchargeable dans /etc/default)
+SOAR_FG_ATTENDUS = dict(x.split("=", 1) for x in c("SOAR_FG_ATTENDUS",
+    "").split(",") if "=" in x)
 SERVER_LOG = "/var/log/graylog-server/server.log"
 STATE_DIR = "/var/lib/omni-siem-coherence"
 CAP_DIR = "/var/log/omni-siem-coherence"
@@ -224,6 +229,18 @@ def check_soar():
     if NOW - newest > SOAR_FETCH_MAX_S:
         alert("soar_fetch", "soar_fg_ne_lit_plus",
               f"SOAR : la blocklist n'a plus été lue depuis {(NOW-newest)/60:.0f} min (FortiGate : connecteur OMNI_SOAR_Blocklist)")
+    # 23/11/2026 : chaque FortiGate attendu doit avoir lu récemment (une alerte par FG, clé distincte).
+    # Seulement si le journal couvre la fenêtre (sinon un journal tout juste tourné ferait une fausse alerte).
+    debut = min(last.values())
+    for nom, ip in SOAR_FG_ATTENDUS.items():
+        t = last.get(ip)
+        if t is None and NOW - debut < SOAR_FETCH_MAX_S:
+            continue
+        if t is None or NOW - t > SOAR_FETCH_MAX_S:
+            alert(f"soar_fetch_{nom}", "soar_fg_ne_lit_plus",
+                  f"SOAR : {nom} ({ip}) ne lit plus la blocklist"
+                  + (f" depuis {(NOW-t)/60:.0f} min" if t else " (aucune lecture dans le journal nginx récent)")
+                  + " : vérifier son connecteur OMNI_SOAR_Blocklist, son DNS et les règles réseau du site", fortigate=nom)
 
 # ---------------------------------------------------------------- 6 canal muet
 def check_channels():

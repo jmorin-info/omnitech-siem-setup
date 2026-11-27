@@ -1,5 +1,5 @@
 [Unit]
-Description=OMNI SIEM - Recapitulatif des alertes (lundi et jeudi 08h00)
+Description=OMNI SIEM - Recapitulatif des alertes (lundi au vendredi 08h00)
 
 [Timer]
 OnCalendar=Mon..Fri *-*-* 08:00:00

@@ -23,6 +23,8 @@ E = load_env()
 esc = lambda s: html.escape(str(s if s is not None else ""))
 INK, BODY, MUT, LAB, LINE, BOX, BG, AMB = "#101828", "#344054", "#667085", "#475467", "#eaecf0", "#f9fafb", "#f2f4f7", "#d97706"
 def take():
+    if not os.path.isdir(os.path.dirname(LOT)):
+        return []
     with open(LOT + ".lock", "w") as lk:
         fcntl.flock(lk, fcntl.LOCK_EX)
         try: q = json.load(open(LOT))
@@ -62,11 +64,143 @@ def card(i, a):
             f'<div style="font-size:14.5px;font-weight:600;color:{INK};margin:3px 0 6px">{esc(a.get("titre"))}</div>'
             f'<table role="presentation" cellpadding="0" cellspacing="0">{facts}</table>{hist}{corr}'
             f'<div style="font-size:12px;margin-top:8px">{liens}</div></div></td></tr>')
+# =============================================================================
+# v4 26/11/2026 : lot horaire en charte v3 (cohérence avec les rapports DSI). Pour chaque alerte : QUOI / OÙ /
+# QUAND / POURQUOI / QUE FAIRE puis les liens. Retour : OMNI_MAIL_CHARTE=v2 dans /etc/omni-alert-triage.env.
+# Aperçu sans envoi ni vidage de la file : LOT_APERCU=/chemin/fichier.html (lit lot.json sans le modifier).
+# =============================================================================
+sys.path.insert(0, os.environ.get("OMNI_MAIL_LIB", "/usr/local/lib/omni-siem"))
+try:
+    import omni_mail_v3 as M3
+except Exception as _ex:
+    M3 = None; print(f"[v4] charte v3 indisponible ({_ex!r}) -> gabarit v2", file=sys.stderr)
+
+def _carte_v3(i, a):
+    e3 = M3.esc
+    lisible, _r = M3.titre_lisible(a.get("titre", ""))
+    ou = a.get("ou")
+    if ou is None:   # alerte mise en file avant la v4 : reconstitution
+        ent = (a.get("entite") or "").split("=", 1)[-1]
+        ou = [[l, v, x] for l, v, x in (("Concerne", ent, ""), ("Compte", a.get("user"), ""), ("Machine", a.get("host"), ""),
+              ("Adresse IP", a.get("src_ip"), a.get("country", ""))) if v and (l == "Concerne" or v != ent)]
+    ou_h = "<br>".join(f"<span style='color:#6b7280'>{e3(l)}</span> <b>{e3(v)}</b>" + (f" <span style='color:#6b7280'>({e3(x)})</span>" if x else "")
+                       for l, v, x in ou) or "<span style='color:#6b7280'>non précisé (voir les événements)</span>"
+    q = M3.quand(a.get("ts")) if a.get("ts") else M3.quand(a.get("t"))
+    qh = f"<b>{e3(q)}</b>" + (f" <span style='color:#6b7280'>· premier événement {e3(M3.quand(a['premier']))}</span>"
+                              if a.get("premier") and M3.quand(a["premier"]) != q else "")
+    if a.get("count_reel") and str(a.get("count")) not in ("0", "0.0", ""):
+        qh += f" <span style='color:#6b7280'>· {e3(a.get('count'))} occurrence(s)</span>"
+    pq = f"Règle : <b>{e3(a.get('regle') or a.get('titre'))}</b>"
+    if a.get("mitre"): pq += "<br>" + M3.puce(e3(a["mitre"]), "#3730a3", "#eef2ff", "#c7d2fe") + (M3.puce(e3(a["tactique"])) if a.get("tactique") else "")
+    if a.get("menace"): pq += f"<br>Menace : <b>{e3(a['menace'])}</b>"
+    if a.get("why"): pq += f"<div style='color:#4b5563;font-size:12.5px'>{e3(a['why'])}</div>"
+    ext = a.get("extrait_court") or re.sub(r"\s+", " ", a.get("extrait") or "")[:240]
+    if ext: pq += (f"<div style='margin-top:4px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;"
+                   f"font-family:Consolas,Courier New,monospace;font-size:11.5px;color:#1f2937;word-break:break-word'>{e3(ext[:300])}</div>")
+    h7 = a.get("hist7") or []
+    if h7: pq += f"<div style='color:#6b7280;font-size:12px;margin-top:4px'>Historique 7 j ({e3(a.get('hist7_total', 0))}) : {e3('; '.join(f'{n}× {t}' for t, n in h7[:4]))}</div>"
+    if a.get("corr"): pq += f"<div style='color:#b45309;font-size:12px;margin-top:2px'>Alertes liées : {e3('; '.join(t for _, t in a['corr'][:3]))}</div>"
+    acts = []
+    if a.get("a_verifier"): acts.append(("Vérifier", a["a_verifier"]))
+    if a.get("remediation"): acts.append(("Si c'est confirmé", a["remediation"]))
+    if not acts and a.get("que_faire"): acts = [tuple(x) for x in a["que_faire"]]
+    if not acts: acts = [("Vérifier", "Ouvrir les événements et confirmer avec l'utilisateur ou l'équipe concernée qu'il s'agit d'une opération connue.")]
+    def court(s, n=320):
+        s = re.sub(r"\s+", " ", str(s or "")).strip()
+        if len(s) <= n: return s
+        c = s.rfind(". ", 0, n); return s[:c + 1] if c > n // 2 else s[:n - 1].rsplit(" ", 1)[0] + "…"
+    qf = "<ol style='margin:0;padding-left:18px'>" + "".join(f"<li><b>{e3(x)} :</b> {e3(court(t))}</li>" for x, t in acts) + "</ol>"
+    liens = "".join(x for x in [
+        M3.bouton("Voir les événements", a["replay"]) if a.get("replay") else "",
+        M3.bouton("Console SOC (dossier 360)", a["soc"], True) if a.get("soc") else "",
+        M3.bouton("Marquer faux positif", a["fp"]) if a.get("fp") else ""] if x)
+    sig = (" · " + ", ".join(a.get("signaux_fr") or [])) if a.get("signaux_fr") else ""
+    return (f"<div style='border:1px solid #e5e7eb;border-left:4px solid #d97706;border-radius:10px;padding:12px 14px 6px;margin:0 0 14px'>"
+            f"<div style='font-size:12px;color:#6b7280'>{i}. {M3.badge('ATTENTION', 'ÉLEVÉ')} &nbsp;score {e3(a.get('score'))}/100{e3(sig)}</div>"
+            f"<div style='font-size:16px;font-weight:700;color:#111827;margin:4px 0 6px'>{e3(lisible)}</div>"
+            + M3.faits([("Où", ou_h), ("Quand", qh), ("Pourquoi", pq), ("Que faire", qf)])
+            + f"<div style='margin:10px 0 0'>{liens}</div></div>")
+
+def render_v3(items):
+    """(objet, html, texte) du lot en charte v3 ; items déjà triés (plus urgent d'abord)."""
+    e3 = M3.esc
+    n = len(items); titres, ents = {}, {}
+    def cible(a):   # machine > compte > site > entité brute
+        ou = {l: v for l, v, *_ in (a.get("ou") or [])}
+        for l in ("Machine", "Compte", "Site physique", "Équipement", "Adresse IP"):
+            if ou.get(l): return ou[l]
+        return (a.get("entite") or "").split("=", 1)[-1]
+    for a in items:
+        t = M3.titre_lisible(a.get("titre", ""))[0]
+        titres.setdefault(t, []).append(a)
+        ent = cible(a)
+        if ent: ents[ent] = ents.get(ent, 0) + 1
+    top = sorted(titres.items(), key=lambda x: -len(x[1]))
+    resume_obj = ", ".join(t for t, _ in top[:2]) + (" …" if len(top) > 2 else "")
+    sujet = M3.objet("ATTENTION", f"{n} alerte(s) à qualifier", resume_obj)
+    ts = sorted(M3.quand(a.get("ts")) if a.get("ts") else M3.quand(a.get("t")) for a in items if a.get("ts") or a.get("t"))
+    ts = [x for x in ts if x]
+    plage = ("" if not ts else f"à {ts[0][-5:]}" if ts[0] == ts[-1] else
+             f"entre {ts[0][-5:]} et {ts[-1][-5:]}" if ts[0][:10] == ts[-1][:10] else f"entre le {ts[0]} et le {ts[-1]}")
+    resume = (f"<b>{n} alerte(s) de niveau ÉLEVÉ</b> regroupées {e3(plage)} ({len(titres)} détection(s), {len(ents)} machine(s) ou compte(s)). "
+              "À vérifier dans la journée. Les alertes <b>critiques</b> et les incidents corrélés partent toujours immédiatement, en mail séparé.")
+    k = M3.kpis([("alertes", n, "ATTENTION"), ("détections", len(titres), None), ("machines / comptes", len(ents), None),
+                 ("score maximal", max((a.get("score") or 0) for a in items), None)])
+    synth = M3.table(["Nb", "Détection", "Concerne"],
+                     [[f"<b>{len(v)}</b>", e3(t), e3(", ".join(sorted({cible(a) for a in v} - {''})[:3]))] for t, v in top])
+    cartes = "".join(_carte_v3(i + 1, a) for i, a in enumerate(items[:40]))
+    reste = f"<p style='color:#6b7280;font-size:12px'>… et {n - 40} autre(s), visibles en console.</p>" if n > 40 else ""
+    soc = E.get("OMNI_SOC_URL", "https://bx-it-graylog-vm.omnitech.security/soc/")
+    corps = (k + M3.section("Synthèse par détection", synth) + M3.section("Alertes, de la plus urgente à la moins urgente", cartes + reste)
+             + f"<div style='margin-top:6px'>{M3.bouton('Ouvrir la console SOC', soc, True)}</div>")
+    html = M3.page(f"{n} alerte(s) à qualifier", f"Lot horaire du {M3.quand()}", "ATTENTION", resume, corps,
+                   pied_html="Regroupement horaire (omni-alert-lot) pour limiter les interruptions. ISO/IEC 27001:2022 — A.8.16.",
+                   generateur="omni-alert-lot")
+    txt = [f"[ATTENTION] {n} alerte(s) ELEVE a qualifier {plage}", ""]
+    for i, a in enumerate(items):
+        ou = "; ".join(f"{l} {v}" for l, v, x in (a.get("ou") or [])) or (a.get("entite") or "").split("=", 1)[-1]
+        txt += [f"{i + 1}. {M3.titre_lisible(a.get('titre', ''))[0]}",
+                f"   OU : {ou}", f"   QUAND : {M3.quand(a.get('ts')) if a.get('ts') else M3.quand(a.get('t'))} (heure de Paris)",
+                f"   POURQUOI : {a.get('regle') or a.get('titre')} ; score {a.get('score')}/100" + (f" ; {a.get('extrait_court')}" if a.get("extrait_court") else ""),
+                f"   QUE FAIRE : {(a.get('a_verifier') or 'verifier les evenements')[:300]}"]
+        if a.get("replay"): txt.append(f"   Evenements : {a['replay']}")
+    txt += ["", f"Console SOC : {soc}"]
+    return sujet, html, "\n".join(txt)
+
 def main():
+    apercu = os.environ.get("LOT_APERCU")
+    if apercu:   # v4 : aperçu sans envoi, file intacte
+        try: items = json.load(open(LOT))
+        except Exception: items = []
+        items.sort(key=lambda a: (-(a.get("score") or 0), a.get("t", 0)))
+        if not items: print("file vide"); return 0
+        s, h, t = render_v3(items); open(apercu, "w", encoding="utf-8").write(M3.apercu(h)); print(s); return 0
+    recipients = [x.strip() for x in E.get("LOT_RECIPIENTS", E.get("MAIL_RECIPIENTS", "")).split(",") if x.strip()]
+    if not recipients and not os.environ.get("LOT_DRYRUN"):
+        print("aucun destinataire (MAIL_RECIPIENTS ou LOT_RECIPIENTS), file conservée", file=sys.stderr)
+        return 2
     items = take()
     if not items:
         return 0
     items.sort(key=lambda a: (-(a.get("score") or 0), a.get("t", 0)))
+    if M3 is not None and E.get("OMNI_MAIL_CHARTE", "v3").lower() != "v2" and not os.environ.get("LOT_DRYRUN"):
+        try:
+            subj3, html3, txt3 = render_v3(items)
+            to = [x.strip() for x in E.get("LOT_RECIPIENTS", E.get("MAIL_RECIPIENTS", "")).split(",") if x.strip()]
+            m3 = M3.message(subj3, E.get("SMTP_FROM", "siem@example.invalid"), to, txt3, html3)
+        except Exception as ex:
+            m3 = None; print(f"[v4] rendu v3 en echec ({ex!r}) -> gabarit v2", file=sys.stderr)
+        if m3 is not None:
+            if os.environ.get("LOT_DRYRUN"):
+                print(subj3); print(txt3); print(f"[dry-run] HTML {len(html3)} octets, aucun envoi")
+                return 0
+            try:
+                with smtplib.SMTP(E.get("SMTP_HOST", "127.0.0.1"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
+                    s.sendmail(m3["From"], to, m3.as_string())
+            except Exception as ex:
+                put_back(items); print(f"echec envoi ({type(ex).__name__}) : {len(items)} alerte(s) remises en file", file=sys.stderr); return 1
+            print(f"lot envoye : {len(items)} alerte(s) -> {len(to)} destinataire(s)")
+            return 0
     n = len(items); titres = {}
     for a in items: titres[a.get("titre", "")] = titres.get(a.get("titre", ""), 0) + 1
     top = ", ".join(t for t, _ in sorted(titres.items(), key=lambda x: -x[1])[:2])
@@ -95,11 +229,11 @@ def main():
     if os.environ.get("LOT_DRYRUN"):
         print(subj); print("\n".join(txt)); print(f"[dry-run] HTML {len(page)} octets"); return 0
     to = [x.strip() for x in E.get("LOT_RECIPIENTS", E.get("MAIL_RECIPIENTS", "")).split(",") if x.strip()]
-    m = EmailMessage(); m["Subject"] = subj; m["From"] = E.get("SMTP_FROM", "no-reply@omnitech-security.fr")
+    m = EmailMessage(); m["Subject"] = subj; m["From"] = E.get("SMTP_FROM", "siem@example.invalid")
     m["To"] = ", ".join(to); m["Date"] = formatdate(localtime=True)
     m.set_content("\n".join(txt)); m.add_alternative(page, subtype="html")
     try:
-        with smtplib.SMTP(E.get("SMTP_HOST", "smtp-internal.omnitech-security.fr"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
+        with smtplib.SMTP(E.get("SMTP_HOST", "127.0.0.1"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
             s.send_message(m)
     except Exception as ex:
         put_back(items); print(f"echec envoi ({type(ex).__name__}) : {n} alerte(s) remises en file", file=sys.stderr); return 1
