@@ -69,7 +69,7 @@
       if (p.description) message(target, p.description);
       message(target, "Période : " + p.days + " jour(s). Streams configurés : " + (p.stream_ids || []).length + ".");
       (p.graylog_dashboard_ids || (p.graylog_dashboard_id ? [p.graylog_dashboard_id] : [])).forEach(function (id) {
-        var dashboard = (state.catalog.dashboards || []).find(function (item) { return item.id === id; });
+        var dashboard = ((state.catalog && state.catalog.dashboards) || []).find(function (item) { return item.id === id; });
         target.appendChild(graylogLink(id, dashboard ? "Ouvrir " + dashboard.title + " dans Graylog" : "Ouvrir le dashboard Graylog"));
       });
       var grid = node("div", "modules-widgets"); (result.widgets || []).forEach(function (w) { grid.appendChild(drawWidget(w)); });
