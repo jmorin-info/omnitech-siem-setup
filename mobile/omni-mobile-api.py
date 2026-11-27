@@ -176,6 +176,29 @@ def os_search(index: str, body: dict) -> dict:
     if result.get("error") or result.get("timed_out") or not isinstance(shards, dict) or shards.get("failed", 0):
         raise SearchBackendError(502)
     aggregations = body.get("aggs") or body.get("aggregations")
+    # Optional product integrations may have no index at all on a site. Treat
+    # only a fully empty, zero-shard response as an empty aggregation result;
+    # partial responses, shard failures and errors remain unavailable.
+    optional_indices = {"omni-aruba*", "omni-linux*", "omni-fortiems*"}
+    if (index in optional_indices and shards.get("total") == 0
+            and shards.get("successful") == 0 and shards.get("failed") == 0
+            and count == 0 and hits.get("hits") == [] and aggregations
+            and "aggregations" not in result):
+        def empty_aggregation(spec):
+            if "terms" in spec:
+                return {"buckets": [], "doc_count_error_upper_bound": 0, "sum_other_doc_count": 0}
+            if "cardinality" in spec:
+                return {"value": 0}
+            if "filter" in spec:
+                children = spec.get("aggs") or spec.get("aggregations") or {}
+                return {"doc_count": 0, **{key: empty_aggregation(value) for key, value in children.items()}}
+            if any(kind in spec for kind in ("max", "min", "avg")):
+                return {"value": None}
+            if "sum" in spec or "value_count" in spec:
+                return {"value": 0}
+            raise SearchBackendError(502)
+
+        result["aggregations"] = {key: empty_aggregation(value) for key, value in aggregations.items()}
     if aggregations and (not isinstance(result.get("aggregations"), dict)
                          or not set(aggregations).issubset(result["aggregations"])):
         raise SearchBackendError(502)
