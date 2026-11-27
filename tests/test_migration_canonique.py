@@ -125,10 +125,11 @@ def test_logstash_waits_for_graylog_gelf_input_with_a_bounded_delay():
 
 def ready_canonical(tmp_path):
     canon = tmp_path / "canon"
+    evidence_readme = "/".join(("docs", "archives", "preuves-iso", "README.md"))
     git_repo(canon, {
         "omni_deploy/engine.py": "", "mobile/requirements.txt": "pywebpush\n",
         "lib-platform.sh": (ROOT / "lib-platform.sh").read_text(),
-        "docs/archives/preuves-iso/README.md": "fixture\n",
+        evidence_readme: "fixture\n",
         "tools/omni-deploy.py": "import json,sys\nprint('DELEGATED='+json.dumps(sys.argv[1:]))\n",
     })
     (canon / "00-vars.env").write_text("PRIVATE_SITE_SETTING='not-for-output'\n")
