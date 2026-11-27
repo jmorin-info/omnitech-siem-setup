@@ -34,6 +34,25 @@ from email.header import Header
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import threading, queue, io, signal
 
+# --- v4 26/11/2026 : charte mail v3 (cohérence avec les rapports DSI) + signatures FP v4 ---------------
+# Modules dans /usr/local/lib/omni-siem. Import défensif : si un module manque ou est cassé, le tri continue
+# avec le gabarit v2 d'origine et sans signature v4 (aucune alerte perdue).
+# Retours sans redémarrage : OMNI_MAIL_CHARTE=v2 (ancien gabarit), OMNI_FP_V4=0 (signatures inactives).
+sys.path.insert(0, os.environ.get("OMNI_MAIL_LIB", "/usr/local/lib/omni-siem"))
+try:
+    import omni_mail_v3 as M3
+except Exception as _ex:
+    M3 = None; print(f"[v4] charte v3 indisponible ({_ex!r}) -> gabarit v2", file=sys.stderr, flush=True)
+try:
+    import omni_fp_v4 as FP4
+except Exception as _ex:
+    FP4 = None; print(f"[v4] signatures FP v4 indisponibles ({_ex!r})", file=sys.stderr, flush=True)
+# v5 27/11/2026 (chantier 2) : relèvement KEV + juge local. Module absent/cassé -> comportement v4 inchangé.
+try:
+    import omni_v5_tri as V5
+except Exception as _ex:
+    V5 = None; print(f"[v5] module omni_v5_tri indisponible ({_ex!r}) -> pas de KEV ni de juge local", file=sys.stderr, flush=True)
+
 ENVFILE   = "/etc/omni-alert-triage.env"
 TIERSFILE = "/etc/omni-alert-triage-tiers.json"
 STATE     = "/var/lib/omni-alert-triage/state.json"
@@ -50,6 +69,10 @@ _LLM_DOWN_UNTIL = 0.0
 # ni a une kill-chain.
 DIGEST_TITLES_DEFAULT = (r"exfiltration par volume|service expos. sur internet|"
                          r"reconnaissance ldap \(.num.ration|anomalie de volume \(z-score\)")
+
+# v5 : détections de SANTÉ / COLLECTE (pas des attaques) jamais relevées pour une CVE KEV. Surchargeable : OMNI_V5_KEV_EXCLURE.
+KEV_EXCLURE_DEFAUT = (r"go-dark|silence|silencieu|siem aveugle|collecte|canal|veeam|sauvegarde|backup|certificat|disque|"
+                      r"rapport|robot|out-of-sync|ha forti|coh.rence siem|d.finition en .chec|maintenance")
 
 _GUIDE_CACHE = {"mtime": 0, "data": {}}
 _SEAL_ID_RE = re.compile(r'\bSEAL\s+([A-Z]{2,3})-(\d{3})\b', re.I)
@@ -81,7 +104,14 @@ def guidance(tag):
         return None
     return _GUIDE_CACHE["data"].get(tag)
 
-GL_BASE = "https://bx-it-graylog-vm.omnitech.security"
+def web_base(settings=None):
+    settings = env() if settings is None else settings
+    explicit = (settings.get("GRAYLOG_WEB_URL") or "").rstrip("/")
+    if explicit:
+        return explicit
+    target = urllib.parse.urlsplit(settings.get("OMNI_SOC_URL") or "")
+    return f"{target.scheme}://{target.netloc}" if target.scheme in ("http", "https") and target.netloc else ""
+
 
 # --- Extrait lisible d'un evenement declencheur -------------------------------
 # PROBLEME resolu (02/07/2026) : message brut tronque a 140 c. -> sur un event
@@ -321,7 +351,7 @@ def replay_url(ev):
     ri = ev.get("replay_info") or {}
     q = ri.get("query", "")
     if not q: return ""
-    return (f"{GL_BASE}/search?q={urllib.parse.quote(q)}&rangetype=absolute"
+    return (f"{web_base()}/search?q={urllib.parse.quote(q)}&rangetype=absolute"
             f"&from={urllib.parse.quote(str(ri.get('timerange_start','')))}"
             f"&to={urllib.parse.quote(str(ri.get('timerange_end','')))}")
 
@@ -342,12 +372,19 @@ def rationale(tier, reason, score):
     if tier == "CRITICAL": return "Signal de sécurité critique — traitement immédiat requis."
     if r.startswith("llm:"):
         # On restitue l'analyse reelle plutot qu'une phrase passe-partout.
-        expl = (reason or "")[4:].strip()
-        return expl if len(expl) > 20 else "Signal qualifié comme pertinent après analyse contextuelle."
+        expl = re.sub(r"\|kev:.*$", "", (reason or "")[4:]).strip()
+        return (expl if len(expl) > 20 else "Signal qualifié comme pertinent après analyse contextuelle.") + _kev_phrase(reason)
     if r.startswith("llm_erreur"):
         return (f"Analyse contextuelle automatique indisponible : alerte transmise par "
-                f"précaution (score {score}/100). À qualifier par un analyste.")
-    return f"Niveau de risque élevé ({score}/100)."
+                f"précaution (score {score}/100). À qualifier par un analyste." + _kev_phrase(reason))
+    return f"Niveau de risque élevé ({score}/100)." + _kev_phrase(reason)
+
+def _kev_phrase(reason):
+    """v5 : phrase lisible quand la gravité a été relevée pour une CVE exploitée connue (raison « kev:CVE-…(MACHINE) »)."""
+    m = re.search(r"kev:([A-Z0-9,\-]+)\(([^)]*)\)", reason or "", re.I)
+    if not m: return ""
+    return (f" Gravité relevée d'un cran : la machine {m.group(2)} porte une vulnérabilité exploitée connue "
+            f"(catalogue CISA KEV) : {m.group(1).replace(',', ', ')}.")
 
 def quick_sign(secret, action, entity, tag, exp):
     return hmac.new(secret.encode(), f"{action}|{entity}|{tag}|{exp}".encode(), hashlib.sha256).hexdigest()[:32]
@@ -360,7 +397,7 @@ def quick_fp_link(e, entity, tag):
     exp = int(time.time()) + 7*86400
     p = urllib.parse.urlencode({"a": "fp", "e": entity, "tag": tag or "",
                                 "exp": exp, "sig": quick_sign(secret, "fp", entity, tag or "", exp)})
-    return f"{GL_BASE}/m/api/quick?{p}"
+    return f"{web_base()}/m/api/quick?{p}"
 
 def is_public_ip(ip):
     try:
@@ -377,7 +414,7 @@ def quick_block_link(e, ip):
     exp = int(time.time()) + 86400
     p = urllib.parse.urlencode({"a": "block", "e": ip, "tag": "",
                                 "exp": exp, "sig": quick_sign(secret, "block", ip, "", exp)})
-    return f"{GL_BASE}/m/api/quick?{p}"
+    return f"{web_base()}/m/api/quick?{p}"
 
 # --- Tiers par defaut (regex sur le titre, insensible casse) -----------------
 CRITICAL_DEFAULT = [
@@ -439,7 +476,8 @@ def env():
     e = dict(os.environ)
     try:
         for line in open(ENVFILE):
-            m = re.match(r"\s*([A-Z_]+)=(.*)", line)
+            # v5 27/11/2026 : noms avec chiffres (OMNI_V5_JUGE, OMNI_FP_V4, OMNI_SEAL_V4B) relus à chaud eux aussi
+            m = re.match(r"\s*([A-Z][A-Z0-9_]*)=(.*)", line)
             if m: e[m.group(1)] = m.group(2).strip().strip("'").strip('"')
     except OSError: pass
     return e
@@ -478,7 +516,7 @@ def gelf(decision, title, tier, score, signals, reason,
     23/09/2026 : sans elles, le recap periodique ne pouvait regrouper les alertes
     retenues ni par machine/compte concerne ni par phase ATT&CK."""
     try:
-        data = json.dumps({"version":"1.1","host":"bx-it-graylog-vm",
+        data = json.dumps({"version":"1.1","host":os.uname().nodename,
             "short_message": f"TRIAGE {decision}: {title} [{tier} score={score}]",
             "_event_source":"alert_triage","_triage_decision":decision,
             "_triage_tier":tier,"_triage_score":score,"_triage_signals":",".join(signals),
@@ -498,7 +536,7 @@ def corr_gelf(corr_key, vel, hist, title, score):
     try:
         types = sorted({x[0] for x in hist})
         tacs = sorted({(x[2] if len(x) > 2 else "") for x in hist} - {""})
-        data = json.dumps({"version": "1.1", "host": "bx-it-graylog-vm",
+        data = json.dumps({"version": "1.1", "host": os.uname().nodename,
             "short_message": f"CORRELATION: {vel} types d'alertes sur {corr_key}",
             "full_message": "Alertes correlees (fil de l'eau) :\n" + "\n".join(
                 f"- {time.strftime('%d/%m %H:%M', time.localtime(x[1]))}  {x[0]}"
@@ -825,7 +863,46 @@ def llm_relevant(e, ctx):
     if time.time() < _LLM_DOWN_UNTIL: return None, "llm_erreur:pause"
     if e.get("OMNI_TRIAGE_LLM_REDACT","true").lower() != "false": ctx = redact_ctx(ctx)
     model = e.get("OMNI_TRIAGE_LLM_MODEL","claude-haiku-4-5-20251001")
-    prompt = (
+    prompt = _juge_prompt(ctx)
+    return _llm_anthropic(e, key, model, prompt)
+
+def _juge_verdict(txt):
+    """Analyse la réponse JSON d'un juge (Anthropic ou local) -> (verdict, explication, raison)."""
+    j = json.loads(re.search(r"\{.*\}", txt, re.S).group(0))
+    m = j.get("mail")
+    verdict = m if isinstance(m, bool) else str(m).strip().lower() in ("true", "oui", "1", "yes")
+    expl = str(j.get("explication") or j.get("raison") or "").strip()
+    if len(expl) > 400:                      # couper a une FIN DE PHRASE
+        cut = expl.rfind(". ", 0, 400)
+        expl = (expl[:cut + 1] if cut > 120 else expl[:397].rsplit(" ", 1)[0] + "...")
+    return verdict, expl, str(j.get("raison", ""))
+
+# v5 27/11/2026 : choix du juge de la zone grise. OMNI_V5_JUGE = anthropic (défaut, comportement d'avant v5) |
+# local (station d'IA, Ollama) | off (pas de juge : même repli que « juge en échec », score puis défaut documenté).
+# Le juge local n'est JAMAIS bloquant : délai borné (OMNI_V5_JUGE_DELAI) puis pause OMNI_V5_JUGE_PAUSE (1 h) après échec ;
+# repli OMNI_V5_JUGE_REPLI=anthropic pour tenter Anthropic quand la station ne répond pas (défaut : score).
+_LOCAL_DOWN_UNTIL = 0.0
+def juge(e, ctx):
+    mode = (e.get("OMNI_V5_JUGE") or "anthropic").strip().lower()
+    if mode == "off": return None, "llm_erreur:juge_off"
+    if mode != "local" or V5 is None: return llm_relevant(e, ctx)
+    global _LOCAL_DOWN_UNTIL
+    repli = (e.get("OMNI_V5_JUGE_REPLI") or "score").strip().lower()
+    if time.time() < _LOCAL_DOWN_UNTIL:
+        return llm_relevant(e, ctx) if repli == "anthropic" else (None, "llm_erreur:local_pause")
+    c = redact_ctx(ctx) if e.get("OMNI_TRIAGE_LLM_REDACT", "true").lower() != "false" else ctx
+    t0 = time.time()
+    try:
+        verdict, expl, rais = _juge_verdict(V5.juge_local(e, _juge_prompt(c)))
+        print(f"[juge-local] {time.time()-t0:.1f}s mail={verdict} | {rais[:60]} | {expl[:120]}", flush=True)
+        return verdict, "llm:" + (expl or rais[:60])
+    except Exception as ex:
+        _LOCAL_DOWN_UNTIL = time.time() + int(e.get("OMNI_V5_JUGE_PAUSE", "3600") or 3600)
+        print(f"[juge-local] echec {type(ex).__name__} apres {time.time()-t0:.1f}s -> pause {int(_LOCAL_DOWN_UNTIL - time.time())} s", flush=True)
+        return llm_relevant(e, ctx) if repli == "anthropic" else (None, f"llm_erreur:local_{type(ex).__name__}")
+
+def _juge_prompt(ctx):
+    return (
         "Tu es analyste SOC senior chez OMNITECH (PME industrielle francaise). Tu juges "
         "si une alerte SIEM merite un MAIL immediat a l'equipe securite.\n\n"
         "CONTEXTE DU PARC (a utiliser pour ecarter les faux positifs) :\n"
@@ -859,6 +936,10 @@ def llm_relevant(e, ctx):
         'contexte qui fonde ta decision (chemin, editeur, process, pays, tactique). '
         'Redige pour un lecteur non expert."}\n\nAlerte:\n'
         + json.dumps(ctx, ensure_ascii=False))
+
+def _llm_anthropic(e, key, model, prompt):
+    """Appel Anthropic d'origine (inchangé hors découpage v5 du prompt)."""
+    global _LLM_DOWN_UNTIL
     body = json.dumps({"model":model,"max_tokens":500,
         "messages":[{"role":"user","content":prompt}]}).encode()
     try:
@@ -1109,11 +1190,238 @@ def _mail_html(titre, level, color, ctx, site, g, soc, why, fp_link="", block_li
             f'Faux positif&nbsp;? Utilisez le bouton dédié ou la console <b style="color:{MUT}">/soc/</b>.</div></td></tr>'
             f'</table></td></tr></table></body></html>')
 
+# =============================================================================
+# v4 26/11/2026 : mail d'alerte en charte v3. En haut, les réponses aux six questions de l'analyste :
+# QUOI / OÙ / QUAND / GRAVITÉ / POURQUOI / QUE FAIRE, puis les liens ; les détails techniques viennent après.
+# =============================================================================
+_SIG_FR = {"critique": "règle critique", "zone_grise": "à qualifier", "bruit": "signal faible",
+           "prio_haute": "priorité haute", "actif_critique": "actif critique", "threat_intel": "IP réputée malveillante",
+           "hors_heures": "hors heures ouvrées"}
+def _signaux_fr(sig):
+    out = []
+    for s in sig or []:
+        m = re.match(r"killchain\(x(\d+)\)", s); m2 = re.match(r"progression_attaque\((\d+)_tactiques\)", s)
+        out.append(f"{m.group(1)} détections corrélées" if m else
+                   f"progression sur {m2.group(1)} tactiques ATT&CK" if m2 else _SIG_FR.get(s, s))
+    return out
+
+def _ou_items(ctx, site):
+    """Liste ordonnée (libellé, valeur, complément) décrivant OÙ, sans doublon."""
+    items, vus = [], set()
+    def add(lab, val, extra=""):
+        v = str(val or "").strip()
+        if not v or v in ("-", "(Empty Value)") or v.lower() in vus: return
+        vus.add(v.lower()); items.append((lab, v, extra))
+    lab, val = _entity_label(ctx.get("entite"))
+    if lab == "Source": lab = "Équipement"
+    if lab == "Concerne" and ctx.get("seal_site"): val = ""          # clé SEAL brute : remplacée par site/porte/badge
+    add("Machine", ctx.get("host"))
+    add("Compte", ctx.get("user"))
+    ip = ctx.get("src_ip") or ctx.get("dest_ip")
+    if ip:
+        ex = (f"{_pays(ctx['country'])}" if ctx.get("country") else "") + (" — réputée malveillante" if ctx.get("ti") else "")
+        add("Adresse IP", ip, ex.strip(" —"))
+    if val: add(lab, val, site if site not in ("-", "", None) else "")
+    if ctx.get("seal_site"):
+        add("Site physique", ctx["seal_site"])
+        add("Zone", ctx.get("seal_zone")); add("Porte / capteur", ctx.get("seal_porte")); add("Badge", ctx.get("seal_badge"))
+    if ctx.get("net"): add("Réseau", ctx["net"])
+    if ctx.get("dest_port"): add("Port ciblé", ctx["dest_port"])
+    if ctx.get("dns_name"): add("Enregistrement DNS", ctx["dns_name"], ctx.get("dns_zone", ""))
+    return items
+
+def _quand_evt(ctx):
+    q = M3.quand(ctx.get("ts")) if ctx.get("ts") else M3.quand()
+    tss = sorted(b["ts"] for b in (ctx.get("backlog") or []) if b.get("ts"))
+    prem = M3.quand(tss[0]) if tss else ""
+    return q, (prem if prem and prem != q else "")
+
+# Détections sans playbook (alert_tag absent) qui partent en mail : consigne dédiée plutôt que générique.
+_QUE_FAIRE_TITRES = [
+    (r"fortigate : usage du compte local admin", [
+        ("Vérifier", "Qui a utilisé le compte local « admin » du FortiGate (IP source, poste, heure) et pourquoi : ce compte est réservé au secours, l'administration courante passe par SAML / ADM_Security."),
+        ("Si ce n'est pas prévu", "Changer le mot de passe du compte admin local, relire les changements de configuration (journal système, différences FortiManager), vérifier les administrateurs et sessions ouvertes, prévenir le RSSI.")]),
+]
+def _que_faire(ctx, g, niveau):
+    """Actions recommandées concrètes : playbook de la détection, sinon conduite par défaut selon la gravité."""
+    acts = []
+    if not g:
+        for rx, a in _QUE_FAIRE_TITRES:
+            if re.search(rx, ctx.get("titre", ""), re.I): acts = list(a); break
+    if g:
+        if g.get("a_verifier"):  acts.append(("Vérifier", g["a_verifier"]))
+        if g.get("remediation"): acts.append(("Si c'est confirmé", g["remediation"]))
+    if ctx.get("threat") and str(ctx.get("av_remediated", "")).lower() in ("false", "0", "non"):
+        acts.insert(0, ("En priorité", "La menace n'a pas été neutralisée par l'antivirus : isoler le poste (ESET / NinjaOne) et lancer une analyse complète."))
+    if not acts:
+        if niveau == "CRITIQUE":
+            acts = [("Vérifier", "Confirmer tout de suite l'activité avec le propriétaire de la machine ou du compte (était-ce lui, était-ce prévu ?)."),
+                    ("Si c'est suspect", "Isoler la machine (ESET / NinjaOne), désactiver ou réinitialiser le compte, conserver les journaux, prévenir le RSSI.")]
+        else:
+            acts = [("Vérifier", "Ouvrir les événements dans Graylog et confirmer avec l'utilisateur ou l'équipe concernée qu'il s'agit d'une opération connue."),
+                    ("Ensuite", "Si c'est légitime et récurrent, le marquer comme faux positif (signature précise) ; sinon traiter comme un incident.")]
+    acts.append(("Qualifier", "Clore ou escalader l'alerte dans la console SOC pour garder la trace de la décision."))
+    return acts
+
+def _extrait_v3(bl, ctx):
+    """Extrait utile du 1er événement : pour un journal FortiGate (clé=valeur), le message humain (msg) et
+    l'action ; sinon l'extrait compact habituel."""
+    raw = str(bl[0].get("raw", "")) if bl else str(ctx.get("message") or "")
+    try:
+        if raw and _looks_forti_kv(raw):
+            d, _k = _parse_forti_kv(raw)
+            parts = [d[k][1] for k in ("msg",) if k in d] + [f"{d[k][0]}={d[k][1]}" for k in ("action", "status", "user", "srcip", "ui") if k in d]
+            if parts: return " | ".join(parts)[:300]
+    except Exception:
+        pass
+    if bl and bl[0].get("msg"): return bl[0]["msg"]
+    return re.sub(r"\s+", " ", raw)[:260]
+
+def _court(s, n=420):
+    s = re.sub(r"\s+", " ", str(s or "")).strip()
+    if len(s) <= n: return s
+    cut = s.rfind(". ", 0, n)
+    return s[:cut + 1] if cut > n // 2 else s[:n - 1].rsplit(" ", 1)[0] + "…"
+
+def _seal_bloc(ctx):
+    """v4b : (html, [lignes texte]) décrivant l'alarme SEAL suivie ; ('', []) hors alarme SEAL."""
+    if not ctx.get("seal_alarme_id"): return "", []
+    esc = M3.esc
+    typ = (ctx.get("seal_type") or ctx.get("seal_action") or "") + (f" ({ctx['seal_reev']})" if ctx.get("seal_reev") else "")
+    ouv = M3.quand(ctx["seal_ouverture"]) if ctx.get("seal_ouverture") else (M3.quand(ctx["seal_ouverture_txt"]) if ctx.get("seal_ouverture_txt") else "")
+    duree = _duree_txt(ctx.get("seal_age_min")) if ctx.get("seal_age_min") not in (None, "") else ""
+    porte = ctx.get("seal_porte") if ctx.get("seal_porte") not in (None, "", "-", "(Empty Value)") else ""
+    lignes = [f"Alarme n° {ctx['seal_alarme_id']}" + (f" · {typ}" if typ else ""),
+              f"Site {ctx.get('seal_site') or '-'} · porte / capteur : " + (porte or "non transmis(e) par SEAL")
+              + (f" · zone {ctx['seal_zone']}" if ctx.get("seal_zone") else "")]
+    if ouv or duree: lignes.append("Ouverte le " + (ouv or "?") + (f" · depuis {duree}" if duree else ""))
+    if ctx.get("seal_sla_min") not in (None, "") or ctx.get("seal_sla_etat"):
+        lignes.append(f"SLA {ctx.get('seal_sla_classe', '')} {ctx.get('seal_sla_min', '?')} min : dépassé · état {ctx.get('seal_sla_etat', '?')}"
+                      + (f" · escalade x{ctx['seal_escalade']}" if ctx.get("seal_escalade") not in (None, "") else ""))
+    if "seal_rappels" in ctx:
+        n = int(ctx.get("seal_rappels") or 0); h = int(ctx.get("seal_rappel_h") or 4)
+        lignes.append((f"Rappel n°{n} : {n} mail(s) déjà envoyé(s) pour cette alarme" + (f", le premier le {M3.quand(ctx['seal_premier_mail'])}" if ctx.get("seal_premier_mail") else "")
+                       if n else "Premier mail pour cette alarme")
+                      + f" ; rappel toutes les {h} h tant qu'elle reste ouverte")
+    if ctx.get("seal_brut_absent"):
+        lignes.append("Événement SEAL d'origine absent du SIEM : seule la réémission du suivi SLA a été reçue (porte et zone à lire dans la console SEAL)")
+    html = "<br>".join(esc(x) if i else f"<b>{esc(x)}</b>" for i, x in enumerate(lignes))
+    return html, lignes
+
+def _mail_v3(e, ctx, decision_reason, titre, site, g, soc_deep, why, fp_link, block_link):
+    """Renvoie (objet, html, texte_en_tete) en charte v3."""
+    r = (decision_reason or "").lower()
+    kc = "killchain" in r
+    niveau = "CRITIQUE" if (ctx.get("tier") == "CRITICAL" or kc or "|kev:" in r) else "ATTENTION"   # v5 : relèvement KEV
+    lisible, regle_id = M3.titre_lisible(ctx.get("titre", ""))
+    _rap = int(ctx.get("seal_rappels") or 0)
+    quoi = ("Incident corrélé — " if kc else "") + (f"Rappel n°{_rap} — " if _rap else "") + lisible
+    ou = _ou_items(ctx, site)
+    q, prem = _quand_evt(ctx)
+    ou_court = next((v for l, v, x in ou if l in ("Machine", "Compte", "Équipement", "Site physique")), "") or (ou[0][1] if ou else "")
+    if l_ := re.match(r"^([A-Za-z0-9-]+)\.omnitech\.security$", ou_court or ""): ou_court = l_.group(1)
+    _alm = _seal_bloc(ctx)                                   # v4b : détail de l'alarme SEAL (HTML, texte)
+    sujet = M3.objet(niveau, quoi, ou_court + (f" · alarme {ctx['seal_alarme_id']}" if ctx.get("seal_alarme_id") else ""))
+    # --- bloc « l'essentiel »
+    esc = M3.esc
+    desc_q = ctx.get("desc") or (g or {}).get("ce_que_cest", "")
+    quoi_h = f"<b style='font-size:15px'>{esc(quoi)}</b>" + (f"<div style='color:#4b5563;font-size:13px;margin-top:3px'>{esc(_court(desc_q, 300))}</div>" if desc_q else "")
+    ou_h = "<br>".join(f"<span style='color:#6b7280'>{esc(l)}</span> <b>{esc(v)}</b>" + (f" <span style='color:#6b7280'>({esc(x)})</span>" if x else "") for l, v, x in ou) or "<span style='color:#6b7280'>non précisé dans l'alerte (voir les événements)</span>"
+    quand_h = f"<b>{esc(q)}</b> <span style='color:#6b7280'>(heure de Paris)</span>" + (f"<br><span style='color:#6b7280'>premier événement : {esc(prem)}</span>" if prem else "")
+    _cnt = ctx.get("count")
+    if ctx.get("count_reel") and str(_cnt) not in ("0", "0.0"):
+        quand_h += f"<br><span style='color:#6b7280'>{esc(_cnt)} occurrence(s) sur la fenêtre d'analyse</span>"
+    elif ctx.get("count_reel"):
+        quand_h += "<br><span style='color:#6b7280'>aucun événement reçu sur la fenêtre : flux muet</span>"
+    grav = M3.badge(niveau) + f" <span style='color:#374151'>score {esc(ctx.get('score'))}/100</span>"
+    if ctx.get("risk_sev") and ctx.get("risk_sev") not in ("none", "-"):
+        grav += f" <span style='color:#6b7280'>· risque {esc(ctx['risk_sev'])}" + (f" {esc(ctx['risk_score'])}/10" if ctx.get("risk_score") not in ("", None) else "") + "</span>"
+    sigfr = [s for s in _signaux_fr(ctx.get("signaux")) if s not in ("règle critique", "à qualifier")]
+    if sigfr: grav += f"<br><span style='color:#6b7280;font-size:12px'>{esc(', '.join(sigfr))}</span>"
+    regle_txt = re.sub(r"^OMNI(?:\s+v\d+)?\s*-\s*", "", ctx.get("titre", ""))
+    pq = f"Règle déclenchée : <b>{esc(regle_txt)}</b>"
+    tags = ""
+    if ctx.get("mitre_tech"):
+        mt = esc(ctx["mitre_tech"]) + (" · " + esc(ctx["mitre_name"]) if ctx.get("mitre_name") else "")
+        tags += M3.puce(mt, "#3730a3", "#eef2ff", "#c7d2fe", mitre_url(ctx["mitre_tech"]) or None)
+        if ctx.get("mitre_tac"): tags += M3.puce(esc(ctx["mitre_tac"]))
+    if ctx.get("ti"): tags += M3.puce("IP réputée malveillante", "#b91c1c", "#fef2f2", "#fecaca")
+    if tags: pq += f"<div style='margin-top:6px'>{tags}</div>"
+    if why: pq += f"<div style='color:#4b5563;font-size:13px;margin-top:2px'>{esc(why)}</div>"
+    if ctx.get("threat"):
+        pq += (f"<div style='margin-top:4px'>Menace : <b>{esc(ctx['threat'])}</b>" + (f" ({esc(ctx['threat_type'])})" if ctx.get("threat_type") else "")
+               + (f" · action antivirus : {esc(ctx['av_action'])}" if ctx.get("av_action") else "") + "</div>")
+    bl = ctx.get("backlog") or []
+    ext = _extrait_v3(bl, ctx)
+    if ext:
+        pq += (f"<div class='mono' style='margin-top:6px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:6px 9px;"
+               f"font-family:Consolas,Courier New,monospace;font-size:12px;color:#1f2937;word-break:break-word'>{esc(ext)}</div>")
+    acts = _que_faire(ctx, g, niveau)
+    qf = "<ol style='margin:0;padding-left:18px'>" + "".join(f"<li style='margin:0 0 4px'><b>{esc(a)} :</b> {esc(_court(t))}</li>" for a, t in acts) + "</ol>"
+    essentiel = M3.faits([("Quoi", quoi_h), ("Où", ou_h), ("Alarme SEAL", _alm[0]), ("Quand", quand_h), ("Gravité", grav), ("Pourquoi", pq), ("Que faire", qf)])
+    btns = M3.bouton("Ouvrir dans la console SOC", soc_deep, True)
+    if ctx.get("replay"): btns += M3.bouton("Voir les événements dans Graylog", ctx["replay"])
+    if block_link:        btns += M3.bouton("Bloquer l'IP", block_link)
+    if fp_link:           btns += M3.bouton("Marquer faux positif", fp_link)
+    corps = essentiel + f"<div style='margin:14px 0 0'>{btns}</div>"
+    # --- détails techniques
+    rows = ctx.get("corr_rows") or []
+    if rows:
+        corps += M3.section(f"Alertes corrélées sur {ctx.get('corr_key') or 'cette entité'}",
+                            M3.table(["Heure", "Alerte"], [[esc(ts), esc(t)] for ts, t in rows]),
+                            f"{esc(ctx.get('velocite', '?'))} types d'alertes distincts sur la même entité dans la fenêtre de corrélation.")
+    h7 = ctx.get("hist7") or []
+    if h7:
+        corps += M3.section(f"Historique de l'entité sur 7 jours ({ctx.get('hist7_total', 0)} alertes triées)",
+                            M3.table(["Nb", "Détection"], [[f"<b>{n}</b>", esc(t)] for t, n in h7]))
+    if bl:
+        cartes = ""
+        for b in bl[:3]:
+            corps_b = _format_log(b.get("raw", "")) or esc(b.get("msg", "")) or "&mdash;"
+            cartes += (f"<div style='border:1px solid #e5e7eb;border-radius:8px;margin:0 0 8px;overflow:hidden'>"
+                       f"<div style='background:#f9fafb;padding:7px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151'>"
+                       f"<b>{esc(M3.quand(b.get('ts'), secondes=True) or b.get('ts'))}</b> · {esc(b.get('src'))}</div>"
+                       f"<div class='mono' style='padding:9px 12px;font-family:Consolas,Courier New,monospace;font-size:11.5px;line-height:1.6;color:#1f2937;word-break:break-word'>{corps_b}</div></div>")
+        if len(bl) > 3:
+            cartes += M3.table(["Heure", "Source", "Résumé"], [[esc(M3.quand(x.get("ts"), True)), esc(x.get("src")), esc(x.get("msg"))] for x in bl[3:]])
+        corps += M3.section(f"Événements déclencheurs ({len(bl)})", cartes, "Échantillon joint par Graylog ; la liste complète est dans « Voir les événements ».")
+    else:
+        det = _format_log(ctx.get("message", ""))
+        if det.strip():
+            corps += M3.section("Détail de l'événement", f"<div class='mono' style='border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;font-family:Consolas,Courier New,monospace;font-size:11.5px;line-height:1.6'>{det}</div>")
+    if g:
+        corps += M3.section("Guide d'action complet", M3.faits([("Ce que c'est", esc(g.get("ce_que_cest", ""))), ("À vérifier", esc(g.get("a_verifier", ""))),
+                                                                 ("Remédiation", esc(g.get("remediation", ""))), ("Correction durable", esc(g.get("correction", "")))]))
+    tech = [("Entité", f"<code>{esc(ctx.get('entite'))}</code>"), ("Règle", esc(regle_id or regle_txt)),
+            ("Signaux", esc(", ".join(ctx.get("signaux") or []))), ("Décision", esc(decision_reason)),
+            ("Priorité", esc(ctx.get("priority"))), ("Horodatage UTC", esc(ctx.get("ts"))), ("Étiquette", esc(ctx.get("tag")))]
+    corps += M3.section("Données techniques", M3.faits(tech))
+    resume = (f"<b>{esc(quoi)}</b>" + (f" — {esc(ou_court)}" if ou_court else "") + f" · {esc(q)}"
+              + ("<br>Plusieurs détections différentes visent la même entité : traiter comme un incident." if kc else
+                 "<br>Alerte critique transmise immédiatement : à qualifier sans attendre." if niveau == "CRITIQUE" else
+                 "<br>Alerte à qualifier dans la journée."))
+    html = M3.page(quoi, "Alerte SIEM · notification immédiate", niveau, resume, corps,
+                   pied_html="Faux positif ? Bouton dédié ou console <b>/soc/</b>. ISO/IEC 27001:2022 — A.8.16 (activités de surveillance).",
+                   generateur="omni-alert-triage")
+    # --- en-tête du texte brut (même ordre)
+    t = [f"[{niveau}] {quoi}", "",
+         f"QUOI      : {quoi}",
+         "OU        : " + ("; ".join(f"{l} {v}" + (f" ({x})" if x else "") for l, v, x in ou) or "non precise")] + (
+         [f"ALARME    : {x}" for x in _alm[1]]) + [
+         f"QUAND     : {q} (heure de Paris)" + (f", premier evenement {prem}" if prem else ""),
+         f"GRAVITE   : {niveau} (score {ctx.get('score')}/100)",
+         f"POURQUOI  : regle « {regle_txt} » ; {why}" + (f" ; extrait : {ext}" if ext else ""),
+         "QUE FAIRE :"] + [f"  - {a} : {_court(x, 300)}" for a, x in acts] + [
+         f"Console SOC : {soc_deep}"] + ([f"Evenements Graylog : {ctx['replay']}"] if ctx.get("replay") else []) + ["", "--- Details ---"]
+    return sujet, html, "\n".join(t)
+
 def send_mail(e, ctx, decision_reason):
-    host = e.get("SMTP_HOST","smtp-internal.omnitech-security.fr")
+    host = e.get("SMTP_HOST","127.0.0.1")
     port = int(e.get("SMTP_PORT","25"))
-    frm  = e.get("SMTP_FROM","no-reply@omnitech-security.fr")
-    to   = [x.strip() for x in e.get("MAIL_RECIPIENTS","informatique@omnitech-security.fr").split(",") if x.strip()]
+    frm  = e.get("SMTP_FROM","")
+    to   = [x.strip() for x in e.get("MAIL_RECIPIENTS","").split(",") if x.strip()]
+    if not to or not frm:
+        raise ValueError("SMTP_FROM et MAIL_RECIPIENTS requis pour envoyer une alerte")
     pfx  = e.get("SMTP_SUBJECT_PREFIX","[SIEM OMNITECH]")
     soc  = e.get("OMNI_SOC_URL","https://bx-it-graylog-vm.omnitech.security/soc/")
     level = sev_label(ctx['tier'], decision_reason)
@@ -1212,10 +1520,21 @@ def send_mail(e, ctx, decision_reason):
     if block_link:          body += f"  Bloquer l'IP : {block_link}\n"
     if fp_link:             body += f"  Marquer faux positif : {fp_link}\n"
     body += "-- Triage automatique (omni-alert-triage).\n"
+    if M3 is not None and e.get("OMNI_MAIL_CHARTE", "v3").lower() != "v2":   # v4 : charte v3
+        try:
+            subj3, html3, top3 = _mail_v3(e, ctx, decision_reason, titre, site, g, soc_deep, why, fp_link, block_link)
+            msg3 = M3.message(subj3, frm, to, top3 + "\n" + body, html3)
+        except Exception as ex:   # rendu v3 en échec -> gabarit v2 (le mail part quand même)
+            msg3 = None
+            print(f"[v4] rendu v3 en echec ({ex!r}) -> gabarit v2", file=sys.stderr, flush=True)
+        if msg3 is not None:
+            with smtplib.SMTP(host, port, timeout=15) as s:
+                s.sendmail(frm, to, msg3.as_string())
+            return
     msg = MIMEMultipart("alternative")
     # sujet encode RFC 2047 (accents corrects sur tous les MUA) ; pas d'emoji
     _r = (decision_reason or "").lower()
-    _tag = ("CRITIQUE" if (ctx.get("tier") == "CRITICAL" or "killchain" in _r)
+    _tag = ("CRITIQUE" if (ctx.get("tier") == "CRITICAL" or "killchain" in _r or "|kev:" in _r)
             else "INFO" if ctx.get("tier") == "NOISE" else "ÉLEVÉ")
     _pre = "Incident corrélé — " if "killchain" in _r else ""
     subj = f"{pfx} [{_tag}] {_pre}{titre}" + (f" · {ent_short}" if ent_short else "")
@@ -1284,6 +1603,148 @@ def admin_connu(e, title, entity):
         except re.error:
             continue
     return False
+# =============================================================================
+# v4b 27/11/2026 (GO jmorin) : alarmes SEAL suivies PAR ALARME (EVEN_GROUP_ID).
+#  - ALM-003 « Intrusion physique » : la PREMIERE occurrence d'une alarme part toujours tout de suite (y compris
+#    quand elle n'arrive que par le suivi SLA, cas de l'alarme 10445692 dont l'evenement SEAL brut n'a jamais ete
+#    collecte). Seules les reemissions horaires du suivi SLA (source oms-seal-sla, TOUS les evenements joints, volume
+#    couvert) d'une alarme DEJA notifiee en ALM-003 sont ecartees. Tout evenement SEAL brut, toute autre alarme,
+#    tout identifiant manquant = mail immediat comme avant.
+#  - SLA-001 : un mail au depassement puis un rappel toutes les 4 h par alarme tant qu'elle reste ouverte.
+#  - Chaque mail porte le detail de l'alarme (id, site, porte/zone, type, ouverture, duree, SLA, rappels).
+# Retour sans redemarrage : OMNI_SEAL_V4B=0 dans /etc/omni-alert-triage.env.
+# =============================================================================
+_SEAL_OS = "http://127.0.0.1:9200/omni-seal-alarm*/_search"
+def _seal_regle(title):
+    t = title or ""
+    if re.search(r"\bSEAL\s+ALM-003\b", t, re.I): return "alm003"
+    if re.search(r"\bSEAL\s+SLA-001\b", t, re.I): return "sla001"
+    return None
+
+def _egid(v):
+    try:
+        s = str(v).strip()
+        return str(int(float(s))) if s not in ("", "-", "None", "(Empty Value)") else ""
+    except Exception:
+        return ""
+
+def _seal_brut(egid):
+    """Evenement SEAL brut (hors suivi SLA) de l'alarme : porte, zone, ouverture. Jamais bloquant (4 s)."""
+    try:
+        fl = f"0.{egid.rstrip('0')}e{len(egid)}"            # format flottant des evenements SEAL bruts
+        b = {"size": 1, "sort": [{"timestamp": "asc"}], "query": {"bool": {
+             "must": [{"query_string": {"query": f'EVEN_GROUP_ID:({egid} OR "{fl}")', "lenient": True}}],
+             "must_not": [{"term": {"source": "oms-seal-sla"}}]}}}
+        req = urllib.request.Request(_SEAL_OS, data=json.dumps(b).encode(), headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=4) as r:
+            h = json.load(r)["hits"]["hits"]
+        return h[0]["_source"] if h else {}
+    except Exception:
+        return {}
+
+def _seal_infos(payload, ev):
+    try:
+        msgs = []
+        for it in (payload.get("backlog") or []):
+            m = it.get("message") if isinstance(it, dict) and isinstance(it.get("message"), dict) else it
+            if isinstance(m, dict): msgs.append(m)
+        kt = [str(x) for x in (ev.get("key_tuple") or [])]
+        # messages de la meme cle de groupe uniquement (site, et identifiant d'alarme pour SLA-001)
+        sites = {str(m.get("seal_site", "")) for m in msgs}
+        site_k = next((x for x in kt if x in sites and x), "")
+        if site_k:
+            msgs = [m for m in msgs if str(m.get("seal_site", "")) == site_k]
+        ids_k = sorted({x for x in kt if re.fullmatch(r"\d{6,}", x)})   # SLA-001 : group_by EVEN_GROUP_ID (cle Graylog, fait foi)
+        if ids_k:
+            ids = ids_k
+            msgs = [m for m in msgs if _egid(m.get("EVEN_GROUP_ID")) in ids_k] or msgs
+        else:
+            ids = sorted({_egid(m.get("EVEN_GROUP_ID")) for m in msgs} - {""})
+        manque = any(not _egid(m.get("EVEN_GROUP_ID")) for m in msgs)
+        n, reel = real_count(ev, len(msgs))
+        relance = (bool(msgs) and not manque and reel and 1 <= n <= len(msgs)
+                   and all(str(m.get("source", "")).strip().lower() == "oms-seal-sla" for m in msgs))
+        m0 = max(msgs, key=lambda m: str(m.get("timestamp", ""))) if msgs else {}
+        c = {"seal_alarme_id": ", ".join(ids)}
+        for k, src in (("seal_type", "event_action"), ("seal_reev", "REEV_CODE"), ("seal_age_min", "age_minutes"),
+                       ("seal_sla_min", "sla_minutes"), ("seal_sla_classe", "sla_class"), ("seal_sla_etat", "sla_state"),
+                       ("seal_escalade", "escalation"), ("seal_site", "seal_site"), ("seal_vie", "EVEN_LIFESTATUS")):
+            v = m0.get(src)
+            if v not in (None, "", "-", "(Empty Value)"): c[k] = v
+        try:
+            if m0.get("timestamp") and m0.get("age_minutes") not in (None, ""):
+                import calendar
+                t = calendar.timegm(time.strptime(str(m0["timestamp"]).replace("T", " ")[:19], "%Y-%m-%d %H:%M:%S"))
+                c["seal_ouverture"] = t - float(m0["age_minutes"]) * 60
+        except Exception:
+            pass
+        if ids:
+            br = _seal_brut(ids[0])
+            if br:
+                porte = next((br.get(k) for k in ("trigger_code", "target_object_label") if br.get(k) not in (None, "", "-", "(Empty Value)")), "")
+                if porte: c["seal_porte"] = porte
+                if br.get("seal_zone"): c["seal_zone"] = br["seal_zone"]
+                c["seal_brut_ts"] = br.get("timestamp", "")
+                if "seal_ouverture" not in c and br.get("timestamp"): c["seal_ouverture_txt"] = br["timestamp"]
+            else:
+                c["seal_brut_absent"] = True
+        return {"ids": ids, "relance_sla": relance, "ctx": c}
+    except Exception as ex:
+        print(f"[v4b] infos SEAL en echec ({ex!r})", file=sys.stderr, flush=True)
+        return None
+
+def _duree_txt(minutes):
+    try:
+        m = int(float(minutes)); j, r = divmod(m, 1440); h, mi = divmod(r, 60)
+        return (f"{j} j " if j else "") + (f"{h} h " if h or j else "") + f"{mi:02d} min"
+    except Exception:
+        return ""
+
+def _fp_v4_alerte(payload, ev):
+    """v4 : signature FP commune a TOUS les messages du backlog (omni_fp_v4), sinon None. Jamais bloquant."""
+    try:
+        msgs = []
+        for it in (payload.get("backlog") or []):
+            m = it.get("message") if isinstance(it, dict) and isinstance(it.get("message"), dict) else it
+            if isinstance(m, dict): msgs.append(m)
+        n, reel = real_count(ev, len(msgs))
+        return FP4.signature_alerte(msgs, n, reel)
+    except Exception as ex:
+        print(f"[v4] signature FP en echec ({ex!r})", file=sys.stderr, flush=True)
+        return None
+
+# =============================================================================
+# v5 27/11/2026 (chantier 2 « tri », go jmorin) : RODAGE des nouvelles détections.
+#  Tout titre commençant par OMNI_RODAGE_PREFIXE (« OMNI v5 - ») part au récapitulatif quotidien (décision
+#  « rodage », section « Nouvelles détections en rodage ») jusqu'au OMNI_RODAGE_JUSQUA inclus (23:59 heure locale),
+#  SAUF une CRITIQUE dont le titre correspond à OMNI_RODAGE_IMMEDIAT (liste blanche à très haute confiance, ex. DCSync).
+#  Une alerte en rodage n'alimente PAS la corrélation kill-chain (une détection non éprouvée ne doit pas fabriquer
+#  d'incident corrélé sur les détections existantes) ; elle est tracée dans le SIEM avec son score indicatif.
+#  Retour à chaud (relu à chaque alerte) : OMNI_RODAGE=0, ou OMNI_RODAGE_JUSQUA vide. Toute erreur -> circuit normal.
+# =============================================================================
+def _rodage_norm(s):
+    return re.sub(r"\s+", " ", str(s or "").replace("–", "-").replace("—", "-")).strip().lower()
+
+def _rodage(e, title, tier):
+    """None = circuit normal ; sinon la raison tracée (décision « rodage »)."""
+    try:
+        if str(e.get("OMNI_RODAGE", "1")).strip() == "0": return None
+        jusqua = (e.get("OMNI_RODAGE_JUSQUA") or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", jusqua): return None
+        if time.strftime("%Y-%m-%d") > jusqua: return None
+        pfx = _rodage_norm(e.get("OMNI_RODAGE_PREFIXE") or "OMNI v5 -")
+        if not pfx or not _rodage_norm(title).startswith(pfx): return None
+        imm = (e.get("OMNI_RODAGE_IMMEDIAT") or "").strip()
+        if tier == "CRITICAL" and imm:
+            try:
+                if re.search(imm, title or "", re.I): return None
+            except re.error:
+                print(f"[v5] OMNI_RODAGE_IMMEDIAT invalide ({imm!r}) -> liste blanche ignoree", file=sys.stderr, flush=True)
+        return f"rodage_v5(jusqu_au={jusqua})"
+    except Exception as ex:
+        print(f"[v5] rodage en echec ({ex!r}) -> circuit normal", file=sys.stderr, flush=True)
+        return None
+
 LOT_FILE = "/var/lib/omni-alert-triage/lot.json"
 def lot_enqueue(e, ctx, reason):
     """Alerte ELEVE (zone grise / bruit escalade) mise en file : envoyee groupee chaque heure par omni-alert-lot."""
@@ -1301,6 +1762,18 @@ def lot_enqueue(e, ctx, reason):
             "fp": quick_fp_link(e, ctx.get("entite", ""), ctx.get("tag", "")) if ctx.get("tier") != "CRITICAL" else "",
             "hist7": ctx.get("hist7") or [], "hist7_total": ctx.get("hist7_total", 0), "corr": ctx.get("corr_rows") or [],
             "extrait": (ctx.get("message") or "")[:300]}
+    # v4 26/11/2026 : éléments de la charte v3 (OÙ / QUAND / POURQUOI / QUE FAIRE) calculés au moment du tri
+    try:
+        item["regle"] = re.sub(r"^OMNI(?:\s+v\d+)?\s*-\s*", "", ctx.get("titre", ""))
+        item["ou"] = [[l, v, x] for l, v, x in _ou_items(ctx, ctx.get("site", "-"))]
+        _bl = ctx.get("backlog") or []
+        item["extrait_court"] = _extrait_v3(_bl, ctx)
+        item["que_faire"] = [] if g else [[a, t] for a, t in _que_faire(ctx, None, "ATTENTION")[:2]]
+        item["premier"] = sorted(b["ts"] for b in _bl if b.get("ts"))[0] if any(b.get("ts") for b in _bl) else ""
+        item["menace"] = ctx.get("threat", "")
+        item["signaux_fr"] = [s for s in _signaux_fr(ctx.get("signaux")) if s not in ("règle critique", "à qualifier")]
+    except Exception as ex:
+        print(f"[v4] enrichissement lot en echec ({ex!r})", file=sys.stderr, flush=True)
     os.makedirs(os.path.dirname(LOT_FILE), exist_ok=True)
     with open(LOT_FILE + ".lock", "w") as lk:
         fcntl.flock(lk, fcntl.LOCK_EX)
@@ -1382,6 +1855,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200); self.end_headers()
             self.wfile.write(json.dumps({"decision": "qa_console", "tier": tier,
                 "score": 0, "reason": "qa_test:" + _qa_site}).encode())
+            return
+        # --- v5 27/11/2026 : rodage des détections « OMNI v5 - » (voir _rodage) -> récapitulatif, aucun mail
+        _rod = _rodage(e, title, tier)
+        if _rod:
+            _rsc, _rsig = score_alert(e, tier, f, ev, entity, 0, 0)   # score indicatif, sans toucher la corrélation
+            bump(d, "rodage"); save(d)
+            gelf("rodage", title, tier, _rsc, _rsig + ["rodage"], _rod, entity, f.get("mitre_tactic", ""), "", 0)
+            self.send_response(200); self.end_headers()
+            self.wfile.write(json.dumps({"decision": "rodage", "tier": tier, "score": _rsc, "reason": _rod}).encode())
             return
         # Correlation fil de l'eau : chaque alerte alimente TOUTES ses cles
         # canoniques (identite/machine/IP/badge) des sa reception ; la kill-chain
@@ -1515,6 +1997,11 @@ class Handler(BaseHTTPRequestHandler):
             corr_gelf(corr_key, vel, corr_hist, title, score)
         elif tier == "CRITICAL":
             want_mail, reason = True, "critical"   # CRITICAL jamais supprime par un FP appris
+        elif (FP4 is not None and str(e.get("OMNI_FP_V4", "1")) != "0"
+              and (_sig4 := _fp_v4_alerte(payload, ev)) is not None):
+            # v4 26/11/2026 : signature EXACTE (tous les evenements joints reconnus, volume reel couvert).
+            # Jamais atteint pour un CRITICAL ni une kill-chain (branches precedentes).
+            decision, reason = "drop", f"fp_v4:{_sig4['id']}"
         elif dyn_rule:
             decision, reason = "drop", f"fp_soc({dyn_rule.get('by','?')})"
         elif tier == "GRAY" and re.search(e.get("DIGEST_TITLES_REGEX") or DIGEST_TITLES_DEFAULT, title or "", re.I):
@@ -1525,7 +2012,7 @@ class Handler(BaseHTTPRequestHandler):
             if score >= mail_thr: want_mail, reason = True, f"noise_escalade(score={score})"
             else: decision, reason = "drop", f"noise(score={score})"
         else:  # GRAY
-            rel, why = llm_relevant(e, ctx); reason = why
+            rel, why = juge(e, ctx); reason = why   # v5 : anthropic (défaut) | local | off
             if rel is True: want_mail = True
             elif rel is False: decision = "drop"
             else:  # juge indisponible -> score, puis defaut fail-safe DOCUMENTE
@@ -1540,6 +2027,32 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     decision, reason = "drop", f"{why}|score={score}<{gray_thr}"
 
+        # --- v5 27/11/2026 : gravité RELEVÉE d'un cran si la machine porte une CVE exploitée connue (KEV, index
+        # omni-vuln). Jamais abaissée. Crans : écartée -> récapitulatif -> lot horaire -> mail immédiat (CRITIQUE).
+        # Jamais appliqué : CRITIQUE (déjà au maximum), kill-chain, faux positifs prouvés (fp_*), admin connu,
+        # alertes de vulnérabilité elles-mêmes. Raison tracée : « |kev:CVE-…(MACHINE) ». Retour : OMNI_V5_KEV=0.
+        _kev_imm = False
+        _kev_ok = (V5 is not None and str(e.get("OMNI_V5_KEV", "1")).strip() != "0" and tier != "CRITICAL"
+                   and not reason.startswith(("killchain", "fp_", "admin_connu"))
+                   and not re.search(r"vuln", str(f.get("alert_tag", "")) + " " + (title or ""), re.I)
+                   and not re.search(e.get("OMNI_V5_KEV_EXCLURE") or KEV_EXCLURE_DEFAUT, title or "", re.I))
+        if _kev_ok:
+            try:
+                _hotes = [ctx.get("host")] + [f.get(k) for k in _HOST_FIELDS] + [entity.split("=", 1)[1] if entity.startswith("host=") else ""]
+                _km, _kv = V5.kev_machines(_hotes, e)
+                if _km:
+                    _ktag = f"kev:{','.join(_kv['cves'][:3])}({_km})"
+                    ctx["kev"] = dict(_kv, machine=_km)
+                    if want_mail:                       # lot horaire -> mail immédiat
+                        _kev_imm = True; reason += "|" + _ktag
+                    elif decision == "digest":          # récapitulatif -> lot horaire
+                        want_mail = True; reason += "|" + _ktag
+                    elif decision == "drop" and str(e.get("OMNI_V5_KEV_ECARTEES", "1")).strip() != "0":   # écartée -> récapitulatif
+                        decision = "digest"; reason += "|" + _ktag
+                    signals = signals + ["kev"]
+            except Exception as ex:
+                print(f"[v5] KEV en echec ({ex!r}) -> pas de relevement", file=sys.stderr, flush=True)
+
         win = int(e.get("TRIAGE_DEDUP_SECONDS","3600"))
         _gris = tier != "CRITICAL" and not reason.startswith("killchain")
         if want_mail and _gris:
@@ -1553,7 +2066,26 @@ class Handler(BaseHTTPRequestHandler):
             _cap = int(e.get("GRAY_STORM_CAP_PER_HOUR", "0") or 0)
             _bk = "burst:" + title
             _rafale = [x for x in d.get(_bk, []) if isinstance(x, (int, float)) and now - x < 3600]
-            if key in d and (now - d[key]) < win:
+            # v4b 27/11/2026 (GO jmorin) : alarmes SEAL suivies PAR ALARME (EVEN_GROUP_ID). Uniquement sur une
+            # decision « critical » pure (jamais sur une kill-chain).
+            _sr = _seal_regle(title) if reason == "critical" and str(e.get("OMNI_SEAL_V4B", "1")) != "0" else None
+            _si = _seal_infos(payload, ev) if _sr else None
+            _win_eff = win
+            if _si and _si["ids"]:
+                ctx.update(_si["ctx"])
+                key += "|egid=" + ",".join(_si["ids"])          # une AUTRE alarme ne peut plus etre absorbee par la dedup
+                if _sr == "sla001":
+                    _win_eff = int(e.get("SEAL_SLA_RAPPEL_SECONDS", "14400") or 14400) - 300   # rappel toutes les 4 h (5 min de tolerance)
+                    _st = d.get("seal_sla:" + _si["ids"][0]) or {}
+                    ctx["seal_rappels"] = int(_st.get("n", 0)) if isinstance(_st, dict) else 0
+                    ctx["seal_premier_mail"] = _st.get("first", "") if isinstance(_st, dict) else ""
+                    ctx["seal_rappel_h"] = int((_win_eff + 300) / 3600)
+            if (_sr == "alm003" and _si and _si["ids"] and _si["relance_sla"]
+                    and all(("seal_alm:" + i) in d for i in _si["ids"])):
+                # Reemission horaire par le suivi SLA d'une alarme DEJA notifiee en ALM-003 : pas un nouvel
+                # evenement d'intrusion. Le suivi continue par SLA-001 (rappel toutes les 4 h, tout le detail).
+                decision, reason = "seal_relance", f"alm003_relance_sla(egid={','.join(_si['ids'])})"
+            elif key in d and (now - d[key]) < _win_eff:
                 decision, reason = "dedup", reason + "+dedup"
             elif _gris and _cap > 0 and len(_rafale) >= _cap:
                 # tempete : la meme detection a deja mailé _cap fois dans l'heure ->
@@ -1562,10 +2094,16 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 if _gris and _cap > 0: d[_bk] = _rafale + [now]
                 try:
-                    if _gris and str(e.get("GRAY_BATCH", "1")) == "1":   # v2-20261111 : ELEVE -> lot horaire
+                    if _gris and str(e.get("GRAY_BATCH", "1")) == "1" and not _kev_imm:   # v2 : ELEVE -> lot horaire (v5 : sauf relèvement KEV)
                         lot_enqueue(e, ctx, reason); decision = "lot"; d[key] = now
                     else:
                         send_mail(e, ctx, reason); decision = "mail"; d[key] = now
+                        if _si and _si["ids"]:                       # v4b : suivi par alarme
+                            for _i in _si["ids"]:
+                                if _sr == "alm003": d["seal_alm:" + _i] = now
+                                if _sr == "sla001":
+                                    _st = d.get("seal_sla:" + _i) if isinstance(d.get("seal_sla:" + _i), dict) else {}
+                                    d["seal_sla:" + _i] = {"n": int(_st.get("n", 0)) + 1, "first": _st.get("first", now), "last": now}
                 except Exception as ex:
                     decision, reason = "mail_echec", f"{reason}|smtp:{type(ex).__name__}"
         # purge dedup expires : borne par win (sinon un TRIAGE_DEDUP_SECONDS > 24h etait
@@ -1581,6 +2119,10 @@ class Handler(BaseHTTPRequestHandler):
                         and (now - (x[1] or 0)) < _velmax for x in v))}
         d = {k: v for k, v in d.items() if not (k.startswith("burst:") and isinstance(v, list)
              and not any(isinstance(x, (int, float)) and now - x < 3600 for x in v))}
+        # v4b : suivi d'alarme SEAL oublie apres 7 jours sans nouvel envoi
+        d = {k: v for k, v in d.items() if not (
+            (k.startswith("seal_alm:") and isinstance(v, (int, float)) and now - v > 7 * 86400)
+            or (k.startswith("seal_sla:") and isinstance(v, dict) and now - float(v.get("last", 0) or 0) > 7 * 86400))}
         bump(d, decision); save(d)
         gelf(decision, title, tier, score, signals, reason,
              entity, f.get("mitre_tactic", ""), corr_key, tspan)

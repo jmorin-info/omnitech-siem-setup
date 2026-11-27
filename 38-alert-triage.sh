@@ -25,15 +25,29 @@ source ./lib-graylog.sh
 require_api
 
 echo "==> [1/4] Service omni-alert-triage + config + unit"
+# Les bibliothèques sont installées avant le binaire et le démarrage du service.
+install -d -m 755 /usr/local/lib/omni-siem
+for helper in omni_mail_v3.py omni_fp_v4.py omni_v5_tri.py omni_cible.py; do
+  install -m 644 "triage/$helper" "/usr/local/lib/omni-siem/$helper"
+done
 install -m 755 triage/omni-alert-triage /usr/local/sbin/omni-alert-triage
 mkdir -p /var/lib/omni-alert-triage
 # config : ne pas ecraser une config existante (cle API !) ; sinon poser le template
 if [[ ! -f /etc/omni-alert-triage.env ]]; then
   install -m 600 triage/omni-alert-triage.env.example /etc/omni-alert-triage.env
-  warn "config posee depuis le template — pensez a renseigner ANTHROPIC_API_KEY"
+  warn "config posée depuis le modèle : renseigner SMTP_FROM, MAIL_RECIPIENTS, SMTP_HOST et OMNI_SOC_URL avant activation des notifications"
 else
   skip "config /etc/omni-alert-triage.env existante conservee"
 fi
+python3 - <<'PY' || die "Configurer SMTP_FROM, MAIL_RECIPIENTS et OMNI_SOC_URL dans /etc/omni-alert-triage.env avant de modifier les notifications"
+from pathlib import Path
+values = {}
+for line in Path('/etc/omni-alert-triage.env').read_text().splitlines():
+    if line.strip() and not line.lstrip().startswith('#') and '=' in line:
+        key, value = line.split('=', 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+raise SystemExit(0 if all(values.get(key) for key in ('SMTP_FROM', 'MAIL_RECIPIENTS', 'OMNI_SOC_URL')) else 1)
+PY
 cat > /etc/systemd/system/omni-alert-triage.service <<'UNIT'
 [Unit]
 Description=OMNITECH - Triage de pertinence des alertes (mail critique uniquement)

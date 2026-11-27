@@ -265,3 +265,6 @@
 /var/www/siem-soc/index.html	mobile/soc/index.html
 /var/www/siem-soc/manifest.webmanifest	mobile/soc/manifest.webmanifest
 /var/www/siem-soc/sw.js	mobile/soc/sw.js
+/usr/local/lib/omni-siem/omni_mail_v3.py	triage/omni_mail_v3.py
+/usr/local/lib/omni-siem/omni_v5_tri.py	triage/omni_v5_tri.py
+/usr/local/lib/omni-siem/omni_fp_v4.py	triage/omni_fp_v4.py
