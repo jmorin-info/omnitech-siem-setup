@@ -28,6 +28,9 @@ SMB_BACKUP_DIR="${SMB_BACKUP_DIR:-SIEM-Sauvegardes}"
 SMB_CRED_FILE="${SMB_CRED_FILE:-/root/.smb-siem-backup.cred}"
 BACKUP_RETENTION_J="${BACKUP_RETENTION_J:-14}"
 BACKUP_LOCAL_RETENTION_J="${BACKUP_LOCAL_RETENTION_J:-3}"   # OMNITECH 2026-11-11 : copie locale courte (/var), le partage garde 14 j
+BACKUP_LOCAL_ONLY="${BACKUP_LOCAL_ONLY:-0}"                 # 1 = export SMB suspendu explicitement
+[[ "$BACKUP_LOCAL_ONLY" == 0 || "$BACKUP_LOCAL_ONLY" == 1 ]] \
+  || { echo "ERREUR: BACKUP_LOCAL_ONLY doit valoir 0 ou 1" >&2; exit 1; }
 # Emplacements surchargeables UNIQUEMENT pour les tests hors ligne
 # (tests/test_backup_config.py) ; les valeurs par defaut sont celles de production.
 RACINE="${OMNI_BACKUP_RACINE:-/}"; RACINE="${RACINE%/}/"
@@ -225,6 +228,25 @@ if grep -qE '(^|/)(\.venv|__pycache__)/' "${TMP}/manifest.txt"; then
 fi
 shred -u "${VERIF}" "${TMP}/manifest.txt" 2>/dev/null || rm -f "${VERIF}" "${TMP}/manifest.txt"
 echo "[+] restaurabilite verifiee : ${VENTRIES} entrees ; streams+pipelines+regles+alertes+notifs+inputs+server.conf+lookups presents ; ${#ATTENDUS[@]} elements de reprise controles ; en-tete LUKS : ${LUKS_ETAT}"
+
+# --- Mode local uniquement, explicitement dégradé ----------------------------
+# Utile pendant une panne SMB : l'archive reste chiffrée sur le serveur et
+# vérifiée, mais ne constitue pas une copie hors machine. Le mode normal reste
+# le transfert SMB, sans fallback silencieux.
+if [[ "$BACKUP_LOCAL_ONLY" == 1 ]]; then
+  chmod 600 "$ARCH_ENC"
+  find "$WORK" -maxdepth 1 -type f -name 'omni-siem-config_*.tar.gz.enc' \
+    ! -samefile "$ARCH_ENC" -mtime "+${BACKUP_LOCAL_RETENTION_J}" -delete \
+    || fail "rotation locale impossible"
+  nettoyer
+  trap - ERR
+  gelf ok "archive locale ${STAMP} (${TAILLE_MB} Mo) verifiee ; export SMB suspendu ; en-tete LUKS : ${LUKS_ETAT}" "${TAILLE_MB}"
+  [[ "${LUKS_ATTENDU}" == 0 || "${LUKS_ETAT}" == inclus ]] \
+    || gelf echec "archive locale ${STAMP} SANS en-tete LUKS attendu : ${LUKS_ETAT}"
+  echo "OK : ${ARCH_ENC} (${TAILLE_MB} Mo) - MODE LOCAL UNIQUEMENT"
+  echo "ATTENTION : aucune copie hors machine ; export SMB suspendu, retention locale ${BACKUP_LOCAL_RETENTION_J} j"
+  exit 0
+fi
 
 # --- 4. Export SMB ---------------------------------------------------------------
 if ! mountpoint -q "${MNT}"; then

@@ -4,14 +4,14 @@
 
 .DESCRIPTION
   A lancer a la main sur n'importe quel poste/serveur Windows :
-      irm https://bx-it-graylog-vm.omnitech.security/kit/install.ps1 | iex
+      irm https://<siem-fqdn>/kit/install.ps1 | iex
 
   Ce script est un WRAPPER leger qui :
     (a) VERIFIE les prerequis (PowerShell 5.1+, OS 64-bit, TCP 5044+443 vers le
         SIEM, espace disque) AVANT de toucher au systeme ;
     (b) s'AUTO-ELEVE en administrateur si lance en utilisateur (UAC) ;
     (c) recupere puis INVOQUE le coeur idempotent Install-OmniSiem-NinjaOne.ps1
-        (CA TOFU -> audit -> Sysmon -> Winlogbeat -> sante -> inventaire) ;
+        (certificat verifie -> audit -> Sysmon -> Winlogbeat -> sante -> inventaire) ;
     (d) renvoie l'exit code du coeur (0 si tout OK, 1 sinon).
 
   Le coeur ecrit son journal dans C:\ProgramData\OMNI-SIEM\install.log et fait
@@ -24,7 +24,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$SiemFqdn = "bx-it-graylog-vm.omnitech.security",
+  [string]$SiemFqdn = "__SIEM_FQDN__",
   [switch]$SkipAudit
 )
 $ErrorActionPreference = "Stop"
@@ -56,27 +56,27 @@ try { $free = (Get-PSDrive C -ErrorAction Stop).Free / 1GB; if ($free -lt 1) { $
 if ($problems.Count) { Fail ("Prerequis non satisfaits :`n - " + ($problems -join "`n - ")) }
 Write-Host ("[OK] Prerequis valides (admin, PS {0}, 64-bit, 5044+443 OK)" -f $PSVersionTable.PSVersion) -ForegroundColor Green
 
-# --- (c) RECUP DU COEUR (TOFU sur le CA le temps du 1er appel) ----------------
+# --- (c) RECUP DU COEUR (HTTPS valide + empreinte obligatoire) ----------------
 $Staging = "$env:ProgramData\OMNI-SIEM"
 New-Item -ItemType Directory -Path $Staging -Force | Out-Null
 $Core = Join-Path $Staging "Install-OmniSiem-NinjaOne.ps1"
-$cb = [Net.ServicePointManager]::ServerCertificateValidationCallback
-[Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }   # TOFU : le CA n'est pas encore pinne
 try {
+  # Keep normal Windows certificate validation enabled. Sites using a private
+  # CA must deploy that CA through their endpoint-management system first.
+  Invoke-WebRequest -Uri "$Base/SHA256SUMS" -OutFile (Join-Path $Staging "SHA256SUMS") -UseBasicParsing
   Invoke-WebRequest -Uri "$Base/Install-OmniSiem-NinjaOne.ps1" -OutFile $Core -UseBasicParsing
-  # Verification d'integrite optionnelle via SHA256SUMS (genere par 95-kit-deploy.sh)
-  try {
-    $sums = (Invoke-WebRequest -Uri "$Base/SHA256SUMS" -UseBasicParsing).Content
-    $want = ($sums -split "`n" | Where-Object { $_ -match 'Install-OmniSiem-NinjaOne\.ps1' } |
-             ForEach-Object { ($_ -split '\s+')[0] }) | Select-Object -First 1
-    if ($want) {
-      $got = (Get-FileHash -Path $Core -Algorithm SHA256).Hash
-      if ($got -ne $want.ToUpper()) { Fail "Integrite du coeur invalide (SHA256 attendu $want, obtenu $got)" }
-      Write-Host "[OK] Integrite du coeur verifiee (SHA256)" -ForegroundColor Green
-    }
-  } catch { Write-Host "[*] SHA256SUMS indisponible - integrite non verifiee (TLS+CA TOFU seuls)" -ForegroundColor Yellow }
+
+  $sumLine = Get-Content (Join-Path $Staging "SHA256SUMS") |
+    Where-Object { $_ -match '^[0-9a-fA-F]{64}\s+\*?Install-OmniSiem-NinjaOne\.ps1\s*$' } |
+    Select-Object -First 1
+  if (-not $sumLine) { Fail "SHA256SUMS absent ou sans entree valide pour Install-OmniSiem-NinjaOne.ps1" }
+  $want = ($sumLine -split '\s+')[0].ToUpperInvariant()
+  $got = (Get-FileHash -Path $Core -Algorithm SHA256).Hash.ToUpperInvariant()
+  if ($got -ne $want) { Fail "Integrite du coeur invalide (SHA256 attendu $want, obtenu $got)" }
+  Write-Host "[OK] Integrite du coeur verifiee (SHA256)" -ForegroundColor Green
+} catch {
+  Fail "Telechargement ou verification du kit impossible : $($_.Exception.Message)"
 }
-finally { [Net.ServicePointManager]::ServerCertificateValidationCallback = $cb }
 if (-not (Test-Path $Core) -or (Get-Item $Core).Length -eq 0) { Fail "Telechargement du coeur vide" }
 
 # --- (d) DELEGATION au coeur idempotent --------------------------------------

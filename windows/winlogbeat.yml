@@ -81,7 +81,7 @@ winlogbeat.event_logs:
 
 # ------------------------------------------------------------------------------
 output.logstash:                       # l'input "Beats" de Graylog parle logstash
-  hosts: ["bx-it-graylog-vm.omnitech.security:5044"]
+  hosts: ["__SIEM_FQDN__:5044"]
   ssl.enabled: true
   ssl.certificate_authorities: ["C:/Program Files/Winlogbeat/omnitech-rootca.pem"]
   # Tant que le cert auto-signe temporaire est en place sur le SIEM, il faudra
@@ -94,7 +94,7 @@ processors:
   - add_fields:
       target: omnitech
       fields:
-        site: "BX"          # adapter par site : BX / IVR / LAN
+        site: "__SITE_NAME__"
         collecteur: "winlogbeat"
 
 logging.level: warning
