@@ -176,6 +176,22 @@ def test_inventory_mode_works_without_tty_or_mutations(tmp_path):
     assert not state.exists()
 
 
+def test_inventory_accepts_extracted_candidate_without_git_metadata(tmp_path):
+    from manager.inventory import inventory
+
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "INSTALLATION.md").write_text("guide", encoding="utf-8")
+    (tmp_path / "sample.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "ignored").write_text("metadata", encoding="utf-8")
+
+    data = inventory(tmp_path)
+
+    assert data["tracked_files"] == 2
+    assert sum(component["file_count"] for component in data["components"]) == 2
+    assert all(".git/ignored" not in path for component in data["components"] for path in component["files"])
+
+
 @pytest.mark.skipif(os.name != "posix", reason="requires a Linux terminal")
 def test_real_terminal_menu_exits_without_creating_state(tmp_path):
     import shutil
