@@ -1,0 +1,14 @@
+{
+  "event": {
+    "event_definition_title": "Exemple synthétique : plusieurs observations à qualifier",
+    "priority": 3,
+    "timestamp": "2026-11-26T09:10:00Z",
+    "fields": {"rule_id": "LAB-CONTEXT-001"},
+    "replay_info": {"timerange_start": "2026-11-26T09:00:00Z", "timerange_end": "2026-11-26T09:10:00Z"}
+  },
+  "backlog": [
+    {"message": {"timestamp": "2026-11-26T09:01:00Z", "event_source": "watchguard", "user": "LAB\\alice", "src_ip": "192.0.2.20", "dest_ip": "198.51.100.10", "src_port": 53001, "dest_port": 443, "protocol": "tcp", "event_action": "deny", "site": "site-laboratoire", "environment": "test", "source": "log-relay"}},
+    {"message": {"timestamp": "2026-11-26T09:05:00Z", "event_source": "sysmon", "user": "LAB\\adm-alice", "host": "lab-server", "source": "lab-server", "process_name": "powershell.exe", "parent_process": "service.exe", "event_id": 1, "site": "site-laboratoire", "environment": "test", "risk_score": 7}},
+    {"message": {"timestamp": "2026-11-26T09:09:00Z", "event_source": "seal", "event_domain": "alarm", "seal_site": "site-laboratoire", "environment": "test", "door_id": "door-lab-04", "target_object_label": "Porte du laboratoire", "trigger_code": "ALARM-LAB", "event_action": "alarme", "source": "access-relay"}}
+  ]
+}
