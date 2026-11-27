@@ -43,7 +43,22 @@ def group(path):
 
 
 def inventory(source: Path):
-    files = [name for name in subprocess.check_output(["git", "-C", str(source), "ls-files", "-z"], env=None).decode().split("\0") if name]
+    try:
+        result = subprocess.run(["git", "-C", str(source), "ls-files", "-z"],
+                                capture_output=True, check=True)
+        files = [name for name in result.stdout.decode().split("\0") if name]
+    except (OSError, subprocess.CalledProcessError):
+        # Update validation runs from an extracted candidate tree without .git.
+        # In that context, inventory the candidate itself instead of failing the
+        # entire offline check. Exclude common generated trees and symlinks.
+        excluded = {".git", ".venv", "venv", "__pycache__", ".pytest_cache",
+                    ".ruff_cache", ".mypy_cache", "node_modules", "vendor"}
+        files = sorted(
+            path.relative_to(source).as_posix()
+            for path in source.rglob("*")
+            if path.is_file() and not path.is_symlink()
+            and not any(part in excluded for part in path.relative_to(source).parts)
+        )
     components = []
     for key, (name, automation, documentation) in GROUPS.items():
         members = [path for path in files if group(path) == key]
