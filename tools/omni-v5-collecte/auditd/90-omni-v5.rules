@@ -1,0 +1,61 @@
+## =============================================================================
+## OMNITECH - SIEM v5 chantier 4 « Collecte » - règles auditd des serveurs Linux
+## Préparé le 27/11/2026 ; pilote sur un serveur Debian 13 le 27/11/2026. Cible : /etc/audit/rules.d/90-omni-v5.rules
+## Principe : peu de règles, à forte valeur (identités, sudo, SSH, persistance, modules, exécutions root
+## lancées par un humain, exécutions depuis /tmp). Les tâches système (auid non défini) ne sont pas suivies.
+## Volume visé : 200 à 2 000 événements/jour/serveur selon l'activité d'administration.
+## =============================================================================
+-D
+-b 8192
+-f 1
+--backlog_wait_time 60000
+
+## Bruit inutile
+-a always,exclude -F msgtype=CWD
+-a always,exclude -F msgtype=EOE
+
+## Identités et droits
+-w /etc/passwd -p wa -k omni_identite
+-w /etc/group -p wa -k omni_identite
+-w /etc/shadow -p wa -k omni_identite
+-w /etc/gshadow -p wa -k omni_identite
+-w /etc/sudoers -p wa -k omni_sudoers
+-w /etc/sudoers.d/ -p wa -k omni_sudoers
+-w /etc/sssd/ -p wa -k omni_identite
+-w /etc/pam.d/ -p wa -k omni_pam
+
+## SSH (configuration et clés autorisées de root)
+-w /etc/ssh/sshd_config -p wa -k omni_sshd
+-w /etc/ssh/sshd_config.d/ -p wa -k omni_sshd
+-w /root/.ssh/ -p wa -k omni_cle_ssh_root
+
+## Persistance
+-w /etc/crontab -p wa -k omni_cron
+-w /etc/cron.d/ -p wa -k omni_cron
+-w /etc/cron.daily/ -p wa -k omni_cron
+-w /var/spool/cron/ -p wa -k omni_cron
+-w /etc/systemd/system/ -p wa -k omni_systemd
+-w /usr/lib/systemd/system/ -p wa -k omni_systemd
+-w /etc/ld.so.preload -p wa -k omni_ld_preload
+-w /etc/rc.local -p wa -k omni_persistance
+
+## Modules noyau
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k omni_modules
+-w /usr/sbin/insmod -p x -k omni_modules
+-w /usr/sbin/modprobe -p x -k omni_modules
+
+## Exécutions avec droits root lancées par un utilisateur authentifié (sudo, su, setuid)
+-a always,exit -F arch=b64 -S execve -F euid=0 -F auid>=1000 -F auid!=unset -k omni_exec_root
+-a always,exit -F arch=b32 -S execve -F euid=0 -F auid>=1000 -F auid!=unset -k omni_exec_root
+
+## Exécutions depuis des répertoires inscriptibles par tous
+-w /tmp/ -p x -k omni_exec_tmp
+-w /var/tmp/ -p x -k omni_exec_tmp
+-w /dev/shm/ -p x -k omni_exec_tmp
+
+## Horloge (anti-horodatage) et audit lui-même
+-a always,exit -F arch=b64 -S settimeofday,clock_settime -F auid>=1000 -F auid!=unset -k omni_horloge
+-w /etc/audit/ -p wa -k omni_audit_conf
+-w /usr/sbin/auditctl -p x -k omni_audit_outil
+
+## Pas de « -e 2 » (règles immuables) : un retour arrière doit rester possible sans redémarrage.

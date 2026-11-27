@@ -1,0 +1,23 @@
+# /etc/omni-v5-reponse/cibles-protegees : cibles que omni-v5-reponse refuse toujours (modèle).
+# Copier ce fichier, le compléter avec les valeurs réelles du site (hors dépôt ; mode 644 car le
+# service tourne sous un utilisateur dynamique sans privilège) puis redémarrer omni-v5-reponse. Sans ce fichier, ou s'il est vide ou mal formé, le service
+# refuse de démarrer. Les garde-fous génériques du code (noms de type AD/DC, serveur SIEM,
+# comptes intégrés, adm-*, svc*, gMSA et comptes machine, comptes MAB, break-glass) s'appliquent en plus.
+#
+# Format : <type> <valeur> [=> motif affiché en cas de refus]   (# en début de ligne = commentaire)
+#   dc       nom d'hôte d'un contrôleur de domaine (sans domaine)
+#   ip       adresse IP d'un contrôleur de domaine
+#   hote-rx  expression régulière sur le nom d'hôte (insensible à la casse)
+#   compte   sAMAccountName exact à ne jamais désactiver (comptes de service hors motifs, Entra Connect...)
+#   leurre   compte leurre (honeytoken) : refus avec un motif dédié
+
+dc DC01
+dc DC02
+ip 192.0.2.10
+ip 192.0.2.11
+hote-rx ^SRV-HERITAGE => serveur à ne jamais toucher (consigne de l'administrateur)
+hote-rx ESET => serveur de la console antivirus (l'isolement passe par lui)
+hote-rx VCENTER|ESXI|VEEAM|PKI|NPS|FICHIERS|NAS => serveur d'infrastructure : action manuelle uniquement
+compte msol_0123456789ab
+compte compte-supervision
+leurre svc-exemple-leurre

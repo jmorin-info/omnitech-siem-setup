@@ -81,3 +81,35 @@ account, unremediated EDR detection (critical on a tier-0 asset), backup job or 
 deletion, and EDR detection followed by an admin logon on the same host within the hour.
 Each rule was replayed over 30 days before activation. Build, test and rollback scripts:
 [`../../tools/omni-v3/`](../../tools/omni-v3/).
+
+## Detection layer v5 (November 2026)
+
+A second additive layer, built like v3: its own pipelines, rules prefixed `omni-v5-` and event
+definitions prefixed "OMNI v5 - ". Until 2026-12-04 these definitions are in rollout: the daily
+digest lists them in a dedicated section instead of sending one mail per alert.
+
+- **Active Directory and Microsoft 365** (pipeline "OMNI v5 - Detections AD et M365", stage 45):
+  Kerberoasting with AES tickets (RC4 is disabled, so rules keyed on encryption type 0x17 no longer
+  fire), AS-REP roasting preparation, DCSync and Shadow Credentials allowed only for the exact
+  Entra Connect account, AD CS SAN abuse (ESC1/ESC6) and template or CA changes (ESC4/ESC7),
+  service installed on a domain controller or PKI, GPO linked to the domain root or the Domain
+  Controllers OU, LSASS memory read outside a strict allow-list, decoy account, canary files,
+  external mail forwarding, suspicious inbox rules and MFA fatigue. Microsoft 365 definitions use
+  five-hour windows because Exchange audit records arrive late (about 85 minutes median). Site
+  values (domain controllers, Entra Connect account, decoy account, canary file names) are read
+  from `/etc/omni-v5-ad/site.json`; template: `site.exemple.json`.
+- **Threat intelligence** (pipeline "OMNI v5 - TI enrichissement", stage 19): `omni-v5-ti-fetch`
+  refreshes Feodo Tracker, Tor exit nodes, ThreatFox, URLhaus and MalwareBazaar every two hours
+  into lookup tables; rules enrich FortiGate, Sysmon and ESET events, and a retro-hunt script
+  searches the last 90 days. Popular domains and proven false positives are filtered out. Blocking
+  high-confidence Feodo C2 addresses on the FortiGate is prepared but disabled.
+- **Collection**: normalisation of Directory Service (unsigned LDAP binds), AppLocker and LAPS read
+  events, a GELF TCP input for domain-controller DNS queries, and direct syslog from a site
+  firewall as a fallback for FortiAnalyzer. Linux auditd rules and their deployment script are in
+  `tools/omni-v5-collecte/auditd/`.
+
+Detection rules were checked in the Graylog simulator and replayed over 30 days of real data before
+activation. Build, test and rollback scripts: [`../../tools/omni-v5-ad/`](../../tools/omni-v5-ad/),
+[`../../tools/omni-v5-ti/`](../../tools/omni-v5-ti/) and
+[`../../tools/omni-v5-collecte/`](../../tools/omni-v5-collecte/). Filtered export of the resulting
+Graylog objects: [`../../objets-graylog/v5/`](../../objets-graylog/v5/).

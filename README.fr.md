@@ -54,6 +54,9 @@ détections rattachées à MITRE ATT&CK et ajoute des services maison :
   et **graphe d'exposition** (`oms-graph`) ;
 - **réponse automatisée** limitée et réversible : blocage d'IP sur les
   FortiGate par flux de menaces, durée limitée, exclusions, mode simulation ;
+- **couches v5** (novembre 2026, en rodage) : détections Active Directory et Microsoft 365,
+  enrichissement par la threat intelligence et réponse à incident avec validation humaine, en
+  simulation uniquement ([détails](docs/exploitation/REPONSE-AUTOMATISEE.md#3-réponse-à-incident-avec-validation-humaine-siem-v5-simulation)) ;
 - **console SOC** web et application installable (PWA) ;
 - **production de preuves ISO/IEC 27001:2022** : rétentions, chaîne
   d'intégrité, dossiers de preuves mensuels.

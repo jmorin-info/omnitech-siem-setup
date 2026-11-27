@@ -91,3 +91,11 @@ See also [exploitation/REPONSE-AUTOMATISEE.md](exploitation/REPONSE-AUTOMATISEE.
 - The LLM judge is paused for one hour after a failure.
 - Triage decisions are written to the internal index, not mixed with Microsoft 365 data.
 - Rollback: the `retour.sh` script restores the previous triage code and removes the signatures.
+
+## Digest and mail layout (November 2026)
+- The daily digest (Monday to Friday, 08:00) adds a section for detections in rollout and 7-day
+  indicators: volume per level, false positives per detection and at triage, and time to
+  acknowledge once acknowledgements are recorded (not measurable yet). Rollback:
+  `OMNI_V5_DIGEST=0` in `/etc/omni-alert-triage.env`.
+- Hourly batches and the digest use the HTML layout shared with the IT department reports
+  (`deploye/lib/omni-siem/omni_mail_v3.py`); `OMNI_MAIL_CHARTE=v2` restores the previous templates.

@@ -1,0 +1,421 @@
+#!/usr/bin/env python3
+# OMNITECH SIEM v5 - chantier 3 « Threat intelligence » (27/11/2026, go jmorin).
+# Télécharge les flux TI vers /etc/graylog/lookup/ti/*.csv (tables Graylog omni-v5-ti-*).
+#   Feodo Tracker (liste recommandée = haute confiance + liste standard), nœuds de sortie Tor (liste officielle),
+#   ThreatFox (export complet toutes les 6 h, API get_iocs days=1 entre deux), URLhaus (export « recent » 30 j,
+#   seules les URL online), MalwareBazaar (export « recent » 48 h cumulé sur 90 j, table = 30 j).
+# Garde-fous : écriture atomique (fichier temporaire + os.replace dans le même dossier), contrôle de format et de
+# taille minimale PAR SOURCE (une source en échec garde sa dernière version valide), jamais de table vidée.
+# La clé Auth-Key abuse.ch est lue dans /etc/omni-v5-ti/threatfox.key au moment de l'exécution : jamais affichée,
+# jamais journalisée, jamais passée en argument (les URL qui la contiennent ne sont jamais écrites).
+# État : journal /var/log/omni-v5-ti/fetch.log + GELF event_source=ti_fetch (http://127.0.0.1:12201/gelf).
+# Option SOAR (blocage FG des C2 Feodo haute confiance) : fichier SÉPARÉ /var/lib/omni-v5-ti/soar/feodo-haute-confiance.txt,
+# jamais publié tant que OMNI_V5_TI_SOAR_FEODO != 1 (défaut 0) - décision jmorin. Ne touche JAMAIS /var/www/siem-kit/soar/.
+# Usage : omni-v5-ti-fetch [--simuler] [--force-threatfox] [--amorcer-mb]
+import csv, datetime as dt, http.client, io, ipaddress, json, os, re, socket, sys, time, urllib.parse, urllib.request, zipfile
+http.client._MAXHEADERS = 10000
+
+LOOKUP = os.environ.get("OMNI_V5_TI_LOOKUP", "/etc/graylog/lookup/ti")
+STATE = os.environ.get("OMNI_V5_TI_STATE", "/var/lib/omni-v5-ti")
+LOGF = os.environ.get("OMNI_V5_TI_LOG", "/var/log/omni-v5-ti/fetch.log")
+KEYF = os.environ.get("OMNI_V5_TI_KEYFILE", "/etc/omni-v5-ti/threatfox.key")
+GELF = os.environ.get("OMNI_V5_TI_GELF", "http://127.0.0.1:12201/gelf")
+JOURS = int(os.environ.get("OMNI_V5_TI_JOURS", "30"))          # fenêtre des tables d'enrichissement
+JOURS_STORE = int(os.environ.get("OMNI_V5_TI_JOURS_STORE", "90"))  # fenêtre conservée pour la rétro
+TF_FULL_H = float(os.environ.get("OMNI_V5_TI_TF_FULL_H", "6"))
+SOAR_FEODO = os.environ.get("OMNI_V5_TI_SOAR_FEODO", "0").strip() == "1"
+SIMULER = "--simuler" in sys.argv
+UA = {"User-Agent": "omni-siem-ti/5.0"}
+NOW = dt.datetime.now(dt.timezone.utc)
+
+# Minimums par source (sous ce seuil : source rejetée, dernière version valide conservée)
+MIN = {"tor": 300, "threatfox_full": 50000, "urlhaus": 1000, "mb_recent": 20, "feodo": 0, "feodo_rec": 0}
+
+# Infrastructures partagées : un hôte d'URL malveillante sur ces domaines ne veut rien dire au niveau DNS
+# (même logique que omni-ti-feeds/66-threatintel.sh) ; les URL exactes restent dans la table URL.
+PARTAGE = {
+    "github.com", "githubusercontent.com", "gitlab.com", "bitbucket.org", "google.com", "google.fr", "googleapis.com",
+    "googleusercontent.com", "gstatic.com", "goo.gl", "g.co", "share.google", "youtube.com", "microsoft.com",
+    "microsoftonline.com", "office.com", "office365.com", "live.com", "outlook.com", "windows.net", "sharepoint.com",
+    "1drv.ms", "onedrive.live.com", "azureedge.net", "windowsupdate.com", "apple.com", "icloud.com", "cloudflare.com",
+    "cloudflare.net", "r2.dev", "pages.dev", "workers.dev", "akamai.net", "akamaized.net", "fastly.net", "cloudfront.net",
+    "amazonaws.com", "fbcdn.net", "facebook.com", "discord.com", "discordapp.com", "discordapp.net", "cdn.jsdelivr.net",
+    "jsdelivr.net", "res.cloudinary.com", "dropbox.com", "dropboxusercontent.com", "pastebin.com", "paste.ee", "mega.nz",
+    "mediafire.com", "t.me", "telegram.org", "bit.ly", "tinyurl.com", "postimg.cc", "imgur.com", "ibb.co", "imgbb.com",
+    "catbox.moe", "transfer.sh", "filebin.net", "gofile.io", "wikipedia.org", "mozilla.org", "mozilla.net", "linkedin.com",
+    "bing.com", "example.com", "example.org", "example.net", "localhost", "omnitech-security.fr", "omnitech.security",
+    "tiktok.com", "tiktokcdn.com", "steamcommunity.com", "steampowered.com", "discord.gg", "x.com", "twitter.com", "vk.com", "telegra.ph",
+    # rétro 90 j du 27/11 : CDN / hébergements de fichiers / sites éditeurs officiels listés pour un abus ponctuel (faux positifs DNS prouvés)
+    "pythonhosted.org", "doubleclick.net", "archive.org", "statically.io", "githack.com", "filestackcontent.com", "imagekit.io", "wsimg.com",
+    "imgbox.com", "gitflic.ru", "cpuid.com", "win-rar.com", "protondownload.com",
+}
+# Plateformes à sous-domaines PAR CLIENT (DNS dynamique, tunnels, pages) : seul le domaine nu est exclu, un sous-domaine reste un IOC précis
+EXACT = {"duckdns.org", "ngrok.io", "ngrok-free.app", "trycloudflare.com", "blogspot.com", "weebly.com", "wixsite.com", "r2.dev", "pages.dev",
+         "workers.dev", "no-ip.com", "ddns.net", "hopto.org", "serveo.net", "sslip.io", "nip.io"}
+# Domaines populaires (Tranco, 20 000 premiers) : un IOC ThreatFox/URLhaus égal à un domaine très fréquenté (ou www.<domaine>)
+# est un abus de plateforme (dead-drop resolver, site compromis) inexploitable au niveau DNS -> exclu des tables domaine/hôte.
+# Constat du rejeu 27/11 : www.tiktok.com, steamcommunity.com, discord.gg, www.rtl.fr = 365 des 368 résolutions sur 30 j.
+POPULAIRES = set()
+def charge_populaires():
+    p = f"{STATE}/tranco-top20k.txt"
+    try:
+        if not os.path.exists(p) or time.time() - os.path.getmtime(p) > 7 * 86400:
+            b = get("https://tranco-list.eu/top-1m.csv.zip", timeout=120)
+            z = zipfile.ZipFile(io.BytesIO(b)); lignes = z.read(z.namelist()[0]).decode("utf-8", "replace").splitlines()[:20000]
+            doms = [l.split(",", 1)[1].strip().lower() for l in lignes if "," in l]
+            if len(doms) >= 15000 and not SIMULER:
+                with open(p + ".tmp", "w") as f: f.write("\n".join(doms) + "\n")
+                os.replace(p + ".tmp", p)
+            POPULAIRES.update(doms)
+        if not POPULAIRES: POPULAIRES.update(l.strip() for l in open(p) if l.strip())
+        log(f"tranco: {len(POPULAIRES)} domaines populaires exclus des tables domaine/hote")
+    except Exception as e:
+        log(f"tranco: indisponible ({masque(e)}) - exclusion par liste statique seule")
+# Exclusions de faux positifs PROUVÉS (une valeur par ligne, # commentaire) : /etc/omni-v5-ti/exclusions.txt
+EXCLUS = set()
+def charge_exclusions():
+    try:
+        for l in open("/etc/omni-v5-ti/exclusions.txt", encoding="utf-8"):
+            v = l.split("#", 1)[0].strip().lower()
+            if v: EXCLUS.add(v)
+    except OSError: pass
+def partage(h):
+    if "." not in h or h in EXCLUS: return True   # valeurs ThreatFox invalides (« http », « none ») ou exclues
+    if h in EXACT or h in POPULAIRES or (h.startswith("www.") and h[4:] in POPULAIRES): return True
+    return any(h == d or h.endswith("." + d) for d in PARTAGE)
+
+os.makedirs(os.path.dirname(LOGF), exist_ok=True)
+def log(m):
+    l = f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {m}"
+    print(l)
+    if not SIMULER:
+        with open(LOGF, "a", encoding="utf-8") as f: f.write(l + "\n")
+
+def cle():
+    try: return open(KEYF, encoding="utf-8").read().strip()
+    except Exception: return ""
+
+def get(url, data=None, headers=None, timeout=180):
+    req = urllib.request.Request(url, data=data, headers={**UA, **(headers or {})})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+def masque(e):
+    # ne jamais laisser la clé apparaître dans un message d'erreur (elle peut être dans l'URL)
+    k = cle(); s = str(e)
+    return s.replace(k, "<cle>") if k else s
+
+def ts(s):
+    s = (s or "").strip().replace("T", " ").replace(" UTC", "").replace("(UTC)", "").strip()
+    for f in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try: return dt.datetime.strptime(s[:19] if f.endswith("%S") else s[:10], f).replace(tzinfo=dt.timezone.utc)
+        except ValueError: pass
+    return None
+
+def est_ip(v):
+    try: ipaddress.ip_address(v); return True
+    except ValueError: return False
+
+def ip_publique(v):
+    try: return ipaddress.ip_address(v).is_global
+    except ValueError: return False
+
+def conf_tf(c):
+    try: c = int(c)
+    except (TypeError, ValueError): return "faible"
+    return "haute" if c >= 90 else ("moyenne" if c >= 75 else "faible")
+
+def propre(v):
+    return str(v or "").replace("|", "/").replace("\n", " ").replace("\r", " ").strip()[:80] or "-"
+
+# ------------------------------------------------------------------ dernières versions valides
+def charge(src):
+    p = f"{STATE}/src/{src}.json"
+    try: return json.load(open(p, encoding="utf-8"))
+    except Exception: return None
+
+def garde(src, data):
+    if SIMULER: return
+    os.makedirs(f"{STATE}/src", exist_ok=True)
+    p = f"{STATE}/src/{src}.json"; t = p + ".tmp"
+    with open(t, "w", encoding="utf-8") as f: json.dump(data, f)
+    os.replace(t, p)
+
+ETAT = {"sources": {}, "erreurs": []}
+def resultat(src, ok, n, msg=""):
+    ETAT["sources"][src] = {"ok": ok, "n": n, "msg": msg[:200]}
+    if not ok: ETAT["erreurs"].append(f"{src}: {msg[:120]}")
+    log(f"{src}: {'OK' if ok else 'ECHEC (version precedente conservee)'} n={n} {msg}")
+
+# ------------------------------------------------------------------ sources
+def src_feodo():
+    # liste recommandée (haute confiance) + liste standard (avec port, statut, malware)
+    for nom, url in (("feodo_rec", "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt"),
+                     ("feodo", "https://feodotracker.abuse.ch/downloads/ipblocklist.csv")):
+        try:
+            t = get(url, timeout=60).decode("utf-8", "replace")
+            if "Feodo Tracker" not in t or not re.search(r"(?m)^# END", t):
+                raise ValueError("format inattendu (en-tete/fin abuse.ch absents)")
+            rows = []
+            if nom == "feodo_rec":
+                rows = [{"ip": l.strip()} for l in t.splitlines() if l.strip() and not l.startswith("#") and est_ip(l.strip())]
+            else:
+                for r in csv.reader(io.StringIO("\n".join(l for l in t.splitlines() if not l.startswith("#")))):
+                    if len(r) >= 6 and r[0] != "first_seen_utc" and est_ip(r[1].strip()):
+                        rows.append({"first": r[0], "ip": r[1].strip(), "port": r[2].strip(), "statut": r[3].strip(), "last": r[4].strip(), "malware": r[5].strip()})
+            if len(rows) < MIN[nom]: raise ValueError(f"{len(rows)} < minimum {MIN[nom]}")
+            garde(nom, {"date": NOW.isoformat(), "rows": rows}); resultat(nom, True, len(rows))
+        except Exception as e:
+            resultat(nom, False, len((charge(nom) or {}).get("rows", [])), masque(e))
+
+def src_tor():
+    try:
+        t = get("https://check.torproject.org/torbulkexitlist", timeout=60).decode("utf-8", "replace")
+        ips = sorted({l.strip() for l in t.splitlines() if l.strip() and est_ip(l.strip())})
+        if len(ips) < MIN["tor"]: raise ValueError(f"{len(ips)} < minimum {MIN['tor']}")
+        garde("tor", {"date": NOW.isoformat(), "rows": ips}); resultat("tor", True, len(ips))
+    except Exception as e:
+        resultat("tor", False, len((charge("tor") or {}).get("rows", [])), masque(e))
+
+def tf_row(first, iid, val, typ, threat, malware, last, conf, ref=""):
+    return {"first": first, "id": iid, "ioc": val, "type": typ, "threat": threat, "malware": malware, "last": last, "conf": conf}
+
+def src_threatfox(force=False):
+    k = cle()
+    if not k:
+        resultat("threatfox", False, 0, "cle Auth-Key absente (/etc/omni-v5-ti/threatfox.key)"); return
+    prev = charge("threatfox")
+    age_h = 1e9
+    if prev and prev.get("full_date"):
+        age_h = (NOW - dt.datetime.fromisoformat(prev["full_date"])).total_seconds() / 3600
+    try:
+        if force or age_h >= TF_FULL_H or not prev:
+            b = get("https://threatfox-api.abuse.ch/v2/files/exports/%s/full.csv.zip" % urllib.parse.quote(k), timeout=300)
+            z = zipfile.ZipFile(io.BytesIO(b)); t = z.read(z.namelist()[0]).decode("utf-8", "replace")
+            if "ThreatFox IOCs" not in t[:600]: raise ValueError("format inattendu (en-tete ThreatFox absent)")
+            rows = {}
+            for r in csv.reader(io.StringIO("\n".join(l for l in t.splitlines() if not l.startswith("#"))), skipinitialspace=True):
+                if len(r) < 10: continue
+                rows[r[1]] = tf_row(r[0], r[1], r[2].strip(), r[3], r[4], r[7], r[8], r[9])
+            if len(rows) < MIN["threatfox_full"]: raise ValueError(f"{len(rows)} < minimum {MIN['threatfox_full']}")
+            garde("threatfox", {"date": NOW.isoformat(), "full_date": NOW.isoformat(), "rows": list(rows.values())})
+            resultat("threatfox", True, len(rows), "export complet")
+        else:
+            b = get("https://threatfox-api.abuse.ch/api/v1/", data=json.dumps({"query": "get_iocs", "days": 1}).encode(),
+                    headers={"Auth-Key": k, "Content-Type": "application/json"}, timeout=180)
+            d = json.loads(b)
+            if d.get("query_status") != "ok": raise ValueError(f"query_status={d.get('query_status')}")
+            rows = {r["id"]: r for r in prev["rows"]}
+            n0 = len(rows)
+            for i in d.get("data") or []:
+                rows[str(i.get("id"))] = tf_row((i.get("first_seen") or "").replace(" UTC", ""), str(i.get("id")), str(i.get("ioc", "")).strip(),
+                                                i.get("ioc_type", ""), i.get("threat_type", ""), i.get("malware_printable") or "",
+                                                (i.get("last_seen") or "") .replace(" UTC", ""), str(i.get("confidence_level", "")))
+            garde("threatfox", {"date": NOW.isoformat(), "full_date": prev["full_date"], "rows": list(rows.values())})
+            resultat("threatfox", True, len(rows), f"API get_iocs days=1 (+{len(rows)-n0} nouveaux)")
+    except Exception as e:
+        resultat("threatfox", False, len((prev or {}).get("rows", [])), masque(e))
+
+def src_urlhaus():
+    k = cle()
+    if not k:
+        resultat("urlhaus", False, 0, "cle Auth-Key absente"); return
+    try:
+        t = get("https://urlhaus-api.abuse.ch/v2/files/exports/%s/recent.csv" % urllib.parse.quote(k), timeout=300).decode("utf-8", "replace")
+        if "URLhaus Database Dump" not in t[:600]: raise ValueError("format inattendu (en-tete URLhaus absent)")
+        rows = []
+        # id,dateadded,url,url_status,last_online,threat,tags,urlhaus_link,reporter
+        for r in csv.reader(io.StringIO("\n".join(l for l in t.splitlines() if not l.startswith("#")))):
+            if len(r) < 8: continue
+            rows.append({"id": r[0], "date": r[1], "url": r[2].strip(), "statut": r[3], "last": r[4], "threat": r[5], "tags": r[6][:60]})
+        if len(rows) < MIN["urlhaus"]: raise ValueError(f"{len(rows)} < minimum {MIN['urlhaus']}")
+        garde("urlhaus", {"date": NOW.isoformat(), "rows": rows}); resultat("urlhaus", True, len(rows), f"{sum(1 for r in rows if r['statut']=='online')} online")
+    except Exception as e:
+        resultat("urlhaus", False, len((charge("urlhaus") or {}).get("rows", [])), masque(e))
+
+MB_COLS = None
+def mb_parse(fileobj, depuis):
+    """CSV MalwareBazaar : first_seen_utc,sha256_hash,md5_hash,sha1_hash,reporter,file_name,file_type_guess,mime_type,signature,..."""
+    out = {}
+    for line in fileobj:
+        if line.startswith("#") or not line.strip(): continue
+        r = next(csv.reader([line], skipinitialspace=True), [])
+        if len(r) < 9: continue
+        f = ts(r[0])
+        if not f or f < depuis: continue
+        sha = r[1].strip().lower()
+        if re.fullmatch(r"[0-9a-f]{64}", sha):
+            out[sha] = {"first": r[0][:19], "sha256": sha, "type": r[6][:20], "sig": (r[8] if r[8] not in ("n/a", "") else r[6])[:60]}
+    return out
+
+def src_mb(amorcer=False):
+    k = cle()
+    if not k:
+        resultat("malwarebazaar", False, 0, "cle Auth-Key absente"); return
+    prev = charge("malwarebazaar") or {"rows": []}
+    depuis = NOW - dt.timedelta(days=JOURS_STORE)
+    try:
+        if amorcer:
+            # amorçage UNIQUE (230 Mo, export régénéré toutes les heures : ne pas relancer en boucle)
+            os.makedirs(f"{STATE}/tmp", exist_ok=True); zp = f"{STATE}/tmp/mb-full.zip"
+            req = urllib.request.Request("https://mb-api.abuse.ch/v2/files/exports/%s/full.csv.zip" % urllib.parse.quote(k), headers=UA)
+            with urllib.request.urlopen(req, timeout=900) as r, open(zp, "wb") as f:
+                while True:
+                    c = r.read(1 << 20)
+                    if not c: break
+                    f.write(c)
+            with zipfile.ZipFile(zp) as z, z.open(z.namelist()[0]) as fo:
+                new = mb_parse(io.TextIOWrapper(fo, encoding="utf-8", errors="replace"), depuis)
+            os.remove(zp)
+            mode = "amorcage export complet"
+        else:
+            t = get("https://mb-api.abuse.ch/v2/files/exports/%s/recent.csv" % urllib.parse.quote(k), timeout=180).decode("utf-8", "replace")
+            if "MalwareBazaar" not in t[:600]: raise ValueError("format inattendu (en-tete MalwareBazaar absent)")
+            new = mb_parse(io.StringIO(t), depuis)
+            if len(new) < MIN["mb_recent"]: raise ValueError(f"{len(new)} < minimum {MIN['mb_recent']}")
+            mode = "export recent 48 h"
+        rows = {r["sha256"]: r for r in prev["rows"] if (ts(r["first"]) or NOW) >= depuis}
+        n0 = len(rows); rows.update(new)
+        garde("malwarebazaar", {"date": NOW.isoformat(), "rows": list(rows.values())})
+        resultat("malwarebazaar", True, len(rows), f"{mode} (+{len(rows)-n0})")
+    except Exception as e:
+        resultat("malwarebazaar", False, len(prev["rows"]), masque(e))
+
+# ------------------------------------------------------------------ construction des tables
+def val(source, typ, malware, conf, ports="", first="", ref=""):
+    return "|".join([source, typ, propre(malware), conf, ports or ";", propre(first)[:10], propre(ref)])
+
+def ajoute(tab, k, v, prio):
+    k = k.strip().lower().rstrip(".")
+    if not k or k in EXCLUS: return
+    if k not in tab or prio < tab[k][0]: tab[k] = (prio, v)
+    elif prio == tab[k][0] and v.split("|")[4] != ";":
+        # même source : on cumule les ports (";443;8787;")
+        p_old, v_old = tab[k]; parts = v_old.split("|"); add = v.split("|")[4]
+        ports = ";" + ";".join(sorted(set((parts[4] + add).strip(";").split(";")) - {""})) + ";"
+        parts[4] = ports; tab[k] = (p_old, "|".join(parts))
+
+def construit():
+    depuis = NOW - dt.timedelta(days=JOURS)
+    T = {"ip": {}, "domaine": {}, "urlhaus-hote": {}, "urlhaus-url": {}, "hachage": {}}
+    fr = charge("feodo_rec") or {"rows": []}; fs = charge("feodo") or {"rows": []}
+    rec = {r["ip"] for r in fr["rows"]}
+    feodo_det = {r["ip"]: r for r in fs["rows"]}
+    for ip in rec:
+        d = feodo_det.get(ip, {})
+        ajoute(T["ip"], ip, val("feodo", "c2_botnet", d.get("malware", "C2"), "haute", f";{d['port']};" if d.get("port") else ";", d.get("first", ""), "recommandee"), 0)
+    for ip, d in feodo_det.items():
+        if ip in rec: continue
+        ajoute(T["ip"], ip, val("feodo", "c2_botnet", d["malware"], "moyenne" if d["statut"] == "online" else "faible", f";{d['port']};", d["first"], d["statut"]), 1)
+    soar = sorted(ip for ip in rec if ip_publique(ip))
+    for r in (charge("threatfox") or {"rows": []})["rows"]:
+        f = ts(r["first"]); l = ts(r["last"])
+        if not ((f and f >= depuis) or (l and l >= depuis)): continue
+        conf = conf_tf(r["conf"]); typ = r["type"]; ioc = r["ioc"]
+        if typ == "ip:port":
+            ip, _, port = ioc.rpartition(":")
+            if ip_publique(ip):
+                ajoute(T["ip"], ip, val("threatfox", "ip_port", r["malware"], conf, f";{port};", r["first"], r["id"]), 2 if r["threat"] == "botnet_cc" else 3)
+        elif typ == "domain":
+            if not partage(ioc.lower()): ajoute(T["domaine"], ioc, val("threatfox", "domaine", r["malware"], conf, "", r["first"], r["id"]), 0)
+        elif typ == "url":
+            try: u = urllib.parse.urlsplit(ioc); h = (u.hostname or "").lower(); port = u.port
+            except ValueError: continue
+            if est_ip(h):
+                if ip_publique(h): ajoute(T["ip"], h, val("threatfox", "url_ip", r["malware"], conf, f";{port or (443 if u.scheme == 'https' else 80)};", r["first"], r["id"]), 3)
+            elif h and not partage(h): ajoute(T["domaine"], h, val("threatfox", "url_hote", r["malware"], conf, "", r["first"], r["id"]), 1)
+        elif typ in ("sha256_hash", "md5_hash", "sha1_hash"):
+            ajoute(T["hachage"], ioc, val("threatfox", typ.replace("_hash", ""), r["malware"], conf, "", r["first"], r["id"]), 1)
+    for r in (charge("urlhaus") or {"rows": []})["rows"]:
+        if r["statut"] != "online": continue
+        f = ts(r["date"])
+        if f and f < depuis: continue
+        try: u = urllib.parse.urlsplit(r["url"]); h = (u.hostname or "").lower(); port = u.port
+        except ValueError: continue
+        ajoute(T["urlhaus-url"], r["url"], val("urlhaus", "url", r["tags"] or r["threat"], "haute", "", r["date"], r["id"]), 0)
+        if est_ip(h):
+            if ip_publique(h): ajoute(T["ip"], h, val("urlhaus", "url_ip", r["tags"] or r["threat"], "moyenne", f";{port or (443 if u.scheme == 'https' else 80)};", r["date"], r["id"]), 4)
+        elif h and not partage(h):
+            ajoute(T["urlhaus-hote"], h, val("urlhaus", "url_hote", r["tags"] or r["threat"], "moyenne", "", r["date"], r["id"]), 0)
+    for r in (charge("malwarebazaar") or {"rows": []})["rows"]:
+        f = ts(r["first"])
+        if f and f >= depuis: ajoute(T["hachage"], r["sha256"], val("malwarebazaar", "sha256", r["sig"], "haute", "", r["first"], r["type"]), 0)
+    for ip in (charge("tor") or {"rows": []})["rows"]:
+        if ip_publique(ip): ajoute(T["ip"], ip, val("tor", "tor_sortie", "Tor exit", "info", "", "", "torbulkexitlist"), 9)
+    return T, soar
+
+def ecrit(nom, tab):
+    """Écriture atomique ; refuse une table vide ou en chute de plus de 70 % par rapport à la précédente."""
+    p = f"{LOOKUP}/{nom}.csv"
+    n_old = 0
+    if os.path.exists(p):
+        with open(p, encoding="utf-8") as f: n_old = max(0, sum(1 for _ in f) - 1)
+    n = len(tab)
+    if n == 0 and n_old > 0:
+        return f"{nom}: REFUS table vide (precedente {n_old} conservee)"
+    if n_old >= 100 and n < 0.3 * n_old:
+        return f"{nom}: REFUS chute {n_old} -> {n} (precedente conservee)"
+    if SIMULER: return None
+    buf = io.StringIO(); w = csv.writer(buf, lineterminator="\n"); w.writerow(["cle", "valeur"])
+    for k in sorted(tab): w.writerow([k, tab[k][1]])
+    contenu = buf.getvalue()
+    # contenu identique : on ne réécrit pas (évite un rechargement de l'adaptateur et une purge du cache Graylog)
+    try:
+        if open(p, encoding="utf-8").read() == contenu: return None
+    except OSError: pass
+    t = f"{LOOKUP}/.{nom}.csv.tmp"
+    with open(t, "w", encoding="utf-8", newline="") as f: f.write(contenu)
+    os.chmod(t, 0o640)
+    try: os.chown(t, 0, __import__("grp").getgrnam("graylog").gr_gid)
+    except Exception: pass
+    os.replace(t, p)
+    return None
+
+def gelf(msg):
+    try:
+        req = urllib.request.Request(GELF, data=json.dumps(msg).encode(), headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10).read()
+    except Exception as e:
+        log(f"GELF KO : {e}")
+
+def main():
+    t0 = time.time()
+    os.makedirs(LOOKUP, exist_ok=True); os.makedirs(f"{STATE}/soar", exist_ok=True)
+    charge_populaires(); charge_exclusions()
+    src_feodo(); src_tor(); src_threatfox("--force-threatfox" in sys.argv); src_urlhaus(); src_mb("--amorcer-mb" in sys.argv)
+    T, soar = construit()
+    refus = [r for r in (ecrit(n, t) for n, t in T.items()) if r]
+    for r in refus: log(r); ETAT["erreurs"].append(r)
+    # Option SOAR préparée, NON branchée : fichier séparé, jamais publié tant que OMNI_V5_TI_SOAR_FEODO != 1
+    if not SIMULER:
+        p = f"{STATE}/soar/feodo-haute-confiance.txt"
+        if soar or not os.path.exists(p):
+            with open(p + ".tmp", "w") as f: f.write("# OMNI v5 TI - C2 Feodo haute confiance (liste recommandee) - NON BRANCHEE (decision jmorin)\n" + "".join(i + "\n" for i in soar))
+            os.replace(p + ".tmp", p)
+        if SOAR_FEODO:
+            # Publication SÉPARÉE de la blocklist SOAR actuelle (/kit/soar/blocklist.txt jamais touchée). Exige en plus le drop-in
+            # ReadWritePaths=/var/www/siem-kit/soar-v5-ti (sinon refus « Read-only file system ») ET le connecteur FortiGate
+            # (C:\DC\SIEM\Graylog\v5\ti\src\FG-TI-FeodoHC-v5.ps1) : trois actions volontaires, décision jmorin.
+            try:
+                d = "/var/www/siem-kit/soar-v5-ti"; os.makedirs(d, exist_ok=True)
+                with open(f"{d}/.feodo-haute-confiance.txt.tmp", "w") as f: f.write("".join(i + "\n" for i in soar))
+                os.replace(f"{d}/.feodo-haute-confiance.txt.tmp", f"{d}/feodo-haute-confiance.txt")
+                log(f"option SOAR Feodo ACTIVE : {len(soar)} IP publiees dans /kit/soar-v5-ti/feodo-haute-confiance.txt")
+            except OSError as e:
+                log(f"option SOAR Feodo demandee mais publication impossible ({e}) : aucune action")
+    tailles = {n: len(t) for n, t in T.items()}
+    statut = "ok" if not ETAT["erreurs"] else ("erreur" if all(not s["ok"] for s in ETAT["sources"].values()) else "degrade")
+    resume = " ".join(f"{n}={c}" for n, c in tailles.items())
+    log(f"tables : {resume} ; statut={statut} ; {round(time.time()-t0,1)} s")
+    m = {"version": "1.1", "host": socket.gethostname(), "short_message": f"OMNI v5 TI fetch {statut} : {resume}",
+         "_event_source": "ti_fetch", "_ti_fetch_statut": statut, "_ti_fetch_duree_s": round(time.time() - t0, 1),
+         "_ti_fetch_erreurs": "; ".join(ETAT["erreurs"])[:900] or "aucune", "_ti_soar_feodo_option": "active" if SOAR_FEODO else "desactivee",
+         "_ti_soar_feodo_n": len(soar), "level": 6 if statut == "ok" else 4}
+    for n, c in tailles.items(): m["_ti_table_" + n.replace("-", "_")] = c
+    for s, v in ETAT["sources"].items(): m["_ti_src_" + s] = v["n"]; m["_ti_src_" + s + "_ok"] = v["ok"]
+    if SIMULER: print(json.dumps(m, ensure_ascii=False, indent=1))
+    else: gelf(m)
+    return 0 if statut != "erreur" else 1
+
+if __name__ == "__main__":
+    sys.exit(main())

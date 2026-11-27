@@ -21,6 +21,34 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - Console SOC : logo personnalisé agrandi (56 px à côté du nom, logo large placé au-dessus du nom) ; adresse cliente réelle derrière le proxy FortiGate (`deploye/nginx/omni-real-ip.conf`), qui rétablit les écritures d'administration depuis les réseaux autorisés et des limites de débit par poste.
 
 ### Ajouté
+- SIEM v5 (27/11/2026), couches additives en rodage jusqu'au 04/12/2026 (définitions « OMNI v5 - »
+  regroupées dans le récapitulatif quotidien, sans mail unitaire). Chaque règle de détection a été
+  vérifiée au simulateur Graylog et rejouée sur 30 jours de données réelles avant activation.
+- Détections Active Directory et Microsoft 365 (`tools/omni-v5-ad/`, pipeline « OMNI v5 - Detections
+  AD et M365 ») : Kerberoasting en AES, préparation d'AS-REP roasting, DCSync et Shadow Credentials
+  limités au compte Entra Connect exact, AD CS (ESC1, ESC4, ESC6, ESC7), service installé sur un
+  contrôleur de domaine ou une PKI, GPO sensibles, lecture mémoire de LSASS hors liste stricte, compte
+  leurre, fichiers canaris, transfert de messagerie externe, règles de boîte suspectes, fatigue MFA.
+  Fenêtres M365 de 5 h (retard de l'audit Exchange). Valeurs du site dans `/etc/omni-v5-ad/site.json`
+  (modèle `site.exemple.json`) : avec les valeurs réelles, les objets produits sont identiques à ceux
+  en production.
+- Threat intelligence : `omni-v5-ti-fetch` et son timer (toutes les 2 h) chargent Feodo Tracker, les
+  nœuds de sortie Tor, ThreatFox, URLhaus et MalwareBazaar dans des tables de correspondance ; pipeline
+  « OMNI v5 - TI enrichissement » (FortiGate, Sysmon, ESET), recherche rétroactive sur 90 jours
+  (`tools/omni-v5-ti/`) ; blocage SOAR des C2 Feodo préparé et désactivé (`OMNI_V5_TI_SOAR_FEODO=0`).
+- Collecte (`tools/omni-v5-collecte/`) : normalisation Directory Service, AppLocker et LAPS, entrée GELF
+  TCP pour les requêtes DNS des contrôleurs de domaine, syslog direct d'un FortiGate de site en secours
+  de FortiAnalyzer ; règles auditd Linux et script de déploiement (installe rsyslog s'il manque).
+- Réponse à incident avec validation humaine, en simulation uniquement (`tools/omni-v5-reponse/`) :
+  isolement ESET, désactivation AD et révocation Entra proposés puis validés par un second
+  administrateur SOC, jeton à usage unique, journal d'audit chaîné ; aucune action n'est exécutée.
+  Cibles protégées propres au site dans `/etc/omni-v5-reponse/cibles-protegees` (modèle fourni) : le
+  service refuse de démarrer sans ce fichier. Test hors ligne `tests/test_omni_v5_reponse.py`.
+- Scripts Windows `windows/Activer-Audit-ADCS.ps1` (audit de l'autorité de certification et de
+  `CN=Public Key Services`) et `windows/Poser-Canaris-Fichiers.ps1` (fichiers canaris audités, noms
+  passés en paramètre), simulation par défaut et retour arrière.
+- Export filtré des objets Graylog v5 (règles sans commentaires, pipelines, requêtes et seuils des
+  définitions) dans `objets-graylog/v5/`.
 
 - Confiance de publication : refus d’un fichier contenant plusieurs certificats
   publics, même lorsque le premier porte l’empreinte attendue. Contrôle ajouté
@@ -99,6 +127,13 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - Fiche de l'incident du 21/11/2026 (tests de la console écrits en production, message de test `soc_admin` conservé dans Graylog) : `docs/archives/INCIDENT-CONSOLE-2026-11-21.md`.
 
 ### Modifié
+- Récapitulatif des alertes (`triage/omni-alert-digest`) : section des détections en rodage et
+  indicateurs sur 7 jours (volume par niveau, faux positifs par détection et au tri, délai de prise en
+  compte) ; retour `OMNI_V5_DIGEST=0`. Récapitulatif et lots horaires (`omni-alert-lot`) mis en forme
+  selon la charte des rapports DSI (`deploye/lib/omni-siem/omni_mail_v3.py`, retour
+  `OMNI_MAIL_CHARTE=v2`) ; libellé du timer du récapitulatif aligné sur son calendrier (lundi au vendredi).
+- `windows/winlogbeat.yml` : canal Directory Service des contrôleurs de domaine (liaisons LDAP non
+  signées ou sans liaison de canal, réplication), ignoré sur les autres machines.
 
 - `tools/omni-update.py` : classement des échecs Git complété (`host_key_unverified` pour une clé d'hôte SSH non vérifiée, refus de clé SSH classé `authentication_required`).
 - Dossiers de la console (`update_case`) : historique daté (`history`) des changements de statut, d'assignation et de qualification, et horodatage de clôture (`closed_ts`), pour mesurer le MTTR. Ajout seul, champs ignorés par l'affichage.

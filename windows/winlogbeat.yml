@@ -73,6 +73,12 @@ winlogbeat.event_logs:
   - name: Microsoft-Windows-DNSServer/Audit
     ignore_older: 72h
 
+  # --- Directory Service (SIEM v5 chantier 4, 27/11/2026) : LDAP non signe, CBT, replication ---
+  # absent hors DC : winlogbeat l'ignore (avertissement « channel not found », sans effet)
+  - name: Directory Service
+    event_id: 1311, 1388, 1925, 1988, 2042, 2087, 2088, 2886-2889, 3039-3041, 3074-3075
+    ignore_older: 72h
+
 # ------------------------------------------------------------------------------
 output.logstash:                       # l'input "Beats" de Graylog parle logstash
   hosts: ["bx-it-graylog-vm.omnitech.security:5044"]

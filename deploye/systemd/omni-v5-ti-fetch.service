@@ -1,0 +1,17 @@
+[Unit]
+Description=OMNI v5 TI - telechargement des flux (Feodo, Tor, ThreatFox, URLhaus, MalwareBazaar) vers /etc/graylog/lookup/ti
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/omni-v5-ti-fetch
+ExecStart=/usr/local/sbin/omni-v5-ti-fetch
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1200
+ProtectSystem=strict
+ReadWritePaths=/etc/graylog/lookup/ti /var/lib/omni-v5-ti /var/log/omni-v5-ti
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true

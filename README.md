@@ -51,6 +51,9 @@ detections mapped to MITRE ATT&CK, and adds in-house services:
   an **exposure graph** (`oms-graph`);
 - **bounded, reversible automated response**: IP blocking on the FortiGate
   firewalls through a threat feed, with expiry, exclusions and a simulation mode;
+- **v5 layers** (November 2026, in rollout): Active Directory and Microsoft 365 detections,
+  threat-intelligence enrichment and a human-validated incident response service that only runs in
+  simulation ([details](docs/detection/DETECTIONS.md#detection-layer-v5-november-2026));
 - a **SOC web console** and an installable app (PWA), with
   [site-configured pages and widgets](docs/CONSOLE-MODULES.md) for existing Graylog streams;
 - **ISO/IEC 27001:2022 evidence**: tiered retention, integrity chain, monthly

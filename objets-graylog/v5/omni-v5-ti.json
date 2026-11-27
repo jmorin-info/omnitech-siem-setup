@@ -1,0 +1,230 @@
+{
+ "_lisez_moi": "Export des objets Graylog « OMNI v5 » de l'instance de référence au 27/11/2026 (lecture seule, API GET), filtré pour publication : commentaires des règles, descriptions et identifiants retirés ; valeurs propres au site (compte leurre, compte Entra Connect, fichiers canaris, GPO de l'agent RMM, préfixes internes) remplacées par celles de tools/omni-v5-ad/site.exemple.json. Les scripts de construction (tools/omni-v5-*) restent la source de vérité.",
+ "pipelines": [
+  {
+   "titre": "OMNI v5 - TI enrichissement",
+   "streams": [
+    "OMNI - ESET",
+    "OMNI - FortiGate",
+    "OMNI - Sysmon"
+   ],
+   "source": "pipeline \"OMNI v5 - TI enrichissement\"\nstage 19 match either\nrule \"omni-v5-ti-fg-ip-dest\"\nrule \"omni-v5-ti-fg-ip-src\"\nrule \"omni-v5-ti-fg-dns-domaine\"\nrule \"omni-v5-ti-fg-dns-urlhaus\"\nrule \"omni-v5-ti-fg-web-domaine\"\nrule \"omni-v5-ti-fg-web-urlhaus\"\nrule \"omni-v5-ti-fg-web-url\"\nrule \"omni-v5-ti-sysmon-dns-domaine\"\nrule \"omni-v5-ti-sysmon-dns-urlhaus\"\nrule \"omni-v5-ti-sysmon-hash-exec\"\nrule \"omni-v5-ti-sysmon-hash-fichier\"\nrule \"omni-v5-ti-sysmon-hash-ads\"\nrule \"omni-v5-ti-eset-hash\"\nrule \"omni-v5-ti-eset-url-urlhaus\"\nrule \"omni-v5-ti-eset-url-domaine\"\nrule \"omni-v5-ti-eset-url-exacte\"\nend"
+  }
+ ],
+ "regles": [
+  {
+   "titre": "omni-v5-ti-eset-hash",
+   "source": "rule \"omni-v5-ti-eset-hash\"\nwhen\n  to_string($message.event_source) == \"eset\" &&\n  has_field(\"eset_hash\") &&\n  !is_null(lookup_value(\"omni-v5-ti-hachage\", lowercase(to_string($message.eset_hash))))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-hachage\", lowercase(to_string($message.eset_hash)))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", lowercase(to_string($message.eset_hash)));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"eset\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-eset-url-domaine",
+   "source": "rule \"omni-v5-ti-eset-url-domaine\"\nwhen\n  to_string($message.event_source) == \"eset\" &&\n  starts_with(to_string($message.eset_object_uri), \"http\", true) &&\n  !is_null(lookup_value(\"omni-v5-ti-domaine\", lowercase(to_string(regex(\"^[a-zA-Z]+://([^/:?#]+)\", to_string($message.eset_object_uri), [\"h\"])[\"h\"]))))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-domaine\", lowercase(to_string(regex(\"^[a-zA-Z]+://([^/:?#]+)\", to_string($message.eset_object_uri), [\"h\"])[\"h\"])))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", lowercase(to_string(regex(\"^[a-zA-Z]+://([^/:?#]+)\", to_string($message.eset_object_uri), [\"h\"])[\"h\"])));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"eset_web\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-eset-url-exacte",
+   "source": "rule \"omni-v5-ti-eset-url-exacte\"\nwhen\n  to_string($message.event_source) == \"eset\" &&\n  starts_with(to_string($message.eset_object_uri), \"http\", true) &&\n  !is_null(lookup_value(\"omni-v5-ti-urlhaus-url\", to_string($message.eset_object_uri)))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-urlhaus-url\", to_string($message.eset_object_uri))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", to_string($message.eset_object_uri));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"eset_web\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-eset-url-urlhaus",
+   "source": "rule \"omni-v5-ti-eset-url-urlhaus\"\nwhen\n  to_string($message.event_source) == \"eset\" &&\n  starts_with(to_string($message.eset_object_uri), \"http\", true) &&\n  !is_null(lookup_value(\"omni-v5-ti-urlhaus-hote\", lowercase(to_string(regex(\"^[a-zA-Z]+://([^/:?#]+)\", to_string($message.eset_object_uri), [\"h\"])[\"h\"]))))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-urlhaus-hote\", lowercase(to_string(regex(\"^[a-zA-Z]+://([^/:?#]+)\", to_string($message.eset_object_uri), [\"h\"])[\"h\"])))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", lowercase(to_string(regex(\"^[a-zA-Z]+://([^/:?#]+)\", to_string($message.eset_object_uri), [\"h\"])[\"h\"])));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"eset_web\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-fg-dns-domaine",
+   "source": "rule \"omni-v5-ti-fg-dns-domaine\"\nwhen\n  to_string($message.event_source) == \"fortigate\" &&\n  to_string($message.subtype) == \"dns\" &&\n  has_field(\"qname\") &&\n  !is_null(lookup_value(\"omni-v5-ti-domaine\", lowercase(to_string($message.qname))))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-domaine\", lowercase(to_string($message.qname)))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", lowercase(to_string($message.qname)));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"dns\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-fg-dns-urlhaus",
+   "source": "rule \"omni-v5-ti-fg-dns-urlhaus\"\nwhen\n  to_string($message.event_source) == \"fortigate\" &&\n  to_string($message.subtype) == \"dns\" &&\n  has_field(\"qname\") &&\n  !is_null(lookup_value(\"omni-v5-ti-urlhaus-hote\", lowercase(to_string($message.qname))))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-urlhaus-hote\", lowercase(to_string($message.qname)))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", lowercase(to_string($message.qname)));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"dns\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-fg-ip-dest",
+   "source": "rule \"omni-v5-ti-fg-ip-dest\"\nwhen\n  to_string($message.event_source) == \"fortigate\" &&\n  has_field(\"dest_ip\") &&\n  to_string($message.dst_priv) == \"false\" &&\n  !is_null(lookup_value(\"omni-v5-ti-ip\", to_string($message.dest_ip)))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-ip\", to_string($message.dest_ip))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", to_string($message.dest_ip));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_direction\", \"sortant\");\n  set_field(\"ti_ioc_ports\", v[\"p\"]);\n  set_field(\"ti_port_match\", contains(to_string(v[\"p\"]), concat(concat(\";\", to_string($message.dest_port)), \";\")));\nend"
+  },
+  {
+   "titre": "omni-v5-ti-fg-ip-src",
+   "source": "rule \"omni-v5-ti-fg-ip-src\"\nwhen\n  to_string($message.event_source) == \"fortigate\" &&\n  has_field(\"src_ip\") &&\n  to_string($message.src_priv) == \"false\" &&\n  !is_null(lookup_value(\"omni-v5-ti-ip\", to_string($message.src_ip)))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-ip\", to_string($message.src_ip))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", to_string($message.src_ip));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_direction\", \"entrant\");\n  set_field(\"ti_ioc_ports\", v[\"p\"]);\nend"
+  },
+  {
+   "titre": "omni-v5-ti-fg-web-domaine",
+   "source": "rule \"omni-v5-ti-fg-web-domaine\"\nwhen\n  to_string($message.event_source) == \"fortigate\" &&\n  to_string($message.type) == \"utm\" &&\n  to_string($message.subtype) != \"dns\" &&\n  has_field(\"hostname\") &&\n  !is_null(lookup_value(\"omni-v5-ti-domaine\", lowercase(to_string($message.hostname))))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-domaine\", lowercase(to_string($message.hostname)))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", lowercase(to_string($message.hostname)));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"web\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-fg-web-url",
+   "source": "rule \"omni-v5-ti-fg-web-url\"\nwhen\n  to_string($message.event_source) == \"fortigate\" &&\n  to_string($message.type) == \"utm\" &&\n  has_field(\"url\") &&\n  !is_null(lookup_value(\"omni-v5-ti-urlhaus-url\", to_string($message.url)))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-urlhaus-url\", to_string($message.url))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", to_string($message.url));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"web\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-fg-web-urlhaus",
+   "source": "rule \"omni-v5-ti-fg-web-urlhaus\"\nwhen\n  to_string($message.event_source) == \"fortigate\" &&\n  to_string($message.type) == \"utm\" &&\n  to_string($message.subtype) != \"dns\" &&\n  has_field(\"hostname\") &&\n  !is_null(lookup_value(\"omni-v5-ti-urlhaus-hote\", lowercase(to_string($message.hostname))))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-urlhaus-hote\", lowercase(to_string($message.hostname)))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", lowercase(to_string($message.hostname)));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"web\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-sysmon-dns-domaine",
+   "source": "rule \"omni-v5-ti-sysmon-dns-domaine\"\nwhen\n  to_string($message.event_source) == \"sysmon\" &&\n  to_string($message.winlogbeat_winlog_event_id) == \"22\" &&\n  has_field(\"dns_query\") &&\n  !is_null(lookup_value(\"omni-v5-ti-domaine\", lowercase(to_string($message.dns_query))))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-domaine\", lowercase(to_string($message.dns_query)))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", lowercase(to_string($message.dns_query)));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"dns\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-sysmon-dns-urlhaus",
+   "source": "rule \"omni-v5-ti-sysmon-dns-urlhaus\"\nwhen\n  to_string($message.event_source) == \"sysmon\" &&\n  to_string($message.winlogbeat_winlog_event_id) == \"22\" &&\n  has_field(\"dns_query\") &&\n  !is_null(lookup_value(\"omni-v5-ti-urlhaus-hote\", lowercase(to_string($message.dns_query))))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-urlhaus-hote\", lowercase(to_string($message.dns_query)))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", lowercase(to_string($message.dns_query)));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"dns\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-sysmon-hash-ads",
+   "source": "rule \"omni-v5-ti-sysmon-hash-ads\"\nwhen\n  to_string($message.event_source) == \"sysmon\" &&\n  to_string($message.winlogbeat_winlog_event_id) == \"15\" &&\n  has_field(\"winlogbeat_winlog_event_data_Hash\") &&\n  !is_null(lookup_value(\"omni-v5-ti-hachage\", to_string(regex(\"SHA256=([0-9A-Fa-f]{64})\", to_string($message.winlogbeat_winlog_event_data_Hash), [\"h\"])[\"h\"])))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-hachage\", to_string(regex(\"SHA256=([0-9A-Fa-f]{64})\", to_string($message.winlogbeat_winlog_event_data_Hash), [\"h\"])[\"h\"]))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", to_string(regex(\"SHA256=([0-9A-Fa-f]{64})\", to_string($message.winlogbeat_winlog_event_data_Hash), [\"h\"])[\"h\"]));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"fichier\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-sysmon-hash-exec",
+   "source": "rule \"omni-v5-ti-sysmon-hash-exec\"\nwhen\n  to_string($message.event_source) == \"sysmon\" &&\n  (to_string($message.winlogbeat_winlog_event_id) == \"1\" || to_string($message.winlogbeat_winlog_event_id) == \"7\") &&\n  has_field(\"winlogbeat_winlog_event_data_Hashes\") &&\n  !is_null(lookup_value(\"omni-v5-ti-hachage\", to_string(regex(\"SHA256=([0-9A-Fa-f]{64})\", to_string($message.winlogbeat_winlog_event_data_Hashes), [\"h\"])[\"h\"])))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-hachage\", to_string(regex(\"SHA256=([0-9A-Fa-f]{64})\", to_string($message.winlogbeat_winlog_event_data_Hashes), [\"h\"])[\"h\"]))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", to_string(regex(\"SHA256=([0-9A-Fa-f]{64})\", to_string($message.winlogbeat_winlog_event_data_Hashes), [\"h\"])[\"h\"]));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"execution\");\nend"
+  },
+  {
+   "titre": "omni-v5-ti-sysmon-hash-fichier",
+   "source": "rule \"omni-v5-ti-sysmon-hash-fichier\"\nwhen\n  to_string($message.event_source) == \"sysmon\" &&\n  (to_string($message.winlogbeat_winlog_event_id) == \"6\" || to_string($message.winlogbeat_winlog_event_id) == \"23\" || to_string($message.winlogbeat_winlog_event_id) == \"26\" || to_string($message.winlogbeat_winlog_event_id) == \"29\") &&\n  has_field(\"winlogbeat_winlog_event_data_Hashes\") &&\n  !is_null(lookup_value(\"omni-v5-ti-hachage\", to_string(regex(\"SHA256=([0-9A-Fa-f]{64})\", to_string($message.winlogbeat_winlog_event_data_Hashes), [\"h\"])[\"h\"])))\nthen\n  let v = regex(\"^([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|([^|]*)\\\\|(.*)$\", to_string(lookup_value(\"omni-v5-ti-hachage\", to_string(regex(\"SHA256=([0-9A-Fa-f]{64})\", to_string($message.winlogbeat_winlog_event_data_Hashes), [\"h\"])[\"h\"]))), [\"s\",\"t\",\"m\",\"c\",\"p\",\"f\",\"r\"]);\n  set_field(\"ti_match\", to_string(regex(\"SHA256=([0-9A-Fa-f]{64})\", to_string($message.winlogbeat_winlog_event_data_Hashes), [\"h\"])[\"h\"]));\n  set_field(\"ti_source\", v[\"s\"]);\n  set_field(\"ti_type\", v[\"t\"]);\n  set_field(\"ti_malware\", v[\"m\"]);\n  set_field(\"ti_confiance\", v[\"c\"]);\n  set_field(\"ti_ioc_date\", v[\"f\"]);\n  set_field(\"ti_ref\", v[\"r\"]);\n  set_field(\"ti_tag\", \"omni_v5_ti\");\n  set_field(\"ti_contexte\", \"fichier\");\nend"
+  }
+ ],
+ "definitions": [
+  {
+   "titre": "OMNI v5 - TI : acces a un hote ou une URL URLhaus en ligne (DNS, web, ESET)",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "ti_source:urlhaus AND ti_contexte:(dns OR web OR eset_web)",
+   "streams": [
+    "OMNI - ESET",
+    "OMNI - FortiGate",
+    "OMNI - Sysmon"
+   ],
+   "regroupement": [
+    "ti_match"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 60,
+   "pas_min": 5,
+   "grace_min": 240
+  },
+  {
+   "titre": "OMNI v5 - TI : connexion sortante AUTORISEE vers un C2 Feodo",
+   "priorite": 3,
+   "etat": "ENABLED",
+   "requete": "ti_source:feodo AND ti_direction:sortant AND type:traffic AND action:(accept OR close OR timeout OR start OR server\\-rst OR client\\-rst)",
+   "streams": [
+    "OMNI - FortiGate"
+   ],
+   "regroupement": [
+    "src_ip"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 10,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - TI : connexion sortante autorisee vers une IP:port malveillante (ThreatFox/URLhaus, port identique)",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "ti_source:(threatfox OR urlhaus) AND ti_direction:sortant AND ti_port_match:true AND ti_confiance:(haute OR moyenne) AND type:traffic AND action:(accept OR close OR timeout OR start OR server\\-rst OR client\\-rst)",
+   "streams": [
+    "OMNI - FortiGate"
+   ],
+   "regroupement": [
+    "src_ip"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 60,
+   "pas_min": 5,
+   "grace_min": 240
+  },
+  {
+   "titre": "OMNI v5 - TI : connexion vers un C2 Feodo BLOQUEE par le FortiGate",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "ti_source:feodo AND ti_direction:sortant AND type:traffic AND action:(deny OR ip\\-conn)",
+   "streams": [
+    "OMNI - FortiGate"
+   ],
+   "regroupement": [
+    "src_ip"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 60,
+   "pas_min": 5,
+   "grace_min": 240
+  },
+  {
+   "titre": "OMNI v5 - TI : hachage malveillant EXECUTE sur un poste (Sysmon 1/7)",
+   "priorite": 3,
+   "etat": "ENABLED",
+   "requete": "ti_contexte:execution AND _exists_:ti_source",
+   "streams": [
+    "OMNI - Sysmon"
+   ],
+   "regroupement": [
+    "source"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 10,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - TI : hachage malveillant vu hors execution (fichier Sysmon, ESET)",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "ti_contexte:(fichier OR eset) AND _exists_:ti_source",
+   "streams": [
+    "OMNI - ESET",
+    "OMNI - Sysmon"
+   ],
+   "regroupement": [
+    "ti_match"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 60,
+   "pas_min": 5,
+   "grace_min": 240
+  },
+  {
+   "titre": "OMNI v5 - TI : resolution DNS d'un domaine ThreatFox",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "ti_source:threatfox AND ti_contexte:dns AND ti_confiance:(haute OR moyenne)",
+   "streams": [
+    "OMNI - FortiGate",
+    "OMNI - Sysmon"
+   ],
+   "regroupement": [
+    "ti_match"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 60,
+   "pas_min": 5,
+   "grace_min": 240
+  },
+  {
+   "titre": "OMNI v5 - TI : trafic entrant accepte depuis un noeud de sortie Tor (INFO)",
+   "priorite": 1,
+   "etat": "ENABLED",
+   "requete": "ti_source:tor AND ti_direction:entrant AND type:traffic AND action:(accept OR close OR timeout OR start OR server\\-rst OR client\\-rst)",
+   "streams": [
+    "OMNI - FortiGate"
+   ],
+   "regroupement": [
+    "dest_ip"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 60,
+   "pas_min": 5,
+   "grace_min": 720
+  },
+  {
+   "titre": "OMNI v5 - TI : trafic sortant autorise vers un noeud de sortie Tor",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "ti_source:tor AND ti_direction:sortant AND src_priv:true AND type:traffic AND action:(accept OR close OR timeout OR start OR server\\-rst OR client\\-rst) AND NOT dest_port:123",
+   "streams": [
+    "OMNI - FortiGate"
+   ],
+   "regroupement": [
+    "src_ip"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 60,
+   "pas_min": 5,
+   "grace_min": 480
+  }
+ ]
+}

@@ -18,7 +18,7 @@ and watched for silence by the source-freshness watchdog.
 | VMware vSphere | Syslog (1516) | `vsphere` | Host/VM lifecycle, authentication, snapshots |
 | ESET | Syslog (1515) | `eset` | Endpoint AV detections |
 | Aruba | Syslog TCP/UDP (1520) | `aruba` | Switch/AP auth, port-security, STP |
-| Linux | Syslog (1519) | `linux` | Host authentication and system logs |
+| Linux | Syslog (1519) | `linux` | Host authentication and system logs; auditd events (`omni_*` keys) where `tools/omni-v5-collecte/auditd/` is deployed |
 | BunkerWeb (WAF) | — | `bunkerweb` | Application-firewall blocks and scanner activity |
 | Vaultwarden | Filebeat / GELF | `vaultwarden` | Password-vault access and brute force |
 | NinjaOne (inventory) | — | `inventory` | Asset inventory |
@@ -27,6 +27,9 @@ and watched for silence by the source-freshness watchdog.
 | Certificate parc (PKI) | Winlogbeat — "OMNI-Certificats" channel (bx-pki2022) | `cert_parc` | Certificate inventory &amp; expiry (Get-OmniCertExpiry) |
 | Cert Orchestrator | GELF UDP (12201) | `cert_orchestrator` | Certificate renewal/request orchestrator (BX-IT-CERT-VM), errors |
 | Windows DNS | Winlogbeat — DNSServer/Audit | `dns` | DNS record changes, cache flush, sensitive zones |
+| Directory Service (domain controllers) | Winlogbeat — "Directory Service" channel | `windows` (`v5_collecte` = `directory_service`) | Unsigned LDAP binds and channel binding (2886-2889, 3039-3041), replication errors |
+| Domain-controller DNS queries | GELF TCP (12220) | `dns_dc` | Client queries resolved by the DCs (C2, DGA, exfiltration); input ready, collector not yet deployed |
+| FortiGate (site fallback) | Syslog UDP (1521), sent directly by the firewall | `fortigate` (`collecte_voie` = `syslog_direct`) | Fallback path when FortiAnalyzer is unavailable |
 | **SEAL** (physical) | GELF TCP (12202) | `seal` | Badge access, doors, alarms, intrusion, dead-man switches |
 
 > **Derived (internal) sources**, re-injected by the robots and the triage service, are also

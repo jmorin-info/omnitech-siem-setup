@@ -1,6 +1,7 @@
 # Manifeste : <chemin en service><TAB><chemin dans le dépôt> (généré par generer-manifeste.sh le 14/11/2026)
 /etc/apt/apt.conf.d/52omni-siem.conf	deploye/apt/52omni-siem.conf
 /etc/apt/preferences.d/oms-siem-series	deploye/apt/oms-siem-series
+/etc/default/omni-v5-ti-fetch	deploye/etc/default/omni-v5-ti-fetch
 /etc/logstash/conf.d/seal-omega.conf	deploye/logstash/seal-omega.conf
 /etc/logstash/conf.d/seal.conf	deploye/logstash/seal.conf
 /etc/logstash/jvm.options	deploye/logstash/jvm.options
@@ -151,6 +152,8 @@
 /etc/systemd/system/omni-ueba-volume.service	deploye/systemd/omni-ueba-volume.service
 /etc/systemd/system/omni-ueba-volume.service.d/hardening.conf	deploye/systemd/omni-ueba-volume.service.d/hardening.conf
 /etc/systemd/system/omni-ueba-volume.timer	deploye/systemd/omni-ueba-volume.timer
+/etc/systemd/system/omni-v5-ti-fetch.service	deploye/systemd/omni-v5-ti-fetch.service
+/etc/systemd/system/omni-v5-ti-fetch.timer	deploye/systemd/omni-v5-ti-fetch.timer
 /etc/systemd/system/omni-version-watch.service	deploye/systemd/omni-version-watch.service
 /etc/systemd/system/omni-version-watch.timer	deploye/systemd/omni-version-watch.timer
 /etc/systemd/system/omni-vuln-scan.service	deploye/systemd/omni-vuln-scan.service
@@ -193,6 +196,7 @@
 /opt/oms-seal-sla/README.md	deploye/opt/oms-seal-sla/README.md
 /opt/oms-seal-sla/seal_sla_poller.py	deploye/opt/oms-seal-sla/seal_sla_poller.py
 /usr/local/lib/omni-siem/omni_cible.py	deploye/lib/omni-siem/omni_cible.py
+/usr/local/lib/omni-siem/omni_mail_v3.py	deploye/lib/omni-siem/omni_mail_v3.py
 /usr/local/sbin/omni-ad-disable	deploye/sbin/omni-ad-disable
 /usr/local/sbin/omni-alert-digest	triage/omni-alert-digest
 /usr/local/sbin/omni-alert-lot	deploye/sbin/omni-alert-lot
@@ -238,6 +242,7 @@
 /usr/local/sbin/omni-ueba-geo-newcountry	deploye/sbin/omni-ueba-geo-newcountry
 /usr/local/sbin/omni-ueba-score	deploye/sbin/omni-ueba-score
 /usr/local/sbin/omni-ueba-volume	deploye/sbin/omni-ueba-volume
+/usr/local/sbin/omni-v5-ti-fetch	deploye/sbin/omni-v5-ti-fetch
 /usr/local/sbin/omni-version-watch	tools/omni-version-watch
 /usr/local/sbin/omni-vuln-scan	deploye/sbin/omni-vuln-scan
 /usr/local/sbin/omni-weekly-report	deploye/sbin/omni-weekly-report

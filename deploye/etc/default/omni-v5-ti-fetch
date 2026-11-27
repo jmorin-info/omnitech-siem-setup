@@ -1,0 +1,9 @@
+# OMNI v5 TI (chantier 3 SIEM v5, 27/11/2026) - aucun secret ici (cle abuse.ch : /etc/omni-v5-ti/threatfox.key, 600)
+# Fenetre des tables d'enrichissement (jours) et conservation locale pour la recherche retroactive
+OMNI_V5_TI_JOURS=30
+OMNI_V5_TI_JOURS_STORE=90
+# Export complet ThreatFox au plus toutes les N heures (API get_iocs days=1 entre deux)
+OMNI_V5_TI_TF_FULL_H=6
+# OPTION SOAR (blocage FortiGate des C2 Feodo haute confiance) : PREPAREE, NON BRANCHEE. Decision jmorin.
+# 0 = desactivee. Le fichier /var/lib/omni-v5-ti/soar/feodo-haute-confiance.txt est SEPARE de /var/www/siem-kit/soar/blocklist.txt.
+OMNI_V5_TI_SOAR_FEODO=0

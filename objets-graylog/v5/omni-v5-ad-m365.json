@@ -1,0 +1,315 @@
+{
+ "_lisez_moi": "Export des objets Graylog « OMNI v5 » de l'instance de référence au 27/11/2026 (lecture seule, API GET), filtré pour publication : commentaires des règles, descriptions et identifiants retirés ; valeurs propres au site (compte leurre, compte Entra Connect, fichiers canaris, GPO de l'agent RMM, préfixes internes) remplacées par celles de tools/omni-v5-ad/site.exemple.json. Les scripts de construction (tools/omni-v5-*) restent la source de vérité.",
+ "pipelines": [
+  {
+   "titre": "OMNI v5 - Detections AD et M365",
+   "streams": [
+    "OMNI - M365",
+    "OMNI - Sysmon",
+    "OMNI - Windows Security",
+    "OMNI - Windows autres"
+   ],
+   "source": "pipeline \"OMNI v5 - Detections AD et M365\"\nstage 45 match either\nrule \"omni-v5-ad-kerberoast-aes\"\nrule \"omni-v5-ad-leurre-svc-exemple-leurre\"\nrule \"omni-v5-ad-asrep-preparation\"\nrule \"omni-v5-ad-dcsync\"\nrule \"omni-v5-ad-shadow-credentials\"\nrule \"omni-v5-ad-adcs-san\"\nrule \"omni-v5-ad-adcs-modele-ca\"\nrule \"omni-v5-ad-service-tier0\"\nrule \"omni-v5-ad-gpo-sensible\"\nrule \"omni-v5-ad-lsass-lecture\"\nrule \"omni-v5-ad-canari-fichier\"\nrule \"omni-v5-m365-transfert-externe\"\nrule \"omni-v5-m365-regle-boite-suspecte\"\nrule \"omni-v5-m365-mfa-defi\"\nend"
+  }
+ ],
+ "regles": [
+  {
+   "titre": "omni-v5-ad-adcs-modele-ca",
+   "source": "rule \"omni-v5-ad-adcs-modele-ca\"\nwhen\n  (to_string($message.winlogbeat_winlog_channel) == \"Security\" &&\n   (to_string($message.winlogbeat_winlog_event_id) == \"4882\" || to_string($message.winlogbeat_winlog_event_id) == \"4885\" || to_string($message.winlogbeat_winlog_event_id) == \"4890\" || to_string($message.winlogbeat_winlog_event_id) == \"4892\" || to_string($message.winlogbeat_winlog_event_id) == \"4899\" || to_string($message.winlogbeat_winlog_event_id) == \"4900\")) ||\n  (to_string($message.winlogbeat_winlog_event_id) == \"5136\" &&\n   (lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectClass)) == \"pkicertificatetemplate\" ||\n    lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectClass)) == \"pkienrollmentservice\" ||\n    lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectClass)) == \"certificationauthority\" ||\n    contains(lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectDN)), \"cn=public key services,\")) &&\n   !(lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) == \"bx-pki2022$\" &&\n     to_string($message.winlogbeat_winlog_event_data_AttributeLDAPDisplayName) == \"cACertificateDN\" &&\n     contains(lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectDN)), \",cn=aia,cn=public key services,\")))\nthen\n  set_field(\"v5_tag\", \"adcs_modele_ca\");\n  set_field(\"v5_severite\", \"ELEVE\");\n  set_field(\"v5_mitre\", \"T1649\");\n  set_field(\"v5_entite\", lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName, to_string($message.source))));\n  set_field(\"v5_detail\", concat(concat(\"AD CS modifie (evenement \", to_string($message.winlogbeat_winlog_event_id)), \")\"));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-adcs-san",
+   "source": "rule \"omni-v5-ad-adcs-san\"\nwhen\n  (to_string($message.winlogbeat_winlog_event_id) == \"4886\" &&\n   regex(\"(?i)(nom principal|principal name|autre nom|other name|upn=)\", to_string($message.winlogbeat_winlog_event_data_SubjectAlternativeName)).matches == true) ||\n  ((to_string($message.winlogbeat_winlog_event_id) == \"4886\" || to_string($message.winlogbeat_winlog_event_id) == \"4887\") &&\n   regex(\"(?i)(^|\\\\n)\\\\s*san:\", to_string($message.winlogbeat_winlog_event_data_Attributes)).matches == true) ||\n  (to_string($message.winlogbeat_winlog_event_id) == \"4887\" &&\n   regex(\"(?i)(?:nom principal|principal name)=([^@\\\\s]+)@\", to_string($message.winlogbeat_winlog_event_data_SubjectAlternativeName)).matches == true &&\n   lowercase(to_string(regex(\"(?i)(?:nom principal|principal name)=([^@\\\\s]+)@\", to_string($message.winlogbeat_winlog_event_data_SubjectAlternativeName), [\"u\"])[\"u\"])) !=\n     lowercase(to_string(regex(\"([^\\\\\\\\]+)$\", to_string($message.winlogbeat_winlog_event_data_Requester), [\"r\"])[\"r\"])))\nthen\n  set_field(\"v5_tag\", \"adcs_san\");\n  set_field(\"v5_severite\", \"CRITIQUE\");\n  set_field(\"v5_mitre\", \"T1649\");\n  set_field(\"v5_entite\", lowercase(to_string($message.winlogbeat_winlog_event_data_Requester)));\n  set_field(\"v5_detail\", concat(concat(concat(\"Demande \", to_string($message.winlogbeat_winlog_event_data_RequestId)), \" SAN \"), to_string($message.winlogbeat_winlog_event_data_SubjectAlternativeName)));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-asrep-preparation",
+   "source": "rule \"omni-v5-ad-asrep-preparation\"\nwhen\n  (to_string($message.winlogbeat_winlog_event_id) == \"4738\" &&\n   regex(\"(?i)(%%2096|pr[ée]-?auth[^\\\\n]*(activ|enabl))\", to_string($message.winlogbeat_winlog_event_data_UserAccountControl)).matches == true) ||\n  (to_string($message.winlogbeat_winlog_event_id) == \"5136\" &&\n   to_string($message.winlogbeat_winlog_event_data_AttributeLDAPDisplayName) == \"userAccountControl\" &&\n   to_string($message.winlogbeat_winlog_event_data_OperationType) == \"%%14674\" &&\n   (to_long($message.winlogbeat_winlog_event_data_AttributeValue, 0) / 4194304) % 2 == 1)\nthen\n  set_field(\"v5_tag\", \"asrep_preparation\");\n  set_field(\"v5_severite\", \"ELEVE\");\n  set_field(\"v5_mitre\", \"T1558.004\");\n  set_field(\"v5_entite\", lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)));\n  set_field(\"v5_detail\", concat(\"Pre-authentification Kerberos retiree : \", to_string($message.winlogbeat_winlog_event_data_TargetUserName, to_string($message.winlogbeat_winlog_event_data_ObjectDN))));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-canari-fichier",
+   "source": "rule \"omni-v5-ad-canari-fichier\"\nwhen\n  (to_string($message.winlogbeat_winlog_event_id) == \"4663\" || to_string($message.winlogbeat_winlog_event_id) == \"5145\") &&\n  (ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectName)), \"\\\\exemple - canari 1.xlsx\") ||\n   ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectName)), \"\\\\exemple - canari 2.kdbx\") ||\n   ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectName)), \"\\\\exemple - canari 3.xlsx\")) &&\n  to_string($message.winlogbeat_winlog_event_data_SubjectUserSid) != \"S-1-5-18\" &&\n  !ends_with(to_string($message.winlogbeat_winlog_event_data_SubjectUserName), \"$\")\nthen\n  set_field(\"v5_tag\", \"canari_fichier\");\n  set_field(\"v5_severite\", \"CRITIQUE\");\n  set_field(\"v5_mitre\", \"T1083\");\n  set_field(\"v5_entite\", lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)));\n  set_field(\"v5_detail\", concat(\"Fichier canari ouvert : \", to_string($message.winlogbeat_winlog_event_data_ObjectName)));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-dcsync",
+   "source": "rule \"omni-v5-ad-dcsync\"\nwhen\n  to_string($message.winlogbeat_winlog_event_id) == \"4662\" &&\n  (contains(to_string($message.winlogbeat_winlog_event_data_Properties), \"1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\", true) ||\n   contains(to_string($message.winlogbeat_winlog_event_data_Properties), \"1131f6ad-9c07-11d1-f79f-00c04fc2dcd2\", true) ||\n   contains(to_string($message.winlogbeat_winlog_event_data_Properties), \"89e95b76-444d-4c62-991a-0facbeda640c\", true)) &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) != \"bx-ad-01-it-vm$\" &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) != \"bx-ad02-it-vm$\" &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) != \"iv-it-ad-vm$\" &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) != \"msol_0123456789ab\"\nthen\n  set_field(\"v5_tag\", \"dcsync\");\n  set_field(\"v5_severite\", \"CRITIQUE\");\n  set_field(\"v5_mitre\", \"T1003.006\");\n  set_field(\"v5_entite\", lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)));\n  set_field(\"v5_detail\", concat(\"Replication d'annuaire demandee par \", to_string($message.winlogbeat_winlog_event_data_SubjectUserName)));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-gpo-sensible",
+   "source": "rule \"omni-v5-ad-gpo-sensible\"\nwhen\n  to_string($message.winlogbeat_winlog_event_id) == \"5136\" &&\n  ((lowercase(to_string($message.winlogbeat_winlog_event_data_AttributeLDAPDisplayName)) == \"gplink\" &&\n    (lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectClass)) == \"domaindns\" || starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectDN)), \"ou=domain controllers,\"))) ||\n   (lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectClass)) == \"grouppolicycontainer\" &&\n    (to_string($message.winlogbeat_winlog_event_data_SubjectUserSid) == \"S-1-5-18\" || ends_with(to_string($message.winlogbeat_winlog_event_data_SubjectUserName), \"$\")) &&\n    !contains(lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectDN)), \"{00000000-0000-0000-0000-000000000000}\")))\nthen\n  set_field(\"v5_tag\", \"gpo_sensible\");\n  set_field(\"v5_severite\", \"ELEVE\");\n  set_field(\"v5_mitre\", \"T1484.001\");\n  set_field(\"v5_entite\", lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)));\n  set_field(\"v5_detail\", concat(concat(to_string($message.winlogbeat_winlog_event_data_AttributeLDAPDisplayName), \" modifie sur \"), to_string($message.winlogbeat_winlog_event_data_ObjectDN)));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-kerberoast-aes",
+   "source": "rule \"omni-v5-ad-kerberoast-aes\"\nwhen\n  to_string($message.winlogbeat_winlog_event_id) == \"4769\" &&\n  to_string($message.winlogbeat_winlog_event_data_Status) == \"0x0\" &&\n  has_field(\"winlogbeat_winlog_event_data_ServiceName\") &&\n  !contains(to_string($message.winlogbeat_winlog_event_data_ServiceName), \"$\") &&\n  !starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ServiceName)), \"krbtgt\") &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_ServiceName)) != \"svc-exemple-leurre\" &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_ServiceName)) != lowercase(to_string(regex(\"^([^@]+)\", to_string($message.winlogbeat_winlog_event_data_TargetUserName), [\"u\"])[\"u\"]))\nthen\n  set_field(\"v5_tag\", \"kerberoast_aes\");\n  set_field(\"v5_severite\", \"ELEVE\");\n  set_field(\"v5_mitre\", \"T1558.003\");\n  set_field(\"v5_entite\", lowercase(to_string($message.winlogbeat_winlog_event_data_TargetUserName)));\n  set_field(\"v5_detail\", concat(\"TGS vers le compte utilisateur \", to_string($message.winlogbeat_winlog_event_data_ServiceName)));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-leurre-svc-exemple-leurre",
+   "source": "rule \"omni-v5-ad-leurre-svc-exemple-leurre\"\nwhen\n  lowercase(to_string($message.winlogbeat_winlog_event_data_TargetUserName)) == \"svc-exemple-leurre\" ||\n  starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_TargetUserName)), \"svc-exemple-leurre@\") ||\n  lowercase(to_string($message.winlogbeat_winlog_event_data_ServiceName)) == \"svc-exemple-leurre\" ||\n  lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) == \"svc-exemple-leurre\" ||\n  contains(lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectDN)), \"cn=svc-exemple-leurre,\")\nthen\n  set_field(\"v5_tag\", \"leurre_svc_exemple_leurre\");\n  set_field(\"v5_severite\", \"CRITIQUE\");\n  set_field(\"v5_mitre\", \"T1558.003\");\n  set_field(\"v5_entite\", lowercase(\"svc-exemple-leurre\"));\n  set_field(\"v5_detail\", concat(concat(\"Evenement \", to_string($message.winlogbeat_winlog_event_id)), \" sur le compte leurre\"));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-lsass-lecture",
+   "source": "rule \"omni-v5-ad-lsass-lecture\"\nwhen\n  to_string($message.winlogbeat_winlog_event_id) == \"10\" &&\n  ends_with(lowercase(to_string($message.winlogbeat_winlog_event_data_TargetImage)), \"\\\\lsass.exe\") &&\n  regex(\"^0x[0-9a-fA-F]*[13579bdfBDF][0-9a-fA-F]$\", to_string($message.winlogbeat_winlog_event_data_GrantedAccess)).matches == true &&\n  !((lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == \"c:\\\\program files (x86)\\\\ninjaone\\\\ninjarmmagent.exe\" || lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == \"c:\\\\program files\\\\ninjaone\\\\ninjarmmagent.exe\" ||\n     lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == \"c:\\\\program files (x86)\\\\ninjaone\\\\njbinarymetering.exe\" || lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == \"c:\\\\program files\\\\vmware\\\\vmware tools\\\\vmtoolsd.exe\") &&\n    to_string($message.winlogbeat_winlog_event_data_GrantedAccess) == \"0x1410\") &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) != \"c:\\\\windows\\\\system32\\\\csrss.exe\" &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) != \"c:\\\\windows\\\\system32\\\\wininit.exe\" &&\n  !((regex(\"^c:\\\\\\\\programdata\\\\\\\\microsoft\\\\\\\\windows defender\\\\\\\\platform\\\\\\\\[0-9.\\\\-]+\\\\\\\\msmpeng\\\\.exe$\", lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage))).matches == true ||\n     lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == \"c:\\\\program files\\\\windows defender\\\\msmpeng.exe\" || lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == \"c:\\\\windows\\\\system32\\\\mrt.exe\") &&\n    (to_string($message.winlogbeat_winlog_event_data_GrantedAccess) == \"0x1010\" || to_string($message.winlogbeat_winlog_event_data_GrantedAccess) == \"0x1410\" || to_string($message.winlogbeat_winlog_event_data_GrantedAccess) == \"0x1418\")) &&\n  !(lowercase(to_string($message.winlogbeat_winlog_event_data_SourceImage)) == \"c:\\\\windows\\\\system32\\\\msiexec.exe\" &&\n    contains(lowercase(to_string($message.winlogbeat_winlog_event_data_CallTrace)), \"\\\\perfproc.dll+\"))\nthen\n  set_field(\"v5_tag\", \"lsass_lecture\");\n  set_field(\"v5_severite\", \"CRITIQUE\");\n  set_field(\"v5_mitre\", \"T1003.001\");\n  set_field(\"v5_entite\", lowercase(to_string($message.source)));\n  set_field(\"v5_detail\", concat(concat(to_string($message.winlogbeat_winlog_event_data_SourceImage), \" masque \"), to_string($message.winlogbeat_winlog_event_data_GrantedAccess)));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-service-tier0",
+   "source": "rule \"omni-v5-ad-service-tier0\"\nwhen\n  to_string($message.winlogbeat_winlog_event_id) == \"7045\" &&\n  (lowercase(to_string($message.source)) == \"bx-ad-01-it-vm\" ||\n   lowercase(to_string($message.source)) == \"bx-ad02-it-vm\" ||\n   lowercase(to_string($message.source)) == \"iv-it-ad-vm\" ||\n   lowercase(to_string($message.source)) == \"bx-pki2022\" ||\n   lowercase(to_string($message.source)) == \"iv-it-pki-vm\" ||\n   lowercase(to_string($message.source)) == \"vm-paca-ad1\") &&\n  !(to_string($message.winlogbeat_winlog_event_data_ServiceName) == \"VeeamVssSupport\" &&\n    contains(lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)), \"c:\\\\windows\\\\veeamvsssupport\\\\veeamguesthelper.exe\") &&\n    starts_with(lowercase(to_string($message.winlogbeat_winlog_user_name)), \"gmsa-sauvegarde\")) &&\n  !starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)), \"\\\"c:\\\\program files\\\\eset\\\\\") &&\n  !starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)), \"\\\"c:\\\\programdata\\\\eset\\\\remoteadministrator\\\\\") &&\n  regex(\"^(\\\\\\\\systemroot\\\\\\\\)?system32\\\\\\\\drivers\\\\\\\\(eamonm|ehdrv|eelam|epfw|epfwwfp)\\\\.sys$\", lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath))).matches == false &&\n  !starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)), \"\\\"c:\\\\program files (x86)\\\\ninjaone\\\\\") &&\n  !starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)), \"\\\"c:\\\\program files\\\\ninjaremote\\\\\") &&\n  regex(\"^\\\"c:\\\\\\\\program files \\\\(x86\\\\)\\\\\\\\exempleorganisation-[0-9.]+\\\\\\\\(njvmagent|nmsmanager|ninjarmmagent|ninjarmmagentpatcher)\\\\.exe\\\"\", lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath))).matches == false &&\n  !starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)), \"\\\"c:\\\\program files\\\\vmware\\\\vmware tools\\\\\") &&\n  regex(\"^(\\\\\\\\systemroot\\\\\\\\)?system32\\\\\\\\(drivers|driverstore\\\\\\\\filerepository\\\\\\\\vm3d\\\\.inf_amd64_[0-9a-f]+)\\\\\\\\(vm[a-z0-9_-]*|vsock|vmci)\\\\.sys$\", lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath))).matches == false &&\n  !(lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)) == \"c:\\\\windows\\\\system32\\\\dllhost.exe /processid:{480b4670-6610-4465-b6c5-e9b5c4e0da31}\") &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)) != \"c:\\\\windows\\\\sysmon64.exe\" &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)) != \"c:\\\\windows\\\\sysmondrv.sys\" &&\n  !starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)), \"\\\"c:\\\\program files\\\\winlogbeat\\\\winlogbeat.exe\\\"\") &&\n  !starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath)), \"\\\"c:\\\\programdata\\\\microsoft\\\\windows defender\\\\platform\\\\\") &&\n  regex(\"^system32\\\\\\\\drivers\\\\\\\\(wd\\\\\\\\[a-z0-9]+|ksld)\\\\.sys$\", lowercase(to_string($message.winlogbeat_winlog_event_data_ImagePath))).matches == false\nthen\n  set_field(\"v5_tag\", \"service_tier0\");\n  set_field(\"v5_severite\", \"ELEVE\");\n  set_field(\"v5_mitre\", \"T1543.003\");\n  set_field(\"v5_entite\", lowercase(to_string($message.source)));\n  set_field(\"v5_detail\", concat(concat(to_string($message.winlogbeat_winlog_event_data_ServiceName), \" -> \"), to_string($message.winlogbeat_winlog_event_data_ImagePath)));\nend"
+  },
+  {
+   "titre": "omni-v5-ad-shadow-credentials",
+   "source": "rule \"omni-v5-ad-shadow-credentials\"\nwhen\n  to_string($message.winlogbeat_winlog_event_id) == \"5136\" &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_AttributeLDAPDisplayName)) == \"msds-keycredentiallink\" &&\n  lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)) != \"msol_0123456789ab\" &&\n  !(ends_with(to_string($message.winlogbeat_winlog_event_data_SubjectUserName), \"$\") &&\n    starts_with(lowercase(to_string($message.winlogbeat_winlog_event_data_ObjectDN)), concat(concat(\"cn=\", lowercase(regex_replace(\"\\\\$$\", to_string($message.winlogbeat_winlog_event_data_SubjectUserName), \"\"))), \",\")))\nthen\n  set_field(\"v5_tag\", \"shadow_credentials\");\n  set_field(\"v5_severite\", \"CRITIQUE\");\n  set_field(\"v5_mitre\", \"T1556\");\n  set_field(\"v5_entite\", lowercase(to_string($message.winlogbeat_winlog_event_data_SubjectUserName)));\n  set_field(\"v5_detail\", concat(\"msDS-KeyCredentialLink modifie sur \", to_string($message.winlogbeat_winlog_event_data_ObjectDN)));\nend"
+  },
+  {
+   "titre": "omni-v5-m365-mfa-defi",
+   "source": "rule \"omni-v5-m365-mfa-defi\"\nwhen\n  to_string($message.event_source) == \"m365\" &&\n  to_string($message.m365_type) == \"signin\" &&\n  (to_string($message.m365_fail_code) == \"50074\" || to_string($message.m365_fail_code) == \"50076\" || to_string($message.m365_fail_code) == \"500121\")\nthen\n  set_field(\"v5_tag\", \"m365_mfa_defi\");\n  set_field(\"v5_severite\", \"ELEVE\");\n  set_field(\"v5_mitre\", \"T1621\");\n  set_field(\"v5_entite\", lowercase(to_string($message.user)));\n  set_field(\"v5_detail\", concat(concat(concat(\"Defi MFA \", to_string($message.m365_fail_code)), concat(\" depuis \", to_string($message.src_country))), concat(\" app \", to_string($message.app))));\n  set_field(\"v5_mfa_etranger\", to_string($message.src_country) != \"FR\" && to_string($message.src_country) != \"\");\nend"
+  },
+  {
+   "titre": "omni-v5-m365-regle-boite-suspecte",
+   "source": "rule \"omni-v5-m365-regle-boite-suspecte\"\nwhen\n  to_string($message.event_source) == \"m365\" &&\n  (to_string($message.event_action) == \"New-InboxRule\" || lowercase(to_string($message.event_action)) == \"set-inboxrule\" ||\n   to_string($message.event_action) == \"UpdateInboxRules\") &&\n  ((has_field(\"src_ip_country_code\") && to_string($message.src_ip_country_code) != \"FR\" && to_string($message.src_ip_country_code) != \"\") ||\n   (to_string($message.event_action) != \"UpdateInboxRules\" && has_field(\"object\") &&\n    regex(\"\\\\\\\\([^A-Za-z0-9]*|.{1,2})$\", to_string($message.object)).matches == true))\nthen\n  set_field(\"v5_tag\", \"m365_regle_boite_suspecte\");\n  set_field(\"v5_severite\", \"ELEVE\");\n  set_field(\"v5_mitre\", \"T1564.008\");\n  set_field(\"v5_entite\", lowercase(to_string($message.user)));\n  set_field(\"v5_detail\", concat(concat(concat(to_string($message.event_action), \" \"), to_string($message.object)), concat(\" depuis \", to_string($message.src_ip_country_code))));\nend"
+  },
+  {
+   "titre": "omni-v5-m365-transfert-externe",
+   "source": "rule \"omni-v5-m365-transfert-externe\"\nwhen\n  to_string($message.event_source) == \"m365\" &&\n  (has_field(\"forward_external\") ||\n   (has_field(\"fwd_target\") &&\n    regex(\"(?i)@(omnitech-security\\\\.fr|omnitech\\\\.security|omnitechsecurity\\\\.onmicrosoft\\\\.com|invissys\\\\.com)\\\\s*$\", to_string($message.fwd_target)).matches == false))\nthen\n  set_field(\"v5_tag\", \"m365_transfert_externe\");\n  set_field(\"v5_severite\", \"ELEVE\");\n  set_field(\"v5_mitre\", \"T1114.003\");\n  set_field(\"v5_entite\", lowercase(to_string($message.user)));\n  set_field(\"v5_detail\", concat(concat(concat(to_string($message.event_action), \" sur \"), to_string($message.object)), concat(\" vers \", to_string($message.fwd_target))));\nend"
+  }
+ ],
+ "definitions": [
+  {
+   "titre": "OMNI v5 - AD Accès mémoire LSASS hors liste stricte",
+   "priorite": 3,
+   "etat": "ENABLED",
+   "requete": "v5_tag:lsass_lecture AND NOT (alert_tag:lsass_access AND NOT winlogbeat_winlog_event_data_SourceImage:(*njbinarymetering* OR *NinjaOne* OR *WerFaultSecure*))",
+   "streams": [
+    "OMNI - Sysmon"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 10,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - AD CS : demande de certificat avec SAN différent du demandeur (ESC1/ESC6)",
+   "priorite": 3,
+   "etat": "ENABLED",
+   "requete": "v5_tag:adcs_san AND NOT alert_tag:adcs_abuse",
+   "streams": [
+    "OMNI - Windows Security"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 30,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - AD CS : modèle de certificat ou configuration de la CA modifiés",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "v5_tag:adcs_modele_ca",
+   "streams": [
+    "OMNI - Windows Security"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 30,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - AD Compte leurre svc-exemple-leurre touché",
+   "priorite": 3,
+   "etat": "ENABLED",
+   "requete": "v5_tag:leurre_svc_exemple_leurre",
+   "streams": [
+    "OMNI - Windows Security"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 5,
+   "pas_min": 5,
+   "grace_min": 30
+  },
+  {
+   "titre": "OMNI v5 - AD DCSync par un compte machine non-DC ou un compte MSOL_ inconnu",
+   "priorite": 3,
+   "etat": "ENABLED",
+   "requete": "v5_tag:dcsync AND NOT alert_tag:dcsync",
+   "streams": [
+    "OMNI - Windows Security"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 5,
+   "pas_min": 5,
+   "grace_min": 30
+  },
+  {
+   "titre": "OMNI v5 - AD Fichier canari ouvert",
+   "priorite": 3,
+   "etat": "ENABLED",
+   "requete": "v5_tag:canari_fichier",
+   "streams": [
+    "OMNI - Windows Security"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 10,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - AD GPO sensible : lien sur domaine/DC ou GPO modifiée par SYSTEM",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "v5_tag:gpo_sensible",
+   "streams": [
+    "OMNI - Windows Security"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 10,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - AD Kerberoasting AES (TGS vers un compte utilisateur à SPN)",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "v5_tag:kerberoast_aes",
+   "streams": [
+    "OMNI - Windows Security"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 10,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - AD Préparation AS-REP roasting (pré-authentification retirée)",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "v5_tag:asrep_preparation",
+   "streams": [
+    "OMNI - Windows Security"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 10,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - AD Service installé sur un contrôleur de domaine ou une PKI",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "v5_tag:service_tier0",
+   "streams": [
+    "OMNI - Windows autres"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 10,
+   "pas_min": 5,
+   "grace_min": 60
+  },
+  {
+   "titre": "OMNI v5 - AD Shadow Credentials par SYSTEM ou un compte MSOL_ inconnu",
+   "priorite": 3,
+   "etat": "ENABLED",
+   "requete": "v5_tag:shadow_credentials AND NOT alert_tag:shadow_credentials",
+   "streams": [
+    "OMNI - Windows Security"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 5,
+   "pas_min": 5,
+   "grace_min": 30
+  },
+  {
+   "titre": "OMNI v5 - M365 Mot de passe validé depuis l'étranger (MFA exigée)",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "v5_tag:m365_mfa_defi AND v5_mfa_etranger:true",
+   "streams": [
+    "OMNI - M365"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 300,
+   "pas_min": 15,
+   "grace_min": 300
+  },
+  {
+   "titre": "OMNI v5 - M365 Rafale de défis MFA (fatigue MFA)",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "v5_tag:m365_mfa_defi AND NOT m365_fail_code:500121",
+   "streams": [
+    "OMNI - M365"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 10.0,
+   "fenetre_min": 300,
+   "pas_min": 15,
+   "grace_min": 300
+  },
+  {
+   "titre": "OMNI v5 - M365 Règle de boîte suspecte (étranger ou nom anormal)",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "v5_tag:m365_regle_boite_suspecte",
+   "streams": [
+    "OMNI - M365"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 300,
+   "pas_min": 15,
+   "grace_min": 300
+  },
+  {
+   "titre": "OMNI v5 - M365 Transfert de messagerie vers une adresse externe",
+   "priorite": 2,
+   "etat": "ENABLED",
+   "requete": "v5_tag:m365_transfert_externe AND NOT alert_tag:m365_mail_forward",
+   "streams": [
+    "OMNI - M365"
+   ],
+   "regroupement": [
+    "v5_entite"
+   ],
+   "seuil": 1.0,
+   "fenetre_min": 300,
+   "pas_min": 15,
+   "grace_min": 300
+  }
+ ]
+}

@@ -1,0 +1,54 @@
+# OMNITECH SIEM v5 - chantier 5 (27/11/2026) - réponse à incident avec validation humaine
+# MODE SIMULATION UNIQUEMENT : le code ne contient aucun client d'action (ESET, AD, Graph).
+# Retour : bash /var/backups/siem/v5-reponse-avant-20261127-0636/retour.sh
+[Unit]
+Description=OMNI v5 - Reponse a incident avec validation humaine (SIMULATION)
+After=network-online.target omni-mobile-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=+/usr/local/lib/omni-v5-reponse/extraire-soc-admins.sh
+ExecStart=/usr/bin/python3 -I /usr/local/lib/omni-v5-reponse/omni_v5_reponse.py
+Restart=on-failure
+RestartSec=5
+# Compte : utilisateur dynamique sans privilège (aucun compte créé)
+DynamicUser=yes
+StateDirectory=omni-v5-reponse
+StateDirectoryMode=0700
+RuntimeDirectory=omni-v5-reponse
+RuntimeDirectoryMode=0755
+UMask=0077
+# Réseau : 127.0.0.1 uniquement (écoute 8091, appels 8090 /m/api/me, 12201 GELF, 9200 lecture)
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Durcissement
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+MemoryMax=256M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=OMNI v5 TI - flux threat intel (toutes les 2 h)
+
+[Timer]
+OnCalendar=*-*-* 00/2:17:00
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,70 @@
+{
+ "_lisez_moi": "Export des objets Graylog « OMNI v5 » de l'instance de référence au 27/11/2026 (lecture seule, API GET), filtré pour publication : commentaires des règles, descriptions et identifiants retirés ; valeurs propres au site (compte leurre, compte Entra Connect, fichiers canaris, GPO de l'agent RMM, préfixes internes) remplacées par celles de tools/omni-v5-ad/site.exemple.json. Les scripts de construction (tools/omni-v5-*) restent la source de vérité.",
+ "pipelines": [
+  {
+   "titre": "omni-v5-collecte - Normalisation Windows",
+   "streams": [
+    "OMNI - Windows Security",
+    "OMNI - Windows autres"
+   ],
+   "source": "pipeline \"omni-v5-collecte - Normalisation Windows\"\nstage 0 match either\nrule \"omni-v5-collecte-ds-normalisation\"\nrule \"omni-v5-collecte-ds-ldap-client\"\nrule \"omni-v5-collecte-ds-ldap-bilan\"\nrule \"omni-v5-collecte-applocker-normalisation\"\nrule \"omni-v5-collecte-applocker-audit\"\nrule \"omni-v5-collecte-applocker-bloque\"\nrule \"omni-v5-collecte-applocker-chemin-utilisateur\"\nrule \"omni-v5-collecte-laps-lecture\"\nend"
+  },
+  {
+   "titre": "omni-v5-collecte - DNS DC",
+   "streams": [
+    "omni-v5-collecte-dns-dc"
+   ],
+   "source": "pipeline \"omni-v5-collecte - DNS DC\"\nstage 0 match either\nrule \"omni-v5-collecte-dns-normalisation\"\nend"
+  },
+  {
+   "titre": "omni-v5-collecte - FortiGate Ivry direct",
+   "streams": [
+    "omni-v5-collecte-fg-ivry"
+   ],
+   "source": "pipeline \"omni-v5-collecte - FortiGate Ivry direct\"\nstage 0 match either\nrule \"omni-v5-collecte-fgiv-keyvalue\"\nend"
+  }
+ ],
+ "regles": [
+  {
+   "titre": "omni-v5-collecte-applocker-audit",
+   "source": "rule \"omni-v5-collecte-applocker-audit\"\nwhen\n  starts_with(to_string($message.winlogbeat_winlog_channel), \"Microsoft-Windows-AppLocker\", false)\n  AND ( to_string($message.winlogbeat_winlog_event_id) == \"8003\" OR to_string($message.winlogbeat_winlog_event_id) == \"8006\"\n     OR to_string($message.winlogbeat_winlog_event_id) == \"8021\" OR to_string($message.winlogbeat_winlog_event_id) == \"8024\" )\nthen\n  set_field(\"applocker_resultat\", \"aurait_ete_bloque\");\nend"
+  },
+  {
+   "titre": "omni-v5-collecte-applocker-bloque",
+   "source": "rule \"omni-v5-collecte-applocker-bloque\"\nwhen\n  starts_with(to_string($message.winlogbeat_winlog_channel), \"Microsoft-Windows-AppLocker\", false)\n  AND ( to_string($message.winlogbeat_winlog_event_id) == \"8004\" OR to_string($message.winlogbeat_winlog_event_id) == \"8007\"\n     OR to_string($message.winlogbeat_winlog_event_id) == \"8022\" OR to_string($message.winlogbeat_winlog_event_id) == \"8025\" )\nthen\n  set_field(\"applocker_resultat\", \"bloque\");\nend"
+  },
+  {
+   "titre": "omni-v5-collecte-applocker-chemin-utilisateur",
+   "source": "rule \"omni-v5-collecte-applocker-chemin-utilisateur\"\nwhen\n  starts_with(to_string($message.winlogbeat_winlog_channel), \"Microsoft-Windows-AppLocker\", false)\n  AND regex(\"(?i)(\\\\\\\\users\\\\\\\\|\\\\\\\\appdata\\\\\\\\|\\\\\\\\temp\\\\\\\\|\\\\\\\\downloads\\\\\\\\|\\\\\\\\programdata\\\\\\\\|\\\\\\\\public\\\\\\\\)\", to_string($message.winlogbeat_winlog_user_data_FullFilePath)).matches == true\nthen\n  set_field(\"applocker_chemin_inscriptible\", true);\nend"
+  },
+  {
+   "titre": "omni-v5-collecte-applocker-normalisation",
+   "source": "rule \"omni-v5-collecte-applocker-normalisation\"\nwhen\n  starts_with(to_string($message.winlogbeat_winlog_channel), \"Microsoft-Windows-AppLocker\", false)\nthen\n  set_field(\"v5_collecte\", \"applocker\");\n  set_field(\"applocker_collection\", to_string($message.winlogbeat_winlog_user_data_PolicyName));\n  set_field(\"applocker_fichier\", to_string($message.winlogbeat_winlog_user_data_FullFilePath));\n  set_field(\"applocker_editeur\", to_string($message.winlogbeat_winlog_user_data_Fqbn));\n  set_field(\"applocker_utilisateur\", to_string($message.winlogbeat_winlog_user_name));\n  set_field(\"applocker_sha256\", substring(to_string($message.winlogbeat_winlog_user_data_FileHash), 0, 64));\nend"
+  },
+  {
+   "titre": "omni-v5-collecte-dns-normalisation",
+   "source": "rule \"omni-v5-collecte-dns-normalisation\"\nwhen\n  has_field(\"QNAME\")\nthen\n  let n = regex_replace(\"\\\\.$\", lowercase(to_string($message.QNAME)), \"\");\n  set_field(\"dns_query\", n);\n  set_field(\"dns_qtype\", to_string($message.QTYPE));\n  set_field(\"src_ip\", to_string($message.Source));\n  set_field(\"dns_serveur\", lowercase(to_string($message.Hostname)));\n  let d = regex(\"([^.]+\\\\.[^.]+)$\", n);\n  set_field(\"dns_domain\", to_string(d[\"0\"]));\n  set_field(\"event_source\", \"dns_dc\");\n  set_field(\"event_category\", \"dns\");\n  set_field(\"v5_collecte\", \"dns_dc\");\nend"
+  },
+  {
+   "titre": "omni-v5-collecte-ds-ldap-bilan",
+   "source": "rule \"omni-v5-collecte-ds-ldap-bilan\"\nwhen\n  to_string($message.winlogbeat_winlog_channel) == \"Directory Service\"\n  AND ( to_string($message.winlogbeat_winlog_event_id) == \"2887\" OR to_string($message.winlogbeat_winlog_event_id) == \"2888\"\n     OR to_string($message.winlogbeat_winlog_event_id) == \"3074\" OR to_string($message.winlogbeat_winlog_event_id) == \"3075\" )\nthen\n  set_field(\"ldap_bilan_simples_sans_tls\", to_long($message.winlogbeat_winlog_event_data_param1, 0));\n  set_field(\"ldap_bilan_sasl_sans_signature\", to_long($message.winlogbeat_winlog_event_data_param2, 0));\n  set_field(\"v5_collecte_tag\", \"ldap_bilan_quotidien\");\nend"
+  },
+  {
+   "titre": "omni-v5-collecte-ds-ldap-client",
+   "source": "rule \"omni-v5-collecte-ds-ldap-client\"\nwhen\n  to_string($message.winlogbeat_winlog_channel) == \"Directory Service\"\n  AND ( to_string($message.winlogbeat_winlog_event_id) == \"2889\" OR to_string($message.winlogbeat_winlog_event_id) == \"3039\" )\nthen\n  let c = regex(\"^\\\\[?([0-9A-Fa-f\\\\.:]+?)\\\\]?:([0-9]+)$\", to_string($message.winlogbeat_winlog_event_data_param1));\n  set_field(\"ldap_client_ip\", to_string(c[\"0\"]));\n  set_field(\"ldap_client_port\", to_string(c[\"1\"]));\n  set_field(\"ldap_identite\", to_string($message.winlogbeat_winlog_event_data_param2));\n  set_field(\"ldap_type_liaison\", to_string($message.winlogbeat_winlog_event_data_param3));\n  set_field(\"v5_collecte_tag\", \"ldap_liaison_faible\");\nend"
+  },
+  {
+   "titre": "omni-v5-collecte-ds-normalisation",
+   "source": "rule \"omni-v5-collecte-ds-normalisation\"\nwhen\n  to_string($message.winlogbeat_winlog_channel) == \"Directory Service\"\nthen\n  set_field(\"v5_collecte\", \"directory_service\");\n  set_field(\"ds_event_id\", to_string($message.winlogbeat_winlog_event_id));\nend"
+  },
+  {
+   "titre": "omni-v5-collecte-fgiv-keyvalue",
+   "source": "rule \"omni-v5-collecte-fgiv-keyvalue\"\nwhen\n  has_field(\"message\") AND contains(to_string($message.message), \"devname=\", false)\nthen\n  set_fields(key_value(value: to_string($message.message), delimiters: \" \", kv_delimiters: \"=\",\n    ignore_empty_values: true, allow_dup_keys: true, handle_dup_keys: \"take_first\", trim_value_chars: \"\\\"\"));\n  set_field(\"event_source\", \"fortigate\");\n  set_field(\"v5_collecte\", \"fg_ivry_direct\");\n  set_field(\"collecte_voie\", \"syslog_direct\");\nend"
+  },
+  {
+   "titre": "omni-v5-collecte-laps-lecture",
+   "source": "rule \"omni-v5-collecte-laps-lecture\"\nwhen\n  to_string($message.winlogbeat_winlog_event_id) == \"4662\"\n  AND to_string($message.winlogbeat_winlog_event_data_ObjectServer) == \"DS\"\n  AND regex(\"(?i)(fb67b5bd-ef3d-4d01-ba85-0ab2f0ed97dd|b3f5799a-a3a6-433b-8d41-0c79fe58fa71|eaf88f9d-c28c-4f8a-992d-2b1f089f66f8|2716a678-16f9-46d4-9a00-b3cc5c55977c)\", to_string($message.winlogbeat_winlog_event_data_Properties)).matches == true\nthen\n  set_field(\"v5_collecte\", \"laps\");\n  set_field(\"laps_lecteur\", to_string($message.winlogbeat_winlog_event_data_SubjectUserName));\n  set_field(\"laps_objet\", to_string($message.winlogbeat_winlog_event_data_ObjectName));\n  set_field(\"laps_lecteur_machine\", ends_with(to_string($message.winlogbeat_winlog_event_data_SubjectUserName), \"$\"));\n  set_field(\"laps_lecture_ciblee\", regex(\"(?s)^.{1,400}$\", to_string($message.winlogbeat_winlog_event_data_Properties)).matches);\nend"
+  }
+ ],
+ "definitions": []
+}

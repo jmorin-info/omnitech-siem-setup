@@ -1,0 +1,14 @@
+{
+  "_lisez_moi": "Modèle des valeurs propres au site lues par v5_ad_build.py, v5_ad_test.py et v5_decisions.py. Copier vers /etc/omni-v5-ad/site.json (mode 600, hors dépôt) et remplacer chaque valeur d'exemple. Les noms du compte leurre et des fichiers canaris ne doivent jamais être publiés.",
+  "comptes_replication": ["DC01$", "DC02$", "MSOL_0123456789ab"],
+  "compte_entra_connect": "MSOL_0123456789ab",
+  "hotes_tier0": ["dc01", "dc02", "pki01"],
+  "compte_machine_ca": "PKI01$",
+  "compte_leurre": "svc-exemple-leurre",
+  "fichiers_canaris": ["Exemple - canari 1.xlsx", "Exemple - canari 2.kdbx"],
+  "gpo_agent_rmm": "{00000000-0000-0000-0000-000000000000}",
+  "prefixe_gmsa_sauvegarde": "gmsa-sauvegarde",
+  "dossier_agent_rmm": "exempleorganisation",
+  "domaines_messagerie": ["exemple.fr", "exemple.onmicrosoft.com"],
+  "notifications": {"teams": "000000000000000000000000", "triage": "000000000000000000000000"}
+}

@@ -1,0 +1,4 @@
+# OMNI v5 TI - exclusions de faux positifs PROUVÉS (27/11/2026). Une valeur par ligne (IP, domaine, URL ou hachage), # = commentaire.
+# Ajouter seulement après preuve (rétro/rejeu) ; retirer une ligne rétablit l'indicateur au passage suivant du timer.
+# Exemple (valeur fictive) :
+# 0000000000000000000000000000000000000000000000000000000000000000  # logiciel légitime signalé à tort (preuve : rejeu du JJ/MM)

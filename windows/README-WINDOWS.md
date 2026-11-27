@@ -150,3 +150,17 @@ Les pipelines Graylog (script 12) normalisent ensuite vers : `event_id`,
 `parent_process`, `dns_query`, `logon_type_label`, `failure_reason`,
 `priv_group_label`, `alert_tag` — ce sont ces champs qu'utilisent les
 détections (script 13) et les dashboards (script 14).
+
+## 6. Compléments SIEM v5 (27/11/2026)
+
+- `winlogbeat.yml` lit le canal **Directory Service** des contrôleurs de domaine (liaisons LDAP non
+  signées ou sans liaison de canal, réplication) ; les autres machines l'ignorent. Le modèle doit
+  aussi être reporté dans le script NinjaOne qui réécrit la configuration Winlogbeat des DC.
+- `Activer-Audit-ADCS.ps1` : audit complet de l'autorité de certification (filtre d'audit,
+  `EDITF_AUDITCERTTEMPLATELOAD`, SACL sur `CN=Public Key Services`) ; simulation par défaut,
+  `-Appliquer`, `-Retour` ; redémarrage de `certsvc` à planifier. Attention : les événements 4890 à
+  4900 de l'autorité ne sont pas dans les plages `event_id` du canal Security de `winlogbeat.yml`
+  et doivent y être ajoutés sur la PKI pour être collectés.
+- `Poser-Canaris-Fichiers.ps1` : fichiers canaris audités (4663) dans des dossiers de partage ;
+  noms passés par `-Noms` (identiques à `fichiers_canaris` de `site.json`), simulation par défaut.
+  Prérequis : audit « Système de fichiers » (réussite) actif sur le serveur cible.
