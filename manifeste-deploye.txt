@@ -197,6 +197,7 @@
 /opt/oms-seal-sla/seal_sla_poller.py	deploye/opt/oms-seal-sla/seal_sla_poller.py
 /usr/local/lib/omni-siem/omni_cible.py	deploye/lib/omni-siem/omni_cible.py
 /usr/local/lib/omni-siem/omni_mail_v3.py	deploye/lib/omni-siem/omni_mail_v3.py
+/usr/local/lib/omni-siem/omni_smtp.py	deploye/lib/omni-siem/omni_smtp.py
 /usr/local/lib/omni-siem/omni_v5_tri.py	deploye/lib/omni-siem/omni_v5_tri.py
 /usr/local/sbin/omni-ad-disable	deploye/sbin/omni-ad-disable
 /usr/local/sbin/omni-alert-digest	triage/omni-alert-digest

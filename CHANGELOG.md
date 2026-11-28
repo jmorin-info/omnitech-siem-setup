@@ -158,6 +158,9 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 - Qualité : `SC2034` n'est plus exclu globalement de ShellCheck (8 constats restants listés dans `tools/shellcheck-baseline.txt`), 16 `cd` vers le répertoire du script sortent explicitement en cas d'échec (SC2164, scripts ponctuels et outils), `lib-graylog.sh` déclare son shell, l'exclusion Ruff `F821` de `seal/graylog/provision_seal.py` est supprimée (import de `NoReturn`), imports inutilisés retirés de quatre fichiers non déployés.
 
 ### Corrigé
+- Messagerie des robots pilotée par la configuration du site : tri, lots, récapitulatif, rapports hebdomadaire/mensuel/SOAR, mises à jour et snapshots lisent leur fichier propre puis `00-vars.env` (`SMTP_RELAY`, `SMTP_PORT`, `SMTP_FROM`, `ALERT_EMAIL`, nouveaux `SMTP_STARTTLS`, `OMS_MAJ_MAIL_TO`, `GRAYLOG_PUBLIC_URL`) via `omni_smtp.py` ; plus aucun relais, expéditeur, destinataire ni lien Graylog codé en dur, STARTTLS optionnel avec vérification du certificat. Un site n'a plus à modifier les robots en production (modifications perdues au déploiement suivant).
+- Fonctions optionnelles non configurées : les unités qui exigent un fichier de site (veille de fuites, M365, surveillance des sources, intégrité, renouvellement de certificat par partage, flux SOAR) sont ignorées par condition au lieu d'échouer ; `omni-ueba-geo-newcountry` et `omni-geo-flux` tolèrent un index absent ; `omni-alert-lot` crée sa file d'attente.
+- Contrôles : `tests/test_site_mail.py` refuse toute valeur SMTP codée en dur dans un robot déployé et toute unité qui échouerait sans son fichier de site.
 
 - Migration de chemins : prise en charge d'un ancien chemin déjà lié au dépôt
   canonique, avec archive des fichiers réels. Seules les unités installées, leurs

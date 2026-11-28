@@ -7,7 +7,9 @@
 # Tout en ASCII (coherence avec les mails du SIEM). Robuste : une section qui
 # echoue n'empeche pas l'envoi. Statut renvoye en GELF (auto-surveillance).
 # =============================================================================
-import json, os, re, smtplib, ssl, sys, urllib.request
+import json, os, re, ssl, sys, urllib.request
+sys.path.insert(0, os.environ.get("OMNI_MAIL_LIB", "/usr/local/lib/omni-siem"))
+import omni_smtp  # noqa: E402  messagerie du site (00-vars.env), aucun relais implicite
 from datetime import datetime, timezone, timedelta
 from email.mime.text import MIMEText
 from email.utils import formatdate
@@ -300,17 +302,16 @@ try:
 except Exception:
     pass
 
-recipients = [r.strip() for r in ENV.get("REPORT_RECIPIENTS","informatique@omnitech-security.fr").split(",")]
+CFG = omni_smtp.settings(ENV, host="REPORT_SMTP", port="REPORT_SMTP_PORT", sender="REPORT_FROM", to="REPORT_RECIPIENTS")
+recipients = CFG["to"]
 msg = MIMEText(html, "html", "utf-8")
 msg["Subject"] = f"[SIEM] Rapport hebdomadaire de supervision - {now:%d/%m/%Y}"
-msg["From"] = ENV.get("REPORT_FROM","no-reply@omnitech-security.fr")
+msg["From"] = CFG["from"]
 msg["To"] = ", ".join(recipients)
 msg["Date"] = formatdate(localtime=True)
 
 try:
-    with smtplib.SMTP(ENV.get("REPORT_SMTP","smtp-internal.omnitech-security.fr"),
-                      int(ENV.get("REPORT_SMTP_PORT","25")), timeout=30) as s:
-        s.sendmail(msg["From"], recipients, msg.as_string())
+    omni_smtp.send(CFG, msg, to=recipients)
     gelf("report_ok", f"{total_alerts} alertes, {p3} P3, disque {disk_pct:.0f}%")
     print(f"OK rapport envoye a {recipients} ({total_alerts} alertes, {p3} P3)")
 except Exception as e:

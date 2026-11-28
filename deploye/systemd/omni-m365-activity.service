@@ -1,6 +1,9 @@
 [Unit]
 Description=Collecte O365 Management Activity (Exchange/SharePoint) -> Graylog
 After=graylog-server.service
+# Fonction non configurée sur le site : unité ignorée (condition), pas en échec.
+ConditionPathExists=/etc/default/omni-m365
+
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/omni-m365-activity
