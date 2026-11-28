@@ -492,7 +492,7 @@ function renderKpis(k){k=k||{};
     ["cy",ic("antenna"),"Événements détectés (24 h)",k.alertes_24h,"détections taguées","detections"],
     ["vio",ic("shield"),"CVE KEV exposées",k.kev_exposees,"catalogue CISA","detections"]
   ].map(([c,i,l,v,s,p])=>`<div class="kpi ${c}" style="cursor:pointer" data-onclick="goNav('${p}')"><div class="lab">${i} ${l}</div>
-    <div class="val mono">${(v??0).toLocaleString("fr")}</div><div class="sub">${s}</div></div>`).join("");
+    <div class="val mono">${v===null?"—":(v??0).toLocaleString("fr")}</div><div class="sub">${v===null?(LANG==="en"?"not configured on this site":"non configuré sur ce site"):s}</div></div>`).join("");
 }
 function renderTs(s){s=s||[];const lab=s.map(x=>new Date(x.t).getHours()+"h"),d=s.map(x=>x.n);
   mk("cTs",{type:"line",data:{labels:lab,datasets:[{data:d,borderColor:"#22d3ee",borderWidth:2,
@@ -1182,7 +1182,14 @@ function renderHealth(d){d=d||{};const rb=d.robots||{},sl=d.sla||{},mt=d.mainten
   if($("#hint"))$("#hint").innerHTML=(d.integrations||[]).map(i=>{const c=SC[i.status]||"#39507a";
     const age=i.age_min==null?(EN?"never":"jamais"):(i.age_min<60?i.age_min+" min":Math.round(i.age_min/60)+" h");
     return `<span class="pchip" style="border:1px solid ${c}66;color:${c}" title="${EN?'threshold':'seuil'} ${i.threshold_min} min">${esc(i.k)} · ${SL[i.status]||i.status} · ${age}</span>`;
-  }).join("")||'<div class="empty">'+(EN?'No expected sources configured':'Aucune source attendue configurée')+'</div>';}
+  }).join("")||'<div class="empty">'+(EN?'No expected sources configured':'Aucune source attendue configurée')+'</div>';
+  // Collecte par entrée : toutes les données reçues, normalisées ou non (volume, dernier message, émetteurs, champs).
+  if($("#hinputs"))$("#hinputs").innerHTML=(d.inputs||[]).map(x=>{const silent=!x.n_24h;
+    return `<div class="inc${silent?" sev-high":""}"><div class="top"><span class="ttl">${esc(x.label||x.id)}</span>
+    <span class="mono" style="color:var(--cy);margin-left:auto">${(x.n_24h||0).toLocaleString("fr")} / 24 h · ${(x.n_7d||0).toLocaleString("fr")} / 7 j</span>
+    <span class="ts">${x.last?ago(x.last):(EN?"never":"jamais")}</span></div>
+    <div class="ts" style="white-space:normal;color:var(--mut)">${EN?"Senders":"Émetteurs"} : ${(x.sources||[]).map(s=>esc(s.k)).join(", ")||"—"} · ${EN?"types":"types"} : ${(x.event_sources||[]).map(esc).join(", ")||(EN?"not normalized":"non normalisé")}${x.unnormalized_7d?` · ${(x.unnormalized_7d).toLocaleString("fr")} ${EN?"raw messages (7 d)":"messages bruts (7 j)"}`:""}</div>
+    <div class="ts" style="white-space:normal;color:var(--mut)">${EN?"Fields":"Champs"} (${x.fields_total||0}) : ${(x.fields||[]).map(esc).join(", ")}</div></div>`;}).join("")||'<div class="empty">—</div>';}
 let DETI=[],DETV=[],detF={tactic:"",source:"",technique:""},detQ="";
 function onFilter(){detF.tactic=$("#fTactic").value;detF.source=$("#fSource").value;detF.technique="";loadDetections();}
 function clearFilter(){detF={tactic:"",source:"",technique:""};detQ="";if($("#detSearch"))$("#detSearch").value="";if($("#fTactic"))$("#fTactic").value="";if($("#fSource"))$("#fSource").value="";loadDetections();}

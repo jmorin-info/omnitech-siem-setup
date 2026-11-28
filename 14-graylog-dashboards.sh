@@ -29,6 +29,17 @@ export GRAYLOG_ADMIN_PASS SIEM_FQDN
 source ./lib-platform.sh
 omni_api_setup
 
+# Un site qui déclare ses sources (clé « site » de la configuration de site) reçoit le socle
+# filtré par sources (tools/omni-integrations.py soc-dashboards) : ce script historique
+# supprimerait puis recréerait « OMNI - SOC » avec toutes les pages, y compris celles des
+# sources que le site ne collecte pas. Il s'arrête donc sans rien toucher.
+SITE_CONFIG="${OMNI_SITE_CONFIG:-/etc/omni-siem/integrations.json}"
+if [[ -f "$SITE_CONFIG" ]] && python3 -c 'import json,sys; sys.exit(0 if "site" in json.load(open(sys.argv[1])) else 1)' "$SITE_CONFIG"; then
+  echo "    [=] $SITE_CONFIG déclare les sources du site : OMNI - SOC est publié par"
+  echo "        python3 tools/omni-integrations.py soc-dashboards --api <url>/api --apply --backup-dir <dossier>"
+  exit 0
+fi
+
 python3 - <<'PY'
 import json, os, ssl, uuid, base64, urllib.request
 

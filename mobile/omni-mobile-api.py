@@ -320,6 +320,115 @@ def save_subs(subs: list) -> None:
     os.replace(tmp, SUBS_FILE)
 
 
+# ------------------------------------------------------- capacités du site (socle)
+# Catalogue du dépôt (integrations/sources.json) + configuration du site (clé « site » de
+# /etc/omni-siem/integrations.json) : la console masque les pages des sources absentes et
+# signale les données non configurées au lieu d'afficher un faux zéro. Sans clé « site »
+# (ou catalogue illisible), tout reste visible : comportement historique.
+SITE_CONFIG_FILE = _setting("SOC_SITE_CONFIG", "/etc/omni-siem/integrations.json")
+_SITE_CACHE = {"key": None, "data": None}
+_SITE_LOCK = threading.Lock()
+
+
+def _socle_module():
+    for root in (os.path.dirname(os.path.dirname(os.path.realpath(__file__))), OMNI_REPO_DIR):
+        if os.path.isfile(os.path.join(root, "omni_integrations", "socle.py")):
+            if root not in sys.path:
+                sys.path.insert(0, root)
+            import importlib
+            return importlib.import_module("omni_integrations.socle")
+    raise FileNotFoundError("omni_integrations/socle.py")
+
+
+def site_profile():
+    with _SITE_LOCK:
+        try:
+            socle = _socle_module()
+            mtime = os.path.getmtime(SITE_CONFIG_FILE) if os.path.exists(SITE_CONFIG_FILE) else 0
+            key = (SITE_CONFIG_FILE, mtime, os.path.getmtime(socle.SOURCES_FILE))
+            if _SITE_CACHE["key"] == key:
+                return _SITE_CACHE["data"]
+            capabilities = socle.load_capabilities()
+            data = {"caps": capabilities, "profile": socle.load_site_profile(SITE_CONFIG_FILE, capabilities), "error": None}
+        except Exception as exc:   # configuration invalide : historique, erreur affichée dans /m/api/site
+            key, data = None, {"caps": None, "profile": None, "error": f"configuration du site illisible ({type(exc).__name__})"}
+        _SITE_CACHE.update(key=key, data=data)
+        return data
+
+
+def site_enabled(*capabilities):
+    profile = site_profile()["profile"]
+    return profile is None or profile["legacy"] or bool(set(capabilities) & profile["enabled"])
+
+
+def _alerts_seen(days=30):
+    """Des événements d'alerte Graylog existent-ils ? (une définition ajoutée sans mise à jour du site)"""
+    try:
+        res = os_search("gl-events*", {"size": 0, "track_total_hits": True,
+                                       "query": {"range": {"timestamp": {"gte": f"now-{int(days)}d"}}}})
+        return res["hits"]["total"]["value"] > 0
+    except SearchBackendError:
+        return False
+
+
+def get_site():
+    data = site_profile()
+    caps, profile = data["caps"] or {}, data["profile"]
+    detections = site_enabled("detections") or _alerts_seen()
+    pages = {}
+    for page, spec in caps.get("console_pages", {}).items():
+        visible = not spec.get("requires_any") or site_enabled(*spec["requires_any"])
+        needs = spec.get("notice_unless_any", [])
+        configured = site_enabled(*needs) or ("detections" in needs and detections)
+        pages[page] = {"visible": visible, "notice": None if (not needs or configured) else spec.get("notice")}
+    location = (profile or {}).get("location") or None
+    return {"legacy": profile is None or profile["legacy"], "error": data["error"],
+            "sources": [{"id": key, "title": caps["sources"][key]["title"]} for key in (profile or {}).get("sources", [])],
+            "features": (profile or {}).get("features", []), "pages": pages,
+            "detections": {"configured": bool(detections)},
+            "kpis_unavailable": [k for k, needs in caps.get("kpis", {}).items() if not site_enabled(*needs)],
+            "location": location}
+
+
+def _site_expected_sources():
+    """Seuils de fraîcheur : SOC_EXPECTED_SOURCES, complété par les sources que le site active."""
+    expected = dict(EXPECTED_SOURCES)
+    data = site_profile()
+    if data["profile"] and not data["profile"]["legacy"]:
+        for key in data["profile"]["sources"]:
+            spec = data["caps"]["sources"][key]
+            for value in spec.get("event_source", []):
+                expected.setdefault(value, int(spec.get("expected_minutes", 1440)))
+    return expected
+
+
+def get_inputs_collect():
+    """Toutes les données reçues, par entrée Graylog : volume, dernier message, émetteurs, champs.
+    Couvre aussi les messages non normalisés (sans event_source) et les entrées arrêtées."""
+    res = os_search("omni-*", {"size": 0, "query": {"range": {"timestamp": {"gte": "now-7d"}}},
+        "aggs": {"inp": {"terms": {"field": "gl2_source_input", "size": 40},
+                         "aggs": {"last": {"max": {"field": "timestamp"}},
+                                  "d1": {"filter": {"range": {"timestamp": {"gte": "now-24h"}}}},
+                                  "src": {"terms": {"field": "source", "size": 5}},
+                                  "es": {"terms": {"field": "event_source", "size": 4}},
+                                  "raw": {"filter": {"bool": {"must_not": [{"exists": {"field": "event_source"}}]}}},
+                                  "doc": {"top_hits": {"size": 1, "sort": [{"timestamp": {"order": "desc"}}]}}}}}})
+    labels = (site_profile()["profile"] or {}).get("inputs", {})
+    hidden = {"message", "full_message", "timestamp", "streams", "source"}
+    out = []
+    for b in res.get("aggregations", {}).get("inp", {}).get("buckets", []):
+        hit = ((((b.get("doc") or {}).get("hits") or {}).get("hits")) or [{}])[0].get("_source", {})
+        fields = sorted(k for k in hit if k not in hidden and not k.startswith("gl2_"))
+        out.append({"id": b["key"], "label": labels.get(b["key"], ""), "n_7d": b["doc_count"],
+                    "n_24h": (b.get("d1") or {}).get("doc_count", 0),
+                    "last": (b.get("last") or {}).get("value_as_string"),
+                    "unnormalized_7d": (b.get("raw") or {}).get("doc_count", 0),
+                    "sources": [{"k": _rd(x["key"]), "n": x["doc_count"]} for x in b.get("src", {}).get("buckets", [])],
+                    "event_sources": [x["key"] for x in b.get("es", {}).get("buckets", [])],
+                    "fields": fields[:24], "fields_total": len(fields)})
+    return out
+
+
 # ----------------------------------------------------------------------- requêtes
 def get_alerts(limit: int = 50) -> list:
     res = os_search("gl-events*", {
@@ -379,6 +488,16 @@ def _count(query: dict) -> int:
 
 
 def get_kpis() -> dict:
+    caps = site_profile()["caps"] or {}
+    kpis = _kpis_raw()
+    # Fonction absente du site : null (« non configuré »), jamais un zéro mesuré.
+    for key, needs in caps.get("kpis", {}).items():
+        if key in kpis and not site_enabled(*needs):
+            kpis[key] = None
+    return kpis
+
+
+def _kpis_raw() -> dict:
     last24 = {"range": {"timestamp": {"gte": "now-24h"}}}
     return {
         "alertes_24h": _count({"bool": {"must": [{"exists": {"field": "alert_tag"}}], "filter": [last24]}}),
@@ -1325,7 +1444,25 @@ _MENACE = {"bool": {"minimum_should_match": 1, "should": [
     {"term": {"event_action": "echec_connexion"}},
     {"bool": {"filter": [{"term": {"event_source": "bunkerweb"}}, {"range": {"http_status": {"gte": 400, "lt": 500}}}]}},
     {"bool": {"filter": [{"term": {"event_source": "fortigate"}}, {"terms": {"action": ["deny", "blocked", "dropped", "drop"]}}]}},
+    {"bool": {"filter": [{"term": {"event_source": "watchguard"}}, {"terms": {"event_action": ["deny", "drop", "block"]}}]}},
 ]}}
+
+
+def _site_geo():
+    """Point d'arrivée des flux de la carte : site.location, sinon nom de la console."""
+    location = (site_profile()["profile"] or {}).get("location")
+    if location:
+        return {"lat": location["lat"], "lng": location["lng"], "label": location.get("label") or _site_name()}
+    if site_profile()["profile"] and not site_profile()["profile"]["legacy"]:
+        return {"lat": 46.6, "lng": 2.4, "label": _site_name()}
+    return OMS_GEO
+
+
+def _site_name():
+    try:
+        return appearance_public().get("name") or APPEARANCE_NAME_DEFAULT
+    except Exception:
+        return APPEARANCE_NAME_DEFAULT
 
 
 def get_geo_flows(hours=3, top=150):
@@ -1383,7 +1520,7 @@ def get_geo_flows(hours=3, top=150):
     topc = [{"cc": b["key"], "n": b["doc_count"]}
             for b in tc.get("aggregations", {}).get("c", {}).get("buckets", [])
             if b.get("key") not in (None, "", "Reserved", "Private", "-")]
-    return {"oms": OMS_GEO, "hours": hours, "window": window, "arcs": arcs, "recent": recent,
+    return {"oms": _site_geo(), "hours": hours, "window": window, "arcs": arcs, "recent": recent,
             "top_countries": topc,
             "coverage": {"locations_limit": int(top), "recent_limit": 16,
                          "omitted_flows": res["aggregations"]["loc"].get("sum_other_doc_count", 0)},
@@ -1393,6 +1530,24 @@ def get_geo_flows(hours=3, top=150):
 
 def get_geo_threats():
     out = {"countries": []}
+    caps = site_profile()["caps"] or {}
+    # Pare-feu du site autres que FortiGate (WatchGuard…) : pays d'origine des blocages.
+    for key, spec in caps.get("sources", {}).items():
+        if key == "fortigate" or not spec.get("firewall") or not site_enabled(key) or not spec.get("country_field"):
+            continue
+        field = spec["country_field"]
+        res = os_search("omni-*", {"size": 0,
+            "query": {"bool": {"filter": [{"terms": {"event_source": spec.get("event_source", [key])}},
+                                          {"terms": {"event_action": ["deny", "drop", "block"]}},
+                                          {"range": {"timestamp": {"gte": "now-7d"}}}]}},
+            "aggs": {"c": {"terms": {"field": field, "size": 14}}}})
+        cc = [{"k": b["key"], "n": b["doc_count"]}
+              for b in res.get("aggregations", {}).get("c", {}).get("buckets", [])
+              if b.get("key") and b["key"] not in ("Reserved", "Private", "-", "")]
+        if cc:
+            return {"countries": cc, "field": field, "source": key}
+    if not site_enabled("fortigate"):
+        return out
     for field in ("src_ip_country_code", "srcip_country_code", "src_country"):
         res = os_search("omni-fortigate*", {"size": 0,
             "query": {"bool": {"filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}},
@@ -1479,9 +1634,9 @@ def get_risk():
     ents = ents[:8]
     ml_top = _top_ml()
     ueba_top = _top_ueba()
-    crit = k.get("incidents_critiques_7j", 0)
-    ueba = k.get("hotes_risque_ueba", 0)
-    kev = k.get("kev_exposees", 0)
+    crit = k.get("incidents_critiques_7j") or 0   # null = fonction non configurée sur le site
+    ueba = k.get("hotes_risque_ueba") or 0
+    kev = k.get("kev_exposees") or 0
     ml_hi = sum(1 for m in ml_top if m["score"] >= 70)   # entités très anormales (ML)
     if crit >= 3:
         lvl = "CRITIQUE"
@@ -1546,7 +1701,7 @@ def get_health():
                  for b in ires.get("aggregations", {}).get("src", {}).get("buckets", [])}
     now_ms = time.time() * 1000
     integrations = []
-    for src, thr in EXPECTED_SOURCES.items():
+    for src, thr in _site_expected_sources().items():
         last = seen_last.get(src)
         if not last:
             integrations.append({"k": src, "status": "missing", "age_min": None, "threshold_min": thr})
@@ -1559,7 +1714,7 @@ def get_health():
     return {"cluster": ch.get("status", "?"), "nodes": ch.get("number_of_nodes"),
             "shards": ch.get("active_shards"), "events_24h": ag.get("tot", {}).get("value", 0),
             "sources": sources, "robots": robots, "sla": sla, "dark_hosts": dark,
-            "integrations": integrations, "maintenance": maint}
+            "integrations": integrations, "maintenance": maint, "inputs": get_inputs_collect()}
 
 
 def get_leaks():
@@ -4126,6 +4281,8 @@ class H(BaseHTTPRequestHandler):
                 return self._json_raw({"error": str(ex)}, ex.code)
         if p == "/m/api/appearance":
             return self._json_raw(appearance_public())
+        if p == "/m/api/site":
+            return self._json(get_site())
         if p == "/m/api/appearance/logo":
             return self._appearance_logo()
         if p == "/m/api/soar":

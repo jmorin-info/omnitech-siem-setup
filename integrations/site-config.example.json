@@ -9,5 +9,12 @@
         "quality": "000000000000000000000000"
       }
     }
+  },
+  "site": {
+    "sources": ["windows_security", "sysmon", "windows", "inventory"],
+    "features": ["deploy_kit"],
+    "dashboards": {"soc": "000000000000000000000000"},
+    "inputs": {"000000000000000000000000": "Winlogbeat (Beats TLS 5044)"},
+    "location": {"lat": 46.6, "lng": 2.4, "label": "Siège"}
   }
 }

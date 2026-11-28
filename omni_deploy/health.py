@@ -259,12 +259,14 @@ def evaluate(config, source: Path, probes: Probes | None = None):
         fqdn = config.get("SIEM_FQDN") or "localhost"
         ca_console = config.get("GRAYLOG_API_CA") or DEFAULT_API_CA
         ca_console = existing_ca(ca_console)
+        # nginx peut n'écouter que sur l'adresse du serveur (listen <SIEM_IP>:443) : sonder cette adresse.
+        address = (config.get("SIEM_IP") or "127.0.0.1").strip() or "127.0.0.1"
+        url = "https://" + ("[" + address + "]" if ":" in address else address) + "/soc/"
         try:
-            status, _ = probes.http("https://127.0.0.1/soc/", headers={"Host": fqdn}, server_name=fqdn,
-                                    ca=ca_console)
+            status, _ = probes.http(url, headers={"Host": fqdn}, server_name=fqdn, ca=ca_console)
             add("console:/soc/", "critique", status == 200, f"HTTP {status}, certificat vérifié pour {fqdn}")
         except ssl.SSLError:
-            status, _ = probes.http("https://127.0.0.1/soc/", headers={"Host": fqdn}, server_name=fqdn, verify=False)
+            status, _ = probes.http(url, headers={"Host": fqdn}, server_name=fqdn, verify=False)
             add("console:/soc/", "critique", status == 200, f"HTTP {status}")
             add("console:certificat", "avertissement", False, f"certificat non approuvé par cette machine pour {fqdn}")
     guarded("console:/soc/", "critique", console_page)
