@@ -1,0 +1,22 @@
+{
+  "_lisez_moi": "Modèle de /etc/omni-siem/detections.json (hors Git, mode 600). Une source à null n'est pas reçue : ses détections ne sont pas créées. Les paramètres sont comparés en minuscules. Les zones externes du pare-feu sont lues dans /etc/omni-siem/integrations.json.",
+  "schema_version": 1,
+  "notification": "OMNI - Triage (mail critique)",
+  "sources": {
+    "windows_security": {"stream": "OMNI - Windows Security"},
+    "windows_autres": {"stream": "OMNI - Windows autres"},
+    "sysmon": {"stream": "OMNI - Sysmon"},
+    "watchguard": {"stream": "OMNI integration - WatchGuard Firebox"},
+    "m365": null
+  },
+  "ti": {"actif": true},
+  "parametres": {
+    "comptes_replication": ["dc01$", "dc02$", "msol_0123456789ab"],
+    "hotes_tier0": ["dc01", "dc02"],
+    "reseaux_internes": ["198.51.100.0/24"],
+    "pays_attendus": ["fra"],
+    "exclusions_services": ["\\program files\\exemple-agent\\"],
+    "exclusions_taches": ["\\exemple\\tache-legitime"],
+    "lecteurs_lsass": ["c:\\program files\\exemple\\agent.exe|0x1410"]
+  }
+}
