@@ -6,7 +6,7 @@ Tout ce qui se passe côté **DC (BX-AD-01-IT-VM / 10.33.50.250)** et côté
 > ** Voie recommandée (12/06) : `Install-OmniSiem-NinjaOne.ps1`** — script
 > UNIQUE et definitif pour NinjaOne (SYSTEM, 64 bits, planification
 > quotidienne). Il REMPLACE `Deploy-SiemAgents-NinjaOne.ps1` +
-> `Set-OmniAudit-NinjaOne.ps1` : Root CA (TOFU), politique d'audit, Sysmon,
+> `Set-OmniAudit-NinjaOne.ps1` : certificat de collecte vérifié, politique d'audit, Sysmon,
 > Winlogbeat (restart seulement si la conf change), canal « Veeam Backup »
 > ajouté automatiquement sur le serveur Veeam, et vérification de santé
 > (test output 5044 + scan des erreurs de canal). Résumé [OK]/[KO] par
@@ -72,7 +72,7 @@ Il converge vers l'état cible et vérifie chaque étape :
 
 | Étape | Ce qu'elle fait |
 |---|---|
-| Root CA | installe la CA OMNITECH si absente (TOFU au premier contact) |
+| Root CA | installe le certificat de collecte après téléchargement HTTPS validé et contrôle SHA256 |
 | Audit | baseline `auditpol`, ligne de commande dans les 4688, ScriptBlock 4104, politique avancée forcée, journal Security 2 Go |
 | Sysmon | installe, ou met à jour la configuration **seulement si son hash a changé** |
 | Winlogbeat | version cible, configuration et CA ; ajoute automatiquement le canal `Veeam Backup` si le journal existe sur la machine |
@@ -85,8 +85,16 @@ d'auto-réparation. Codes de sortie : `0` = tout OK, `1` = au moins un composant
 en échec (le résumé par composant est affiché dans NinjaOne, le détail dans
 `C:\ProgramData\OMNI-SIEM\install.log`).
 
-Tout est téléchargé depuis le SIEM (`https://bx-it-graylog-vm.omnitech.security/kit/`) :
-ni AD, ni NETLOGON, ni accès Internet requis sur la machine.
+Tout est téléchargé depuis le SIEM (`https://<fqdn-du-siem>/kit/`). Le certificat
+HTTPS doit être reconnu par Windows avant l'exécution. Si le site utilise une CA
+privée, la déployer d'abord via GPO/NinjaOne. Le script refuse les certificats
+TLS non valides et les fichiers absents du manifeste `SHA256SUMS`.
+
+Pour publier le kit du site, définir `SIEM_FQDN`, `SIEM_IP`, `SITE_NAME` et
+éventuellement `GRAYLOG_BEATS_CERT_FILE` dans `00-vars.env`, puis lancer
+`sudo bash 95-kit-deploy.sh`. Le certificat désigné est public (aucune clé
+privée) et n'est jamais commité. `SHA256SUMS` est régénéré après validation de
+tous les fichiers nécessaires ; une erreur arrête la publication.
 
 > Les scripts `Deploy-SiemAgents-NinjaOne.ps1` et `Set-OmniAudit-NinjaOne.ps1`
 > sont **remplacés** par celui-ci et déplacés dans `archive/`. Ne pas les

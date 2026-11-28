@@ -8,7 +8,7 @@
   prealable) : le script converge vers l'etat cible et VERIFIE tout.
   Tout est telecharge depuis le SIEM (https://<siem>/kit/), sans AD ni Internet.
 
-    0. Root CA OMNITECH dans le magasin machine (TOFU au premier contact)
+  0. Certificat de collecte installe apres telechargement HTTPS valide
     1. Politique d'audit locale : baseline auditpol (audit-baseline.csv du kit),
        ligne de commande dans les 4688, ScriptBlockLogging 4104, politique
        avancee forcee, journal Security 2 Go circulaire
@@ -31,7 +31,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string]$BaseUrl           = "https://bx-it-graylog-vm.omnitech.security/kit",
+  [string]$BaseUrl           = "https://__SIEM_FQDN__/kit",
   [string]$WinlogbeatVersion = "8.17.4",
   [string]$InstallDir        = "C:\Program Files\Winlogbeat",
   [int]   $SecurityLogMB     = 2048,
@@ -43,11 +43,29 @@ $Staging = "C:\ProgramData\OMNI-SIEM"
 New-Item -ItemType Directory -Path $Staging -Force | Out-Null
 Start-Transcript -Path (Join-Path $Staging "install.log") -Append | Out-Null
 
+# The download endpoint must validate with the Windows trust store. Sites using
+# a private web-PKI must deploy its CA before running this installer.
+$ManifestPath = Join-Path $Staging "SHA256SUMS"
+Invoke-WebRequest -Uri "$BaseUrl/SHA256SUMS" -OutFile $ManifestPath -UseBasicParsing
+$KitChecksums = @{}
+foreach ($line in Get-Content $ManifestPath) {
+  if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$') {
+    $KitChecksums[$Matches[2]] = $Matches[1].ToUpperInvariant()
+  }
+}
+if (-not $KitChecksums.Count) { throw "Manifeste SHA256SUMS absent ou invalide" }
+
 $Report = [ordered]@{}   # composant -> "OK ..." / "KO ..."
 function Step($m){ Write-Host ("[{0}] {1}" -f (Get-Date -Format "HH:mm:ss"), $m) }
 function Get-KitFile($Name, $Dest){
+  if (-not $KitChecksums.ContainsKey($Name)) { throw "Empreinte SHA256 absente du manifeste : $Name" }
   Invoke-WebRequest -Uri "$BaseUrl/$Name" -OutFile $Dest -UseBasicParsing
   if (-not (Test-Path $Dest) -or (Get-Item $Dest).Length -eq 0) { throw "Telechargement vide : $Name" }
+  $actual = (Get-FileHash -Path $Dest -Algorithm SHA256).Hash.ToUpperInvariant()
+  if ($actual -ne $KitChecksums[$Name]) {
+    Remove-Item -LiteralPath $Dest -Force -ErrorAction SilentlyContinue
+    throw "Integrite SHA256 invalide : $Name"
+  }
 }
 function Get-HashOrEmpty($Path){
   if (Test-Path $Path) { (Get-FileHash -Path $Path -Algorithm SHA256).Hash } else { "" }
@@ -57,11 +75,8 @@ function Get-HashOrEmpty($Path){
 try {
   $CaSubject = "CN=Root CA OMNITECH SECURITY*"
   if (-not (Get-ChildItem Cert:\LocalMachine\Root | Where-Object { $_.Subject -like $CaSubject })) {
-    Step "Root CA absente -> recuperation TOFU puis installation"
-    $OldCb = [Net.ServicePointManager]::ServerCertificateValidationCallback
-    [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-    try { Get-KitFile "omnitech-rootca.pem" (Join-Path $Staging "omnitech-rootca.pem") }
-    finally { [Net.ServicePointManager]::ServerCertificateValidationCallback = $OldCb }
+    Step "Root CA absente -> recuperation HTTPS verifiee puis installation"
+    Get-KitFile "omnitech-rootca.pem" (Join-Path $Staging "omnitech-rootca.pem")
     Import-Certificate -FilePath (Join-Path $Staging "omnitech-rootca.pem") `
       -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
   }

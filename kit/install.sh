@@ -3,8 +3,8 @@
 # kit/install.sh - Enrolement SIEM OMNITECH (Linux), STANDALONE & idempotent.
 #
 #   One-liner :
-#     curl -fsSL https://bx-it-graylog-vm.omnitech.security/kit/install.sh \
-#       | sudo bash -s -- 10.33.220.10
+#     curl -fsSL https://<siem-fqdn>/kit/install.sh \
+#       | sudo bash -s -- <siem-ip>
 #   (le « -- » separe les options de bash des ARGUMENTS du script ; $1 = SIEM)
 #
 #   Converge un hote Linux vers l'etat cible et VERIFIE tout :
@@ -18,7 +18,7 @@
 #   resume). Relancable en boucle sans effet de bord.
 # =============================================================================
 set -uo pipefail
-SIEM_IP="${1:-10.33.220.10}"
+SIEM_IP="${1:-__SIEM_IP__}"
 PORT=1519
 declare -A R                                   # R[composant] = "OK ..." | "KO ..."
 ok(){ R["$1"]="OK $2"; }
