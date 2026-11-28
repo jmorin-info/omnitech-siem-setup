@@ -85,6 +85,15 @@ def test_planificateur_seuil_fenetre_grace(outil):
     d = {"fenetre_min": 10, "pas_min": 5, "grace_min": 60, "seuil": 3}
     t0 = 1_700_000_000
     evts = [(t0 + i * 60, "a", i) for i in range(5)] + [(t0 + 7200, "a", 9), (t0 + 30, "b", 1)]
+    q = "ti_source:(threatfox OR urlhaus) AND ti_direction:sortant AND ti_port_match:true AND action:Allow AND NOT dest_port:123"
+    doc = {"ti_source": "threatfox", "ti_direction": "sortant", "ti_port_match": True, "action": "Allow", "dest_port": 443}
+    assert outil.correspond(q, doc)
+    assert not outil.correspond(q, dict(doc, dest_port=123))
+    assert not outil.correspond(q, dict(doc, action="Deny"))
+    assert outil.correspond("ti_contexte:execution AND _exists_:ti_source", {"ti_contexte": "execution", "ti_source": "malwarebazaar"})
+    assert not outil.correspond("_exists_:ti_source", {})
+    with pytest.raises(ValueError):
+        outil.correspond("(a:1) OR (b:2)", {})
     notifs = outil.planificateur(evts, d)
     assert [e for _, e in notifs] == ["a"]  # b sous le seuil, second passage de a isolé (sous le seuil)
     d["seuil"] = 1

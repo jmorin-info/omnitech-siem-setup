@@ -172,6 +172,32 @@ def champs_lus(source_rendue):
     return set(re.findall(r"\$message\.([A-Za-z0-9_]+)", source_rendue)) | set(re.findall(r'has_field\("([A-Za-z0-9_]+)"\)', source_rendue))
 
 
+def correspond(q, doc):
+    """Évalue sur un message le sous-ensemble Lucene des définitions TI du catalogue : conjonction (AND) de
+    champ:valeur, champ:(a OR b), _exists_:champ, NOT clause ; joker * en fin de valeur ; échappement \\."""
+    for c in (x.strip() for x in re.split(r"\s+AND\s+", q.strip())):
+        neg = c.startswith("NOT ")
+        if neg:
+            c = c[4:].strip()
+        m = re.fullmatch(r"_exists_:([A-Za-z0-9_]+)", c)
+        if m:
+            ok = doc.get(m.group(1)) not in (None, "")
+        else:
+            m = re.fullmatch(r"([A-Za-z0-9_]+):(\((.+)\)|\S+)", c)
+            if not m:
+                raise ValueError(f"clause non prise en charge : {c}")
+            valeurs = [v.strip() for v in re.split(r"\s+OR\s+", m.group(3))] if m.group(3) else [m.group(2)]
+            v_doc = doc.get(m.group(1))
+            v_doc = "" if v_doc is None else str(v_doc).lower()
+            ok = False
+            for v in valeurs:
+                v = re.sub(r"\\(.)", r"\1", v).strip('"').lower()
+                ok |= v_doc.startswith(v[:-1]) if v.endswith("*") else v_doc == v
+        if ok == neg:
+            return False
+    return True
+
+
 def champ_couvert(champ, motifs):
     return any(champ == m or (m.endswith("*") and champ.startswith(m[:-1])) for m in motifs)
 
@@ -246,6 +272,14 @@ def valider(cat, site_exemple):
                 erreurs.append(f"{r['id']}: la règle TI lit {c}, absent de la source")
         if r["lookup"] not in lookups:
             erreurs.append(f"{r['id']}: table inconnue")
+        if not r.get("champs_rejeu"):
+            erreurs.append(f"{r['id']}: champs_rejeu manquant (recherche rétroactive)")
+    for d in cat["detections"]:
+        if d.get("ti"):
+            try:
+                correspond(requete(d), {})
+            except ValueError as e:
+                erreurs.append(f"{d['id']}: requête TI non évaluable au rejeu ({e})")
     return erreurs
 
 
@@ -787,6 +821,60 @@ def rejeu_requete(cl, d, e, src, jours):
     return r
 
 
+def charger_cles(chemin):
+    try:
+        with open(chemin, encoding="utf-8") as f:
+            return [ligne.split(",", 1)[0].strip() for i, ligne in enumerate(f) if i and ligne.strip()]
+    except OSError:
+        return []
+
+
+def rejeu_ti(cat, site, cl, jours, plafond):
+    """Recherche rétroactive : les indicateurs des tables TI sont cherchés dans les messages conservés (champs
+    déclarés par champs_rejeu), chaque message trouvé passe dans le simulateur de pipeline (enrichissement réel),
+    puis la requête de chaque définition TI est évaluée et le planificateur rejoué."""
+    pl = plan(cat, site, cl, jours)
+    lk = {x["nom"]: x for x in cat["lookups"]}
+    simules, regles = {}, {}
+    for r in cat["ti_regles"]:
+        src = pl["sources"].get(r["source"], {})
+        cles = charger_cles(lk[r["lookup"]]["csv"])
+        if not src.get("stream") or not cles:
+            continue
+        idx = cat["sources"][r["source"]]["index"]
+        vus = {}
+        for champ in r["champs_rejeu"]:
+            for i in range(0, len(cles), 1000):
+                lot = cles[i:i + 1000] if champ != "message" else [c.lower() for c in cles[i:i + 1000]]
+                q = {"bool": {"filter": [{"terms": {champ: lot}}, {"range": {"timestamp": {"gte": f"now-{jours}d"}}}]}}
+                for h in cl.os("POST", f"/{idx}/_search", {"size": plafond, "query": q, "sort": [{"timestamp": "desc"}]})["hits"]["hits"]:
+                    vus[h["_id"]] = h
+        enrichis = 0
+        for h in list(vus.values())[:plafond]:
+            out = simuler_message(cl, src["stream"], h["_source"], h["_id"])
+            if out.get("ti_tag"):
+                enrichis += 1
+                simules.setdefault(r["source"], {})[h["_id"]] = (h["_source"]["timestamp"], out)
+        regles[r["id"]] = {"messages": len(vus), "simules": min(len(vus), plafond), "enrichis": enrichis}
+        print(f"{r['id']:<24} {regles[r['id']]}", flush=True)
+    det = {}
+    for d in cat["detections"]:
+        if not d.get("ti"):
+            continue
+        msgs = simules.get(d["source"], {})
+        champ = regroupement(d)[0]
+        retenus = [(ts, out) for ts, out in msgs.values() if correspond(requete(d), out)]
+        evts = [(epoch(ts), str(out.get(champ)), i) for i, (ts, out) in enumerate(retenus)]
+        r = {"mode": "rétro TI (simulateur)", "candidats": len(msgs), "etiquetes": len(evts), "exemples_ok": True,
+             "etiquetes_exemples": [{"t": ts, "ti_match": o.get("ti_match"), "ti_source": o.get("ti_source"), "ti_malware": o.get("ti_malware"),
+                                     "ti_confiance": o.get("ti_confiance"), "action": o.get("action"), "src_ip": o.get("src_ip"),
+                                     "dest_ip": o.get("dest_ip"), "dest_port": o.get("dest_port"), "source": o.get("source")} for ts, o in retenus[:15]]}
+        r.update(resume_notifs(planificateur(evts, d)))
+        det[d["id"]] = r
+        print(f"{d['id']:<24} {json.dumps({k: r[k] for k in ('candidats', 'etiquetes', 'notifications', 'max_par_jour')})}", flush=True)
+    return {"date": dt.datetime.now(dt.timezone.utc).isoformat(), "jours": jours, "regles_ti": regles, "detections": det}
+
+
 # ----------------------------------------------------------------------------- définitions
 def entite_definition(cat, d, e, notif_id, raison=None, preuve=None):
     serie = d.get("serie")
@@ -813,8 +901,9 @@ def entite_definition(cat, d, e, notif_id, raison=None, preuve=None):
     }
 
 
-def decision(cat, d, e, rj):
-    """(planifier: bool, raison|None, preuve|None)."""
+def decision(cat, d, e, rj, plafond=None):
+    """(planifier: bool, raison|None, preuve|None). plafond : déclenchements par jour (défaut : catalogue)."""
+    plafond = plafond if plafond is not None else cat["plafond_par_jour"]
     if e["etat"] != "active":
         return False, e.get("raison"), None
     r = (rj or {}).get("detections", {}).get(d["id"])
@@ -828,12 +917,12 @@ def decision(cat, d, e, rj):
     if r.get("champs_absents_partout"):
         return False, ("champ(s) " + ", ".join(r["champs_absents_partout"]) + " absent(s) de tous les événements candidats : "
                        "la source ne les produit pas, la détection serait muette"), preuve
-    if r.get("max_par_jour", 0) > cat["plafond_par_jour"]:
-        return False, f"plus de {cat['plafond_par_jour']} déclenchements par jour au rejeu", preuve
+    if r.get("max_par_jour", 0) > plafond:
+        return False, f"plus de {plafond} déclenchements par jour au rejeu", preuve
     return True, None, preuve
 
 
-def appliquer_definitions(cat, site, cl, rj, simuler):
+def appliquer_definitions(cat, site, cl, rj, simuler, seulement=None, plafond=None):
     pl = plan(cat, site, cl)
     etat = etat_lire()
     notif = next((n for n in cl.api("GET", "/events/notifications?per_page=200")["notifications"] if n["title"] == site["notification"]), None)
@@ -842,12 +931,14 @@ def appliquer_definitions(cat, site, cl, rj, simuler):
     existantes = {x["title"]: x for x in cl.api("GET", "/events/definitions?per_page=1000")["event_definitions"]}
     journal = []
     for d, e in zip(cat["detections"], pl["detections"]):
+        if seulement and d["id"] not in seulement:
+            continue
         if e["etat"] == "non_creee":
             journal.append(f"NON CRÉÉE  {d['titre']} : {e['raison']}")
             continue
         if not e.get("streams"):
             e["streams"] = [pl["sources"][d["source"]]["stream"]]
-        planif, raison, preuve = decision(cat, d, e, rj)
+        planif, raison, preuve = decision(cat, d, e, rj, plafond)
         corps = entite_definition(cat, d, e, notif["id"], raison, preuve)
         libelle = ("PLANIFIÉE  " if planif else "DÉSACTIVÉE ") + d["titre"] + (f" : {raison}" if raison else "")
         if simuler:
@@ -857,7 +948,8 @@ def appliquer_definitions(cat, site, cl, rj, simuler):
             did = existantes[d["titre"]]["id"]
             if did not in etat["definitions"].values():
                 raise SystemExit(f"définition « {d['titre']} » existante non créée par cet outil : arrêt")
-            cl.api("PUT", f"/events/definitions/{did}?schedule=false", {"entity": dict(corps, id=did)})
+            # Graylog 7 : création = {"entity": …}, mise à jour = corps brut ; la planification est posée juste après
+            cl.api("PUT", f"/events/definitions/{did}?schedule=false", dict(corps, id=did))
         else:
             did = cl.api("POST", "/events/definitions?schedule=false", {"entity": corps})["id"]
             etat["definitions"][d["id"]] = did
@@ -1001,7 +1093,8 @@ def retour(cl, simuler):
 # ----------------------------------------------------------------------------- CLI
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("commande", choices=["valider", "plan", "appliquer-regles", "rejeu", "appliquer-definitions", "verifier", "mesure", "retour"])
+    ap.add_argument("commande", choices=["valider", "plan", "appliquer-regles", "rejeu", "rejeu-ti", "appliquer-definitions", "verifier", "mesure", "retour"])
+    ap.add_argument("--plafond-jour", type=int, help="déclenchements par jour tolérés au rejeu (défaut : catalogue)")
     ap.add_argument("--catalogue", default=str(CATALOGUE))
     ap.add_argument("--site", default=str(SITE))
     ap.add_argument("--simuler", action="store_true")
@@ -1025,9 +1118,12 @@ def main(argv=None):
         print(json.dumps(plan(cat, site, cl, a.jours), ensure_ascii=False, indent=1))
     elif a.commande == "appliquer-regles":
         print("\n".join(appliquer_regles(cat, site, cl, a.simuler)))
-    elif a.commande == "rejeu":
-        r = rejeu(cat, site, cl, a.jours, a.plafond_messages, a.seulement)
-        if a.seulement and Path(a.rejeu_fichier).exists():
+    elif a.commande in ("rejeu", "rejeu-ti"):
+        if a.commande == "rejeu":
+            r = rejeu(cat, site, cl, a.jours, a.plafond_messages, a.seulement)
+        else:
+            r = rejeu_ti(cat, site, cl, a.jours, a.plafond_messages)
+        if (a.seulement or a.commande == "rejeu-ti") and Path(a.rejeu_fichier).exists():
             ancien = charger(a.rejeu_fichier)
             ancien["detections"].update(r["detections"])
             r = dict(ancien, date=r["date"])
@@ -1036,7 +1132,7 @@ def main(argv=None):
         print(f"rejeu écrit dans {a.rejeu_fichier}")
     elif a.commande == "appliquer-definitions":
         rj = charger(a.rejeu_fichier) if Path(a.rejeu_fichier).exists() else None
-        print("\n".join(appliquer_definitions(cat, site, cl, rj, a.simuler)))
+        print("\n".join(appliquer_definitions(cat, site, cl, rj, a.simuler, a.seulement, a.plafond_jour)))
     elif a.commande == "verifier":
         rapport, defauts = verifier(cat, site, cl)
         print(json.dumps(rapport, ensure_ascii=False, indent=1))

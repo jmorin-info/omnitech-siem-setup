@@ -60,6 +60,12 @@ seuls Feodo Tracker et la liste des nœuds de sortie Tor sont téléchargés. Th
 et MalwareBazaar apparaissent alors « désactivés », et la table des domaines reste vide : les
 définitions qui en dépendent sont créées désactivées.
 
+## Rejeu de la threat intel
+Les champs `ti_*` n'existent que sur les messages reçus après la pose des règles : `rejeu-ti` cherche donc les
+indicateurs des tables (champs `champs_rejeu` de chaque règle TI, plein texte compris) dans les messages conservés,
+les passe dans le simulateur de pipeline, évalue la requête de chaque définition TI et rejoue le planificateur.
+Le résultat complète le fichier de rejeu ; `appliquer-definitions --seulement <id…> --plafond-jour 2` l'applique.
+
 ## Anti-récidive
 - `valider` refuse une règle qui lit un champ que sa source ne produit pas, une définition
   qui interroge un champ que personne ne produit, et un titre hors rodage.
