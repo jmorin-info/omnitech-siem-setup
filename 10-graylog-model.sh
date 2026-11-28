@@ -16,6 +16,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 source ./00-vars.env
 source ./lib-graylog.sh
+source ./lib-modules.sh
 [[ $EUID -eq 0 ]] || die "a lancer en root."
 require_api
 
@@ -58,7 +59,10 @@ echo "==> [1/3] Index sets (1 index/jour, replicas=0 - mono-noeud)"
 IS_WINSEC="$(ensure_index_set 'OMNI - Windows Security' 'omni-winsec'     90)"
 IS_SYSMON="$(ensure_index_set 'OMNI - Sysmon'           'omni-sysmon'    60)"
 IS_WINOTH="$(ensure_index_set 'OMNI - Windows autres'   'omni-winother'  60)"
+IS_FORTI=""
+if omni_module_enabled fortigate; then
 IS_FORTI="$(ensure_index_set  'OMNI - FortiGate'        'omni-fortigate' 180)"  # 180j (~1.8To) : compromis forensique/disque (audit 2026-06-14)
+fi
 echo "    winsec=${IS_WINSEC} sysmon=${IS_SYSMON} winother=${IS_WINOTH} forti=${IS_FORTI}"
 echo "    (retention en ligne 60-90 j ; long terme = snapshots, cf. 08-backup)"
 
@@ -144,10 +148,13 @@ ST_WINOTH="$(ensure_stream 'OMNI - Windows autres' "${IS_WINOTH}" "AND" "[
   {\"type\":1,\"field\":\"winlogbeat_winlog_channel\",\"value\":\"Security\",\"inverted\":true,\"description\":\"hors Security\"},
   {\"type\":1,\"field\":\"winlogbeat_winlog_channel\",\"value\":\"Microsoft-Windows-Sysmon/Operational\",\"inverted\":true,\"description\":\"hors Sysmon\"}]")"
 
+ST_FORTI=""
+if omni_module_enabled fortigate; then
 FORTI_RULES="[{\"type\":1,\"field\":\"gl2_source_input\",\"value\":\"${IN_SYSTCP}\",\"inverted\":false,\"description\":\"syslog TCP FAZ\"}"
 [[ -n "${IN_SYSUDP}" ]] && FORTI_RULES+=",{\"type\":1,\"field\":\"gl2_source_input\",\"value\":\"${IN_SYSUDP}\",\"inverted\":false,\"description\":\"syslog UDP FAZ\"}"
 FORTI_RULES+="]"
 ST_FORTI="$(ensure_stream 'OMNI - FortiGate' "${IS_FORTI}" "OR" "${FORTI_RULES}")"
+fi
 
 echo "    streams: winsec=${ST_WINSEC} sysmon=${ST_SYSMON} winother=${ST_WINOTH} forti=${ST_FORTI}"
 echo

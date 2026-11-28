@@ -179,7 +179,8 @@ def load_site_profile(path, capabilities=None):
     # A source normalized by an integration module is enabled with it.
     enabled = set(sources) | set(features)
     for key, spec in capabilities["sources"].items():
-        if spec.get("integration") and spec["integration"] in data.get("integrations", {}):
+        if (spec.get("integration") and spec["integration"] in data.get("integrations", {})) or \
+                (spec.get("module") and spec["module"] in (site.get("modules") or [])):
             enabled.add(key)
     return {"legacy": False, "enabled": enabled, "sources": sorted(enabled & set(capabilities["sources"])),
             "features": sorted(enabled & set(capabilities["features"])), "dashboards": bindings, "inputs": inputs,

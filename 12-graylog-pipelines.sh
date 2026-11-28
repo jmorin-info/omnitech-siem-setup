@@ -27,6 +27,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 source ./00-vars.env
 source ./lib-graylog.sh
+source ./lib-modules.sh
 [[ $EUID -eq 0 ]] || die "a lancer en root."
 require_api
 
@@ -611,6 +612,7 @@ end
 EOF
 
 # ==========================================================================
+if omni_module_enabled fortigate; then
 echo "==> [4/6] Regles - FortiGate"
 # ==========================================================================
 
@@ -819,6 +821,9 @@ end
 EOF
 
 # ==========================================================================
+else
+  echo "==> [4/6] Module fortigate inactif sur ce site : regles FortiGate non creees"
+fi
 echo "==> [5/6] Pipelines + connexions aux streams"
 # ==========================================================================
 
@@ -888,6 +893,8 @@ end
 EOF
 )"
 
+PL_FORTI=""
+if omni_module_enabled fortigate; then
 PL_FORTI="$(ensure_pipeline "OMNI - FortiGate" <<'EOF'
 pipeline "OMNI - FortiGate"
 stage 0 match either
@@ -911,18 +918,20 @@ rule "omni-forti-11-threatintel-tag"
 end
 EOF
 )"
+fi
 
 ST_WINSEC="$(get_stream_id 'OMNI - Windows Security')"
 ST_SYSMON="$(get_stream_id 'OMNI - Sysmon')"
 ST_WINOTH="$(get_stream_id 'OMNI - Windows autres')"
 ST_FORTI="$(get_stream_id  'OMNI - FortiGate')"
-[[ -n "${ST_WINSEC}" && -n "${ST_SYSMON}" && -n "${ST_WINOTH}" && -n "${ST_FORTI}" ]] \
+[[ -n "${ST_WINSEC}" && -n "${ST_SYSMON}" && -n "${ST_WINOTH}" ]] \
+  && { [[ -n "${ST_FORTI}" ]] || ! omni_module_enabled fortigate; } \
   || die "streams OMNI introuvables (lancer 10-graylog-model.sh)"
 
 connect_pipeline "${ST_WINSEC}" "${PL_WINSEC}"
 connect_pipeline "${ST_SYSMON}" "${PL_SYSMON}"
 connect_pipeline "${ST_WINOTH}" "${PL_WINOTH}"
-connect_pipeline "${ST_FORTI}"  "${PL_FORTI}"
+if [[ -n "${ST_FORTI}" && -n "${PL_FORTI}" ]]; then connect_pipeline "${ST_FORTI}"  "${PL_FORTI}"; fi
 
 # ==========================================================================
 echo "==> [6/6] Ordre des processeurs (Filter Chain -> Pipelines -> GeoIP)"

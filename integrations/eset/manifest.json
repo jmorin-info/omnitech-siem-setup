@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "id": "eset",
+  "name": "Antivirus ESET PROTECT",
+  "summary": "Événements ESET PROTECT (menaces, pare-feu, HIPS, audit) exportés en syslog JSON par la console ; normalisation, score de risque et état de remédiation.",
+  "revision": 1,
+  "status": "legacy",
+  "compat": {"omni_siem_min": "2026-11-28", "graylog": ">=7.0,<8.0"},
+  "depends": [],
+  "conflicts": [],
+  "provides": {"sources": ["eset"], "features": []},
+  "site_config": {
+    "schema": {
+      "syslog_port": {"type": "integer", "default": 1515, "description": "Port syslog TCP de l'entrée ESET (variable historique ESET_PORT de 00-vars.env)."},
+      "retention_indices": {"type": "integer", "default": 365, "description": "Nombre d'indices conservés pour l'index set omni-eset."}
+    }
+  },
+  "secrets": [],
+  "inputs": [
+    {"key": "syslog_tcp", "type": "syslog_tcp", "default_port": 1515, "tls": false, "adopt": true, "legacy_title": "ESET (Syslog TCP 1515)"}
+  ],
+  "graylog": {
+    "streams": ["OMNI - ESET"],
+    "index_sets": ["omni-eset"],
+    "pipelines": ["OMNI - Sources externes"],
+    "rule_prefixes": ["omni-eset-"],
+    "lookups": ["lookups/eset-severity.csv"]
+  },
+  "collectors": [],
+  "fields": ["eset_threat_name", "eset_hostname", "eset_severity", "eset_risk_score", "eset_outcome", "eset_non_remediee"],
+  "field_prefixes": ["eset_"],
+  "derived_fields": {},
+  "detections": {"sources": ["eset"], "legacy_scripts": ["47-detections-extra.sh", "81-fp-allowlist.sh"]},
+  "dashboards": [],
+  "console_pages": [],
+  "checks": [
+    {"id": "flux", "type": "stream_recent", "stream": "OMNI - ESET", "minutes": 1440, "severity": "critique"},
+    {"id": "entree", "type": "input_running", "input": "syslog_tcp", "severity": "critique"},
+    {"id": "champs", "type": "fields_present", "stream": "OMNI - ESET", "fields": ["eset_hostname"], "days": 1, "severity": "avertissement"}
+  ],
+  "rollback": {"objects": "by_name", "keeps_data": true, "notes": "Aucun fichier système : retour = marqueur (modules rollback)."},
+  "uninstall": {"objects": "by_name", "keeps_data": true, "notes": "Entrée ESET, stream OMNI - ESET et règles omni-eset-* retirés à la main par nom après export ; le pipeline partagé OMNI - Sources externes est conservé (BunkerWeb) ; l'index omni-eset est conservé jusqu'à sa rétention."},
+  "legacy": {
+    "scripts": ["52-new-sources.sh"],
+    "to_split": ["14-graylog-dashboards.sh", "47-detections-extra.sh", "74-source-watchdog.sh", "81-fp-allowlist.sh", "29-drift-check.sh"]
+  }
+}

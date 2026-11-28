@@ -192,6 +192,18 @@ def plan(source, state, target):
         raise UpdateError("Target must descend from the installed code revision; use rollback for an owned previous update")
     before, after = tracked(repo, base), tracked(repo, candidate)
     changed = [p for p in sorted(before.keys() | after.keys()) if before.get(p) != after.get(p)]
+    # Contrat de module : signaler les modules dont la révision change (modules plan ensuite).
+    modules_changed = []
+    for path in changed:
+        if re.fullmatch(r"integrations/[a-z][a-z0-9_]{1,31}/manifest\.json", path):
+            revisions = []
+            for side in (before, after):
+                try:
+                    revisions.append(json.loads(content(repo, side.get(path))).get("revision"))
+                except (TypeError, ValueError, AttributeError):
+                    revisions.append(None)
+            modules_changed.append({"module": path.split("/")[1], "revision_before": revisions[0],
+                                    "revision_after": revisions[1]})
     code, withheld, conflicts = [], [], []
     # Check every managed file, including unchanged ones, before claiming alignment.
     for path in sorted(before.keys() | after.keys()):
@@ -219,6 +231,8 @@ def plan(source, state, target):
             "preserved_or_manual_files": withheld, "conflicts": sorted(set(conflicts)),
             "migration_review_required": migrations,
             "can_apply_code": not conflicts and not migrations,
+            "modules_changed": modules_changed,
+            "modules_next_step": "omni-integrations modules plan" if modules_changed else None,
             "scope": "application code and static assets only; Git HEAD, runtime publication, configuration and databases unchanged"}
 
 

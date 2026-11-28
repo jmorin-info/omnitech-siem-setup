@@ -13,6 +13,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 source ./00-vars.env
 source ./lib-graylog.sh
+source ./lib-modules.sh
 [[ $EUID -eq 0 ]] || die "root requis"
 require_api
 LOOKUP_DIR="/etc/graylog/lookup"
@@ -53,6 +54,8 @@ create_input() {  # titre json
     echo "$J" | post_entity "/system/inputs" | jqr '.id' >/dev/null && ok "input '${T}' cree" || warn "input '${T}' refuse"
   fi
 }
+ESET_INPUT_ID=""
+if omni_module_enabled eset; then
 create_input "ESET (Syslog TCP ${ESET_PORT})" "$(cat <<EOF
 { "title": "ESET (Syslog TCP ${ESET_PORT})",
   "type": "org.graylog2.inputs.syslog.tcp.SyslogTCPInput", "global": true,
@@ -64,6 +67,9 @@ EOF
 )"
 ESET_INPUT_ID="$(api_get "/system/inputs" | jq -r '.inputs[]|select(.title|startswith("ESET"))|.id' | head -1)"
 echo "    ESET input id = ${ESET_INPUT_ID}"
+else
+  echo "    module eset inactif sur ce site : entree ESET non creee"
+fi
 
 echo "==> [2/4] Streams (OMNI - ESET, OMNI - BunkerWeb)"
 IDX_DEFAULT="$(api_get '/system/indices/index_sets?limit=100' | jq -r '.index_sets[]|select(.index_prefix=="graylog")|.id')"
@@ -78,7 +84,7 @@ mk_stream() {  # titre  regle_json  description  (logs vers stderr, rien sur std
     ok "stream '$T' cree ($SID)" >&2
   else warn "stream '$T' refuse" >&2; fi
 }
-mk_stream "OMNI - ESET" "$(jq -n --arg i "$ESET_INPUT_ID" '[{field:"gl2_source_input",type:1,value:$i,inverted:false}]')" "Logs ESET PROTECT (syslog)"
+omni_module_enabled eset && mk_stream "OMNI - ESET" "$(jq -n --arg i "$ESET_INPUT_ID" '[{field:"gl2_source_input",type:1,value:$i,inverted:false}]')" "Logs ESET PROTECT (syslog)"
 mk_stream "OMNI - BunkerWeb" '[{field:"filebeat_event_source",type:1,value:"bunkerweb",inverted:false}]' "Logs WAF BunkerWeb (Filebeat)"
 ST_ESET="$(get_stream_id 'OMNI - ESET')"
 ST_BW="$(get_stream_id 'OMNI - BunkerWeb')"
@@ -90,6 +96,8 @@ ensure_index_set() {  # prefix  titre  retention_indices  -> stdout: id
   ID="$(api_get '/system/indices/index_sets?limit=200' | jq -r --arg p "$PFX" '.index_sets[]|select(.index_prefix==$p)|.id')"
   if [[ -n "$ID" ]]; then echo "$ID"; return; fi
   local TMPL; TMPL="$(api_get '/system/indices/index_sets?limit=200' | jq -c '.index_sets[]|select(.index_prefix=="omni-fortigate")')"
+  # Site sans module fortigate : modele = index set par defaut.
+  [[ -n "$TMPL" ]] || TMPL="$(api_get '/system/indices/index_sets?limit=200' | jq -c '[.index_sets[]|select(.default==true)][0] // empty')"
   ID="$(echo "$TMPL" | jq --arg t "$TITLE" --arg p "$PFX" --argjson r "$RET" \
         'del(.id,.creation_date,.default,.can_be_default) | .title=$t | .index_prefix=$p | .description=$t | .retention_strategy.max_number_of_indices=$r' \
         | api_post '/system/indices/index_sets' | jqr '.id')"
@@ -105,7 +113,8 @@ reassign_stream_idx() {  # stream_id  index_set_id
     | "${CURL[@]}" -X PUT "${API}/streams/${SID}" -H 'Content-Type: application/json' -d @- >/dev/null 2>&1 \
     && ok "stream reaffecte a l'index set ${IDX}" >&2
 }
-IDX_ESET="$(ensure_index_set 'omni-eset' 'OMNI - ESET' 365)"
+IDX_ESET=""
+omni_module_enabled eset && IDX_ESET="$(ensure_index_set 'omni-eset' 'OMNI - ESET' 365)"
 IDX_BW="$(ensure_index_set 'omni-bunkerweb' 'OMNI - BunkerWeb' 90)"
 reassign_stream_idx "$ST_ESET" "$IDX_ESET"
 reassign_stream_idx "$ST_BW" "$IDX_BW"

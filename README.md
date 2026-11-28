@@ -171,6 +171,23 @@ A terminal administration interface wraps these operations:
 retention. Their role and status are listed in
 [SCRIPTS-PROVISIONING.md](docs/reference/SCRIPTS-PROVISIONING.md) (French).
 
+## Deploying to a new environment
+
+The repository targets different infrastructures (FortiGate, WatchGuard or another firewall; ESET, Bitdefender or another
+EDR; with or without Microsoft 365; one or several sites) through **integration modules**: each integration declares what
+it installs in a manifest, and the site configuration (`/etc/omni-siem/integrations.json`, key `site.modules`) selects the
+active modules. An inactive module installs no unit, no file and no Graylog object.
+
+```bash
+cp integrations/profiles/site-pme-watchguard.example.json /etc/omni-siem/integrations.json   # then adapt
+python3 tools/omni-integrations.py modules plan            # read-only
+python3 tools/omni-integrations.py modules apply --apply   # markers + timers, reversible transaction
+python3 tools/omni-integrations.py modules verify --api https://127.0.0.1:9000/api
+```
+
+Module contract, lifecycle and full procedure (French): [docs/MODULES.md](docs/MODULES.md). Without a `site.modules`
+key, an existing site keeps every module active.
+
 ## Repository layout
 
 | Path | Content |

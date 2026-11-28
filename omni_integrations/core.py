@@ -37,7 +37,7 @@ def load_module(module_id):
     if not re.fullmatch(r"[a-z][a-z0-9_-]*", module_id):
         raise ValueError("Invalid integration identifier")
     data = json.loads((CATALOG / module_id / "manifest.json").read_text(encoding="utf-8"))
-    if data.get("id") != module_id or data.get("schema_version") != 1:
+    if data.get("id") != module_id or data.get("schema_version") not in (1, 2):
         raise ValueError("Manifest identifier/schema mismatch")
     if data["parser"]["type"] not in SUPPORTED or type(data["revision"]) is not int or data["revision"] < 1:
         raise ValueError("Unsupported parser or revision")

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "site": {
+    "name": "Exemple multisite (pare-feu FortiGate, antivirus ESET, Microsoft 365)",
+    "modules": ["fortigate", "eset"],
+    "sources": ["windows_security", "sysmon", "windows", "inventory", "m365", "linux"],
+    "features": ["detections", "soar", "deploy_kit"],
+    "dashboards": {"soc": "000000000000000000000000"},
+    "inputs": {"000000000000000000000000": "Winlogbeat (Beats TLS 5044)"},
+    "location": {"lat": 45.0, "lng": 5.0, "label": "Siège (fictif)"}
+  },
+  "integrations": {
+    "fortigate": {
+      "parameters": {"syslog_port": 1514, "dhcp_enabled": true, "dhcp_host": "192.0.2.1", "dhcp_port": 443},
+      "secrets": {"dhcp_api": "/etc/omni-siem/secrets/fortigate/dhcp_api"},
+      "inputs": {"syslog_tcp": "000000000000000000000000"}
+    },
+    "eset": {
+      "parameters": {"syslog_port": 1515},
+      "inputs": {"syslog_tcp": "000000000000000000000000"}
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "site": {
+    "name": "Exemple PME (pare-feu WatchGuard, postes Windows, sans Microsoft 365 ni EDR collecté)",
+    "modules": ["watchguard"],
+    "sources": ["windows_security", "sysmon", "windows", "inventory"],
+    "features": ["deploy_kit"],
+    "dashboards": {"soc": "000000000000000000000000"},
+    "inputs": {"000000000000000000000000": "Winlogbeat (Beats TLS 5044)"}
+  },
+  "integrations": {
+    "watchguard": {
+      "source_input": "000000000000000000000000",
+      "parameters": {"external_zones": ["External"]},
+      "dashboards": {
+        "activity": "000000000000000000000000",
+        "security": "000000000000000000000000",
+        "quality": "000000000000000000000000"
+      }
+    }
+  }
+}

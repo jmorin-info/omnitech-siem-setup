@@ -1,0 +1,65 @@
+{
+  "schema_version": 2,
+  "id": "fortigate",
+  "name": "Pare-feu FortiGate",
+  "summary": "Journaux FortiOS key=value (trafic, UTM, VPN, événements) reçus en syslog depuis FortiAnalyzer ou les FortiGate ; attribution DHCP facultative par l'API REST FortiGate en lecture seule.",
+  "revision": 1,
+  "status": "legacy",
+  "compat": {"omni_siem_min": "2026-11-28", "graylog": ">=7.0,<8.0"},
+  "depends": [],
+  "conflicts": [],
+  "provides": {"sources": ["fortigate"], "features": []},
+  "site_config": {
+    "schema": {
+      "syslog_port": {"type": "integer", "default": 1514, "description": "Port syslog TCP et UDP des FortiAnalyzer/FortiGate (entrées historiques 07-inputs.sh)."},
+      "retention_indices": {"type": "integer", "default": 180, "description": "Nombre d'indices conservés pour l'index set omni-fortigate."},
+      "dhcp_enabled": {"type": "boolean", "default": false, "description": "Active le collecteur omni-fortidhcp-fetch (baux DHCP -> nom des postes derrière une adresse privée)."},
+      "dhcp_host": {"type": "string", "default": "", "pattern": "^[A-Za-z0-9.:-]*$", "description": "Adresse d'administration du FortiGate interrogé en lecture seule."},
+      "dhcp_port": {"type": "integer", "default": 443, "description": "Port HTTPS de l'API REST FortiGate."}
+    }
+  },
+  "secrets": [
+    {"name": "dhcp_api", "description": "Jeton API REST FortiGate d'un profil sans aucun droit d'écriture.", "required": false,
+     "default_path": "/etc/omni-siem/secrets/fortigate/dhcp_api", "format": "text", "legacy_env": "FORTI_DHCP_TOKEN"}
+  ],
+  "inputs": [
+    {"key": "syslog_tcp", "type": "syslog_tcp", "default_port": 1514, "tls": false, "adopt": true, "legacy_title": "FortiAnalyzer (Syslog TCP 1514)"},
+    {"key": "syslog_udp", "type": "syslog_udp", "default_port": 1514, "tls": false, "adopt": true, "legacy_title": "FortiAnalyzer (Syslog UDP 1514)"}
+  ],
+  "graylog": {
+    "streams": ["OMNI - FortiGate"],
+    "index_sets": ["omni-fortigate"],
+    "pipelines": ["OMNI - FortiGate"],
+    "rule_prefixes": ["omni-forti-"],
+    "lookups": ["lookups/forti-severity.csv", "lookups/fortigate-sites.csv", "/etc/graylog/lookup/omni-dhcp-attribution.csv"]
+  },
+  "collectors": [
+    {"unit": "omni-fortidhcp-fetch.service", "timer": "omni-fortidhcp-fetch.timer",
+     "files": ["/usr/local/sbin/omni-fortidhcp-fetch"], "secrets": ["dhcp_api"], "enabled_by": "dhcp_enabled",
+     "output": "GELF 127.0.0.1:12201 (event_source=forti_dhcp) + /etc/graylog/lookup/omni-dhcp-attribution.csv"}
+  ],
+  "fields": ["action", "dest_port", "src_port", "src_ip_country_code", "srccountry", "dstcountry", "policyid", "service", "app",
+             "vpn_tunnel", "devname", "subtype", "level", "src_hostname", "dest_hostname", "forti_severity_num",
+             "bytes_sent", "bytes_rcvd", "bytes_total", "bytes_sent_gb", "bytes_rcvd_gb", "bytes_total_gb", "bytes_total_tb"],
+  "field_prefixes": ["forti_"],
+  "derived_fields": {
+    "ti_tag": "étiquette posée par les règles omni-forti-10/11-threatintel (12-graylog-pipelines.sh)"
+  },
+  "detections": {"sources": ["fortigate"], "legacy_scripts": ["13-graylog-alerts.sh", "47-detections-extra.sh"]},
+  "dashboards": [],
+  "console_pages": ["globe", "entities"],
+  "checks": [
+    {"id": "flux", "type": "stream_recent", "stream": "OMNI - FortiGate", "minutes": 120, "severity": "critique"},
+    {"id": "entree", "type": "input_running", "input": "syslog_tcp", "severity": "critique"},
+    {"id": "champs", "type": "fields_present", "stream": "OMNI - FortiGate", "fields": ["action", "policyid"], "days": 1, "severity": "avertissement"},
+    {"id": "dhcp_unite", "type": "unit", "unit": "omni-fortidhcp-fetch.service", "when": "dhcp_enabled", "severity": "avertissement"},
+    {"id": "dhcp_secret", "type": "secret", "secret": "dhcp_api", "when": "dhcp_enabled", "severity": "avertissement"}
+  ],
+  "rollback": {"objects": "by_name", "keeps_data": true, "notes": "Retour des fichiers par omni-deploy rollback ; marqueur et timer par modules rollback."},
+  "uninstall": {"objects": "by_name", "keeps_data": true, "notes": "Les objets Graylog historiques (entrées, stream, pipeline, règles omni-forti-*) sont retirés à la main par nom après export ; l'index omni-fortigate est conservé jusqu'à sa rétention."},
+  "legacy": {
+    "scripts": ["07-inputs.sh", "10-graylog-model.sh", "12-graylog-pipelines.sh", "56-fortidhcp.sh"],
+    "to_split": ["13-graylog-alerts.sh", "14-graylog-dashboards.sh", "28-vpn-remip-ti.sh", "36-soar.sh", "97-multisite-soar.sh"],
+    "device_config": "fortigate/*.conf : préparation côté équipement, jamais appliquée automatiquement"
+  }
+}

@@ -11,6 +11,22 @@ numérotée `0.1.0-rc.2`.
 Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
+## 28/11/2026 : contrat de module
+
+### Ajouté
+- Contrat de module v2 (`docs/MODULES.md`) : manifeste unique (sources, entrées, collecteurs, paramètres de site avec
+  schéma, secrets par chemin, champs produits, détections, dashboards, pages, contrôles, retour, compatibilité,
+  dépendances) et cycle de vie `omni-integrations modules list|validate|plan|apply|verify|rollback|uninstall`.
+- Activation par `site.modules` : marqueurs `/etc/omni-siem/modules.d/<id>.enabled`, garde shell `lib-modules.sh`,
+  unités conditionnées ; site sans `site.modules` inchangé (tous les modules actifs).
+- Modules `fortigate` et `eset` (statut `legacy`) ; profils de site d'exemple (`integrations/profiles/`).
+- `tests/test_modules.py` : chaque manifeste est validé hors ligne (schéma, champs, secrets, unités, profils à blanc).
+
+### Modifié
+- `07`, `10`, `12`, `52`, `56` : parties FortiGate et ESET sautées quand le module est inactif.
+- `omni-deploy` ne pose pas les fichiers d'un module inactif ; `omni-update plan` liste `modules_changed`.
+- `watchguard` passe au manifeste v2 (Content Pack identique, même empreinte).
+
 ## [Non publié]
 - Détections portables pilotées par la configuration du site (`tools/omni-site-detections.py`,
   catalogue `objets-graylog/detections-site/`) : une détection n'est créée que si sa source

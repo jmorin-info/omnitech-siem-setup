@@ -16,8 +16,10 @@ set -uo pipefail
 cd "$(dirname "$0")"
 source ./00-vars.env
 source ./lib-graylog.sh
+source ./lib-modules.sh
 [[ $EUID -eq 0 ]] || die "root requis"
 require_api
+omni_module_enabled fortigate || { skip "module fortigate inactif sur ce site : collecteur DHCP non installe"; exit 0; }
 
 LOOKUP_DIR="/etc/graylog/lookup"
 SBIN="/usr/local/sbin/omni-fortidhcp-fetch"
@@ -127,6 +129,8 @@ echo "==> [2/4] Timer systemd (15 min)"
 cat > /etc/systemd/system/omni-fortidhcp-fetch.service <<'EOF'
 [Unit]
 Description=OMNI - FortiGate DHCP -> attribution IP/MAC/hostname (GELF + lookup CSV)
+ConditionPathExists=|/etc/omni-siem/modules.d/fortigate.enabled
+ConditionPathExists=|!/etc/omni-siem/modules.d
 After=network-online.target
 [Service]
 Type=oneshot

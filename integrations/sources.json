@@ -45,7 +45,7 @@
       "country_field": "src_country"
     },
     "fortigate": {
-      "title": "Pare-feu FortiGate",
+      "title": "Pare-feu FortiGate", "module": "fortigate",
       "event_source": ["fortigate"],
       "streams": ["OMNI - FortiGate"],
       "expected_minutes": 120,
@@ -68,7 +68,7 @@
       "fields": ["net_segment"]
     },
     "eset": {
-      "title": "Antivirus ESET PROTECT",
+      "title": "Antivirus ESET PROTECT", "module": "eset",
       "event_source": ["eset"],
       "streams": ["OMNI - ESET"],
       "expected_minutes": 1440,

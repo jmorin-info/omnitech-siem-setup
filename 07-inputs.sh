@@ -16,6 +16,7 @@ source ./00-vars.env
 [[ $EUID -eq 0 ]] || { echo "ERREUR: a lancer en root."; exit 1; }
 
 source ./lib-platform.sh
+source ./lib-modules.sh
 omni_api_setup
 
 input_exists() {  # $1 = titre
@@ -56,6 +57,8 @@ create_input "Winlogbeat (Beats TLS 5044)" "$(cat <<EOF
 EOF
 )"
 
+# Module fortigate (docs/MODULES.md) : entrees creees seulement si le site l'active.
+if omni_module_enabled fortigate; then
 echo "==> Input Syslog TCP 1514 - FortiAnalyzer"
 create_input "FortiAnalyzer (Syslog TCP 1514)" "$(cat <<EOF
 {
@@ -96,6 +99,10 @@ EOF
 )"
 
 echo
+else
+  echo "==> Module fortigate inactif sur ce site : entrees FortiAnalyzer non creees"
+fi
+
 echo "==> Etat des inputs :"
 "${CURL[@]}" "${API}/system/inputs" | jq -r '.inputs[] | "    - \(.title)  [\(.type)]"'
 echo

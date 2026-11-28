@@ -41,6 +41,7 @@ exact figure dans [INSTALLATION.md](INSTALLATION.md).
 | [Console SOC : déploiement et diagnostic](CONSOLE-DEPLOIEMENT.md) | Publication de `/soc/`, erreurs 404 et 502 |
 | [Console SOC : pages et widgets](CONSOLE-MODULES.md) | Pages adaptées aux streams du site, droits, nouvelles machines et conservation des réglages |
 | [Modules WatchGuard, UniFi, Palo Alto](INTEGRATIONS-MODULAIRES.md) | Content Packs, tableaux de bord, limites de formats |
+| [Contrat de module](MODULES.md) | Manifeste v2, activation par site, cycle de vie, nouvel environnement |
 | [Gabarit des secrets](securite-conformite/SECRETS.example.md) | Liste des secrets à définir localement (jamais versionnés) |
 | [Scripts de provisioning](reference/SCRIPTS-PROVISIONING.md) | Rôle, statut et dépendances des scripts numérotés |
 

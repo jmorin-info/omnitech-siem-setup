@@ -17,6 +17,37 @@ from omni_integrations.socle import (validate_socle, load_site_profile, deploy_s
 SITE_CONFIG = "/etc/omni-siem/integrations.json"
 
 
+def run_modules(args, parser):
+    """Contrat de module (docs/MODULES.md) : activation par la configuration de site et cycle de vie."""
+    from omni_integrations import modules as mod
+    if args.apply and args.action in ("list", "validate", "plan", "verify"):
+        parser.error(args.action + " est en lecture seule")
+    if args.action in ("rollback", "uninstall") and not args.target:
+        parser.error(args.action + " attend " + ("une transaction" if args.action == "rollback" else "un module"))
+    code = 0
+    if args.action == "list":
+        result = mod.list_modules(args.site_config, root=args.root)
+    elif args.action == "validate":
+        result = mod.validate_all()
+        code = 1 if result["problems"] else 0
+    elif args.action == "plan":
+        result = mod.plan(args.site_config, root=args.root)
+        code = 1 if result["blockers"] else 0
+    elif args.action == "apply":
+        result = mod.apply(args.site_config, root=args.root, state_dir=args.state_dir, apply=args.apply)
+        code = 1 if result.get("refused") else 0
+    elif args.action == "verify":
+        client = Graylog(args.api, os.environ.get(args.token_env), args.ca, args.username) if args.api else None
+        result = mod.verify(args.site_config, root=args.root, client=client)
+        code = 1 if result["failures"] else 0
+    elif args.action == "rollback":
+        result = mod.rollback(args.target, root=args.root, state_dir=args.state_dir, apply=args.apply)
+    else:
+        result = mod.uninstall(args.target, args.site_config, root=args.root, state_dir=args.state_dir, apply=args.apply)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return code
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -62,7 +93,21 @@ def main(argv=None):
             command.add_argument("--backup-dir", type=Path)
         if name == "soc-sources":
             command.add_argument("--days", type=int, default=7)
+    # Contrat de module (docs/MODULES.md) : activation par site et cycle de vie.
+    modules_cmd = commands.add_parser("modules", help="Modules : list, validate, plan, apply, verify, rollback, uninstall")
+    modules_cmd.add_argument("action", choices=("list", "validate", "plan", "apply", "verify", "rollback", "uninstall"))
+    modules_cmd.add_argument("target", nargs="?", help="transaction (rollback) ou module (uninstall)")
+    modules_cmd.add_argument("--site-config", default=SITE_CONFIG, type=Path)
+    modules_cmd.add_argument("--root", default="/", help="Racine factice pour un déploiement à blanc")
+    modules_cmd.add_argument("--state-dir", type=Path)
+    modules_cmd.add_argument("--apply", action="store_true", help="Écrire réellement (jamais par défaut)")
+    modules_cmd.add_argument("--api", help="API Graylog (verify seulement, facultatif)")
+    modules_cmd.add_argument("--ca", help="Trusted CA certificate file")
+    modules_cmd.add_argument("--token-env", default="GRAYLOG_API_TOKEN")
+    modules_cmd.add_argument("--username", help="Account whose password is in --token-env")
     args = parser.parse_args(argv)
+    if args.command == "modules":
+        return run_modules(args, parser)
     if args.command == "soc-validate":
         result = validate_socle()
     elif args.command in ("soc-sources", "soc-dashboards", "soc-check"):
@@ -87,6 +132,11 @@ def main(argv=None):
         result = [validate_module(module) for module in ([load_module(args.module)] if args.module else catalog())]
         if not args.module:
             result.append(validate_socle())
+            from omni_integrations.modules import validate_all
+            contract = validate_all()
+            if contract["problems"]:
+                raise ValueError("module contract: " + "; ".join(contract["problems"]))
+            result.append({"modules": contract["modules"]})
     elif args.command == "export":
         module = load_module(args.module)
         validate_module(module)

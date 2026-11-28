@@ -170,6 +170,23 @@ suivre la procédure de [mise à jour du code](docs/UPDATES.md).
 journaux ou modifient des rétentions. Leur rôle et leur statut sont recensés
 dans [SCRIPTS-PROVISIONING.md](docs/reference/SCRIPTS-PROVISIONING.md).
 
+## Déployer sur un nouvel environnement
+
+Le dépôt se déploie sur des infrastructures différentes (FortiGate, WatchGuard ou autre pare-feu ; ESET, Bitdefender ou
+autre EDR ; avec ou sans Microsoft 365 ; un ou plusieurs sites) grâce aux **modules d'intégration** : chaque intégration
+déclare dans un manifeste ce qu'elle installe, et la configuration du site (`/etc/omni-siem/integrations.json`, clé
+`site.modules`) choisit les modules actifs. Un module inactif n'installe ni unité, ni fichier, ni objet Graylog.
+
+```bash
+cp integrations/profiles/site-pme-watchguard.example.json /etc/omni-siem/integrations.json   # puis adapter
+python3 tools/omni-integrations.py modules plan            # lecture seule
+python3 tools/omni-integrations.py modules apply --apply   # marqueurs + timers, transaction annulable
+python3 tools/omni-integrations.py modules verify --api https://127.0.0.1:9000/api
+```
+
+Contrat, cycle de vie et procédure complète : [docs/MODULES.md](docs/MODULES.md). Sans clé `site.modules`, un site
+existant garde tous ses modules actifs.
+
 ## Documentation
 
 L'[index de la documentation](docs/README.md) présente les documents par

@@ -185,6 +185,24 @@ class Deployer:
             if "/var/www/siem-mobile/chart.min.js" not in known and (self.source / "mobile/soc/chart.min.js").is_file():
                 selected.append(("/var/www/siem-mobile/chart.min.js", "mobile/soc/chart.min.js", "console"))
 
+        # Contrat de module : les fichiers d'un module inactif sur ce site ne sont pas posés
+        # (un fichier déjà présent reste mis à jour, jamais supprimé par deploy).
+        self.module_skipped, self.module_error = [], None
+        try:
+            from omni_integrations.modules import inactive_targets
+            inactive = inactive_targets(self.physical("/etc/omni-siem/integrations.json"), self.source)
+        except ImportError:
+            inactive = {}
+        except (OSError, ValueError) as exc:
+            inactive, self.module_error = {}, str(exc)
+        if inactive:
+            kept = []
+            for item in selected:
+                if item[0] in inactive and not self.physical(item[0]).exists():
+                    self.module_skipped.append({"target": item[0], "module": inactive[item[0]]})
+                else:
+                    kept.append(item)
+            selected = kept
         def order(item):
             target, _, component = item
             # Comme deploy-console.py : la page puis le service worker en dernier.
@@ -378,6 +396,12 @@ class Deployer:
                             and item["target"].count("/") == 4})
         if new_units:
             warnings.append("nouvelles unités non activées automatiquement : " + ", ".join(new_units))
+        skipped = getattr(self, "module_skipped", [])
+        if skipped:
+            warnings.append(f"{len(skipped)} fichier(s) de modules inactifs sur ce site non posés : "
+                            + ", ".join(sorted({s['module'] for s in skipped})))
+        if getattr(self, "module_error", None):
+            warnings.append("configuration de site illisible pour les modules : " + self.module_error)
         notes = [NOTES[c] for c in COMPONENTS if c in touched and c in NOTES]
         counts = {}
         for item in files + venvs:
@@ -385,7 +409,8 @@ class Deployer:
         return {"mode": "plan", "source": str(self.source), "home": str(self.home), "root": str(self.root),
                 "system": self.system, "components": components, "pattern": pattern, "counts": counts,
                 "files": files, "venvs": venvs, "actions": actions, "restarts": restarts,
-                "blockers": blockers, "warnings": warnings, "notes": notes}
+                "blockers": blockers, "warnings": warnings, "notes": notes,
+                "module_skipped": getattr(self, "module_skipped", [])}
 
     @staticmethod
     def normalize(components):
