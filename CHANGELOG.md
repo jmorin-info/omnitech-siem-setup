@@ -13,6 +13,15 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
 
 ## [Non publié]
 
+- Intégration WatchGuard révision 4 : parsing générique Fireware (en-tête syslog,
+  paires `clé="valeur"`, VPN IKE/SSL, authentifications, administration, hôtes bloqués) ;
+  les champs déjà extraits par un collecteur atteignent désormais l'étape de mapping.
+  Variante « entrée existante » (`adopt`) pour un site qui reçoit déjà la source :
+  pas de nouvelle entrée, stockage inchangé, désinstallation native par identifiant.
+  Catalogue de dashboards déclaratifs (`dashboards`, remplacement en place des vues
+  liées par la configuration de site, sauvegarde et `restore-dashboards` par identifiant).
+  Anti-récidive : contrôle hors ligne des champs référencés par chaque widget et
+  contrôle après déploiement (`check` : widgets vides, champs absents).
 - Intégration WatchGuard : normalisation complémentaire des champs Fireware déjà
   extraits (`srcip`, `dstip`, `msg_id`, `action`, `policy_name`, ports et protocole),
   en préservant les champs d'origine et sans activer de stream historique. La console
