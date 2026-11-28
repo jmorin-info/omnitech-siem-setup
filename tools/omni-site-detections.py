@@ -537,7 +537,8 @@ def assurer_chaine_interne(cl, ci, etat, simuler):
     elif simuler:
         journal.append(f"stream « {ci['stream']['titre']} » serait créé")
     else:
-        sid = cl.api("POST", "/streams", corps_stream(ci, isid, eid))["stream_id"]
+        # Graylog 7 : création d'entité partageable = enveloppe {"entity": …}
+        sid = cl.api("POST", "/streams", {"entity": corps_stream(ci, isid, eid)})["stream_id"]
         etat.setdefault("chaine", {})["stream"] = sid
         etat_ecrire(etat)
         cl.api("POST", f"/streams/{sid}/resume")
