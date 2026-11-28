@@ -897,7 +897,9 @@ def verifier(cat, site, cl, jours=7):
                     titre = nom_regle(d)
                     if sid not in streams_connectes(titre, pipelines, connexions):
                         ligne["defauts"].append(f"règle {titre} non connectée au stream « {s['title']} »")
-                    a_lire = champs_lus(source_regle(d, p))
+                    # Champs décisifs (condition) seulement : ceux du libellé ou de l'entité n'existent
+                    # souvent que dans l'événement détecté lui-même (ex. MemberName d'un 4728 encore jamais vu).
+                    a_lire = champs_lus(rendre(d["condition"], p))
                 elif d.get("tag"):
                     a_lire = set()
                     if not any(sid in streams_connectes(r, pipelines, connexions) for r in e.get("regles_socle", [])):
