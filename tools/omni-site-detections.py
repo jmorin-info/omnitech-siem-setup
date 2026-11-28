@@ -100,6 +100,8 @@ def rendre(texte, p):
             return "(" + " || ".join(f"{expr} == {_q(v)}" for v in valeurs) + ")"
         if genre == "contient":
             return "(" + " || ".join(f"contains({expr}, {_q(v)})" for v in valeurs) + ")"
+        if genre == "commence":
+            return "(" + " || ".join(f"starts_with({expr}, {_q(v)})" for v in valeurs) + ")"
         raise ValueError(f"gabarit inconnu : {corps}")
 
     return re.sub(r"\{\{([^{}]+)\}\}", sub, texte)
@@ -716,13 +718,19 @@ def rejeu_regle(cl, d, p, src, jours, plafond):
     q = {"bool": {"filter": [{"query_string": {"query": pref}}, {"range": {"timestamp": {"gte": f"now-{jours}d"}}}]}}
     total = cl.os("POST", f"/{idx}/_count", {"query": q})["count"]
     r["candidats"] = total
-    evts, exemples, entites_fp = [], [], {}
+    evts, exemples = [], []
     champ_serie = d.get("serie", {}).get("champ")
+    # Couverture : un champ testé par has_field() absent de TOUS les candidats rend la détection muette
+    requis = re.findall(r'has_field\("([A-Za-z0-9_]+)"\)', source_regle(d, p))
+    absents = dict.fromkeys(requis, 0)
     if total <= plafond:
         docs = cl.os("POST", f"/{idx}/_search", {"size": total, "query": q, "sort": [{"timestamp": "asc"}]})["hits"]["hits"]
         r["mode"] = "message par message"
         for h in docs:
             out = simuler_message(cl, stream, h["_source"], h["_id"])
+            for c in requis:
+                if out.get(c) in (None, ""):
+                    absents[c] += 1
             if out.get("v5_tag") == v5:
                 evts.append((epoch(h["_source"]["timestamp"]), out.get("v5_entite"), h["_source"].get(champ_serie) if champ_serie else h["_id"]))
                 if len(exemples) < 10:
@@ -758,6 +766,8 @@ def rejeu_regle(cl, d, p, src, jours, plafond):
             if not apres or not res["buckets"]:
                 break
         r["combinaisons"] = n_buckets
+    if r["mode"] == "message par message" and total:
+        r["champs_absents_partout"] = [c for c, n in absents.items() if n == total]
     r["etiquetes"] = len(evts)
     r["etiquetes_exemples"] = exemples
     r.update(resume_notifs(planificateur(evts, d)))
@@ -815,6 +825,9 @@ def decision(cat, d, e, rj):
     if "condition" in d and not r.get("exemples_ok"):
         return False, "exemples synthétiques en échec au simulateur", None
     preuve = f"{r.get('candidats', 0)} candidats, {r.get('etiquetes', 0)} étiquetés, {r.get('notifications', 0)} notifications en {rj['jours']} j (max {r.get('max_par_jour', 0)}/jour)"
+    if r.get("champs_absents_partout"):
+        return False, ("champ(s) " + ", ".join(r["champs_absents_partout"]) + " absent(s) de tous les événements candidats : "
+                       "la source ne les produit pas, la détection serait muette"), preuve
     if r.get("max_par_jour", 0) > cat["plafond_par_jour"]:
         return False, f"plus de {cat['plafond_par_jour']} déclenchements par jour au rejeu", preuve
     return True, None, preuve

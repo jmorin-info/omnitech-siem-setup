@@ -17,6 +17,7 @@
     "pays_attendus": ["fra"],
     "exclusions_services": ["\\program files\\exemple-agent\\"],
     "exclusions_taches": ["\\exemple\\tache-legitime"],
-    "lecteurs_lsass": ["c:\\program files\\exemple\\agent.exe|0x1410"]
+    "lecteurs_lsass_chemins": ["c:\\program files\\exemple\\"],
+    "lecteurs_lsass_masques": ["0x1410"]
   }
 }

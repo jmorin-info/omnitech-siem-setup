@@ -72,6 +72,7 @@ def test_gabarits(outil):
     assert 'cidr_match("10.0.0.0/8", to_ip($message.src_ip))' in interne and "198.51.100.0/24" in interne
     assert outil.rendre("$ed.Status", p) == "$message.winlogbeat_winlog_event_data_Status"
     assert outil.rendre("{{premier:comptes}}", p) == "dc1$"
+    assert outil.rendre("{{commence:X:comptes}}", p).startswith('(starts_with(X, "dc1$")')
 
 
 def test_aucune_valeur_de_site_dans_le_catalogue(cat):
@@ -107,6 +108,10 @@ def test_decision_plafond_et_preuve(outil, cat):
     rj["detections"][d["id"]]["max_par_jour"] = 2
     assert outil.decision(cat, d, e, rj)[0]
     assert not outil.decision(cat, d, e, None)[0]
+    rj["detections"][d["id"]]["champs_absents_partout"] = ["src_country"]
+    planif, raison, _ = outil.decision(cat, d, e, rj)
+    assert not planif and "src_country" in raison and "muette" in raison
+    rj["detections"][d["id"]]["champs_absents_partout"] = []
     assert not outil.decision(cat, d, {"etat": "desactivee", "raison": "x"}, rj)[0]
 
 
