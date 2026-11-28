@@ -405,10 +405,48 @@ def query_fields(query_string):
     return fields
 
 
+SERIES = re.compile(r"(count|sum|avg|max|min|card)\(([A-Za-z_][A-Za-z0-9_]*)?\)")
+PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
+# Fixed meaning colours: refused/dropped in red, allowed in green.
+ACTION_COLOURS = {"deny": "#d32f2f", "drop": "#d32f2f", "block": "#d32f2f", "allow": "#2e7d32"}
+
+
+def site_value(item):
+    """Lucene group of quoted literal values supplied by the site configuration."""
+    values = item if isinstance(item, list) else [item]
+    if not values or any(not isinstance(v, str) or not re.fullmatch(r"[A-Za-z0-9 ._:/@-]{1,64}", v) for v in values):
+        raise ValueError("Site parameters must be short literal names")
+    return "(" + " OR ".join('"' + v + '"' for v in values) + ")"
+
+
+def resolve_query(widget, params):
+    """Query with site parameters substituted, or None when a required parameter is absent."""
+    query = widget.get("query", "")
+    names = PLACEHOLDER.findall(query)
+    if any(name not in (params or {}) for name in names):
+        return None
+    return PLACEHOLDER.sub(lambda m: site_value(params[m.group(1)]), query)
+
+
+def widget_series(widget):
+    series = widget.get("series", ["count()"])
+    for item in series:
+        if not SERIES.fullmatch(item) or (item != "count()" and item.endswith("()")):
+            raise ValueError("Unsupported catalog series: " + item)
+    return series
+
+
 def widget_fields(widget):
-    fields = query_fields(widget.get("query", ""))
+    fields = query_fields(PLACEHOLDER.sub('"site"', widget.get("query", "")))
     fields |= {widget[key] for key in ("field", "split") if widget.get(key)}
+    fields |= {SERIES.fullmatch(item).group(2) for item in widget_series(widget) if SERIES.fullmatch(item).group(2)}
     return fields | set(widget.get("fields", []))
+
+
+def site_parameters(module):
+    """Names of site parameters the catalog can use (documented in the example configuration)."""
+    return {name for spec in module.get("dashboards", []) for page in spec["pages"]
+            for widget in page["widgets"] for name in PLACEHOLDER.findall(widget.get("query", ""))}
 
 
 def check_dashboard_fields(module):
@@ -435,21 +473,37 @@ def _pivot(field, limit):
             {"type": "values", "fields": [field], "limit": limit, "skip_empty_values": True})
 
 
-def catalog_dashboard(module, spec, stream_id):
-    """Native Graylog 7.2 search and view bodies (API format) for one catalog dashboard."""
+def _series(widget):
+    config, search = [], []
+    for item in widget_series(widget):
+        function, field = SERIES.fullmatch(item).groups()
+        config.append({"config": {"name": widget.get("series_names", {}).get(item)}, "function": item})
+        search.append({"type": function, "id": item, **({"field": field} if field else {})})
+    return config, search
+
+
+def catalog_dashboard(module, spec, stream_id, params=None):
+    """Native Graylog 7.2 search and view bodies (API format) for one catalog dashboard.
+
+    Widgets whose query needs a site parameter that the site does not define are left out.
+    """
     slug, key = module["id"], spec["key"]
     queries, states = [], {}
     for page_number, page in enumerate(spec["pages"]):
         query_id = stable_id(slug, f"catalog:{key}:{page_number}:query")
         widgets, searches, positions, mapping, titles = [], [], {}, {}, {}
         for number, item in enumerate(page["widgets"]):
+            query_string = resolve_query(item, params)
+            if query_string is None:
+                continue
             wid = stable_id(slug, f"catalog:{key}:{page_number}:{number}:widget")
             sid = stable_id(slug, f"catalog:{key}:{page_number}:{number}:search")
-            query = {"type": "elasticsearch", "query_string": item.get("query", "")}
+            query = {"type": "elasticsearch", "query_string": query_string}
             timerange = {"type": "relative", "range": item["range"]} if item.get("range") else None
             common = {"query": query, "streams": [stream_id], "filter": None, "filters": [], "timerange": timerange}
+            described = {"description": item["description"]} if item.get("description") else {}
             if item["type"] == "messages":
-                widgets.append({"id": wid, "type": "messages", **common,
+                widgets.append({"id": wid, "type": "messages", **common, **described,
                                 "config": {"fields": item.get("fields", ["timestamp", "source", "message"]),
                                            "show_message_row": True, "decorators": [], "sort": []}})
                 searches.append({"id": sid, "type": "messages", "name": "messages", **common, "limit": 50, "offset": 0,
@@ -466,23 +520,33 @@ def catalog_dashboard(module, spec, stream_id):
                 elif item["type"] in ("terms", "map"):
                     pivot, group = _pivot(item["field"], item.get("limit", 100 if item["type"] == "map" else 15))
                     rows, row_groups = [pivot], [group]
-                widgets.append({"id": wid, "type": "aggregation", **common, "stream_categories": [],
-                                "config": {"visualization": visualization, "row_pivots": rows, "column_pivots": cols,
-                                           "series": [{"config": {}, "function": "count()"}], "sort": [], "rollup": True,
-                                           "event_annotation": False}})
+                series_config, series_search = _series(item)
+                config = {"visualization": visualization, "row_pivots": rows, "column_pivots": cols,
+                          "series": series_config, "sort": [], "rollup": True, "event_annotation": False}
+                sizes = {SERIES.fullmatch(s).group(2) for s in widget_series(item)
+                         if (SERIES.fullmatch(s).group(2) or "").startswith("bytes_")}
+                if sizes:
+                    config["units"] = {field: {"abbrev": "b", "unit_type": "size"} for field in sorted(sizes)}
+                if item.get("split") == "event_action":
+                    config["formatting_settings"] = {"chart_colors": [
+                        {"field_name": name, "chart_color": colour} for name, colour in ACTION_COLOURS.items()]}
+                widgets.append({"id": wid, "type": "aggregation", **common, **described, "stream_categories": [],
+                                "config": config})
                 searches.append({"id": sid, "type": "pivot", "name": "chart", **common,
-                                 "series": [{"type": "count", "id": "count()"}], "row_groups": row_groups,
+                                 "series": series_search, "row_groups": row_groups,
                                  "column_groups": col_groups, "sort": [], "rollup": True})
             col, row, width, height = item["pos"]
             positions[wid] = {"col": col, "row": row, "width": width, "height": height}
             mapping[wid], titles[wid] = [sid], item["title"]
+        highlighting = [{"field": "event_action", "value": name, "condition": "equal",
+                         "color": {"type": "static", "color": colour}} for name, colour in ACTION_COLOURS.items()]
         queries.append({"id": query_id, "timerange": {"type": "relative", "range": page.get("range", 86400)},
                         "filter": None, "filters": [], "query": {"type": "elasticsearch", "query_string": ""},
                         "search_types": searches})
         states[query_id] = {"selected_fields": None, "static_message_list_id": None,
                             "titles": {"tab": {"title": page["title"]}, "widget": titles},
                             "widgets": widgets, "widget_mapping": mapping, "positions": positions,
-                            "formatting": {"highlighting": []}, "display_mode_settings": {"positions": {}}}
+                            "formatting": {"highlighting": highlighting}, "display_mode_settings": {"positions": {}}}
     search = {"queries": queries, "parameters": []}
     view = {"type": "DASHBOARD", "title": spec["title"], "summary": spec.get("summary", ""),
             "description": spec.get("description", "") + " Généré par le catalogue " + slug + " révision "
@@ -490,10 +554,12 @@ def catalog_dashboard(module, spec, stream_id):
     return {"search": search, "view": view}
 
 
-def catalog_search_types(module, spec):
-    """(page, widget, search type id, expected-empty reason) for post-deployment checks."""
+def catalog_search_types(module, spec, params=None):
+    """(page, widget, query id, search type id) of deployed widgets, for post-deployment checks."""
     for page_number, page in enumerate(spec["pages"]):
         for number, item in enumerate(page["widgets"]):
+            if resolve_query(item, params) is None:
+                continue
             yield (page["title"], item, stable_id(module["id"], f"catalog:{spec['key']}:{page_number}:query"),
                    stable_id(module["id"], f"catalog:{spec['key']}:{page_number}:{number}:search"))
 
@@ -519,8 +585,9 @@ def validate_module(module):
         for widget in state["widgets"]:
             if widget["streams"] != [stream]:
                 raise ValueError("Dashboard widget is not scoped to its module stream")
+    dummy = {name: "site" for name in site_parameters(module)}
     for spec in module.get("dashboards", []):
-        built = catalog_dashboard(module, spec, stream)
+        built = catalog_dashboard(module, spec, stream, dummy)
         for state in built["view"]["state"].values():
             if set(state["positions"]) != {w["id"] for w in state["widgets"]}:
                 raise ValueError("Catalog widget positions do not match widgets")
