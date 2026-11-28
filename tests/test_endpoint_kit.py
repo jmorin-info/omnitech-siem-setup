@@ -212,13 +212,13 @@ def site(tmp_path):
     return {"tmp": tmp_path, "kit": kit, "crt": crt, "key": key}
 
 
-def render(site, **extra):
+def render(site, env_extra=None, **extra):
     values = {"SIEM_FQDN": "siem.example.test", "SIEM_IP": "192.0.2.10", "SITE_NAME": "site-test",
               "GRAYLOG_BEATS_CERT_FILE": str(site["crt"])}
     values.update(extra)
     vars_file = site["tmp"] / "00-vars.env"
     vars_file.write_text("".join(f'{k}="{v}"\n' for k, v in values.items()))
-    env = dict(os.environ, KIT_DIR=str(site["kit"]), OMNI_VARS_FILE=str(vars_file))
+    env = dict(os.environ, KIT_DIR=str(site["kit"]), OMNI_VARS_FILE=str(vars_file), **(env_extra or {}))
     return subprocess.run(["bash", str(ROOT / "95-kit-deploy.sh")], env=env, capture_output=True, text=True, timeout=120)
 
 
@@ -283,6 +283,46 @@ def test_ambiguous_winlogbeat_version_is_refused(site):
     (site["kit"] / "winlogbeat-8.19.7-windows-x86_64.zip").write_bytes(b"PK autre archive")
     result = render(site)
     assert result.returncode != 0 and "WINLOGBEAT_VERSION" in result.stderr
+
+
+def _fake_systemctl(site, rw_paths):
+    """systemctl factice : un service en cours (omni-soar) avec ReadWritePaths donné ; journal des appels."""
+    bindir = site["tmp"] / "bin"
+    bindir.mkdir(exist_ok=True)
+    calls = site["tmp"] / "systemctl.log"
+    script = bindir / "systemctl"
+    script.write_text(
+        "#!/bin/bash\n"
+        f'echo "$*" >> "{calls}"\n'
+        'case "$1" in\n'
+        '  list-units) echo "omni-soar.service loaded active running SOAR"; echo "nginx.service loaded active running web";;\n'
+        '  show) if [[ "$*" == *omni-soar.service* ]]; then echo "' + rw_paths + '"; else echo ""; fi;;\n'
+        "esac\n"
+        "exit 0\n")
+    script.chmod(0o755)
+    return bindir, calls
+
+
+def test_publication_keeps_root_mode_and_restarts_writers(site):
+    """28/11/2026 : la bascule imposait 755 (omni-geo-flux en échec) et laissait omni-soar
+    écrire dans l'ancien répertoire monté (blocklist SOAR figée)."""
+    kit = site["kit"]
+    kit.chmod(0o775)
+    bindir, calls = _fake_systemctl(site, f"/var/lib/omni-soar -{kit}/soar")
+    result = render(site, env_extra={"PATH": f"{bindir}:{os.environ['PATH']}"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (kit.stat().st_mode & 0o777) == 0o775
+    log = calls.read_text()
+    assert "try-restart omni-soar.service" in log
+    assert "try-restart nginx.service" not in log
+    assert "omni-soar.service relancé" in result.stdout
+
+
+def test_publication_restart_can_be_disabled(site):
+    bindir, calls = _fake_systemctl(site, f"{site['kit']}/soar")
+    result = render(site, env_extra={"PATH": f"{bindir}:{os.environ['PATH']}", "KIT_RESTART_UNITS": "0"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not calls.exists() or "try-restart" not in calls.read_text()
 
 
 def test_kit_shell_scripts_parse():
