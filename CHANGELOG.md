@@ -12,6 +12,12 @@ Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
 ## [Non publié]
+- Détections de site : flux TI à clé exploités dès que la clé abuse.ch est posée (`/etc/omni-v5-ti/threatfox.key`) :
+  tables `omni-v5-ti-urlhaus-hote` et `omni-v5-ti-hachage`, règles DNS Sysmon (événement 22) et hachage exécuté
+  (Sysmon 1/7), hôtes URLhaus sur le proxy WatchGuard, définitions « IP:port ThreatFox/URLhaus autorisée »,
+  « résolution DNS malveillante » et « hachage malveillant exécuté ». Nouvelle commande `rejeu-ti` : les indicateurs
+  des tables sont cherchés dans les messages conservés, passés au simulateur de pipeline, puis chaque définition TI
+  est rejouée ; `appliquer-definitions --plafond-jour N --seulement …` applique un plafond plus strict.
 - Détections portables pilotées par la configuration du site (`tools/omni-site-detections.py`,
   catalogue `objets-graylog/detections-site/`) : une détection n'est créée que si sa source
   est déclarée dans `/etc/omni-siem/detections.json`, et n'est planifiée que si sa source
