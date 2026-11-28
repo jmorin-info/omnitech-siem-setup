@@ -1,28 +1,32 @@
 # ==============================================================================
-# winlogbeat.yml - Configuration de reference OMNITECH (postes & serveurs)
-# A deployer via NinjaOne avec Winlogbeat OSS + Sysmon (cf. README §Clients).
-# Remplacer <CA_ROOT> par le chemin du certificat Root CA OMNITECH SECURITY
-# exporte en .pem (deja deploye dans le magasin Windows via AD CS, mais Beats
-# utilise son propre fichier CA).
+# winlogbeat.yml - Configuration de reference des postes et serveurs Windows
+# Source unique : publiee sous /kit/ par 95-kit-deploy.sh, qui remplace les
+# marqueurs __SIEM_FQDN__, __SITE_NAME__ et __BEATS_CA_FILE__ par les valeurs
+# de 00-vars.env. Ne pas copier ce fichier a la main sur les postes : un second
+# circuit (GPO, autre RMM) qui ecrit une version differente provoque un
+# redemarrage de Winlogbeat a chaque passage de l'un ou de l'autre.
+# Controle hors ligne : tests/test_endpoint_kit.py (marqueurs, YAML, plages).
 # ==============================================================================
 
 winlogbeat.event_logs:
 
   # --- Securite : on ne prend que les EventID utiles a la detection ----------
   - name: Security
-    # RANGES obligatoires (pas une longue liste) : l'API Windows Event Log limite
+    # PLAGES obligatoires (pas une longue liste) : l'API Windows Event Log limite
     # le nombre d'expressions par requete ; au-dela -> "requete invalide" et le
-    # canal Security n'est plus lu du tout. Ces ranges couvrent les memes EventID.
-    #   1100-1104 logs effaces/arretes | 4624-4799 auth, comptes, Kerberos, DS
-    #   4868-4889 AD CS | 5136-5145 DS changes + partages | 6272-6274 NPS | 7045
-    event_id: 1100-1104, 4624-4799, 4868-4889, 5136-5145, 6272-6274, 7045
+    # canal Security n'est plus lu du tout. Ne jamais depasser 22 conditions
+    # (une plage compte pour deux) : controle par tests/test_endpoint_kit.py.
+    #   1100-1104 journal efface/arrete | 4624-4799 auth, comptes, Kerberos, DS
+    #   4868-4900 AD CS (dont 4898-4900 modeles de certificats)
+    #   5136-5145 changements DS + partages | 6272-6274 NPS | 7045
+    event_id: 1100-1104, 4624-4799, 4868-4900, 5136-5145, 6272-6274, 7045
     ignore_older: 72h
 
   # --- Sysmon : tout (le filtrage se fait dans la config Sysmon elle-meme) ---
   - name: Microsoft-Windows-Sysmon/Operational
     ignore_older: 72h
 
-  # --- PowerShell : script blocks (4104) et execution (4103) -----------------
+  # --- PowerShell : script blocks (4104) ---------------------------------------
   - name: Microsoft-Windows-PowerShell/Operational
     event_id: 4104
     ignore_older: 72h
@@ -37,7 +41,7 @@ winlogbeat.event_logs:
     event_id: 104, 1074, 6005, 6006, 6008, 7034, 7036, 7040, 7045
     ignore_older: 72h
 
-  # --- RDP : sessions ouvertes/reconnectees (latéralisation) -----------------
+  # --- RDP : sessions ouvertes/reconnectees (lateralisation) -----------------
   - name: Microsoft-Windows-TerminalServices-LocalSessionManager/Operational
     event_id: 21, 22, 24, 25
     ignore_older: 72h
@@ -45,6 +49,21 @@ winlogbeat.event_logs:
   # --- NTLM : audit (n'emet que si la GPO d'audit NTLM est activee) ----------
   - name: Microsoft-Windows-NTLM/Operational
     event_id: 8001, 8002, 8003, 8004
+    ignore_older: 72h
+
+  # --- AppLocker : refus et « aurait ete bloque » (mode audit) seulement -------
+  # Les autorisations 8002/8005/8020/8023 (environ 5 000/jour/poste) sont exclues.
+  - name: Microsoft-Windows-AppLocker/EXE and DLL
+    event_id: 8003, 8004
+    ignore_older: 72h
+  - name: Microsoft-Windows-AppLocker/MSI and Script
+    event_id: 8006, 8007
+    ignore_older: 72h
+  - name: Microsoft-Windows-AppLocker/Packaged app-Execution
+    event_id: 8021, 8022
+    ignore_older: 72h
+  - name: Microsoft-Windows-AppLocker/Packaged app-Deployment
+    event_id: 8024, 8025
     ignore_older: 72h
 
   # --- Certificats : journal dedie alimente par Get-OmniCertExpiry.ps1 -------
@@ -59,22 +78,14 @@ winlogbeat.event_logs:
   - name: OMNI-Inventaire
     ignore_older: 26h
 
-  # --- DNS Server : requetes (alimente la detection C2/exfil/DGA omni-ndr-dns) -
-  # N'existe QUE sur les serveurs DNS (DC). Les autres machines l'ignorent sans
-  # erreur. Pre-requis sur le DC : canal active une fois via
-  #   wevtutil sl "Microsoft-Windows-DNSServer/Analytical" /e:true /rt:false /q:true
-  # Volume eleve -> reserve aux DC. EventID 256/257 = requete/reponse.
-  - name: Microsoft-Windows-DNSServer/Analytical
-    # canal "direct"/analytique -> lecteur experimental obligatoire (sinon 0 event)
-    api: wineventlog-experimental
-    ignore_older: 12h
-
   # --- DNS Server : audit (changements de config DNS, faible volume, A.8.9) ----
+  # Les requetes DNS (canal analytique) ne sont PAS lisibles par Winlogbeat :
+  # elles passent par une collecte ETW dediee (NXLog im_etw -> GELF).
   - name: Microsoft-Windows-DNSServer/Audit
     ignore_older: 72h
 
-  # --- Directory Service (SIEM v5 chantier 4, 27/11/2026) : LDAP non signe, CBT, replication ---
-  # absent hors DC : winlogbeat l'ignore (avertissement « channel not found », sans effet)
+  # --- Directory Service (DC seulement) : LDAP non signe, CBT, replication -----
+  # Absent hors DC : Winlogbeat l'ignore (avertissement « channel not found »).
   - name: Directory Service
     event_id: 1311, 1388, 1925, 1988, 2042, 2087, 2088, 2886-2889, 3039-3041, 3074-3075
     ignore_older: 72h
@@ -83,9 +94,8 @@ winlogbeat.event_logs:
 output.logstash:                       # l'input "Beats" de Graylog parle logstash
   hosts: ["__SIEM_FQDN__:5044"]
   ssl.enabled: true
-  ssl.certificate_authorities: ["C:/Program Files/Winlogbeat/omnitech-rootca.pem"]
-  # Tant que le cert auto-signe temporaire est en place sur le SIEM, il faudra
-  # soit pousser CE cert comme CA, soit (mieux) signer au plus vite via la PKI.
+  ssl.verification_mode: full
+  ssl.certificate_authorities: ["C:/Program Files/Winlogbeat/__BEATS_CA_FILE__"]
   bulk_max_size: 2048
   compression_level: 3
 
@@ -100,5 +110,5 @@ processors:
 logging.level: warning
 logging.to_files: true
 logging.files:
-  path: C:/ProgramData/winlogbeat/Logs
+  path: C:/ProgramData/winlogbeat/logs
   keepfiles: 3

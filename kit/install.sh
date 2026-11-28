@@ -15,7 +15,7 @@
 #     4. test d'emission + re-test TCP ; resume [OK]/[KO] par composant ; exit 0/1
 #
 #   Reprend la logique de kit/linux-omni.sh en l'durcissant (multi-distro, checks,
-#   resume). Relancable en boucle sans effet de bord.
+#   resume). Relancable en boucle : rien n'est recharge si rien n'a change.
 # =============================================================================
 set -uo pipefail
 SIEM_IP="${1:-__SIEM_IP__}"
@@ -61,7 +61,16 @@ if (\$syslogfacility-text == "authpriv" or \$syslogfacility-text == "auth" or \$
            queue.type="LinkedList" queue.saveOnShutdown="on")
 }
 EOF
-if [[ "$(cat "$CONF" 2>/dev/null)" != "$NEW" ]]; then
+# Un autre circuit du depot (paquet omni-siem-linux-agent, collecte auditd v5)
+# peut deja renvoyer vers le meme SIEM : un second renvoi doublerait chaque ligne.
+OTHER=""
+for f in /etc/rsyslog.d/*.conf; do
+  [[ -f "$f" && "$f" != "$CONF" ]] || continue
+  if grep -qE "target=\"?${SIEM_IP//./\\.}\"?" "$f" && grep -qE "port=\"?${PORT}\"?" "$f"; then OTHER="$f"; break; fi
+done
+if [[ -n "$OTHER" ]]; then
+  ok rsyslog "renvoi deja assure par $OTHER (pas de doublon)"
+elif [[ "$(cat "$CONF" 2>/dev/null)" != "$NEW" ]]; then
   printf '%s\n' "$NEW" > "$CONF"
   if systemctl restart rsyslog 2>/dev/null || service rsyslog restart 2>/dev/null; then ok rsyslog "forward applique + reload"
   else ko rsyslog "ecrit mais reload KO"; fi
@@ -70,7 +79,9 @@ else ok rsyslog "deja a jour (inchange)"; fi
 # --- 3. auditd (memes regles que linux-omni.sh ; idempotent) -----------------
 if command -v auditctl >/dev/null 2>&1; then
   mkdir -p /etc/audit/rules.d
-  cat > /etc/audit/rules.d/omni.rules <<'EOF'
+  RULES=/etc/audit/rules.d/omni.rules
+  RULES_NEW="$(mktemp)"
+  cat > "$RULES_NEW" <<'EOF'
 # OMNITECH - surveillance fichiers sensibles (cles = omni_*)
 -w /etc/passwd -p wa -k omni_passwd
 -w /etc/shadow -p wa -k omni_shadow
@@ -79,11 +90,16 @@ if command -v auditctl >/dev/null 2>&1; then
 -w /root/.ssh/ -p wa -k omni_sshkeys
 -w /etc/ssh/sshd_config -p wa -k omni_sshkeys
 EOF
-  augenrules --load >/dev/null 2>&1 || service auditd restart >/dev/null 2>&1 || true
+  # Idempotent : regles rechargees et auditd relance seulement en cas de changement.
+  if ! cmp -s "$RULES_NEW" "$RULES"; then
+    install -m 640 "$RULES_NEW" "$RULES"
+    augenrules --load >/dev/null 2>&1 || service auditd restart >/dev/null 2>&1 || true
+  fi
+  rm -f "$RULES_NEW"
   # relais des events auditd vers syslog (pour qu'ils partent via rsyslog)
-  if [[ -f /etc/audit/plugins.d/syslog.conf ]]; then
+  if [[ -f /etc/audit/plugins.d/syslog.conf ]] && grep -q '^active = no' /etc/audit/plugins.d/syslog.conf; then
     sed -i 's/^active = no/active = yes/' /etc/audit/plugins.d/syslog.conf 2>/dev/null || true
-    service auditd restart >/dev/null 2>&1 || systemctl restart auditd >/dev/null 2>&1 || true
+    service auditd restart >/dev/null 2>&1 || true
   fi
   if auditctl -l 2>/dev/null | grep -q omni_; then ok auditd "regles omni_* chargees"
   else ko auditd "regles ecrites mais non actives (auditd ?)"; fi
