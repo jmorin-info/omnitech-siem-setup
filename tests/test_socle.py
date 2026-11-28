@@ -43,7 +43,7 @@ def test_catalog_contract_is_valid():
 ])
 def test_contract_refuses_widgets_that_depend_on_absent_data(change, message):
     caps, cat = socle.load_capabilities(), copy.deepcopy(socle.load_socle())
-    page = next(p for p in cat["dashboards"][0]["pages"] if p["title"] == "Vue d'ensemble")
+    page = next(p for p in cat["dashboards"][0]["pages"] if p["title"] == "Direction")
     change(page["widgets"][1])
     problems = socle.check_socle(caps, cat)
     assert any(message in " ".join(p) for p in problems), problems
@@ -66,8 +66,9 @@ def test_only_pages_and_widgets_of_enabled_sources_are_published(tmp_path):
     assert "watchguard" in prof["enabled"]          # activée par son module d'intégration
     built = build(prof)
     tabs = [s["titles"]["tab"]["title"] for s in built["view"]["state"].values()]
-    assert tabs == ["Vue d'ensemble", "Collecte et santé", "Authentifications et AD", "Postes et serveurs Windows",
-                    "Détections et tri"]
+    assert tabs == ["Direction", "Détections et alertes", "Collecte et santé", "Identité AD", "Comptes à privilèges",
+                    "Comptes et conformité", "Postes et serveurs Windows", "Chasse", "Réseau (pare-feu)",
+                    "VPN et exposition", "Investigation"]
     titles = {w["title"] for _, w, _, _ in built["widgets"]}
     assert "Blocages du pare-feu (24 h)" in titles and "Blocages du pare-feu FortiGate (24 h)" not in titles
     assert not any(w.get("requires") and set(w["requires"]) <= {"detections", "m365", "fortigate"} for _, w, _, _ in built["widgets"])
@@ -168,3 +169,44 @@ def test_broken_site_configuration_keeps_everything_visible(api, tmp_path, monke
     api._SITE_CACHE.update(key=None, data=None)
     site = api.get_site()
     assert site["legacy"] and site["error"] and all(v["visible"] for v in site["pages"].values())
+
+
+def test_discovery_maps_decorated_input_titles_and_counts_raw_messages(monkeypatch):
+    class Client:
+        def call(self, method, path, body=None):
+            if path == "/system/inputs":
+                return {"inputs": [{"id": "c" * 24, "title": "Pare-feu"}]}
+            field = body["group_by"][0]["field"]
+            rows = {"event_source": [["watchguard", 9], ["(Empty Value)", 4]],
+                    "gl2_source_input": [["Pare-feu", 9], ["d" * 24, 4]]}[field]
+            return {"datarows": rows}
+    result = socle.discover_sources(Client())
+    assert result["proposed_sources"] == ["watchguard"] and result["unnormalized_messages"] == 4
+    assert result["inputs"] == [{"id": "c" * 24, "title": "Pare-feu", "messages": 9},
+                                {"id": "d" * 24, "title": "(entrée supprimée)", "messages": 4}]
+
+
+def test_console_check_reports_hidden_pages_and_fails_on_visible_errors(site_api, monkeypatch):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("console_check", ROOT / "tools" / "omni-console-check.py")
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    monkeypatch.setattr(site_api, "_alerts_seen", lambda days=30: False)
+    monkeypatch.setattr(site_api, "_load_roles", lambda: {})
+    monkeypatch.setattr(site_api, "SOC_ADMINS", set())
+    for page, readers in tool.PAGES.items():
+        for name in readers:
+            monkeypatch.setattr(site_api, name, lambda *a, **k: {"total": 1})
+    missing_admin = tool.check(site_api)
+    assert missing_admin["failures"] == 1 and missing_admin["administrators_problem"]
+    monkeypatch.setattr(site_api, "SOC_ADMINS", {"alice"})
+    for page, readers in tool.PAGES.items():
+        for name in readers:
+            monkeypatch.setattr(site_api, name, lambda *a, **k: {"total": 1})
+    result = tool.check(site_api)
+    states = {p["page"]: p["status"] for p in result["pages"]}
+    assert result["failures"] == 0 and states["ems"] == "hidden" and states["health"] == "ok"
+    def broken(*a, **k):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(site_api, "get_health", broken)
+    assert tool.check(site_api)["failures"] == 1

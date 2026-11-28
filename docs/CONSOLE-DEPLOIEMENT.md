@@ -309,3 +309,13 @@ le refus HTTP vers d'autres serveurs et le rollback du backend géré.
 Un test réel de Nginx 1.24 sur Ubuntu 24.04 vérifie les réponses 200 et 404 des
 ressources. La pile Docker complète et la collecte de chaque équipement doivent
 encore faire l'objet d'une recette sur l'environnement cible.
+
+### Administrateurs de la console (obligatoire)
+
+`SOC_ADMINS` (fichier `/etc/default/omni-mobile`) doit lister au moins un compte Graylog
+administrateur de la console, par exemple `SOC_ADMINS=admin`. Sans lui, l'espace
+Administration, les notifications et les validations SOAR n'apparaissent pour personne.
+L'installation l'annonce, `omni-deploy verify` remonte un avertissement
+`console:administrateurs` et `tools/omni-console-check.py` échoue tant qu'aucun
+administrateur n'est déclaré. L'administration n'est servie que depuis `SOC_ADMIN_NETS`
+(réseaux privés par défaut) : ajouter le réseau interne du site s'il est en adressage public.

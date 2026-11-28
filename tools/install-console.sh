@@ -62,6 +62,11 @@ EOF
     chgrp omni-console /etc/default/omni-mobile
     chmod 640 /etc/default/omni-mobile
   fi
+  if ! grep -Eq '^SOC_ADMINS=["'"'"']?[A-Za-z0-9]' /etc/default/omni-mobile; then
+    echo "AVERTISSEMENT : SOC_ADMINS est vide dans /etc/default/omni-mobile : la console n'aura aucun administrateur" >&2
+    echo "  (espace Administration, notifications, validations SOAR). Renseigner les comptes Graylog autorisés" >&2
+    echo "  (SOC_ADMINS=compte1,compte2), puis : systemctl restart omni-mobile-api" >&2
+  fi
   cat > /etc/systemd/system/omni-mobile-api.service <<EOF
 [Unit]
 Description=OMNI SOC console backend
