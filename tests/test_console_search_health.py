@@ -182,7 +182,7 @@ def test_failed_search_is_not_cached_and_later_recovery_is_observed(api):
     with serve(handler) as base:
         api.OS_URL = base
         assert all(value == 0 for value in api.get_kpis().values())
-        assert handler.calls == 4
+        assert handler.calls == 5   # un compteur par indicateur, dont les correspondances TI
 
 
 def test_default_shared_log_scope_includes_native_modules_without_system_indices(api):
