@@ -81,7 +81,13 @@
     "dns": {"title": "DNS des contrôleurs de domaine", "event_source": ["dns"], "streams": [], "expected_minutes": 1440}
   },
   "features": {
-    "detections": {"title": "Définitions d'alerte Graylog (événements)", "fields": ["event_definition_id", "priority", "key", "mitre_tactic", "mitre_technique"]},
+    "detections": {"title": "Définitions d'alerte Graylog (événements) et détections du socle (v5_*)",
+                   "fields": ["event_definition_id", "priority", "key", "mitre_tactic", "mitre_technique",
+                              "v5_tag", "v5_severite", "v5_mitre", "v5_entite", "v5_detail",
+                              "triage_decision", "triage_reason", "alert_title"]},
+    "threat_intel": {"title": "Correspondances threat intel (ti_*)",
+                     "fields": ["ti_tag", "ti_match", "ti_source", "ti_type", "ti_malware", "ti_confiance", "ti_direction",
+                                "ti_contexte", "ti_port_match", "ti_ioc_ports", "ti_ioc_date", "ti_ref"]},
     "xdr": {"title": "Corrélation d'incidents oms-xdr"},
     "ueba": {"title": "Scores comportementaux UEBA / ML"},
     "kev": {"title": "Vulnérabilités exposées (catalogue KEV)"},
@@ -115,6 +121,7 @@
   "kpis": {
     "incidents_critiques_7j": ["xdr"],
     "hotes_risque_ueba": ["ueba"],
-    "kev_exposees": ["kev"]
+    "kev_exposees": ["kev"],
+    "correspondances_ti_24h": ["threat_intel"]
   }
 }

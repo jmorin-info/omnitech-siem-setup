@@ -497,10 +497,16 @@ def get_kpis() -> dict:
     return kpis
 
 
+# Détection posée par un pipeline : alert_tag (historique) ou v5_tag (détections du socle par site).
+DETECTED = {"bool": {"minimum_should_match": 1, "should": [{"exists": {"field": "alert_tag"}},
+                                                          {"exists": {"field": "v5_tag"}}]}}
+
+
 def _kpis_raw() -> dict:
     last24 = {"range": {"timestamp": {"gte": "now-24h"}}}
     return {
-        "alertes_24h": _count({"bool": {"must": [{"exists": {"field": "alert_tag"}}], "filter": [last24]}}),
+        "alertes_24h": _count({"bool": {"must": [DETECTED], "filter": [last24]}}),
+        "correspondances_ti_24h": _count({"bool": {"must": [{"exists": {"field": "ti_source"}}], "filter": [last24]}}),
         "incidents_critiques_7j": _count({"bool": {"must": [
             {"term": {"event_source": "xdr_incident"}}, {"term": {"severity": "critical"}}],
             "filter": [{"range": {"timestamp": {"gte": "now-7d"}}}]}}),
@@ -512,7 +518,7 @@ def _kpis_raw() -> dict:
 
 def get_timeseries():
     res = os_search("omni-*", {"size": 0,
-        "query": {"bool": {"must": [{"exists": {"field": "alert_tag"}}],
+        "query": {"bool": {"must": [DETECTED],
                            "filter": [{"range": {"timestamp": {"gte": "now-24h"}}}]}},
         "aggs": {"h": {"date_histogram": {"field": "timestamp", "fixed_interval": "1h"}}}})
     return [{"t": b.get("key_as_string"), "n": b.get("doc_count")}
@@ -522,7 +528,7 @@ def get_timeseries():
 def get_terms(field, gte="now-7d", size=8, tagged=True):
     # tagged=False : compte TOUTE l'activite (pas seulement les detections) -> rend les
     # sources benignes (aruba/linux/dns : ports/STP/CADownload) visibles dans top-sources.
-    must = [{"exists": {"field": "alert_tag"}}] if tagged else []
+    must = [DETECTED] if tagged else []
     res = os_search("omni-*", {"size": 0,
         "query": {"bool": {"must": must,
                            "filter": [{"range": {"timestamp": {"gte": gte}}}]}},
@@ -543,8 +549,15 @@ def get_attack_matrix():
     except Exception:
         pass
     res = os_search("omni-*", {"size": 0, "query": {"range": {"timestamp": {"gte": "now-7d"}}},
-        "aggs": {"t": {"terms": {"field": "mitre_technique", "size": 300}}}})
+        "aggs": {"t": {"terms": {"field": "mitre_technique", "size": 300}},
+                 "v5": {"terms": {"field": "v5_mitre", "size": 300}}}})
     counts = {b.get("key"): b.get("doc_count") for b in res.get("aggregations", {}).get("t", {}).get("buckets", [])}
+    known = {r[0] for r in rows}
+    for b in res.get("aggregations", {}).get("v5", {}).get("buckets", []):
+        # Détections du socle (v5_mitre) : sous-technique comptée sur sa technique si elle n'est pas au référentiel.
+        tech = b.get("key") or ""
+        tech = tech if tech in known else tech.split(".")[0]
+        counts[tech] = counts.get(tech, 0) + b.get("doc_count", 0)
     _SR = {"critique": 4, "critical": 4, "eleve": 3, "élevé": 3, "high": 3,
            "moyen": 2, "medium": 2, "faible": 1, "low": 1}
     tac = {}
@@ -1315,29 +1328,38 @@ def get_guidance():
 
 
 def get_detections(tactic="", source="", tag="", technique=""):
-    must = [{"exists": {"field": "alert_tag"}}]
+    def either(a, b, value):
+        return {"bool": {"minimum_should_match": 1, "should": [{"term": {a: value}}, {"term": {b: value}}]}}
+    must = [DETECTED]
     if tactic:
         must.append({"term": {"mitre_tactic": tactic}})
     if source:
         must.append({"term": {"event_source": source}})
     if tag:
-        must.append({"term": {"alert_tag": tag}})
+        must.append(either("alert_tag", "v5_tag", tag))
     if technique:
-        must.append({"term": {"mitre_technique": technique}})
+        must.append(either("mitre_technique", "v5_mitre", technique))
     res = os_search("omni-*", {"size": 60, "sort": [{"timestamp": {"order": "desc"}}],
         "query": {"bool": {"must": must, "filter": [{"range": {"timestamp": {"gte": "now-24h"}}}]}},
         "_source": ["timestamp", "alert_tag", "mitre_technique", "mitre_tactic", "event_source",
-                    "user", "key", "short_message", "message", "priority", "risk_severity", "risk_score"],
+                    "user", "key", "short_message", "message", "priority", "risk_severity", "risk_score",
+                    "v5_tag", "v5_severite", "v5_mitre", "v5_entite", "v5_detail"],
         "aggs": {"tac": {"terms": {"field": "mitre_tactic", "size": 14}},
                  "src": {"terms": {"field": "event_source", "size": 15}}}})
+    try:
+        tactic_of = _tech_tactic_map()
+    except Exception:
+        tactic_of = {}
     items = []
     for h in res.get("hits", {}).get("hits", []):
         s = h.get("_source", {})
-        items.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag"), "tech": s.get("mitre_technique"),
-                      "tactic": s.get("mitre_tactic"), "source": s.get("event_source"),
-                      "entity": _rd(s.get("user") or s.get("key")), "priority": s.get("priority"),
-                      "sev": s.get("risk_severity"), "score": s.get("risk_score"),
-                      "msg": s.get("short_message") or s.get("message")})
+        tech = s.get("mitre_technique") or s.get("v5_mitre")
+        items.append({"ts": s.get("timestamp"), "tag": s.get("alert_tag") or s.get("v5_tag"), "tech": tech,
+                      "tactic": s.get("mitre_tactic") or tactic_of.get(tech) or tactic_of.get((tech or "").split(".")[0]),
+                      "source": s.get("event_source"),
+                      "entity": _rd(s.get("user") or s.get("v5_entite") or s.get("key")), "priority": s.get("priority"),
+                      "sev": s.get("risk_severity") or s.get("v5_severite"), "score": s.get("risk_score"),
+                      "msg": s.get("v5_detail") or s.get("short_message") or s.get("message")})
     ag = res.get("aggregations", {})
     return {"items": items,
             "tactics": [b["key"] for b in ag.get("tac", {}).get("buckets", [])],
@@ -4305,7 +4327,10 @@ class H(BaseHTTPRequestHandler):
         if p == "/m/api/by-tactic":
             return self._json({"data": get_terms("mitre_tactic")})
         if p == "/m/api/top-detections":
-            return self._json({"data": get_terms("alert_tag")})
+            merged = {}
+            for row in get_terms("alert_tag") + get_terms("v5_tag"):
+                merged[row["k"]] = merged.get(row["k"], 0) + row["n"]
+            return self._json({"data": [{"k": k, "n": n} for k, n in sorted(merged.items(), key=lambda kv: -kv[1])[:8]]})
         if p == "/m/api/top-sources":
             return self._json({"data": get_terms("event_source", size=16, tagged=False)})
         if p == "/m/api/attack-matrix":
