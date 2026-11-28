@@ -143,9 +143,10 @@ def garde(src, data):
 
 ETAT = {"sources": {}, "erreurs": []}
 def resultat(src, ok, n, msg=""):
+    """ok : True, False (échec, version précédente conservée) ou None (source désactivée : clé absente)."""
     ETAT["sources"][src] = {"ok": ok, "n": n, "msg": msg[:200]}
-    if not ok: ETAT["erreurs"].append(f"{src}: {msg[:120]}")
-    log(f"{src}: {'OK' if ok else 'ECHEC (version precedente conservee)'} n={n} {msg}")
+    if ok is False: ETAT["erreurs"].append(f"{src}: {msg[:120]}")
+    log(f"{src}: {'OK' if ok else ('DESACTIVEE' if ok is None else 'ECHEC (version precedente conservee)')} n={n} {msg}")
 
 # ------------------------------------------------------------------ sources
 def src_feodo():
@@ -183,7 +184,7 @@ def tf_row(first, iid, val, typ, threat, malware, last, conf, ref=""):
 def src_threatfox(force=False):
     k = cle()
     if not k:
-        resultat("threatfox", False, 0, "cle Auth-Key absente (/etc/omni-v5-ti/threatfox.key)"); return
+        resultat("threatfox", None, 0, "desactivee : cle Auth-Key absente (/etc/omni-v5-ti/threatfox.key)"); return
     prev = charge("threatfox")
     age_h = 1e9
     if prev and prev.get("full_date"):
@@ -219,7 +220,7 @@ def src_threatfox(force=False):
 def src_urlhaus():
     k = cle()
     if not k:
-        resultat("urlhaus", False, 0, "cle Auth-Key absente"); return
+        resultat("urlhaus", None, 0, "desactivee : cle Auth-Key absente"); return
     try:
         t = get("https://urlhaus-api.abuse.ch/v2/files/exports/%s/recent.csv" % urllib.parse.quote(k), timeout=300).decode("utf-8", "replace")
         if "URLhaus Database Dump" not in t[:600]: raise ValueError("format inattendu (en-tete URLhaus absent)")
@@ -251,7 +252,7 @@ def mb_parse(fileobj, depuis):
 def src_mb(amorcer=False):
     k = cle()
     if not k:
-        resultat("malwarebazaar", False, 0, "cle Auth-Key absente"); return
+        resultat("malwarebazaar", None, 0, "desactivee : cle Auth-Key absente"); return
     prev = charge("malwarebazaar") or {"rows": []}
     depuis = NOW - dt.timedelta(days=JOURS_STORE)
     try:
@@ -381,7 +382,9 @@ def gelf(msg):
 def main():
     t0 = time.time()
     os.makedirs(LOOKUP, exist_ok=True); os.makedirs(f"{STATE}/soar", exist_ok=True)
-    charge_populaires(); charge_exclusions()
+    # Tranco ne sert qu'aux tables de domaines, alimentées par les flux à clé (ThreatFox, URLhaus)
+    if cle(): charge_populaires()
+    charge_exclusions()
     src_feodo(); src_tor(); src_threatfox("--force-threatfox" in sys.argv); src_urlhaus(); src_mb("--amorcer-mb" in sys.argv)
     T, soar = construit()
     refus = [r for r in (ecrit(n, t) for n, t in T.items()) if r]
@@ -404,7 +407,8 @@ def main():
             except OSError as e:
                 log(f"option SOAR Feodo demandee mais publication impossible ({e}) : aucune action")
     tailles = {n: len(t) for n, t in T.items()}
-    statut = "ok" if not ETAT["erreurs"] else ("erreur" if all(not s["ok"] for s in ETAT["sources"].values()) else "degrade")
+    actives = [s for s in ETAT["sources"].values() if s["ok"] is not None]
+    statut = "ok" if not ETAT["erreurs"] else ("erreur" if all(not s["ok"] for s in actives) else "degrade")
     resume = " ".join(f"{n}={c}" for n, c in tailles.items())
     log(f"tables : {resume} ; statut={statut} ; {round(time.time()-t0,1)} s")
     m = {"version": "1.1", "host": socket.gethostname(), "short_message": f"OMNI v5 TI fetch {statut} : {resume}",
@@ -412,7 +416,7 @@ def main():
          "_ti_fetch_erreurs": "; ".join(ETAT["erreurs"])[:900] or "aucune", "_ti_soar_feodo_option": "active" if SOAR_FEODO else "desactivee",
          "_ti_soar_feodo_n": len(soar), "level": 6 if statut == "ok" else 4}
     for n, c in tailles.items(): m["_ti_table_" + n.replace("-", "_")] = c
-    for s, v in ETAT["sources"].items(): m["_ti_src_" + s] = v["n"]; m["_ti_src_" + s + "_ok"] = v["ok"]
+    for s, v in ETAT["sources"].items(): m["_ti_src_" + s] = v["n"]; m["_ti_src_" + s + "_ok"] = "desactivee" if v["ok"] is None else v["ok"]
     if SIMULER: print(json.dumps(m, ensure_ascii=False, indent=1))
     else: gelf(m)
     return 0 if statut != "erreur" else 1

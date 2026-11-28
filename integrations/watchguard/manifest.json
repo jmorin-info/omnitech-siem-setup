@@ -270,5 +270,24 @@
         }
       ]
     }
-  ]
+  ],
+  "derived_fields": {
+    "v5_tag": "étiquette de la détection v5 (une valeur par détection) (tools/omni-site-detections.py)",
+    "v5_severite": "CRITIQUE, ELEVE ou INFO (tools/omni-site-detections.py)",
+    "v5_mitre": "technique MITRE ATT&CK (tools/omni-site-detections.py)",
+    "v5_entite": "entité regroupée par la définition (compte, hôte ou adresse) (tools/omni-site-detections.py)",
+    "v5_detail": "phrase lisible décrivant l'événement détecté (tools/omni-site-detections.py)",
+    "ti_tag": "omni_v5_ti sur tout message enrichi par la threat intel (tools/omni-site-detections.py)",
+    "ti_match": "indicateur trouvé (adresse IP ou domaine) (tools/omni-site-detections.py)",
+    "ti_source": "flux qui liste l'indicateur : feodo, tor, threatfox, urlhaus (tools/omni-site-detections.py)",
+    "ti_type": "type d'indicateur : c2_botnet, tor_sortie, ip_port, domaine… (tools/omni-site-detections.py)",
+    "ti_malware": "famille de maliciel ou libellé du flux (tools/omni-site-detections.py)",
+    "ti_confiance": "haute, moyenne, faible ou info (tools/omni-site-detections.py)",
+    "ti_direction": "sortant (poste interne vers l'indicateur) ou entrant (indicateur vers le site) (tools/omni-site-detections.py)",
+    "ti_contexte": "trafic, vpn ou web (tools/omni-site-detections.py)",
+    "ti_port_match": "true si le port de destination est celui publié pour l'indicateur (tools/omni-site-detections.py)",
+    "ti_ioc_ports": "ports publiés pour l'indicateur (;443;8080;) (tools/omni-site-detections.py)",
+    "ti_ioc_date": "date de première publication de l'indicateur (tools/omni-site-detections.py)",
+    "ti_ref": "référence dans le flux (identifiant, statut) (tools/omni-site-detections.py)"
+  }
 }

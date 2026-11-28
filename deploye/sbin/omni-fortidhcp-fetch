@@ -14,7 +14,7 @@ GELF_URL = "http://127.0.0.1:12201/gelf"
 SIEM     = "bx-it-graylog-vm"
 LOOKUP   = "/etc/graylog/lookup/dhcp-attribution.csv"
 
-def load_env(path="/opt/omni-siem/repository/00-vars.env"):
+def load_env(path=os.environ.get("OMNI_VARS", "/opt/omni-siem/repository/00-vars.env")):
     env = {}
     try:
         for line in open(path):
@@ -26,6 +26,8 @@ ENV   = load_env()
 HOST  = ENV.get("FORTI_DHCP_HOST", "").strip()
 TOKEN = ENV.get("FORTI_DHCP_TOKEN", "").strip()
 PORT  = ENV.get("FORTI_DHCP_PORT", "443")
+# Site sans FortiGate interrogeable : FORTI_DHCP_ENABLED='0' dans 00-vars.env (le jeton d'exemple vaut aussi « non configuré »)
+ENABLED = ENV.get("FORTI_DHCP_ENABLED", "1").strip().lower() not in ("0", "non", "no", "false")
 
 def gelf(fields):
     base = {"version": "1.1", "host": SIEM, "short_message": fields.get("short_message", "forti_dhcp")}
@@ -38,7 +40,10 @@ def gelf(fields):
         print("gelf KO:", e, file=sys.stderr)
 
 def main():
-    if not HOST or not TOKEN:
+    if not ENABLED:
+        print("[forti-dhcp] desactive par la configuration du site (FORTI_DHCP_ENABLED=0) -> rien a faire.")
+        return
+    if not HOST or not TOKEN or TOKEN == "CHANGEME":
         print("[forti-dhcp] FORTI_DHCP_HOST/TOKEN non configures -> rien a faire.")
         return
     # cert mgmt FortiGate auto-signe -> contexte non verifie (reseau d'admin interne)

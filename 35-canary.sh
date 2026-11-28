@@ -24,9 +24,14 @@ require_api
 LOOKUP_DIR="/etc/graylog/lookup"
 
 echo "==> [1/3] Deploiement du CSV des comptes canari"
-install -m 644 lookups/canary-accounts.csv "${LOOKUP_DIR}/"
-chown root:graylog "${LOOKUP_DIR}/canary-accounts.csv" 2>/dev/null || true
-ok "canary-accounts.csv deploye"
+# La liste du site (comptes leurres réels) prime : le modèle du dépôt n'est posé que si elle est absente.
+if [[ -f "${LOOKUP_DIR}/canary-accounts.csv" ]]; then
+  skip "canary-accounts.csv du site conserve"
+else
+  install -m 644 lookups/canary-accounts.csv "${LOOKUP_DIR}/"
+  chown root:graylog "${LOOKUP_DIR}/canary-accounts.csv" 2>/dev/null || true
+  ok "canary-accounts.csv deploye"
+fi
 
 echo "==> [2/3] Lookup table omni-canary (adapter + cache + table)"
 AID="$(api_get "/system/lookup/adapters" | jq -r '.data_adapters[]? | select(.name=="omni-canary-adapter") | .id')"

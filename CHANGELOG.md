@@ -12,6 +12,26 @@ Les entrées antérieures au 21/11/2026 sont reprises de l'ancien journal
 tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste libre.
 
 ## [Non publié]
+- Détections portables pilotées par la configuration du site (`tools/omni-site-detections.py`,
+  catalogue `objets-graylog/detections-site/`) : une détection n'est créée que si sa source
+  est déclarée dans `/etc/omni-siem/detections.json`, et n'est planifiée que si sa source
+  produit ses champs, si ses événements témoins ont été reçus, si ses paramètres de site sont
+  renseignés et si le rejeu (simulateur de pipeline sur de vrais messages puis planificateur)
+  reste sous 5 déclenchements par jour ; sinon elle est créée désactivée avec la raison dans
+  sa description. Threat intel sur WatchGuard (adresses source, destination, pair VPN, domaine)
+  avec les tables `omni-v5-ti-*`. Anti-récidive : `valider` (hors ligne) et `verifier` (après
+  déploiement : chaque définition planifiée a une source qui produit ses champs, chaque table
+  lue par une règle connectée existe). Champs `ti_*` et `v5_*` déclarés dans le module WatchGuard.
+  Chaîne interne indépendante de M365 (entrée GELF HTTP 127.0.0.1:12201, index set
+  `omni-interne`, stream « OMNI - Interne SIEM », réutilisés s'ils existent) : sans elle, les
+  décisions du tri, dont le rodage, n'atteignent pas le récapitulatif. `16-m365-input.sh`
+  réutilise une entrée GELF déjà en écoute sur 12201.
+- `omni-v5-ti-fetch` : sans clé abuse.ch, ThreatFox, URLhaus et MalwareBazaar sont signalés
+  « désactivés » (et non en erreur) et la liste Tranco n'est plus téléchargée ; Feodo et Tor
+  restent alimentés.
+- `omni-fortidhcp-fetch` : `FORTI_DHCP_ENABLED='0'` arrête proprement le collecteur sur un site
+  sans FortiGate interrogeable (le jeton d'exemple `CHANGEME` vaut aussi « non configuré »).
+- `35-canary.sh` ne remplace plus la liste `canary-accounts.csv` du site.
 
 - Intégration WatchGuard révision 4 : parsing générique Fireware (en-tête syslog,
   paires `clé="valeur"`, VPN IKE/SSL, authentifications, administration, hôtes bloqués) ;

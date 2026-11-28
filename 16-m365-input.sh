@@ -20,7 +20,8 @@ require_api
 
 # ------------------------------------------------------------------ 1. Input
 echo "==> [1/5] Input GELF HTTP 127.0.0.1:12201"
-IN_GELF="$(api_get "/system/inputs" | jq -r '.inputs[] | select(.title=="M365 (GELF HTTP 12201)") | .id')"
+# Réutilise toute entrée GELF HTTP déjà en écoute sur 12201 (ex. chaîne interne posée par tools/omni-site-detections.py)
+IN_GELF="$(api_get "/system/inputs" | jq -r '[.inputs[] | select(.title=="M365 (GELF HTTP 12201)" or ((.type|endswith("GELFHttpInput")) and .attributes.port==12201)) | .id][0] // empty')"
 if [[ -z "${IN_GELF}" ]]; then
   IN_GELF="$(api_post "/system/inputs" <<'EOF' | jqr '.id'
 {
