@@ -95,10 +95,6 @@
     },
     "existing_fields": {"msg_id": "event_id", "srcip": "src_ip", "dstip": "dest_ip", "srcport": "src_port", "dstport": "dest_port", "action": "event_action", "policy_name": "network_rule", "protocol": "network_protocol"}
   },
-  "derived_fields": {
-    "src_ip_geolocation": "Graylog GeoIP Resolver placed after Pipeline Processor",
-    "dest_ip_geolocation": "Graylog GeoIP Resolver placed after Pipeline Processor"
-  },
   "dashboards": [
     {
       "key": "activity",
@@ -146,7 +142,7 @@
             {"title": "Top sources bloquées", "type": "terms", "field": "src_ip", "query": "event_action:deny", "pos": [1, 1, 4, 5]},
             {"title": "Top ports de destination bloqués", "type": "terms", "field": "dest_port", "query": "event_action:deny", "pos": [5, 1, 4, 5]},
             {"title": "Règles qui bloquent", "type": "terms", "field": "network_rule", "query": "event_action:deny", "pos": [9, 1, 4, 5]},
-            {"title": "Origine des connexions bloquées", "type": "map", "field": "src_ip_geolocation", "query": "event_action:deny", "pos": [1, 6, 8, 6]},
+            {"title": "Pays d'origine des blocages (géolocalisation Fireware)", "type": "terms", "field": "src_country", "query": "event_action:deny", "pos": [1, 6, 8, 6]},
             {"title": "Zones d'entrée des blocages", "type": "terms", "field": "src_zone", "query": "event_action:deny", "pos": [9, 6, 4, 6]},
             {"title": "Trafic hostile et hôtes bloqués temporairement", "type": "terms", "field": "src_ip", "query": "event_id:(\"3000-0173\" OR \"3001-1001\") OR _exists_:threat_indicator", "may_be_empty": "aucun site bloqué ni attaque détectée sur la période", "pos": [1, 12, 12, 4]}
           ]

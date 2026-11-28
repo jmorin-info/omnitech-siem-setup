@@ -199,9 +199,12 @@ python3 tools/omni-integrations.py check watchguard --api ...                   
 d'origine republiée), vues créées supprimées par identifiant.
 
 **Anti-récidive.** `validate` (et la CI) refuse un widget qui référence un champ
-qu'aucune règle, aucun mapping ni aucun champ dérivé déclaré (`derived_fields`, par
-exemple la géolocalisation Graylog) ne produit. `check` exécute chaque widget déployé
-et signale les widgets vides et les champs absents des journaux reçus ; un widget
+qu'aucune règle, aucun mapping ni aucun champ dérivé déclaré (`derived_fields`) ne
+produit. Attention : le GeoIP Resolver de Graylog 7.2 ne géolocalise pas les adresses
+écrites avec `to_ip()` (constaté en production) ; les dashboards utilisent donc les
+pays fournis par l'équipement. `check` exécute chaque widget déployé et signale les
+widgets vides (pour une répartition : aucune valeur non vide) et les champs absents
+des journaux reçus ; un widget
 qui dépend d'un type de journal facultatif porte `may_be_empty` avec sa raison et
 n'est pas compté en échec. Le code de retour vaut 1 si un widget est vide ou en erreur.
 

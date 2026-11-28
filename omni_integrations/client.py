@@ -452,6 +452,9 @@ def check_dashboards(client, module, site, *, days=1, wait_seconds=120):
         for page, widget, query_id, search_type in catalog_search_types(module, specs[item["key"]]):
             result = (job.get("results", {}).get(query_id) or {}).get("search_types", {}).get(search_type)
             total = None if result is None else result.get("total_results", result.get("total"))
+            if result is not None and widget["type"] in ("terms", "map") and isinstance(result.get("rows"), list):
+                # A breakdown is only useful with values: count non-empty buckets, not matching documents.
+                total = sum(1 for row in result["rows"] if row.get("key"))
             missing = sorted(widget_fields(widget) - present) if present is not None else []
             if search_type in errors or result is None:
                 status = "error"

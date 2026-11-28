@@ -551,12 +551,16 @@ def test_post_deployment_check_flags_empty_widgets_and_absent_fields(tmp_path):
     results = {}
     for _, widget, query_id, search_type in catalog_search_types(module, spec):
         total = 0 if widget["title"] == "Messages non reconnus" else 5
-        results.setdefault(query_id, {"search_types": {}})["search_types"][search_type] = {"total": total}
+        result = {"total": total}
+        if widget["title"] == "Identifiants sans adresse source":
+            result["rows"] = [{"key": [], "values": [{"value": 5}], "source": "non-leaf"}]  # documents but no value
+        results.setdefault(query_id, {"search_types": {}})["search_types"][search_type] = result
     client.job = {"id": "j", "execution": {"done": True}, "errors": [], "results": results}
     client.fields = ["timestamp", "source", "message", "omni_parse_status", "event_id"]
     report = check_dashboards(client, module, _site(tmp_path, {"quality": "f" * 24}))
     statuses = {w["widget"]: w for w in report["widgets"] if w.get("page")}
     assert statuses["Messages non reconnus"]["status"] == "empty"
     assert statuses["Non reconnus par processus"]["fields_absent"] == ["event_category"]
-    assert report["failures"] == 1 + 2  # one empty widget, two catalog dashboards not deployed
+    assert statuses["Identifiants sans adresse source"]["status"] == "empty"
+    assert report["failures"] == 2 + 2  # two empty widgets, two catalog dashboards not deployed
     assert catalog_dashboard(module, spec, "9" * 24)["view"]["type"] == "DASHBOARD"
