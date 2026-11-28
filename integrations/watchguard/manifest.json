@@ -208,7 +208,13 @@
             {"title": "Hôtes bloqués temporairement (attaques)", "type": "terms", "field": "src_ip", "query": "event_id:\"3001-1001\"", "may_be_empty": "aucune attaque détectée sur la période (33 en 30 jours avant normalisation)", "pos": [9, 1, 4, 6]},
             {"title": "Scanners IKE (négociations refusées)", "type": "terms", "field": "vpn_peer_ip", "query": "event_category:iked AND _exists_:event_reason", "pos": [1, 7, 6, 5]},
             {"title": "Antivirus et objets non analysés", "type": "terms", "field": "event_message", "query": "event_message:ProxyAvScan* OR _exists_:threat_name OR event_id:\"1AFF-003C\"", "may_be_empty": "aucun événement antivirus sur la période", "pos": [7, 7, 6, 5]},
-            {"title": "Trafic hostile dans le temps", "type": "timeline", "query": "event_id:(\"3000-0173\" OR \"3001-1001\") OR _exists_:threat_indicator", "pos": [1, 12, 12, 4]}
+            {"title": "Trafic hostile dans le temps", "type": "timeline", "query": "event_id:(\"3000-0173\" OR \"3001-1001\") OR _exists_:threat_indicator", "pos": [1, 12, 12, 4]},
+            {"title": "Threat intel : correspondances par flux (Feodo, Tor…)", "type": "terms", "field": "ti_source", "query": "_exists_:ti_source", "may_be_empty": "aucune adresse listée par les flux de threat intel sur la période", "pos": [1, 16, 4, 5]},
+            {"title": "Threat intel : sens (entrant, sortant)", "type": "terms", "field": "ti_direction", "query": "_exists_:ti_source", "may_be_empty": "aucune adresse listée par les flux de threat intel sur la période", "pos": [5, 16, 4, 5]},
+            {"title": "Threat intel : trafic accepté ou refusé", "type": "terms", "field": "event_action", "query": "_exists_:ti_source", "may_be_empty": "aucune adresse listée par les flux de threat intel sur la période", "pos": [9, 16, 4, 5]},
+            {"title": "Threat intel : indicateurs les plus vus", "type": "terms", "field": "ti_match", "query": "_exists_:ti_source", "may_be_empty": "aucune adresse listée par les flux de threat intel sur la période", "pos": [1, 21, 6, 5]},
+            {"title": "Threat intel : familles et libellés", "type": "terms", "field": "ti_malware", "query": "_exists_:ti_source", "may_be_empty": "aucune adresse listée par les flux de threat intel sur la période", "pos": [7, 21, 6, 5]},
+            {"title": "Threat intel : correspondances dans le temps", "type": "timeline", "split": "ti_source", "query": "_exists_:ti_source", "may_be_empty": "aucune adresse listée par les flux de threat intel sur la période", "pos": [1, 26, 12, 4]}
           ]
         },
         {

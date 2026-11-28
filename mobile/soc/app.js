@@ -490,7 +490,8 @@ function renderKpis(k){k=k||{};
     ["red",ic("warning"),"Incidents critiques (7 j)",k.incidents_critiques_7j,"corrélés oms-xdr","incidents"],
     ["amb",ic("target"),"Hôtes à risque (UEBA)",k.hotes_risque_ueba,"score ≥ 80","graph"],
     ["cy",ic("antenna"),"Événements détectés (24 h)",k.alertes_24h,"détections taguées","detections"],
-    ["vio",ic("shield"),"CVE KEV exposées",k.kev_exposees,"catalogue CISA","detections"]
+    ["vio",ic("shield"),"CVE KEV exposées",k.kev_exposees,"catalogue CISA","detections"],
+    ...(k.correspondances_ti_24h!==undefined?[["amb",ic("globe"),"Correspondances threat intel (24 h)",k.correspondances_ti_24h,"adresses listées (Feodo, Tor…)","detections"]]:[])
   ].map(([c,i,l,v,s,p])=>`<div class="kpi ${c}" style="cursor:pointer" data-onclick="goNav('${p}')"><div class="lab">${i} ${l}</div>
     <div class="val mono">${v===null?"—":(v??0).toLocaleString("fr")}</div><div class="sub">${v===null?(LANG==="en"?"not configured on this site":"non configuré sur ce site"):s}</div></div>`).join("");
 }

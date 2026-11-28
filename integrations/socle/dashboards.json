@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "socle",
-  "revision": 2,
+  "revision": 3,
   "description": "Dashboards SOC génériques d'une PME. Chaque page et chaque widget déclarent les sources (integrations/sources.json) dont ils dépendent : le déploiement ne publie que ceux que la configuration du site active, la validation hors ligne refuse un champ qu'aucune source requise ne produit.",
   "dashboards": [
     {
@@ -18,6 +18,10 @@
             {"title": "Blocages du pare-feu (24 h)", "type": "count", "requires": ["watchguard"], "query": "event_action:deny", "range": 86400, "pos": [7, 1, 3, 2]},
             {"title": "Blocages du pare-feu FortiGate (24 h)", "type": "count", "requires": ["fortigate"], "query": "action:(deny OR blocked OR dropped)", "range": 86400, "pos": [7, 1, 3, 2]},
             {"title": "Détections des pipelines (24 h)", "type": "count", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "query": "_exists_:alert_tag", "range": 86400, "pos": [10, 1, 3, 2], "may_be_empty": "aucune détection calculée sur la période"},
+            {"title": "Détections du socle (24 h)", "type": "count", "requires": ["detections"], "scope": "all", "query": "_exists_:v5_tag", "range": 86400, "pos": [1, 3, 3, 2], "may_be_empty": "aucune détection du socle sur la période"},
+            {"title": "Détections CRITIQUE (7 j)", "type": "count", "requires": ["detections"], "scope": "all", "query": "v5_severite:CRITIQUE", "range": 604800, "pos": [4, 3, 3, 2], "may_be_empty": "aucune détection critique sur 7 jours"},
+            {"title": "Alertes Graylog (7 j)", "type": "count", "requires": ["detections"], "scope": "events", "range": 604800, "pos": [7, 3, 3, 2], "may_be_empty": "aucune alerte sur 7 jours"},
+            {"title": "Correspondances threat intel (24 h)", "type": "count", "requires": ["threat_intel"], "scope": "all", "query": "_exists_:ti_source", "range": 86400, "pos": [10, 3, 3, 2], "may_be_empty": "aucune adresse listée par les flux de threat intel sur la période"},
             {"title": "Activité par type de source (24 h)", "type": "timeline", "scope": "all", "split": "event_source", "range": 86400, "pos": [1, 3, 12, 4]},
             {"title": "Hôtes les plus à risque (détections, 7 j)", "type": "terms", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "field": "host", "query": "_exists_:alert_tag", "range": 604800, "pos": [1, 7, 4, 4], "may_be_empty": "aucune détection calculée sur 7 jours"},
             {"title": "Échecs de connexion par compte (24 h)", "type": "terms", "requires": ["windows_security"], "field": "user", "query": "event_action:echec_connexion", "range": 86400, "pos": [5, 7, 4, 4], "may_be_empty": "aucun échec de connexion sur la période"},
@@ -34,7 +38,13 @@
             {"title": "Détections des pipelines par type", "type": "terms", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "field": "alert_tag", "range": 604800, "pos": [1, 5, 4, 4], "may_be_empty": "aucune détection calculée sur 7 jours"},
             {"title": "Détections par hôte", "type": "terms", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "field": "host", "query": "_exists_:alert_tag", "range": 604800, "pos": [5, 5, 4, 4], "may_be_empty": "aucune détection calculée sur 7 jours"},
             {"title": "Détections par compte", "type": "terms", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "field": "user", "query": "_exists_:alert_tag", "range": 604800, "pos": [9, 5, 4, 4], "may_be_empty": "aucune détection calculée sur 7 jours"},
-            {"title": "Alertes Graylog dans le temps", "type": "timeline", "requires": ["detections"], "scope": "events", "range": 604800, "pos": [1, 9, 6, 4], "may_be_empty": "aucune alerte sur 7 jours"},
+            {"title": "Détections du socle par sévérité (7 j)", "type": "timeline", "requires": ["detections"], "scope": "all", "query": "_exists_:v5_tag", "split": "v5_severite", "range": 604800, "pos": [1, 9, 12, 4], "may_be_empty": "aucune détection du socle sur 7 jours"},
+            {"title": "Détections du socle par type (7 j)", "type": "terms", "requires": ["detections"], "scope": "all", "field": "v5_tag", "range": 604800, "pos": [1, 13, 4, 4], "may_be_empty": "aucune détection du socle sur 7 jours"},
+            {"title": "Entités concernées (7 j)", "type": "terms", "requires": ["detections"], "scope": "all", "field": "v5_entite", "query": "_exists_:v5_tag", "range": 604800, "pos": [5, 13, 4, 4], "may_be_empty": "aucune détection du socle sur 7 jours"},
+            {"title": "Décisions du tri (rodage, mail, récapitulatif, 7 j)", "type": "terms", "requires": ["detections"], "scope": "all", "field": "triage_decision", "query": "event_source:alert_triage", "range": 604800, "pos": [9, 13, 4, 4], "may_be_empty": "aucune alerte passée par le tri sur 7 jours"},
+            {"title": "Alertes triées par titre (7 j)", "type": "terms", "requires": ["detections"], "scope": "all", "field": "alert_title", "query": "event_source:alert_triage", "range": 604800, "pos": [1, 17, 6, 4], "may_be_empty": "aucune alerte passée par le tri sur 7 jours"},
+            {"title": "Alertes Graylog dans le temps", "type": "timeline", "requires": ["detections"], "scope": "events", "range": 604800, "pos": [7, 17, 6, 4], "may_be_empty": "aucune alerte sur 7 jours"},
+            {"title": "Dernières détections du socle", "type": "messages", "requires": ["detections"], "scope": "all", "query": "_exists_:v5_tag", "fields": ["timestamp", "v5_severite", "v5_tag", "v5_entite", "v5_mitre", "v5_detail"], "range": 604800, "pos": [1, 21, 12, 5], "may_be_empty": "aucune détection du socle sur 7 jours"},
             {"title": "Alertes Graylog par priorité", "type": "terms", "requires": ["detections"], "scope": "events", "field": "priority", "range": 604800, "pos": [7, 9, 6, 4], "may_be_empty": "aucune alerte sur 7 jours"},
             {"title": "File de tri : dernières détections des pipelines", "type": "messages", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "query": "_exists_:alert_tag", "fields": ["timestamp", "host", "user", "alert_tag", "event_action", "src_ip", "message"], "range": 604800, "pos": [1, 13, 12, 5], "may_be_empty": "aucune détection calculée sur 7 jours"}
           ]
@@ -159,8 +169,21 @@
           "title": "ATT&CK",
           "requires": ["detections"],
           "widgets": [
-            {"title": "Alertes par tactique (30 j)", "type": "terms", "requires": ["detections"], "scope": "events", "field": "mitre_tactic", "range": 2592000, "pos": [1, 1, 6, 4], "may_be_empty": "aucune alerte classée ATT&CK sur 30 jours"},
-            {"title": "Alertes par technique (30 j)", "type": "terms", "requires": ["detections"], "scope": "events", "field": "mitre_technique", "range": 2592000, "pos": [7, 1, 6, 4], "may_be_empty": "aucune alerte classée ATT&CK sur 30 jours"}
+            {"title": "Détections par technique ATT&CK (30 j)", "type": "terms", "requires": ["detections"], "scope": "all", "field": "v5_mitre", "query": "_exists_:v5_mitre", "range": 2592000, "pos": [1, 1, 6, 4], "may_be_empty": "aucune détection classée ATT&CK sur 30 jours"},
+            {"title": "Techniques ATT&CK par détection (30 j)", "type": "terms", "requires": ["detections"], "scope": "all", "field": "v5_tag", "query": "_exists_:v5_mitre", "range": 2592000, "pos": [7, 1, 6, 4], "may_be_empty": "aucune détection classée ATT&CK sur 30 jours"},
+            {"title": "Techniques ATT&CK dans le temps (30 j)", "type": "timeline", "requires": ["detections"], "scope": "all", "query": "_exists_:v5_mitre", "split": "v5_mitre", "range": 2592000, "pos": [1, 5, 12, 4], "may_be_empty": "aucune détection classée ATT&CK sur 30 jours"}
+          ]
+        },
+        {
+          "title": "Menaces (threat intel)",
+          "requires": ["threat_intel"],
+          "widgets": [
+            {"title": "Correspondances par flux (Feodo, Tor…)", "type": "terms", "requires": ["threat_intel"], "scope": "all", "field": "ti_source", "query": "_exists_:ti_source", "range": 604800, "pos": [1, 1, 4, 4], "may_be_empty": "aucune adresse listée par les flux de threat intel sur 7 jours"},
+            {"title": "Sens (entrant, sortant)", "type": "terms", "requires": ["threat_intel"], "scope": "all", "field": "ti_direction", "query": "_exists_:ti_source", "range": 604800, "pos": [5, 1, 4, 4], "may_be_empty": "aucune adresse listée par les flux de threat intel sur 7 jours"},
+            {"title": "Trafic accepté ou refusé", "type": "terms", "requires": ["threat_intel"], "scope": "all", "field": "event_action", "query": "_exists_:ti_source", "range": 604800, "pos": [9, 1, 4, 4], "may_be_empty": "aucune adresse listée par les flux de threat intel sur 7 jours"},
+            {"title": "Indicateurs les plus vus", "type": "terms", "requires": ["threat_intel"], "scope": "all", "field": "ti_match", "query": "_exists_:ti_source", "range": 604800, "pos": [1, 5, 6, 4], "may_be_empty": "aucune adresse listée par les flux de threat intel sur 7 jours"},
+            {"title": "Familles et libellés", "type": "terms", "requires": ["threat_intel"], "scope": "all", "field": "ti_malware", "query": "_exists_:ti_source", "range": 604800, "pos": [7, 5, 6, 4], "may_be_empty": "aucune adresse listée par les flux de threat intel sur 7 jours"},
+            {"title": "Correspondances dans le temps", "type": "timeline", "requires": ["threat_intel"], "scope": "all", "split": "ti_source", "query": "_exists_:ti_source", "range": 604800, "pos": [1, 9, 12, 4], "may_be_empty": "aucune adresse listée par les flux de threat intel sur 7 jours"}
           ]
         },
         {

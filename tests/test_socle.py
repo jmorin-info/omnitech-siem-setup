@@ -133,7 +133,7 @@ def test_console_hides_pages_of_absent_sources_and_flags_missing_detections(site
     assert hidden == {"graph", "twin", "ems", "network", "leaks", "soar"}
     assert site["pages"]["deploy"]["visible"] and site["pages"]["globe"]["visible"]
     assert site["pages"]["detections"]["notice"] and site["detections"]["configured"] is False
-    assert set(site["kpis_unavailable"]) == {"incidents_critiques_7j", "hotes_risque_ueba", "kev_exposees"}
+    assert set(site["kpis_unavailable"]) == {"incidents_critiques_7j", "hotes_risque_ueba", "kev_exposees", "correspondances_ti_24h"}
 
 
 def test_alerts_produced_without_site_update_clear_the_detection_notice(site_api, monkeypatch):
@@ -210,3 +210,20 @@ def test_console_check_reports_hidden_pages_and_fails_on_visible_errors(site_api
         raise RuntimeError("boom")
     monkeypatch.setattr(site_api, "get_health", broken)
     assert tool.check(site_api)["failures"] == 1
+
+
+def test_detections_and_threat_intel_pages_follow_the_site_features(tmp_path):
+    site = json.loads(json.dumps(SITE))
+    site["site"]["features"] += ["detections", "threat_intel"]
+    built = build(profile(tmp_path, site))
+    tabs = [s["titles"]["tab"]["title"] for s in built["view"]["state"].values()]
+    assert "ATT&CK" in tabs and "Menaces (threat intel)" in tabs
+    titles = {w["title"] for _, w, _, _ in built["widgets"]}
+    assert {"Détections du socle (24 h)", "Correspondances threat intel (24 h)", "Décisions du tri (rodage, mail, récapitulatif, 7 j)"} <= titles
+    without = build(profile(tmp_path))
+    assert not {w["title"] for _, w, _, _ in without["widgets"]} & {"Détections du socle (24 h)", "Correspondances threat intel (24 h)"}
+
+
+def test_threat_intel_kpi_is_null_without_the_feature(site_api, monkeypatch):
+    monkeypatch.setattr(site_api, "_kpis_raw", lambda: {"alertes_24h": 1, "correspondances_ti_24h": 0})
+    assert site_api.get_kpis()["correspondances_ti_24h"] is None
