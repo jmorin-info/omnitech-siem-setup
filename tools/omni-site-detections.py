@@ -629,7 +629,8 @@ def simuler_message(cl, stream, champs, ident):
     r = cl.api("POST", "/system/pipelines/simulate", {"stream_id": stream, "message": msg})
     sortie = {}
     for m in r.get("messages", []):
-        sortie.update(m.get("fields", m))
+        # Graylog 7 : {"messages": [{"message": {champs…}, "decoration_stats": …}]}
+        sortie.update(m["message"] if isinstance(m.get("message"), dict) else m.get("fields", m))
     return sortie
 
 
