@@ -1,6 +1,9 @@
 [Unit]
 Description=OMNI - Integrite logs : maillon quotidien hache+signe + copie hors-SIEM
 After=network-online.target
+# Fonction non configurée sur le site : unité ignorée (condition), pas en échec.
+ConditionPathExists=/etc/graylog/omni-integrity.key
+
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/omni-integrity

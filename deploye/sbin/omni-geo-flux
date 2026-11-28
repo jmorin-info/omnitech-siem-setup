@@ -51,7 +51,7 @@ def gather(idx, query, geo_field, country_field):
         "g": {"terms": {"field": geo_field, "size": 1000},
               "aggs": {"c": {"terms": {"field": country_field, "size": 1}}}}}}
     out = {}
-    for b in es(idx, body)["aggregations"]["g"]["buckets"]:
+    for b in es(idx, body).get("aggregations", {}).get("g", {}).get("buckets", []):   # index absent : rien
         g = parse_geo(b["key"])
         if not g:
             continue

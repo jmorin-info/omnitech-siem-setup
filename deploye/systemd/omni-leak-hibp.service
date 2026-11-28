@@ -1,6 +1,9 @@
 [Unit]
 Description=OMNI - Leak intel hibp
 After=network-online.target
+# Fonction non configurée sur le site : unité ignorée (condition), pas en échec.
+ConditionPathExists=/etc/default/omni-leak
+
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/omni-leak-hibp

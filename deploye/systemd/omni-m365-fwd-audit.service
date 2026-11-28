@@ -1,6 +1,9 @@
 [Unit]
 Description=OMNI - Audit M365 des transferts mail externes existants
 After=network-online.target
+# Fonction non configurée sur le site : unité ignorée (condition), pas en échec.
+ConditionPathExists=/etc/default/omni-m365
+
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/omni-m365-fwd-audit

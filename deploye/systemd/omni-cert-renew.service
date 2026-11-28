@@ -2,6 +2,8 @@
 Description=Renouvellement automatique du certificat console (CSR -> AD CS via SMB)
 After=network-online.target
 Wants=network-online.target
+# Fonction non configurée sur le site : unité ignorée (condition), pas en échec.
+ConditionPathExists=/root/.smb-siem-backup.cred
 
 [Service]
 Type=oneshot

@@ -6,10 +6,14 @@
 # en premier. CRITIQUE et kill-chain ne passent jamais par ici (mail immediat). Test : LOT_DRYRUN=1.
 # Retour : GRAY_BATCH=0 dans /etc/omni-alert-triage.env -> retour au mail unitaire immediat.
 # =============================================================================
-import fcntl, html, json, os, re, smtplib, sys, time
+import fcntl, html, json, os, re, sys, time
 from email.message import EmailMessage
 from email.utils import formatdate
 ENVF = "/etc/omni-alert-triage.env"; LOT = "/var/lib/omni-alert-triage/lot.json"
+try:  # file d'attente : répertoire créé au premier passage (installation neuve)
+    os.makedirs(os.path.dirname(LOT), mode=0o700, exist_ok=True)
+except OSError:
+    pass
 def load_env():
     e = {}
     try:
@@ -68,6 +72,8 @@ def card(i, a):
 # Aperçu sans envoi ni vidage de la file : LOT_APERCU=/chemin/fichier.html (lit lot.json sans le modifier).
 # =============================================================================
 sys.path.insert(0, os.environ.get("OMNI_MAIL_LIB", "/usr/local/lib/omni-siem"))
+import omni_smtp  # noqa: E402  messagerie du site (00-vars.env), aucun relais implicite
+CFG = omni_smtp.settings(E, to="LOT_RECIPIENTS")
 try:
     import omni_mail_v3 as M3
 except Exception as _ex:
@@ -180,14 +186,13 @@ def main():
     if M3 is not None and E.get("OMNI_MAIL_CHARTE", "v3").lower() != "v2" and not os.environ.get("LOT_DRYRUN"):
         try:
             subj3, html3, txt3 = render_v3(items)
-            to = [x.strip() for x in E.get("LOT_RECIPIENTS", E.get("MAIL_RECIPIENTS", "")).split(",") if x.strip()]
-            m3 = M3.message(subj3, E.get("SMTP_FROM", "no-reply@omnitech-security.fr"), to, txt3, html3)
+            to = CFG["to"]
+            m3 = M3.message(subj3, CFG["from"], to, txt3, html3)
         except Exception as ex:
             m3 = None; print(f"[v4] rendu v3 en echec ({ex!r}) -> gabarit v2", file=sys.stderr)
         if m3 is not None:
             try:
-                with smtplib.SMTP(E.get("SMTP_HOST", "smtp-internal.omnitech-security.fr"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
-                    s.sendmail(m3["From"], to, m3.as_string())
+                omni_smtp.send(CFG, m3, to=to)
             except Exception as ex:
                 put_back(items); print(f"echec envoi ({type(ex).__name__}) : {len(items)} alerte(s) remises en file", file=sys.stderr); return 1
             print(f"lot envoye : {len(items)} alerte(s) -> {len(to)} destinataire(s)")
@@ -219,13 +224,12 @@ def main():
         + (f"\n    Logs : {a['replay']}" if a.get("replay") else "") for a in items] + ["", f"Console SOC : {soc}"]
     if os.environ.get("LOT_DRYRUN"):
         print(subj); print("\n".join(txt)); print(f"[dry-run] HTML {len(page)} octets"); return 0
-    to = [x.strip() for x in E.get("LOT_RECIPIENTS", E.get("MAIL_RECIPIENTS", "")).split(",") if x.strip()]
-    m = EmailMessage(); m["Subject"] = subj; m["From"] = E.get("SMTP_FROM", "no-reply@omnitech-security.fr")
+    to = CFG["to"]
+    m = EmailMessage(); m["Subject"] = subj; m["From"] = CFG["from"]
     m["To"] = ", ".join(to); m["Date"] = formatdate(localtime=True)
     m.set_content("\n".join(txt)); m.add_alternative(page, subtype="html")
     try:
-        with smtplib.SMTP(E.get("SMTP_HOST", "smtp-internal.omnitech-security.fr"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
-            s.send_message(m)
+        omni_smtp.send(CFG, m, to=to)
     except Exception as ex:
         put_back(items); print(f"echec envoi ({type(ex).__name__}) : {n} alerte(s) remises en file", file=sys.stderr); return 1
     print(f"lot envoye : {n} alerte(s) -> {len(to)} destinataire(s)")
