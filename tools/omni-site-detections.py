@@ -948,7 +948,8 @@ def appliquer_definitions(cat, site, cl, rj, simuler, seulement=None, plafond=No
             did = existantes[d["titre"]]["id"]
             if did not in etat["definitions"].values():
                 raise SystemExit(f"définition « {d['titre']} » existante non créée par cet outil : arrêt")
-            cl.api("PUT", f"/events/definitions/{did}?schedule=false", {"entity": dict(corps, id=did)})
+            # Graylog 7 : création = {"entity": …}, mise à jour = corps brut ; la planification est posée juste après
+            cl.api("PUT", f"/events/definitions/{did}?schedule=false", dict(corps, id=did))
         else:
             did = cl.api("POST", "/events/definitions?schedule=false", {"entity": corps})["id"]
             etat["definitions"][d["id"]] = did
