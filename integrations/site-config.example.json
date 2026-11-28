@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "integrations": {
+    "watchguard": {
+      "source_input": "000000000000000000000000",
+      "parameters": {"external_zones": ["External"]},
+      "dashboards": {
+        "activity": "000000000000000000000000",
+        "security": "000000000000000000000000",
+        "quality": "000000000000000000000000"
+      }
+    }
+  }
+}

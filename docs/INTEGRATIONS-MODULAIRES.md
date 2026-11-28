@@ -38,9 +38,17 @@ Il filtre explicitement sur le stream du module. Les UUID d'entités du pack son
 reproductibles et résolus par Graylog à l'installation ; aucun identifiant d'une
 installation OMNITECH n'est embarqué.
 
+La **révision 4 de `watchguard`** reconnaît tout message Fireware portant un `msg_id` :
+en-tête syslog (équipement, numéro de série, processus → `event_category`), tuple
+action/zones/protocole, paires `clé="valeur"` (adresses, ports, interfaces,
+utilisateurs, pays, catégories web, domaine, application, octets), politique en fin
+de message, VPN IKE (pair, passerelle, raison d'échec), VPN SSL, ouvertures/fermetures
+et refus de session (`user`, `event_outcome`), actions d'administration et hôtes
+bloqués temporairement. Les messages de diagnostic sans `msg_id` restent `unparsed`.
+Elle déclare aussi trois dashboards de catalogue (voir plus bas).
+
 Cette version ne couvre pas les anciens syslogs texte UniFi, les logs
-PAN-OS `THREAT`/`SYSTEM`/`CONFIG`, ni les événements WatchGuard VPN/authentification
-et les nombreuses variantes IPv6. Ils restent consultables avec
+PAN-OS `THREAT`/`SYSTEM`/`CONFIG` ni les nombreuses variantes IPv6. Ils restent consultables avec
 `omni_parse_status:unparsed`. Les messages bruts sont conservés ; aucun `drop_message`
 n'est exécuté. La date d'indexation est celle de réception : les horodatages
 constructeur ne remplacent pas encore `timestamp`.
@@ -151,6 +159,62 @@ En cas d'erreur après le début d'un `--apply`, inspecter **System > Content Pa
 les inputs et le stream. Une installation API implique plusieurs opérations :
 le gestionnaire ne prétend pas rendre leur ensemble transactionnel. Il n'efface
 jamais automatiquement des entités ou des logs pour tenter de réparer l'échec.
+
+## Source déjà collectée par une entrée du site
+
+Quand le site reçoit déjà la source (entrée syslog existante, éventuellement avec
+des extracteurs d'un autre pack), ne pas créer de seconde entrée sur le même port :
+utiliser la variante `adopt`. Elle installe un Content Pack sans entrée — stream
+sélectionnant l'entrée existante (`gl2_source_input`), règles et pipeline — sans
+retirer les messages du stream par défaut ni changer d'index set. Les champs déjà
+extraits sont conservés ; le modèle commun n'est complété que s'il est absent.
+
+La configuration propre au site reste hors Git, par défaut
+`/etc/omni-siem/integrations.json` (modèle : `integrations/site-config.example.json`) :
+`source_input` désigne l'entrée, `dashboards` associe facultativement une clé du
+catalogue à une vue existante à remplacer en place (même identifiant, mêmes favoris).
+
+```bash
+export GRAYLOG_API_TOKEN   # ou mot de passe du compte avec --username en boucle locale
+python3 tools/omni-integrations.py adopt watchguard --api http://127.0.0.1:9000/api            # plan, GET seulement
+python3 tools/omni-integrations.py adopt watchguard --api http://127.0.0.1:9000/api --apply    # installation
+python3 tools/omni-integrations.py uninstall watchguard --existing-input --installation-id <ID> --api ... [--apply]
+```
+
+### Dashboards de catalogue
+
+Le manifeste déclare des dashboards (`dashboards` : pages, widgets `count`, `terms`,
+`timeline`, `map`, `messages`, requêtes, champs, séries `count()`/`sum(champ)`/`card(champ)`,
+description). Les sommes d'octets (`bytes_*`) s'affichent en unités lisibles ; les
+répartitions par `event_action` utilisent rouge (refus) et vert (autorisé), repris par
+le surlignage des journaux. Une requête peut contenir un paramètre de site entre
+accolades, par exemple `src_zone:{external_zones}` : sa valeur vient de `parameters`
+dans la configuration de site ; sans cette valeur, le widget n'est pas publié et le
+plan le signale. WatchGuard propose ainsi les pages Vue d'ensemble, Applications et
+bande passante, Utilisateurs et postes, Politiques, Administration et cluster, Blocages,
+Exposition entrante, Menaces, Web et applications, VPN, Authentification et Qualité. Le déploiement les crée, ou
+remplace en place les vues liées par la configuration de site, après sauvegarde JSON
+de chaque vue remplacée :
+
+```bash
+python3 tools/omni-integrations.py dashboards watchguard --api ...                               # plan
+python3 tools/omni-integrations.py dashboards watchguard --api ... --apply --backup-dir /var/backups/<dossier-neuf>
+python3 tools/omni-integrations.py restore-dashboards watchguard --api ... --backup-dir <dossier> [--apply]
+python3 tools/omni-integrations.py check watchguard --api ...                                    # contrôle après déploiement
+```
+
+`restore-dashboards` relit `state.json` : vues remplacées restaurées (recherche
+d'origine republiée), vues créées supprimées par identifiant.
+
+**Anti-récidive.** `validate` (et la CI) refuse un widget qui référence un champ
+qu'aucune règle, aucun mapping ni aucun champ dérivé déclaré (`derived_fields`) ne
+produit. Attention : le GeoIP Resolver de Graylog 7.2 ne géolocalise pas les adresses
+écrites avec `to_ip()` (constaté en production) ; les dashboards utilisent donc les
+pays fournis par l'équipement. `check` exécute chaque widget déployé et signale les
+widgets vides (pour une répartition : aucune valeur non vide) et les champs absents
+des journaux reçus ; un widget
+qui dépend d'un type de journal facultatif porte `may_be_empty` avec sa raison et
+n'est pas compté en échec. Le code de retour vaut 1 si un widget est vide ou en erreur.
 
 ## Côté équipements et réseau
 

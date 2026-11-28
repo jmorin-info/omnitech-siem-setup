@@ -8,8 +8,11 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from omni_integrations.core import catalog, load_module, build_pack, validate_module
-from omni_integrations.client import Graylog, parameters, install, uninstall
+from omni_integrations.core import catalog, load_module, build_pack, build_existing_input_pack, validate_module
+from omni_integrations.client import (Graylog, parameters, install, uninstall, load_site_config, install_existing_input,
+                                      deploy_dashboards, restore_dashboards, check_dashboards)
+
+SITE_CONFIG = "/etc/omni-siem/integrations.json"
 
 
 def main(argv=None):
@@ -21,18 +24,28 @@ def main(argv=None):
     export = commands.add_parser("export")
     export.add_argument("module")
     export.add_argument("--output", type=Path)
-    for name in ("plan", "install", "uninstall"):
+    export.add_argument("--existing-input", action="store_true", help="Export the variant for an existing site input")
+    for name in ("plan", "install", "uninstall", "adopt", "dashboards", "restore-dashboards", "check"):
         command = commands.add_parser(name)
         command.add_argument("module")
         command.add_argument("--api", required=True, help="Graylog API URL ending in /api")
         command.add_argument("--ca", help="Trusted CA certificate file (optional when system trust is sufficient)")
         command.add_argument("--token-env", default="GRAYLOG_API_TOKEN")
-        command.add_argument("--apply", action="store_true", help="Explicitly perform writes (install/uninstall only)")
+        command.add_argument("--username", help="Account whose password is in --token-env (loopback administration)")
+        if name != "check":
+            command.add_argument("--apply", action="store_true", help="Explicitly perform writes (never with plan)")
         if name == "uninstall":
             command.add_argument("--installation-id", required=True)
-        else:
+            command.add_argument("--existing-input", action="store_true")
+        elif name in ("plan", "install"):
             command.add_argument("--port", type=int)
             command.add_argument("--bind", default="127.0.0.1")
+        elif name in ("adopt", "dashboards", "check"):
+            command.add_argument("--site-config", default=SITE_CONFIG, type=Path)
+        if name in ("dashboards", "restore-dashboards"):
+            command.add_argument("--backup-dir", type=Path, required=name == "restore-dashboards")
+        if name == "check":
+            command.add_argument("--days", type=int, default=1)
     args = parser.parse_args(argv)
     if args.command == "list":
         result = [{key: module[key] for key in ("id", "name", "revision", "status", "default_port", "supported_format")} for module in catalog()]
@@ -41,7 +54,7 @@ def main(argv=None):
     elif args.command == "export":
         module = load_module(args.module)
         validate_module(module)
-        result = build_pack(module)
+        result = build_existing_input_pack(module) if args.existing_input else build_pack(module)
         if args.output:
             # Refuse silent overwrite of an exported or locally modified artifact.
             with args.output.open("x", encoding="utf-8") as output:
@@ -53,11 +66,23 @@ def main(argv=None):
         validate_module(module)
         if args.command == "plan" and args.apply:
             parser.error("plan is read-only; use install --apply for an explicit installation")
-        client = Graylog(args.api, os.environ.get(args.token_env), args.ca)
+        client = Graylog(args.api, os.environ.get(args.token_env), args.ca, args.username)
+        apply = getattr(args, "apply", False)
         if args.command == "uninstall":
-            result = uninstall(client, module, args.installation_id, apply=args.apply)
+            result = uninstall(client, module, args.installation_id, apply=apply, existing_input=args.existing_input)
+        elif args.command == "adopt":
+            result = install_existing_input(client, module, load_site_config(args.site_config, module["id"]), apply=apply)
+        elif args.command == "dashboards":
+            result = deploy_dashboards(client, module, load_site_config(args.site_config, module["id"]),
+                                       apply=apply, backup_dir=args.backup_dir)
+        elif args.command == "restore-dashboards":
+            result = restore_dashboards(client, args.backup_dir, apply=apply)
+        elif args.command == "check":
+            result = check_dashboards(client, module, load_site_config(args.site_config, module["id"]), days=args.days)
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 1 if result["failures"] else 0
         else:
-            result = install(client, module, parameters(module, args.port, args.bind), apply=args.command == "install" and args.apply)
+            result = install(client, module, parameters(module, args.port, args.bind), apply=args.command == "install" and apply)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
 
