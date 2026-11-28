@@ -18,6 +18,10 @@
 #                             IP active de blocklist.json absente du fichier publié.
 #     5. soar_fg_ne_lit_plus: aucun GET de /kit/soar/blocklist.txt dans le journal
 #                             nginx depuis SOAR_FETCH_MAX_S (les FortiGate lisent toutes les 2 min).
+#                             23/11/2026 : contrôle PAR FortiGate (SOAR_FG_ATTENDUS, nom=IP source),
+#                             un FG muet est signalé même si les autres lisent encore (liste du site).
+#     5b. soar_publication_en_echec : blocklist.json réécrit depuis plus de SOAR_RENDER_LAG_S sans
+#                             que blocklist.txt suive (omni-soar ne peut plus écrire le fichier publié).
 #     6. canal_silencieux   : (horaire) poste/serveur dont le journal Sécurité (winsec)
 #                             est muet depuis 6 h alors que Sysmon/autres journaux arrivent.
 #   Anti-bruit : une alerte par clé et par fenêtre (1 h, 24 h pour canal_silencieux).
@@ -45,6 +49,11 @@ DEF_FAILS = c("DEF_FAILS", 3)
 SOAR_MAX_AGE_S = c("SOAR_MAX_AGE_S", 4500)
 SOAR_FETCH_MAX_S = c("SOAR_FETCH_MAX_S", 900)
 NGINX_LOG = c("NGINX_LOG", "/var/log/nginx/access.log")
+# Pare-feu qui doivent lire la blocklist : « nom=IP source » séparés par des virgules, propres au
+# site (/etc/default/omni-siem-coherence). Vide par défaut : seul le contrôle global s'applique.
+SOAR_FG_ATTENDUS = dict(x.strip().split("=", 1) for x in c("SOAR_FG_ATTENDUS", "").split(",") if "=" in x)
+# Publication en échec : l'état (blocklist.json) a été réécrit sans que le fichier publié suive.
+SOAR_RENDER_LAG_S = c("SOAR_RENDER_LAG_S", 300)
 SERVER_LOG = "/var/log/graylog-server/server.log"
 STATE_DIR = "/var/lib/omni-siem-coherence"
 CAP_DIR = "/var/log/omni-siem-coherence"
@@ -200,6 +209,15 @@ def check_soar():
               f"SOAR : blocklist publiée {'absente' if age is None else f'âgée de {age/60:.0f} min'}"
               + (f", {len(missing)} IP active(s) non publiée(s) : {', '.join(missing[:5])}" if missing else "")
               + " (omni-soar-expire réécrit le fichier à :30)", soar_feed_age_min=-1 if age is None else round(age/60))
+    # 28/11/2026 : omni-soar enregistre son état puis réécrit le fichier publié. Un état plus récent
+    # que le fichier signifie que la publication échoue (ex. lecture seule après republication du kit).
+    try: retard = os.path.getmtime(SOAR_STATE) - os.path.getmtime(SOAR_FEED)
+    except Exception: retard = None
+    if retard is not None and retard > SOAR_RENDER_LAG_S:
+        alert("soar_publication", "soar_publication_en_echec",
+              f"SOAR : l'état de la blocklist a changé il y a {retard/60:.0f} min sans que le fichier publié suive : "
+              "omni-soar n'arrive plus à écrire (journal du service ; après une republication du kit, relancer omni-soar)",
+              soar_retard_min=round(retard/60))
     # lecture par les FortiGate (journal nginx, fin de fichier)
     try:
         sz = os.path.getsize(NGINX_LOG)
@@ -224,6 +242,18 @@ def check_soar():
     if NOW - newest > SOAR_FETCH_MAX_S:
         alert("soar_fetch", "soar_fg_ne_lit_plus",
               f"SOAR : la blocklist n'a plus été lue depuis {(NOW-newest)/60:.0f} min (FortiGate : connecteur OMNI_SOAR_Blocklist)")
+    # 23/11/2026 : chaque FortiGate attendu doit avoir lu récemment (une alerte par FG, clé distincte).
+    # Seulement si le journal couvre la fenêtre (sinon un journal tout juste tourné ferait une fausse alerte).
+    debut = min(last.values())
+    for nom, ip in SOAR_FG_ATTENDUS.items():
+        t = last.get(ip)
+        if t is None and NOW - debut < SOAR_FETCH_MAX_S:
+            continue
+        if t is None or NOW - t > SOAR_FETCH_MAX_S:
+            alert(f"soar_fetch_{nom}", "soar_fg_ne_lit_plus",
+                  f"SOAR : {nom} ({ip}) ne lit plus la blocklist"
+                  + (f" depuis {(NOW-t)/60:.0f} min" if t else " (aucune lecture dans le journal nginx récent)")
+                  + " : vérifier son connecteur de flux externe, son DNS et la règle de pare-feu vers le SIEM", fortigate=nom)
 
 # ---------------------------------------------------------------- 6 canal muet
 def check_channels():

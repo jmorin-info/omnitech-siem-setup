@@ -21,6 +21,8 @@
 #   Publication atomique : construction dans un repertoire frere, controle du
 #   manifeste, puis bascule ; l'ancien kit reste dans /var/www/siem-kit.previous.*
 #   (3 derniers conserves). Retour : mv du repertoire .previous a la place du kit.
+#   La racine garde le mode/proprietaire du kit en service, et les services dont
+#   ReadWritePaths vise le kit (omni-soar) sont relances apres la bascule.
 #   Tests hors ligne : KIT_DIR et OMNI_VARS_FILE (tests/test_endpoint_kit.py).
 # =============================================================================
 set -euo pipefail
@@ -147,7 +149,33 @@ if [[ $EUID -eq 0 ]]; then
   ( cd "$STAGE" && chown root:root "${files[@]}" SHA256SUMS )
 fi
 ( cd "$STAGE" && chmod 644 "${files[@]}" SHA256SUMS )
-chmod 755 "$STAGE"
+# Le répertoire racine garde le mode et le propriétaire du kit en service : des
+# robots y écrivent (omni-geo-flux, groupe www-data). Un mode 755 imposé les
+# mettait en échec à chaque publication (28/11/2026).
+chmod --reference="$KIT" "$STAGE"
+if [[ $EUID -eq 0 ]]; then chown --reference="$KIT" "$STAGE"; fi
+
+# Services en cours dont l'espace de noms (ProtectSystem=strict) monte en écriture
+# un chemin du kit : après la bascule, ce montage désigne encore l'ancien
+# répertoire (devenu .previous) et le nouveau leur est en lecture seule (blocklist
+# SOAR figée le 28/11/2026). Ils sont relancés juste après la bascule.
+# KIT_RESTART_UNITS=0 pour ne relancer aucun service.
+kit_rw_units() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  local unit p
+  systemctl list-units --type=service --state=running --no-legend --plain 2>/dev/null | awk '{print $1}' |
+  while read -r unit; do
+    [[ -n "$unit" ]] || continue
+    for p in $(systemctl show -p ReadWritePaths --value "$unit" 2>/dev/null); do
+      p="${p#-}"; p="${p#+}"
+      case "$p" in "$KIT"|"$KIT"/*) echo "$unit"; break ;; esac
+    done
+  done
+}
+restart_units=()
+if [[ "${KIT_RESTART_UNITS:-1}" == 1 ]]; then
+  mapfile -t restart_units < <(kit_rw_units)
+fi
 PREVIOUS="${KIT}.previous.$(date +%Y%m%d%H%M%S).$$"
 mv "$KIT" "$PREVIOUS"
 if ! mv "$STAGE" "$KIT"; then
@@ -157,6 +185,13 @@ if ! mv "$STAGE" "$KIT"; then
 fi
 STAGE=""
 trap - EXIT
+for unit in "${restart_units[@]}"; do
+  if systemctl try-restart "$unit"; then
+    echo "    [~] $unit relancé (écriture dans le kit)"
+  else
+    echo "ATTENTION: $unit n'a pas pu être relancé : ses écritures dans $KIT échoueront (systemctl restart $unit)" >&2
+  fi
+done
 # Ne garder que les 3 dernières versions précédentes (binaires volumineux).
 mapfile -t old < <(ls -1d "${KIT}".previous.* 2>/dev/null | sort -r | tail -n +4)
 for d in "${old[@]}"; do rm -rf -- "$d"; done
