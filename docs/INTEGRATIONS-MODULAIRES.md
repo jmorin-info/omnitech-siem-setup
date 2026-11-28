@@ -184,7 +184,15 @@ python3 tools/omni-integrations.py uninstall watchguard --existing-input --insta
 ### Dashboards de catalogue
 
 Le manifeste déclare des dashboards (`dashboards` : pages, widgets `count`, `terms`,
-`timeline`, `map`, `messages`, requêtes et champs). Le déploiement les crée, ou
+`timeline`, `map`, `messages`, requêtes, champs, séries `count()`/`sum(champ)`/`card(champ)`,
+description). Les sommes d'octets (`bytes_*`) s'affichent en unités lisibles ; les
+répartitions par `event_action` utilisent rouge (refus) et vert (autorisé), repris par
+le surlignage des journaux. Une requête peut contenir un paramètre de site entre
+accolades, par exemple `src_zone:{external_zones}` : sa valeur vient de `parameters`
+dans la configuration de site ; sans cette valeur, le widget n'est pas publié et le
+plan le signale. WatchGuard propose ainsi les pages Vue d'ensemble, Applications et
+bande passante, Utilisateurs et postes, Politiques, Administration et cluster, Blocages,
+Exposition entrante, Menaces, Web et applications, VPN, Authentification et Qualité. Le déploiement les crée, ou
 remplace en place les vues liées par la configuration de site, après sauvegarde JSON
 de chaque vue remplacée :
 

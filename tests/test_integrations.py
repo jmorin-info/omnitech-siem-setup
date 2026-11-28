@@ -447,6 +447,31 @@ def test_existing_input_variant_creates_no_input_and_keeps_storage():
     assert not set(e["id"] for e in pack["entities"]) & set(e["id"] for e in build_pack(module)["entities"])
 
 
+def test_site_parameters_bytes_units_and_action_colours():
+    from omni_integrations.core import catalog_search_types, site_value, widget_fields
+    module = load_module("watchguard")
+    spec = module["dashboards"][1]
+    without = catalog_dashboard(module, spec, "9" * 24)
+    with_zones = catalog_dashboard(module, spec, "9" * 24, {"external_zones": ["External", "Optional-1"]})
+    count = lambda built: sum(len(s["widgets"]) for s in built["view"]["state"].values())  # noqa: E731
+    assert count(with_zones) > count(without)  # inbound exposure needs the site's external zones
+    queries = [w["query"]["query_string"] for s in with_zones["view"]["state"].values() for w in s["widgets"]]
+    assert any('src_zone:("External" OR "Optional-1")' in q for q in queries) and not any("{" in q for q in queries)
+    assert len(list(catalog_search_types(module, spec))) == count(without)
+    with pytest.raises(ValueError):
+        site_value(['x" OR *'])
+    activity = catalog_dashboard(module, module["dashboards"][0], "9" * 24, {"external_zones": "External"})
+    widgets = [w for s in activity["view"]["state"].values() for w in s["widgets"]]
+    sized = [w for w in widgets if w["config"].get("units")]
+    assert sized and all(set(w["config"]["units"]) <= {"bytes_in", "bytes_out"} for w in sized)
+    coloured = [w for w in widgets if w["config"].get("formatting_settings")]
+    assert coloured and all({"field_name": "deny", "chart_color": "#d32f2f"} in w["config"]["formatting_settings"]["chart_colors"]
+                            for w in coloured)
+    assert all(s["formatting"]["highlighting"] for s in activity["view"]["state"].values())
+    volume = next(w for p in module["dashboards"][0]["pages"] for w in p["widgets"] if w["title"] == "Utilisateurs par volume")
+    assert {"bytes_out", "bytes_in", "user"} <= widget_fields(volume)
+
+
 def _site(tmp_path, bindings=None):
     path = tmp_path / "integrations.json"
     path.write_text(json.dumps({"schema_version": 1, "integrations": {"watchguard": {

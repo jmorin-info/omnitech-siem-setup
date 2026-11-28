@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 from .core import (build_existing_input_pack, build_pack, catalog_dashboard, catalog_search_types, digest,
-                   stable_id, value, widget_fields)
+                   resolve_query, site_value, stable_id, value, widget_fields)
 
 
 class ApiError(RuntimeError):
@@ -275,6 +275,11 @@ def load_site_config(path, module_id):
     bindings = site.get("dashboards", {})
     if not isinstance(bindings, dict) or any(not OBJECT_ID.fullmatch(str(item)) for item in bindings.values()):
         raise ValueError("dashboards must map catalog keys to Graylog view IDs")
+    params = site.get("parameters", {})
+    if not isinstance(params, dict):
+        raise ValueError("parameters must be an object of site values")
+    for item in params.values():
+        site_value(item)  # rejects quotes, operators and empty lists
     return site
 
 
@@ -358,8 +363,11 @@ def plan_dashboards(client, module, site):
             target = same[0] if same else None
         if target and views[target].get("type") != "DASHBOARD":
             raise ValueError("Bound view is not a dashboard: " + target)
+        skipped = [w["title"] for page in spec["pages"] for w in page["widgets"]
+                   if resolve_query(w, site.get("parameters")) is None]
         items.append({"key": spec["key"], "title": spec["title"], "action": "update" if target else "create",
-                      "view_id": target, "current_title": views[target].get("title") if target else None})
+                      "view_id": target, "current_title": views[target].get("title") if target else None,
+                      "widgets_without_site_parameter": skipped})
     return {"module": module["id"], "revision": module["revision"], "stream_id": stream, "dashboards": items}
 
 
@@ -385,7 +393,7 @@ def deploy_dashboards(client, module, site, *, apply=False, backup_dir=None):
     save()
     specs = {spec["key"]: spec for spec in module["dashboards"]}
     for item in plan["dashboards"]:
-        built = catalog_dashboard(module, specs[item["key"]], plan["stream_id"])
+        built = catalog_dashboard(module, specs[item["key"]], plan["stream_id"], site.get("parameters"))
         # Graylog searches are immutable: publish a new one, then point the view at it.
         search_id = _new_object_id()
         client.call("POST", "/views/search", dict(built["search"], id=search_id))
@@ -449,7 +457,7 @@ def check_dashboards(client, module, site, *, days=1, wait_seconds=120):
             time.sleep(1)
             job = client.call("GET", "/views/search/status/" + job["id"])
         errors = {error.get("search_type_id") for error in job.get("errors", [])}
-        for page, widget, query_id, search_type in catalog_search_types(module, specs[item["key"]]):
+        for page, widget, query_id, search_type in catalog_search_types(module, specs[item["key"]], site.get("parameters")):
             result = (job.get("results", {}).get(query_id) or {}).get("search_types", {}).get(search_type)
             total = None if result is None else result.get("total_results", result.get("total"))
             if result is not None and widget["type"] in ("terms", "map") and isinstance(result.get("rows"), list):

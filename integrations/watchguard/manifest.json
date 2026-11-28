@@ -99,32 +99,72 @@
     {
       "key": "activity",
       "title": "OMNI - WatchGuard - Activité",
-      "summary": "Volumes par domaine Fireware, équipements, erreurs et administration",
-      "description": "Remplace les compteurs par stream du pack communautaire.",
+      "summary": "Vue d'ensemble, applications et bande passante, utilisateurs et postes, politiques, administration et cluster",
+      "description": "Filtrer avec la barre de recherche de l'onglet (par exemple observer_name:<pare-feu> ou src_zone:<zone>) ; la période de l'onglet s'applique aux widgets sans période propre. Octets affichés en unités lisibles ; refusé en rouge, autorisé en vert.",
       "pages": [
         {
-          "title": "Activité",
+          "title": "Vue d'ensemble",
           "range": 86400,
           "widgets": [
             {"title": "Messages reçus", "type": "count", "pos": [1, 1, 3, 2]},
             {"title": "Connexions refusées", "type": "count", "query": "event_action:deny", "pos": [4, 1, 3, 2]},
             {"title": "Événements VPN", "type": "count", "query": "event_category:(iked OR sslvpn)", "pos": [7, 1, 3, 2]},
-            {"title": "Format non reconnu", "type": "count", "query": "omni_parse_status:unparsed", "pos": [10, 1, 3, 2]},
-            {"title": "Activité par catégorie (processus Fireware)", "type": "timeline", "split": "event_category", "pos": [1, 3, 12, 4]},
-            {"title": "Catégories", "type": "terms", "field": "event_category", "pos": [1, 7, 4, 5]},
-            {"title": "Équipements émetteurs", "type": "terms", "field": "observer_name", "pos": [5, 7, 4, 5]},
-            {"title": "Actions", "type": "terms", "field": "event_action", "pos": [9, 7, 4, 5]},
-            {"title": "Messages sur 14 jours", "type": "timeline", "range": 1209600, "pos": [1, 12, 12, 4]}
+            {"title": "Format non reconnu", "type": "count", "query": "omni_parse_status:unparsed", "description": "Messages de diagnostic Fireware sans identifiant (msg_id), conservés tels quels.", "pos": [10, 1, 3, 2]},
+            {"title": "Autorisé / refusé", "type": "timeline", "split": "event_action", "query": "_exists_:event_action", "pos": [1, 3, 12, 4]},
+            {"title": "Activité par catégorie (processus Fireware)", "type": "timeline", "split": "event_category", "pos": [1, 7, 12, 4]},
+            {"title": "Catégories", "type": "terms", "field": "event_category", "pos": [1, 11, 4, 5]},
+            {"title": "Pare-feu émetteurs", "type": "terms", "field": "observer_name", "pos": [5, 11, 4, 5]},
+            {"title": "Actions", "type": "terms", "field": "event_action", "pos": [9, 11, 4, 5]},
+            {"title": "Messages sur 14 jours", "type": "timeline", "range": 1209600, "pos": [1, 16, 12, 4]}
           ]
         },
         {
-          "title": "Erreurs et administration",
-          "range": 604800,
+          "title": "Applications et bande passante",
+          "range": 86400,
           "widgets": [
-            {"title": "Identifiants de message (7 jours)", "type": "terms", "field": "event_id", "limit": 25, "pos": [1, 1, 4, 6]},
-            {"title": "Raisons d'échec (VPN, système)", "type": "terms", "field": "event_reason", "query": "_exists_:event_reason", "pos": [5, 1, 8, 6]},
-            {"title": "Administration et configuration", "type": "messages", "query": "event_category:configd OR auth_type:Management", "fields": ["timestamp", "observer_name", "user", "src_ip", "event_outcome", "message"], "may_be_empty": "aucune action d'administration sur la période", "pos": [1, 7, 12, 5]},
-            {"title": "Liens, interfaces et cluster", "type": "messages", "query": "event_category:(\"link-mon\" OR networkd OR crd OR clstrmgr)", "fields": ["timestamp", "observer_name", "event_category", "message"], "may_be_empty": "aucun changement d'état de lien sur la période", "pos": [1, 12, 12, 5]}
+            {"title": "Applications identifiées", "type": "terms", "field": "network_application", "description": "Contrôle d'applications et proxys.", "pos": [1, 1, 4, 6]},
+            {"title": "Catégories d'applications", "type": "terms", "field": "network_application_category", "pos": [5, 1, 4, 6]},
+            {"title": "Pays de destination par volume", "type": "terms", "field": "dest_country", "query": "_exists_:bytes_out", "series": ["sum(bytes_out)", "sum(bytes_in)"], "series_names": {"sum(bytes_out)": "Envoyé", "sum(bytes_in)": "Reçu"}, "pos": [9, 1, 4, 6]},
+            {"title": "Évolution du volume (envoyé / reçu)", "type": "timeline", "query": "_exists_:bytes_out", "series": ["sum(bytes_out)", "sum(bytes_in)"], "series_names": {"sum(bytes_out)": "Envoyé", "sum(bytes_in)": "Reçu"}, "description": "Octets des fins de connexion et des requêtes proxy.", "pos": [1, 7, 12, 4]},
+            {"title": "Volume par zone source", "type": "terms", "field": "src_zone", "query": "_exists_:bytes_out", "series": ["sum(bytes_out)", "sum(bytes_in)"], "series_names": {"sum(bytes_out)": "Envoyé", "sum(bytes_in)": "Reçu"}, "pos": [1, 11, 6, 5]},
+            {"title": "Volume par zone de destination", "type": "terms", "field": "dest_zone", "query": "_exists_:bytes_out", "series": ["sum(bytes_out)", "sum(bytes_in)"], "series_names": {"sum(bytes_out)": "Envoyé", "sum(bytes_in)": "Reçu"}, "pos": [7, 11, 6, 5]},
+            {"title": "Destinations par volume reçu", "type": "terms", "field": "dest_ip", "query": "_exists_:bytes_in", "series": ["sum(bytes_in)", "count()"], "series_names": {"sum(bytes_in)": "Reçu", "count()": "Connexions"}, "pos": [1, 16, 12, 5]}
+          ]
+        },
+        {
+          "title": "Utilisateurs et postes",
+          "range": 86400,
+          "widgets": [
+            {"title": "Utilisateurs les plus actifs", "type": "terms", "field": "user", "pos": [1, 1, 4, 6]},
+            {"title": "Utilisateurs par volume", "type": "terms", "field": "user", "query": "_exists_:bytes_out", "series": ["sum(bytes_out)", "sum(bytes_in)"], "series_names": {"sum(bytes_out)": "Envoyé", "sum(bytes_in)": "Reçu"}, "pos": [5, 1, 4, 6]},
+            {"title": "Utilisateurs avec des refus", "type": "terms", "field": "user", "query": "event_action:deny", "pos": [9, 1, 4, 6]},
+            {"title": "Postes internes les plus actifs", "type": "terms", "field": "src_ip", "query": "NOT src_zone:{external_zones}", "pos": [1, 7, 6, 5]},
+            {"title": "Postes internes avec le plus de refus", "type": "terms", "field": "src_ip", "query": "event_action:deny AND NOT src_zone:{external_zones}", "pos": [7, 7, 6, 5]},
+            {"title": "Utilisateurs authentifiés (sessions)", "type": "terms", "field": "user", "query": "event_outcome:logged_in", "may_be_empty": "aucune ouverture de session sur la période (environ 130 par jour ouvré)", "pos": [1, 12, 12, 4]}
+          ]
+        },
+        {
+          "title": "Politiques",
+          "range": 86400,
+          "widgets": [
+            {"title": "Règles les plus utilisées", "type": "terms", "field": "network_rule", "limit": 20, "description": "Les règles jamais utilisées ne se déduisent pas des journaux : comparer avec la liste des règles du pare-feu.", "pos": [1, 1, 4, 6]},
+            {"title": "Règles qui refusent", "type": "terms", "field": "network_rule", "query": "event_action:deny", "pos": [5, 1, 4, 6]},
+            {"title": "Règles d'autorisation par volume", "type": "terms", "field": "network_rule", "query": "event_action:allow AND _exists_:bytes_out", "series": ["sum(bytes_out)", "sum(bytes_in)"], "series_names": {"sum(bytes_out)": "Envoyé", "sum(bytes_in)": "Reçu"}, "pos": [9, 1, 4, 6]},
+            {"title": "Règles dans le temps (autorisé / refusé)", "type": "timeline", "split": "event_action", "query": "_exists_:network_rule", "pos": [1, 7, 12, 4]},
+            {"title": "Actions de proxy appliquées", "type": "terms", "field": "proxy_action", "pos": [1, 11, 6, 5]},
+            {"title": "Règles de proxy déclenchées", "type": "terms", "field": "proxy_rule", "pos": [7, 11, 6, 5]}
+          ]
+        },
+        {
+          "title": "Administration et cluster",
+          "range": 2592000,
+          "widgets": [
+            {"title": "Connexions d'administration", "type": "messages", "query": "auth_type:Management", "fields": ["timestamp", "observer_name", "user", "src_ip", "event_outcome"], "may_be_empty": "aucune connexion d'administration sur la période", "pos": [1, 1, 12, 5]},
+            {"title": "Changements de configuration", "type": "messages", "query": "event_category:configd", "fields": ["timestamp", "observer_name", "user", "src_ip", "event_outcome", "message"], "may_be_empty": "aucun changement de configuration sur la période", "pos": [1, 6, 12, 5]},
+            {"title": "Cluster, liens et interfaces", "type": "messages", "query": "event_category:(\"link-mon\" OR networkd OR crd OR clstrmgr OR ntp)", "fields": ["timestamp", "observer_name", "event_category", "message"], "may_be_empty": "aucun changement d'état sur la période", "pos": [1, 11, 12, 5]},
+            {"title": "Services de sécurité et certificats", "type": "messages", "query": "event_category:(sigd OR certd)", "fields": ["timestamp", "observer_name", "event_id", "message"], "may_be_empty": "aucune mise à jour de signatures sur la période", "pos": [1, 16, 12, 4]},
+            {"title": "Raisons d'échec (VPN, système)", "type": "terms", "field": "event_reason", "query": "_exists_:event_reason", "pos": [1, 20, 6, 5]},
+            {"title": "Identifiants de message", "type": "terms", "field": "event_id", "limit": 25, "pos": [7, 20, 6, 5]}
           ]
         }
       ]
@@ -132,8 +172,8 @@
     {
       "key": "security",
       "title": "OMNI - WatchGuard - Sécurité",
-      "summary": "Blocages, menaces, web et applications, VPN et authentification",
-      "description": "Remplace la carte du pack communautaire et ajoute les vues de sécurité.",
+      "summary": "Blocages, exposition entrante, menaces, web, VPN et authentification",
+      "description": "Filtrer avec la barre de recherche de l'onglet (observer_name, src_zone, src_country…) ; refusé en rouge, autorisé en vert. Les zones externes viennent de la configuration du site.",
       "pages": [
         {
           "title": "Blocages",
@@ -144,7 +184,31 @@
             {"title": "Règles qui bloquent", "type": "terms", "field": "network_rule", "query": "event_action:deny", "pos": [9, 1, 4, 5]},
             {"title": "Pays d'origine des blocages (géolocalisation Fireware)", "type": "terms", "field": "src_country", "query": "event_action:deny", "pos": [1, 6, 8, 6]},
             {"title": "Zones d'entrée des blocages", "type": "terms", "field": "src_zone", "query": "event_action:deny", "pos": [9, 6, 4, 6]},
-            {"title": "Trafic hostile et hôtes bloqués temporairement", "type": "terms", "field": "src_ip", "query": "event_id:(\"3000-0173\" OR \"3001-1001\") OR _exists_:threat_indicator", "may_be_empty": "aucun site bloqué ni attaque détectée sur la période", "pos": [1, 12, 12, 4]}
+            {"title": "Blocages dans le temps", "type": "timeline", "split": "event_action", "query": "event_action:deny", "pos": [1, 12, 12, 4]}
+          ]
+        },
+        {
+          "title": "Exposition entrante",
+          "range": 86400,
+          "widgets": [
+            {"title": "Entrant accepté par port", "type": "terms", "field": "dest_port", "query": "event_action:allow AND src_zone:{external_zones}", "description": "Connexions venant des interfaces externes du site et autorisées.", "pos": [1, 1, 4, 6]},
+            {"title": "Services publiés (destinations entrantes acceptées)", "type": "terms", "field": "dest_ip", "query": "event_action:allow AND src_zone:{external_zones}", "pos": [5, 1, 4, 6]},
+            {"title": "Pays d'origine de l'entrant accepté", "type": "terms", "field": "src_country", "query": "event_action:allow AND src_zone:{external_zones}", "pos": [9, 1, 4, 6]},
+            {"title": "Accès acceptés vers le Firebox lui-même", "type": "terms", "field": "dest_port", "query": "event_action:allow AND src_zone:{external_zones} AND dest_zone:Firebox", "may_be_empty": "aucun accès externe accepté vers le Firebox sur la période", "pos": [1, 7, 6, 5]},
+            {"title": "Entrant refusé par port", "type": "terms", "field": "dest_port", "query": "event_action:deny AND src_zone:{external_zones}", "pos": [7, 7, 6, 5]},
+            {"title": "Entrant (autorisé / refusé)", "type": "timeline", "split": "event_action", "query": "src_zone:{external_zones}", "pos": [1, 12, 12, 4]}
+          ]
+        },
+        {
+          "title": "Menaces",
+          "range": 604800,
+          "widgets": [
+            {"title": "Trafic hostile (sites bloqués, botnet)", "type": "terms", "field": "src_ip", "query": "event_id:\"3000-0173\" OR _exists_:threat_indicator", "pos": [1, 1, 4, 6]},
+            {"title": "Pays d'origine du trafic hostile", "type": "terms", "field": "src_country", "query": "event_id:\"3000-0173\" OR _exists_:threat_indicator", "pos": [5, 1, 4, 6]},
+            {"title": "Hôtes bloqués temporairement (attaques)", "type": "terms", "field": "src_ip", "query": "event_id:\"3001-1001\"", "may_be_empty": "aucune attaque détectée sur la période (33 en 30 jours avant normalisation)", "pos": [9, 1, 4, 6]},
+            {"title": "Scanners IKE (négociations refusées)", "type": "terms", "field": "vpn_peer_ip", "query": "event_category:iked AND _exists_:event_reason", "pos": [1, 7, 6, 5]},
+            {"title": "Antivirus et objets non analysés", "type": "terms", "field": "event_message", "query": "event_message:ProxyAvScan* OR _exists_:threat_name OR event_id:\"1AFF-003C\"", "may_be_empty": "aucun événement antivirus sur la période", "pos": [7, 7, 6, 5]},
+            {"title": "Trafic hostile dans le temps", "type": "timeline", "query": "event_id:(\"3000-0173\" OR \"3001-1001\") OR _exists_:threat_indicator", "pos": [1, 12, 12, 4]}
           ]
         },
         {
@@ -155,22 +219,32 @@
             {"title": "Catégories web", "type": "terms", "field": "url_category", "pos": [5, 1, 4, 6]},
             {"title": "Applications identifiées", "type": "terms", "field": "network_application", "pos": [9, 1, 4, 6]},
             {"title": "Requêtes refusées par les proxys", "type": "terms", "field": "url_domain", "query": "event_category:(\"http-proxy\" OR \"https-proxy\" OR \"ftp-proxy\") AND event_action:deny", "may_be_empty": "aucun refus proxy sur la période", "pos": [1, 7, 6, 5]},
-            {"title": "Utilisateurs (trafic proxy)", "type": "terms", "field": "user", "query": "event_category:(\"http-proxy\" OR \"https-proxy\")", "pos": [7, 7, 6, 5]},
-            {"title": "Antivirus et objets non analysés", "type": "terms", "field": "event_message", "query": "event_message:ProxyAvScan* OR _exists_:threat_name OR event_id:\"1AFF-003C\"", "may_be_empty": "aucun événement antivirus sur la période", "pos": [1, 12, 12, 4]}
+            {"title": "Utilisateurs (trafic proxy)", "type": "terms", "field": "user", "query": "event_category:(\"http-proxy\" OR \"https-proxy\")", "pos": [7, 7, 6, 5]}
           ]
         },
         {
-          "title": "VPN et authentification",
+          "title": "VPN",
           "range": 604800,
           "widgets": [
-            {"title": "Ouvertures et fermetures de session", "type": "terms", "field": "event_outcome", "query": "_exists_:auth_type", "pos": [1, 1, 4, 5]},
-            {"title": "Utilisateurs authentifiés", "type": "terms", "field": "user", "query": "event_outcome:logged_in", "pos": [5, 1, 4, 5]},
+            {"title": "Pairs IKE en échec", "type": "terms", "field": "vpn_peer_ip", "query": "event_category:iked AND _exists_:event_reason", "pos": [1, 1, 4, 5]},
+            {"title": "Raisons d'échec IKE", "type": "terms", "field": "event_reason", "query": "event_category:iked", "pos": [5, 1, 4, 5]},
+            {"title": "Passerelles et tunnels VPN", "type": "terms", "field": "vpn_gateway", "pos": [9, 1, 4, 5]},
+            {"title": "Re-key par passerelle", "type": "terms", "field": "vpn_gateway", "query": "event_id:\"0207-0001\"", "may_be_empty": "aucun re-key journalisé sur la période (9 en 30 jours)", "pos": [1, 6, 4, 5]},
+            {"title": "Utilisateurs VPN SSL", "type": "terms", "field": "user", "query": "event_category:sslvpn", "may_be_empty": "aucune session VPN SSL sur la période (11 en 30 jours)", "pos": [5, 6, 4, 5]},
+            {"title": "Adresses d'origine VPN SSL", "type": "terms", "field": "src_ip", "query": "event_category:sslvpn AND event_outcome:logged_in", "may_be_empty": "aucune connexion VPN SSL sur la période", "pos": [9, 6, 4, 5]},
+            {"title": "Tunnels et sessions VPN (détail)", "type": "messages", "query": "event_category:sslvpn OR event_id:(\"0207-0001\" OR \"0203-0024\")", "fields": ["timestamp", "event_id", "user", "event_outcome", "src_ip", "vpn_client_ip", "vpn_gateway", "vpn_peer_ip"], "may_be_empty": "aucun événement de tunnel ni de session sur la période", "pos": [1, 11, 12, 5]}
+          ]
+        },
+        {
+          "title": "Authentification",
+          "range": 604800,
+          "widgets": [
+            {"title": "Ouvertures et fermetures de session", "type": "terms", "field": "event_outcome", "query": "_exists_:auth_type", "may_be_empty": "aucune session sur la période (environ 130 par jour ouvré)", "pos": [1, 1, 4, 5]},
+            {"title": "Utilisateurs authentifiés", "type": "terms", "field": "user", "query": "event_outcome:logged_in", "may_be_empty": "aucune ouverture de session sur la période", "pos": [5, 1, 4, 5]},
             {"title": "Échecs d'authentification", "type": "count", "query": "event_outcome:(was_rejected OR login_failed OR log_in_failed)", "may_be_empty": "aucun échec journalisé sur la période", "pos": [9, 1, 4, 2]},
             {"title": "Comptes en échec", "type": "terms", "field": "user", "query": "event_outcome:(was_rejected OR login_failed OR log_in_failed)", "may_be_empty": "aucun échec journalisé sur la période", "pos": [9, 3, 4, 3]},
-            {"title": "Pairs IKE en échec", "type": "terms", "field": "vpn_peer_ip", "query": "event_category:iked AND _exists_:event_reason", "pos": [1, 6, 4, 5]},
-            {"title": "Raisons d'échec IKE", "type": "terms", "field": "event_reason", "query": "event_category:iked", "pos": [5, 6, 4, 5]},
-            {"title": "Passerelles et tunnels VPN", "type": "terms", "field": "vpn_gateway", "pos": [9, 6, 4, 5]},
-            {"title": "Sessions VPN SSL", "type": "messages", "query": "event_category:sslvpn", "fields": ["timestamp", "user", "event_outcome", "src_ip", "vpn_client_ip"], "may_be_empty": "aucune session VPN SSL sur la période", "pos": [1, 11, 12, 5]}
+            {"title": "Types de comptes", "type": "terms", "field": "auth_type", "may_be_empty": "aucune session sur la période", "pos": [1, 6, 6, 5]},
+            {"title": "Origine des connexions", "type": "terms", "field": "src_ip", "query": "_exists_:auth_type", "may_be_empty": "aucune session sur la période", "pos": [7, 6, 6, 5]}
           ]
         }
       ]
