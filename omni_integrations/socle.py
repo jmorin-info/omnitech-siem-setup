@@ -449,8 +449,14 @@ def discover_sources(client, *, days=7):
             "group_by": [{"field": field, "limit": 50}], "metrics": [{"function": "count"}]})
         return {str(row[0]): row[-1] for row in result.get("datarows", [])}
     observed, per_input = counts("event_source"), counts("gl2_source_input")
+    unnormalized = observed.pop("(Empty Value)", 0)
     proposal = sorted(key for key, spec in capabilities["sources"].items()
                       if any(observed.get(value) for value in spec.get("event_source", [])))
-    return {"days": days, "event_sources": observed, "proposed_sources": proposal,
-            "inputs": [{"id": key, "title": inputs.get(key, "(entrée supprimée)"), "messages": count}
-                       for key, count in sorted(per_input.items(), key=lambda kv: -kv[1])]}
+    by_title = {title: key for key, title in inputs.items()}
+    rows = []
+    for key, count in sorted(per_input.items(), key=lambda kv: -kv[1]):
+        # The scripting API decorates input IDs with their titles; deleted inputs keep their ID.
+        identifier = key if key in inputs or OBJECT_ID.fullmatch(key) else by_title.get(key, key)
+        rows.append({"id": identifier, "title": inputs.get(identifier, "(entrée supprimée)"), "messages": count})
+    return {"days": days, "event_sources": observed, "unnormalized_messages": unnormalized,
+            "proposed_sources": proposal, "inputs": rows}

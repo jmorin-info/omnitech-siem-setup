@@ -81,7 +81,7 @@
     "dns": {"title": "DNS des contrôleurs de domaine", "event_source": ["dns"], "streams": [], "expected_minutes": 1440}
   },
   "features": {
-    "detections": {"title": "Définitions d'alerte Graylog (événements)", "fields": ["event_definition_id", "priority", "key"]},
+    "detections": {"title": "Définitions d'alerte Graylog (événements)", "fields": ["event_definition_id", "priority", "key", "mitre_tactic", "mitre_technique"]},
     "xdr": {"title": "Corrélation d'incidents oms-xdr"},
     "ueba": {"title": "Scores comportementaux UEBA / ML"},
     "kev": {"title": "Vulnérabilités exposées (catalogue KEV)"},

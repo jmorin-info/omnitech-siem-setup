@@ -271,6 +271,21 @@ def evaluate(config, source: Path, probes: Probes | None = None):
             add("console:certificat", "avertissement", False, f"certificat non approuvé par cette machine pour {fqdn}")
     guarded("console:/soc/", "critique", console_page)
 
+    def console_admins():
+        # Sans administrateur, l'espace Administration de /soc/ n'apparaît pour personne.
+        path = Path(config.get("MOBILE_CONFIG") or "/etc/default/omni-mobile")
+        if not path.is_file():
+            add("console:administrateurs", "info", True, "configuration de la console absente : non contrôlé")
+            return
+        admins = ""
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.strip().startswith("SOC_ADMINS="):
+                admins = line.split("=", 1)[1].strip().strip('"').strip("'")
+        add("console:administrateurs", "avertissement", bool(admins.strip(", ")),
+            "SOC_ADMINS renseigné" if admins.strip(", ") else
+            "SOC_ADMINS vide : aucun administrateur de la console (renseigner les comptes Graylog, puis redémarrer omni-mobile-api)")
+    guarded("console:administrateurs", "avertissement", console_admins)
+
     # 7. Migration vers le dépôt canonique
     def legacy():
         found = probes.legacy_references(LEGACY_HOME)
