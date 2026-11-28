@@ -22,9 +22,26 @@ set -u
 export LANG=C.UTF-8 DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
 JOURNAL=/var/log/oms-maj-siem.log
 ETAT=/var/lib/oms-maj-siem; mkdir -p "$ETAT"
-MAIL_A="jmorin@omnitech-security.fr"
-MAIL_DE="no-reply@omnitech-security.fr"
-SMTP="smtp://smtp-internal.omnitech-security.fr:25"
+# Messagerie du site : 00-vars.env (SMTP_RELAY, SMTP_PORT, SMTP_FROM, SMTP_STARTTLS,
+# OMS_MAJ_MAIL_TO ou a defaut ALERT_EMAIL). Aucun relais ni destinataire implicite.
+site_var(){ # site_var CLE -> valeur dans le fichier de site (sans expansion)
+  local f
+  for f in "${OMNI_SITE_VARS:-}" "${OMNI_SIEM_HOME:-/opt/omni-siem/repository}/00-vars.env" /opt/omni-siem/repository/00-vars.env; do
+    [ -n "$f" ] && [ -r "$f" ] || continue
+    sed -n -E "s/^[[:space:]]*(export[[:space:]]+)?$1=//p" "$f" | tail -1 \
+      | sed -E "s/^\"([^\"]*)\".*/\1/; s/^'([^']*)'.*/\1/; s/[[:space:]]+#.*$//; s/[[:space:]]+$//"
+    return 0
+  done
+}
+MAIL_A="$(site_var OMS_MAJ_MAIL_TO)"; [ -n "$MAIL_A" ] || MAIL_A="$(site_var ALERT_EMAIL)"
+MAIL_DE="$(site_var SMTP_FROM)"
+SMTP=""; SMTP_HOTE="$(site_var SMTP_RELAY)"; SMTP_PORT_SITE="$(site_var SMTP_PORT)"
+[ -n "$SMTP_HOTE" ] && SMTP="smtp://${SMTP_HOTE}:${SMTP_PORT_SITE:-25}"
+case "$(site_var SMTP_STARTTLS)" in
+  1|oui|yes|true|required) CURL_TLS=(--ssl-reqd) ;;
+  auto) CURL_TLS=(--ssl) ;;
+  *) CURL_TLS=() ;;
+esac
 PILE_HOLD="mongodb-org mongodb-org-database mongodb-org-database-tools-extra mongodb-org-mongos mongodb-org-server mongodb-org-tools opensearch"
 MODE="${1:-normal}"
 HORO=$(date +%Y%m%d-%H%M)
@@ -35,7 +52,11 @@ envoyer_mail(){ # $1 = objet
   local f; f=$(mktemp)
   { echo "From: SIEM OMNITECH <$MAIL_DE>"; echo "To: $MAIL_A"; echo "Subject: [SIEM OMNITECH] $1"
     echo "Content-Type: text/plain; charset=UTF-8"; echo; cat "$RAPPORT"; } > "$f"
-  curl -s --max-time 30 --url "$SMTP" --mail-from "$MAIL_DE" --mail-rcpt "$MAIL_A" --upload-file "$f" || log "ATTENTION : envoi du mail impossible"
+  if [ -n "$SMTP" ] && [ -n "$MAIL_A" ] && [ -n "$MAIL_DE" ]; then
+    curl -s "${CURL_TLS[@]}" --max-time 30 --url "$SMTP" --mail-from "$MAIL_DE" --mail-rcpt "$MAIL_A" --upload-file "$f" || log "ATTENTION : envoi du mail impossible"
+  else
+    log "ATTENTION : messagerie du site non configuree (SMTP_RELAY, SMTP_FROM, ALERT_EMAIL dans 00-vars.env)"
+  fi
   rm -f "$f"
 }
 os_statut(){ curl -s --max-time 5 http://127.0.0.1:9200/_cluster/health | grep -oE '"status":"[a-z]+"' | cut -d'"' -f4; }

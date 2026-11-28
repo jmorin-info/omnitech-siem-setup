@@ -27,7 +27,7 @@
 #   Actifs critiques : ASSET_CRITICAL_REGEX (env, regex sep. par des |).
 # Etat   : /var/lib/omni-alert-triage/state.json   Ecoute : 127.0.0.1:8089.
 # =============================================================================
-import hashlib, hmac, html as _html, ipaddress, json, os, re, smtplib, sys, time, urllib.request, urllib.parse
+import hashlib, hmac, html as _html, ipaddress, json, os, re, sys, time, urllib.request, urllib.parse
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
@@ -39,6 +39,7 @@ import threading, queue, io, signal
 # avec le gabarit v2 d'origine et sans signature v4 (aucune alerte perdue).
 # Retours sans redémarrage : OMNI_MAIL_CHARTE=v2 (ancien gabarit), OMNI_FP_V4=0 (signatures inactives).
 sys.path.insert(0, os.environ.get("OMNI_MAIL_LIB", "/usr/local/lib/omni-siem"))
+import omni_smtp  # noqa: E402  messagerie du site (00-vars.env), aucun relais implicite
 try:
     import omni_mail_v3 as M3
 except Exception as _ex:
@@ -104,7 +105,7 @@ def guidance(tag):
         return None
     return _GUIDE_CACHE["data"].get(tag)
 
-GL_BASE = "https://bx-it-graylog-vm.omnitech.security"
+GL_BASE = omni_smtp.public_url(omni_smtp.read_env(ENVFILE))   # GRAYLOG_PUBLIC_URL ou https://SIEM_FQDN
 
 # --- Extrait lisible d'un evenement declencheur -------------------------------
 # PROBLEME resolu (02/07/2026) : message brut tronque a 140 c. -> sur un event
@@ -1413,12 +1414,10 @@ def _mail_v3(e, ctx, decision_reason, titre, site, g, soc_deep, why, fp_link, bl
     return sujet, html, "\n".join(t)
 
 def send_mail(e, ctx, decision_reason):
-    host = e.get("SMTP_HOST","smtp-internal.omnitech-security.fr")
-    port = int(e.get("SMTP_PORT","25"))
-    frm  = e.get("SMTP_FROM","no-reply@omnitech-security.fr")
-    to   = [x.strip() for x in e.get("MAIL_RECIPIENTS","informatique@omnitech-security.fr").split(",") if x.strip()]
+    cfg  = omni_smtp.settings(e)   # robot puis 00-vars.env (SMTP_RELAY, SMTP_FROM, ALERT_EMAIL)
+    frm, to = cfg["from"], cfg["to"]
     pfx  = e.get("SMTP_SUBJECT_PREFIX","[SIEM OMNITECH]")
-    soc  = e.get("OMNI_SOC_URL","https://bx-it-graylog-vm.omnitech.security/soc/")
+    soc  = e.get("OMNI_SOC_URL") or GL_BASE + "/soc/"
     level = sev_label(ctx['tier'], decision_reason)
     titre = re.sub(r"^OMNI\s*-\s*", "", ctx['titre'])   # titre epure
     _lv = level.lower()
@@ -1523,8 +1522,7 @@ def send_mail(e, ctx, decision_reason):
             msg3 = None
             print(f"[v4] rendu v3 en echec ({ex!r}) -> gabarit v2", file=sys.stderr, flush=True)
         if msg3 is not None:
-            with smtplib.SMTP(host, port, timeout=15) as s:
-                s.sendmail(frm, to, msg3.as_string())
+            omni_smtp.send(cfg, msg3, to=to, sender=frm, timeout=15)
             return
     msg = MIMEMultipart("alternative")
     # sujet encode RFC 2047 (accents corrects sur tous les MUA) ; pas d'emoji
@@ -1537,8 +1535,7 @@ def send_mail(e, ctx, decision_reason):
     msg["From"] = frm; msg["To"] = ", ".join(to)
     msg.attach(MIMEText(body, "plain", "utf-8"))
     msg.attach(MIMEText(_mail_html(titre, level, color, ctx, site, g, soc_deep, why, fp_link, block_link), "html", "utf-8"))
-    with smtplib.SMTP(host, port, timeout=15) as s:
-        s.sendmail(frm, to, msg.as_string())
+    omni_smtp.send(cfg, msg, to=to, sender=frm, timeout=15)
 
 def bump(d, decision):
     c = d.setdefault("stats", {}); c[decision] = c.get(decision, 0) + 1

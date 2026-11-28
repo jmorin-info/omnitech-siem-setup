@@ -154,7 +154,7 @@ def _agg_counts(base_query, country_f, idx, gte_ms, lt_ms):
                 {"range": {"timestamp": {"gte": int(gte_ms), "lt": int(lt_ms), "format": "epoch_millis"}}}]}},
             "aggs": {"u": {"terms": {"field": "user", "size": 65000},
                      "aggs": {"c": {"terms": {"field": country_f, "size": 1000}}}}}}
-    a = es(f"/{idx}/_search", body)["aggregations"]["u"]
+    a = es(f"/{idx}/_search", body).get("aggregations", {}).get("u", {"buckets": []})
     if a.get("sum_other_doc_count"):
         print("baseline : agregation incomplete (sum_other_doc_count)", file=sys.stderr)
     out = {}

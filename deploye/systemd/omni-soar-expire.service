@@ -1,5 +1,7 @@
 [Unit]
 Description=Expiration des IP de la blocklist SOAR
+# Fonction non configurée sur le site : unité ignorée (condition), pas en échec.
+ConditionPathIsDirectory=/var/www/siem-kit/soar
 
 [Service]
 Type=oneshot

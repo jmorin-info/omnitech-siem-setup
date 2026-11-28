@@ -19,7 +19,7 @@
 #   Aucune dependance externe (stdlib). Lance par omni-alert-digest.timer.
 #   Test a blanc : DIGEST_DRYRUN=1 /usr/local/sbin/omni-alert-digest
 # =============================================================================
-import json, os, re, smtplib, sys, time, urllib.request
+import json, os, re, sys, time, urllib.request
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import formatdate
@@ -329,6 +329,7 @@ def render(rows, hours, since_txt, prev_rows=None, dropped=0):
 # Retour : OMNI_MAIL_CHARTE=v2 dans /etc/omni-alert-triage.env. Aperçu sans envoi : DIGEST_APERCU=/chemin.html
 # =============================================================================
 sys.path.insert(0, os.environ.get("OMNI_MAIL_LIB", "/usr/local/lib/omni-siem"))
+import omni_smtp  # noqa: E402  messagerie du site (00-vars.env), aucun relais implicite
 try:
     import omni_mail_v3 as M3
 except Exception as _ex:
@@ -673,14 +674,14 @@ def main():
         print(txt); print(f"\n[dry-run] {len(rows)} alerte(s) retenue(s) sur {hours} h ; HTML {len(html)} octets")
         return 0
 
-    to = [a.strip() for a in (E.get("MAIL_RECIPIENTS", "")).split(",") if a.strip()]
+    cfg = omni_smtp.settings(E)   # robot puis 00-vars.env (SMTP_RELAY, SMTP_FROM, ALERT_EMAIL)
+    to = cfg["to"]
     if not to:
         print("aucun destinataire (MAIL_RECIPIENTS)", file=sys.stderr); return 2
-    frm = E.get("SMTP_FROM", "no-reply@omnitech-security.fr")
+    frm = cfg["from"]
     if M3 is not None and "cid:" + M3.LOGO_CID in html:   # v4 : html v3 + logo en pièce liée
         m = M3.message(sujet, frm, to, txt, html)
-        with smtplib.SMTP(E.get("SMTP_HOST", "127.0.0.1"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
-            s.sendmail(frm, to, m.as_string())
+        omni_smtp.send(cfg, m, to=to, sender=frm)
         print(f"recap envoye : {len(rows)} alerte(s) retenue(s) sur {hours} h -> {', '.join(to)}")
         return 0
     m = EmailMessage()
@@ -690,8 +691,7 @@ def main():
     m["Date"] = formatdate(localtime=True)
     m.set_content(txt)
     m.add_alternative(html, subtype="html")
-    with smtplib.SMTP(E.get("SMTP_HOST", "127.0.0.1"), int(E.get("SMTP_PORT", "25")), timeout=30) as s:
-        s.send_message(m)
+    omni_smtp.send(cfg, m, to=to, sender=frm)
     print(f"recap envoye : {len(rows)} alerte(s) retenue(s) sur {hours} h -> {', '.join(to)}")
     return 0
 

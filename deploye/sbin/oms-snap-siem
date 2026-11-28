@@ -34,9 +34,27 @@ LIBRE_ARRET_PCT=5    # en dessous pendant le snapshot : snapshot annule
 SELECTION="omni-winsec:21 omni-fortigate:7 omni-vsphere:14 omni-m365:0 omni-interne:0 omni-eset:0 omni-seal-access:0 omni-seal-alarm:0 omni-seal-audit:0 omni-fortiems:0 omni-fortimanager:0 omni-fortidhcp:0 omni-linux:0 omni-vaultwarden:0 omni-cert:0 omni-aruba:0 omni-bunkerweb:0 gl-events:0 gl-system-events:0"
 [ -f "$CONF" ] && . "$CONF"
 REPO="$DEPOT"
-# destinataire des alertes : le meme que la mise a jour hebdomadaire (pas de second endroit a maintenir)
-MAIL_A=$(grep -oE '^MAIL_A="[^"]+"' /usr/local/sbin/oms-maj-siem 2>/dev/null | cut -d'"' -f2)
-MAIL_DE="no-reply@omnitech-security.fr"; SMTP="smtp://smtp-internal.omnitech-security.fr:25"
+# destinataire des alertes : le meme que la mise a jour hebdomadaire (meme fichier de site)
+# Messagerie du site : 00-vars.env (SMTP_RELAY, SMTP_PORT, SMTP_FROM, SMTP_STARTTLS,
+# OMS_MAJ_MAIL_TO ou a defaut ALERT_EMAIL). Aucun relais ni destinataire implicite.
+site_var(){ # site_var CLE -> valeur dans le fichier de site (sans expansion)
+  local f
+  for f in "${OMNI_SITE_VARS:-}" "${OMNI_SIEM_HOME:-/opt/omni-siem/repository}/00-vars.env" /opt/omni-siem/repository/00-vars.env; do
+    [ -n "$f" ] && [ -r "$f" ] || continue
+    sed -n -E "s/^[[:space:]]*(export[[:space:]]+)?$1=//p" "$f" | tail -1 \
+      | sed -E "s/^\"([^\"]*)\".*/\1/; s/^'([^']*)'.*/\1/; s/[[:space:]]+#.*$//; s/[[:space:]]+$//"
+    return 0
+  done
+}
+MAIL_A="$(site_var OMS_MAJ_MAIL_TO)"; [ -n "$MAIL_A" ] || MAIL_A="$(site_var ALERT_EMAIL)"
+MAIL_DE="$(site_var SMTP_FROM)"
+SMTP=""; SMTP_HOTE="$(site_var SMTP_RELAY)"; SMTP_PORT_SITE="$(site_var SMTP_PORT)"
+[ -n "$SMTP_HOTE" ] && SMTP="smtp://${SMTP_HOTE}:${SMTP_PORT_SITE:-25}"
+case "$(site_var SMTP_STARTTLS)" in
+  1|oui|yes|true|required) CURL_TLS=(--ssl-reqd) ;;
+  auto) CURL_TLS=(--ssl) ;;
+  *) CURL_TLS=() ;;
+esac
 
 log(){ echo "$(date '+%F %T') $*" | tee -a "$JOURNAL"; logger -t oms-snap-siem -- "$*"; }
 # Evenements GELF IDENTIQUES a l'ancien siem-backup.sh (+ champ backup_outil=oms-snap-siem) :
@@ -54,11 +72,11 @@ gelf(){ # gelf <ok|echec> <message>
 alerte(){ # $1 objet, $2 texte
   gelf echec "oms-snap-siem : $1 - $2"
   log "ALERTE : $1 - $2"
-  [ -n "$MAIL_A" ] || return 0
+  [ -n "$SMTP" ] && [ -n "$MAIL_A" ] && [ -n "$MAIL_DE" ] || { log "messagerie du site non configuree : pas de mail"; return 0; }
   local f; f=$(mktemp)
   printf 'From: SIEM OMNITECH <%s>\nTo: %s\nSubject: [SIEM OMNITECH] Snapshots OpenSearch : %s\nContent-Type: text/plain; charset=UTF-8\n\n%s\n\nJournal : %s (serveur %s)\n' \
     "$MAIL_DE" "$MAIL_A" "$1" "$2" "$JOURNAL" "$(hostname)" > "$f"
-  curl -s --max-time 30 --url "$SMTP" --mail-from "$MAIL_DE" --mail-rcpt "$MAIL_A" --upload-file "$f" >/dev/null || log "envoi du mail impossible"
+  curl -s "${CURL_TLS[@]}" --max-time 30 --url "$SMTP" --mail-from "$MAIL_DE" --mail-rcpt "$MAIL_A" --upload-file "$f" >/dev/null || log "envoi du mail impossible"
   rm -f "$f"
 }
 libre_pct(){ df --output=pcent "$DEPOT_CHEMIN" | tail -1 | tr -dc 0-9 | awk '{print 100-$1}'; }

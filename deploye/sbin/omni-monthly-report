@@ -6,7 +6,9 @@
 #   envoye par mail. Embarque une carte SVG des menaces (30 j). Zero dependance.
 # Lance par timer le 1er du mois. Config SMTP : REPORT_* dans 00-vars.env.
 # =============================================================================
-import json, math, os, re, smtplib, ssl, subprocess, sys, urllib.request
+import json, math, os, re, ssl, subprocess, sys, urllib.request
+sys.path.insert(0, os.environ.get("OMNI_MAIL_LIB", "/usr/local/lib/omni-siem"))
+import omni_smtp  # noqa: E402  messagerie du site (00-vars.env), aucun relais implicite
 from datetime import datetime, timezone, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -254,12 +256,13 @@ def main():
     else:
         pdf = None
     # envoi mail (PDF en piece jointe si dispo, sinon HTML inline)
-    to = ENV.get("REPORT_RECIPIENTS",""); host = ENV.get("REPORT_SMTP",""); port = int(ENV.get("REPORT_SMTP_PORT","25"))
+    cfg = omni_smtp.settings(ENV, host="REPORT_SMTP", port="REPORT_SMTP_PORT", sender="REPORT_FROM", to="REPORT_RECIPIENTS")
+    to = ", ".join(cfg["to"]); host = cfg["host"]
     if to and host and not os.environ.get("REPORT_NOMAIL"):
         try:
             msg = MIMEMultipart("mixed")
             msg["Subject"] = f"[OMNITECH SOC] Rapport executif - {period}"
-            msg["From"] = ENV.get("REPORT_FROM","no-reply@omnitech-security.fr"); msg["To"] = to
+            msg["From"] = cfg["from"]; msg["To"] = to
             body = MIMEMultipart("alternative")
             body.attach(MIMEText(f"Rapport executif SOC - {period}. PDF en piece jointe.", "plain"))
             body.attach(MIMEText(html, "html"))
@@ -269,8 +272,7 @@ def main():
                     att = MIMEApplication(f.read(), _subtype="pdf")
                 att.add_header("Content-Disposition", "attachment", filename=os.path.basename(pdf))
                 msg.attach(att)
-            with smtplib.SMTP(host, port, timeout=30) as s:
-                s.sendmail(msg["From"], [a.strip() for a in to.split(",")], msg.as_string())
+            omni_smtp.send(cfg, msg)
             print(f"  mail envoye -> {to}" + (" (+ PDF)" if pdf else ""))
         except Exception as e:
             print(f"  mail KO: {e}", file=sys.stderr)
