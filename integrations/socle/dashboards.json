@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "id": "socle",
+  "revision": 1,
+  "description": "Dashboards SOC génériques d'une PME. Chaque page et chaque widget déclarent les sources (integrations/sources.json) dont ils dépendent : le déploiement ne publie que ceux que la configuration du site active, la validation hors ligne refuse un champ qu'aucune source requise ne produit.",
+  "dashboards": [
+    {
+      "key": "soc",
+      "title": "OMNI - SOC",
+      "summary": "Vue d'ensemble, collecte, authentifications, postes, Microsoft 365, Linux et détections du site",
+      "description": "Pages et widgets limités aux sources activées par la configuration du site.",
+      "pages": [
+        {
+          "title": "Vue d'ensemble",
+          "widgets": [
+            {"title": "Messages reçus (24 h)", "type": "count", "scope": "all", "range": 86400, "pos": [1, 1, 3, 2]},
+            {"title": "Échecs de connexion Windows (24 h)", "type": "count", "requires": ["windows_security"], "query": "event_action:echec_connexion", "range": 86400, "pos": [4, 1, 3, 2], "may_be_empty": "aucun échec de connexion sur la période"},
+            {"title": "Blocages du pare-feu (24 h)", "type": "count", "requires": ["watchguard"], "query": "event_action:deny", "range": 86400, "pos": [7, 1, 3, 2]},
+            {"title": "Blocages du pare-feu FortiGate (24 h)", "type": "count", "requires": ["fortigate"], "query": "action:(deny OR blocked OR dropped)", "range": 86400, "pos": [7, 1, 3, 2]},
+            {"title": "Détections des pipelines (24 h)", "type": "count", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "scope": "sources", "query": "_exists_:alert_tag", "range": 86400, "pos": [10, 1, 3, 2], "may_be_empty": "aucune détection calculée sur la période"},
+            {"title": "Activité par type de source (24 h)", "type": "timeline", "scope": "all", "split": "event_source", "range": 86400, "pos": [1, 3, 12, 4]},
+            {"title": "Échecs de connexion par compte (24 h)", "type": "terms", "requires": ["windows_security"], "field": "user", "query": "event_action:echec_connexion", "range": 86400, "pos": [1, 7, 4, 4], "may_be_empty": "aucun échec de connexion sur la période"},
+            {"title": "Pays d'origine des blocages (24 h)", "type": "terms", "requires": ["watchguard"], "field": "src_country", "query": "event_action:deny", "range": 86400, "pos": [5, 7, 4, 4]},
+            {"title": "Détections par type (7 j)", "type": "terms", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "scope": "sources", "field": "alert_tag", "range": 604800, "pos": [9, 7, 4, 4], "may_be_empty": "aucune détection calculée sur 7 jours"},
+            {"title": "Alertes Graylog par définition (7 j)", "type": "terms", "requires": ["detections"], "scope": "events", "field": "event_definition_id", "range": 604800, "pos": [1, 11, 6, 4], "may_be_empty": "aucune alerte sur 7 jours"},
+            {"title": "Applications Microsoft 365 en échec (24 h)", "type": "terms", "requires": ["m365"], "field": "app", "query": "m365_type:signin AND event_action:echec_connexion", "range": 86400, "pos": [7, 11, 6, 4], "may_be_empty": "aucun échec de connexion cloud"}
+          ]
+        },
+        {
+          "title": "Collecte et santé",
+          "widgets": [
+            {"title": "Volume et dernier message par entrée (24 h)", "type": "terms", "scope": "all", "field": "gl2_source_input", "series": ["count()", "latest(timestamp)"], "range": 86400, "pos": [1, 1, 6, 4]},
+            {"title": "Volume et dernier message par émetteur (24 h)", "type": "terms", "scope": "all", "field": "source", "series": ["count()", "latest(timestamp)"], "limit": 30, "range": 86400, "pos": [7, 1, 6, 4]},
+            {"title": "Volume par entrée (7 j)", "type": "timeline", "scope": "all", "split": "gl2_source_input", "range": 604800, "pos": [1, 5, 12, 4]},
+            {"title": "Volume par type de source (24 h)", "type": "terms", "scope": "all", "field": "event_source", "series": ["count()", "latest(timestamp)"], "range": 86400, "pos": [1, 9, 4, 4]},
+            {"title": "Messages non normalisés par entrée (24 h)", "type": "terms", "scope": "all", "field": "gl2_source_input", "query": "NOT _exists_:event_source", "range": 86400, "pos": [5, 9, 4, 4], "may_be_empty": "tous les messages reçus sont normalisés"},
+            {"title": "Hôtes Windows actifs (24 h)", "type": "terms", "requires": ["windows_security", "sysmon", "windows"], "field": "host", "series": ["count()", "latest(timestamp)"], "range": 86400, "pos": [9, 9, 4, 4]},
+            {"title": "Derniers messages reçus (toutes entrées)", "type": "messages", "scope": "all", "fields": ["timestamp", "source", "gl2_source_input", "event_source", "message"], "range": 3600, "pos": [1, 13, 12, 5]}
+          ]
+        },
+        {
+          "title": "Authentifications et AD",
+          "requires": ["windows_security"],
+          "widgets": [
+            {"title": "Connexions réussies et échecs", "type": "timeline", "requires": ["windows_security"], "query": "event_action:(connexion_reussie OR echec_connexion)", "split": "event_action", "range": 86400, "pos": [1, 1, 12, 4]},
+            {"title": "Comptes en échec de connexion", "type": "terms", "requires": ["windows_security"], "field": "user", "query": "event_action:echec_connexion", "range": 86400, "pos": [1, 5, 4, 4], "may_be_empty": "aucun échec de connexion sur la période"},
+            {"title": "Raisons des échecs", "type": "terms", "requires": ["windows_security"], "field": "failure_reason", "query": "event_action:echec_connexion", "range": 86400, "pos": [5, 5, 4, 4], "may_be_empty": "aucun échec de connexion sur la période"},
+            {"title": "Adresses à l'origine des échecs", "type": "terms", "requires": ["windows_security"], "field": "src_ip", "query": "event_action:echec_connexion", "range": 86400, "pos": [9, 5, 4, 4], "may_be_empty": "aucun échec de connexion sur la période"},
+            {"title": "Types d'ouverture de session", "type": "terms", "requires": ["windows_security"], "field": "logon_type_label", "query": "event_action:connexion_reussie", "range": 86400, "pos": [1, 9, 4, 4]},
+            {"title": "Identifiants explicites (4648) par compte", "type": "terms", "requires": ["windows_security"], "field": "user", "query": "event_action:connexion_credentials_explicites", "range": 86400, "pos": [5, 9, 4, 4]},
+            {"title": "Privilèges spéciaux attribués (4672) par compte", "type": "terms", "requires": ["windows_security"], "field": "user", "query": "event_action:privileges_speciaux_attribues", "range": 86400, "pos": [9, 9, 4, 4]},
+            {"title": "Opérations sur l'annuaire (4662) par compte", "type": "terms", "requires": ["windows_security"], "field": "user", "query": "event_action:operation_objet_annuaire", "range": 86400, "pos": [1, 13, 4, 4], "may_be_empty": "aucune opération d'annuaire auditée (contrôleur de domaine non collecté ?)"},
+            {"title": "Kerberos : demandes par compte", "type": "terms", "requires": ["windows_security"], "field": "user", "query": "event_category:kerberos", "range": 86400, "pos": [5, 13, 4, 4], "may_be_empty": "aucun événement Kerberos (contrôleur de domaine non collecté ?)"},
+            {"title": "Énumérations de groupes et de membres", "type": "terms", "requires": ["windows_security"], "field": "user", "query": "event_action:(enumeration_membres_groupe OR enumeration_groupes_utilisateur)", "range": 86400, "pos": [9, 13, 4, 4], "may_be_empty": "aucune énumération sur la période"},
+            {"title": "Modifications de la stratégie d'audit (7 j)", "type": "count", "requires": ["windows_security"], "query": "event_action:strategie_audit_modifiee", "range": 604800, "pos": [1, 17, 3, 2], "may_be_empty": "aucune modification de la stratégie d'audit"},
+            {"title": "Derniers échecs de connexion", "type": "messages", "requires": ["windows_security"], "query": "event_action:echec_connexion", "fields": ["timestamp", "host", "user", "src_ip", "failure_reason", "logon_type_label"], "range": 86400, "pos": [4, 17, 9, 5], "may_be_empty": "aucun échec de connexion sur la période"}
+          ]
+        },
+        {
+          "title": "Postes et serveurs Windows",
+          "requires": ["sysmon", "windows", "inventory"],
+          "widgets": [
+            {"title": "Processus créés (Sysmon 1)", "type": "terms", "requires": ["sysmon"], "field": "process_name", "query": "event_action:processus_cree", "range": 86400, "pos": [1, 1, 4, 4]},
+            {"title": "Processus parents", "type": "terms", "requires": ["sysmon"], "field": "parent_process", "query": "event_action:processus_cree", "range": 86400, "pos": [5, 1, 4, 4]},
+            {"title": "Requêtes DNS (Sysmon 22)", "type": "terms", "requires": ["sysmon"], "field": "dns_query", "query": "event_action:requete_dns", "range": 86400, "pos": [9, 1, 4, 4], "may_be_empty": "requêtes DNS non journalisées par la configuration Sysmon"},
+            {"title": "Activité Sysmon par hôte", "type": "terms", "requires": ["sysmon"], "field": "host", "range": 86400, "pos": [1, 5, 4, 4]},
+            {"title": "Types d'événements Sysmon", "type": "terms", "requires": ["sysmon"], "field": "event_action", "range": 86400, "pos": [5, 5, 4, 4]},
+            {"title": "Connexions réseau (Sysmon 3) par destination", "type": "terms", "requires": ["sysmon"], "field": "dest_ip", "query": "_exists_:dest_ip", "range": 86400, "pos": [9, 5, 4, 4], "may_be_empty": "connexions réseau non journalisées par la configuration Sysmon"},
+            {"title": "Événements Windows par canal", "type": "terms", "requires": ["windows"], "field": "channel", "range": 86400, "pos": [1, 9, 4, 4]},
+            {"title": "Changements d'état de services (7036) par hôte", "type": "terms", "requires": ["windows"], "field": "host", "query": "event_action:service_changement_etat", "range": 86400, "pos": [5, 9, 4, 4]},
+            {"title": "PowerShell : blocs de script (4104) par hôte", "type": "terms", "requires": ["windows"], "field": "host", "query": "event_action:powershell_scriptblock", "range": 86400, "pos": [9, 9, 4, 4], "may_be_empty": "aucun bloc de script PowerShell journalisé"},
+            {"title": "Logiciels inventoriés", "type": "terms", "requires": ["inventory"], "field": "inv_product", "limit": 25, "range": 604800, "pos": [1, 13, 6, 4]},
+            {"title": "Systèmes d'exploitation", "type": "terms", "requires": ["inventory"], "field": "os_caption", "range": 604800, "pos": [7, 13, 6, 4], "may_be_empty": "inventaire des systèmes non encore remonté"},
+            {"title": "Lignes de commande récentes", "type": "messages", "requires": ["sysmon"], "query": "_exists_:command_line", "fields": ["timestamp", "host", "user", "process_name", "parent_process", "command_line"], "range": 86400, "pos": [1, 17, 12, 5]}
+          ]
+        },
+        {
+          "title": "Microsoft 365",
+          "requires": ["m365"],
+          "widgets": [
+            {"title": "Connexions cloud (24 h)", "type": "count", "requires": ["m365"], "query": "m365_type:signin", "range": 86400, "pos": [1, 1, 3, 2]},
+            {"title": "Échecs de connexion cloud (24 h)", "type": "count", "requires": ["m365"], "query": "m365_type:signin AND event_action:echec_connexion", "range": 86400, "pos": [4, 1, 3, 2], "may_be_empty": "aucun échec de connexion cloud"},
+            {"title": "Connexions par pays", "type": "terms", "requires": ["m365"], "field": "src_country", "query": "m365_type:signin", "range": 86400, "pos": [1, 3, 4, 4]},
+            {"title": "Échecs par compte", "type": "terms", "requires": ["m365"], "field": "user", "query": "m365_type:signin AND event_action:echec_connexion", "range": 86400, "pos": [5, 3, 4, 4], "may_be_empty": "aucun échec de connexion cloud"},
+            {"title": "Causes des échecs", "type": "terms", "requires": ["m365"], "field": "m365_fail_label", "query": "m365_type:signin AND event_action:echec_connexion", "range": 86400, "pos": [9, 3, 4, 4], "may_be_empty": "aucun échec de connexion cloud"},
+            {"title": "Clients d'authentification", "type": "terms", "requires": ["m365"], "field": "client_app", "query": "m365_type:signin", "range": 86400, "pos": [1, 7, 6, 4]},
+            {"title": "Actions d'administration Entra", "type": "terms", "requires": ["m365"], "field": "event_action", "query": "m365_type:audit", "range": 86400, "pos": [7, 7, 6, 4]}
+          ]
+        },
+        {
+          "title": "Serveurs Linux",
+          "requires": ["linux"],
+          "widgets": [
+            {"title": "Activité par serveur", "type": "terms", "requires": ["linux"], "field": "host", "range": 86400, "pos": [1, 1, 4, 4]},
+            {"title": "Adresses sources SSH", "type": "terms", "requires": ["linux"], "field": "src_ip", "query": "_exists_:src_ip", "range": 86400, "pos": [5, 1, 4, 4]},
+            {"title": "Comptes en cause", "type": "terms", "requires": ["linux"], "field": "user", "query": "_exists_:user", "range": 86400, "pos": [9, 1, 4, 4]},
+            {"title": "Événements Linux récents", "type": "messages", "requires": ["linux"], "fields": ["timestamp", "host", "user", "src_ip", "alert_tag", "message"], "range": 86400, "pos": [1, 5, 12, 5]}
+          ]
+        },
+        {
+          "title": "Antivirus",
+          "requires": ["eset"],
+          "widgets": [
+            {"title": "Menaces détectées (7 j)", "type": "terms", "requires": ["eset"], "field": "eset_threat_name", "query": "alert_tag:eset_detection", "range": 604800, "pos": [1, 1, 6, 4], "may_be_empty": "aucune menace sur 7 jours"},
+            {"title": "Postes touchés (7 j)", "type": "terms", "requires": ["eset"], "field": "eset_hostname", "query": "alert_tag:eset_detection", "range": 604800, "pos": [7, 1, 6, 4], "may_be_empty": "aucune menace sur 7 jours"}
+          ]
+        },
+        {
+          "title": "Détections et tri",
+          "widgets": [
+            {"title": "Détections des pipelines par type", "type": "terms", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "scope": "sources", "field": "alert_tag", "range": 604800, "pos": [1, 1, 4, 4], "may_be_empty": "aucune détection calculée sur 7 jours"},
+            {"title": "Détections par hôte", "type": "terms", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "scope": "sources", "field": "host", "query": "_exists_:alert_tag", "range": 604800, "pos": [5, 1, 4, 4], "may_be_empty": "aucune détection calculée sur 7 jours"},
+            {"title": "Détections par compte", "type": "terms", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "scope": "sources", "field": "user", "query": "_exists_:alert_tag", "range": 604800, "pos": [9, 1, 4, 4], "may_be_empty": "aucune détection calculée sur 7 jours"},
+            {"title": "Alertes Graylog dans le temps", "type": "timeline", "requires": ["detections"], "scope": "events", "range": 604800, "pos": [1, 5, 6, 4], "may_be_empty": "aucune alerte sur 7 jours"},
+            {"title": "Alertes Graylog par priorité", "type": "terms", "requires": ["detections"], "scope": "events", "field": "priority", "range": 604800, "pos": [7, 5, 6, 4], "may_be_empty": "aucune alerte sur 7 jours"},
+            {"title": "Dernières détections des pipelines", "type": "messages", "requires": ["windows_security", "sysmon", "linux", "m365", "eset"], "scope": "sources", "query": "_exists_:alert_tag", "fields": ["timestamp", "host", "user", "alert_tag", "event_action", "src_ip"], "range": 604800, "pos": [1, 9, 12, 5], "may_be_empty": "aucune détection calculée sur 7 jours"}
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "description": "Capacités d'un site : sources de journaux et fonctions SOC. Le socle des dashboards (integrations/socle) et la console /soc/ n'affichent que ce que la configuration du site active (clé site de /etc/omni-siem/integrations.json). Sans clé site, tout reste actif (comportement historique).",
+  "common_fields": ["event_source", "host", "alert_tag", "event_id", "event_action", "event_category", "user", "src_ip", "dest_ip"],
+  "sources": {
+    "windows_security": {
+      "title": "Windows - journal Sécurité",
+      "event_source": ["windows_security"],
+      "streams": ["OMNI - Windows Security"],
+      "expected_minutes": 15,
+      "field_prefixes": ["winlogbeat_"],
+      "fields": ["src_host", "logon_type_label", "failure_reason", "logon_fail", "logon_ok", "service_logon_fail",
+                 "src_ip_country_code", "src_ip_city_name", "src_ip_geolocation", "channel", "target_user", "group_name"]
+    },
+    "sysmon": {
+      "title": "Windows - Sysmon",
+      "event_source": ["sysmon"],
+      "streams": ["OMNI - Sysmon"],
+      "expected_minutes": 15,
+      "field_prefixes": ["winlogbeat_"],
+      "fields": ["process_name", "process_path", "command_line", "parent_process", "dns_query", "dest_port", "image_loaded", "target_filename"]
+    },
+    "windows": {
+      "title": "Windows - autres journaux (Système, PowerShell, Defender)",
+      "event_source": ["windows"],
+      "streams": ["OMNI - Windows autres"],
+      "expected_minutes": 60,
+      "field_prefixes": ["winlogbeat_"],
+      "fields": ["channel"]
+    },
+    "inventory": {
+      "title": "Windows - inventaire des postes",
+      "event_source": ["inventory"],
+      "streams": ["OMNI - Windows autres"],
+      "expected_minutes": 1440,
+      "fields": ["channel", "inv_product", "inv_publisher", "inv_version", "os_caption", "os_version", "os_build", "os_last_kb", "os_last_patch", "os_hotfix_count"]
+    },
+    "watchguard": {
+      "title": "Pare-feu WatchGuard Firebox",
+      "event_source": ["watchguard"],
+      "streams": ["OMNI integration - WatchGuard Firebox"],
+      "expected_minutes": 15,
+      "integration": "watchguard",
+      "firewall": true,
+      "country_field": "src_country"
+    },
+    "fortigate": {
+      "title": "Pare-feu FortiGate",
+      "event_source": ["fortigate"],
+      "streams": ["OMNI - FortiGate"],
+      "expected_minutes": 120,
+      "firewall": true,
+      "country_field": "src_ip_country_code",
+      "fields": ["action", "dest_port", "src_ip_country_code", "srccountry", "policyid", "service", "app", "vpn_tunnel"]
+    },
+    "m365": {
+      "title": "Microsoft 365 / Entra ID",
+      "event_source": ["m365"],
+      "streams": ["OMNI - M365"],
+      "expected_minutes": 360,
+      "fields": ["m365_type", "src_country", "src_city", "app", "client_app", "device_os", "target", "m365_fail_label"]
+    },
+    "linux": {
+      "title": "Serveurs Linux",
+      "event_source": ["linux"],
+      "streams": ["OMNI - Linux"],
+      "expected_minutes": 1440,
+      "fields": ["net_segment"]
+    },
+    "eset": {
+      "title": "Antivirus ESET PROTECT",
+      "event_source": ["eset"],
+      "streams": ["OMNI - ESET"],
+      "expected_minutes": 1440,
+      "fields": ["eset_threat_name", "eset_hostname", "eset_severity"]
+    },
+    "fortiems": {"title": "FortiClient EMS", "event_source": ["fortiems"], "streams": ["OMNI - FortiClient EMS"], "expected_minutes": 2880},
+    "aruba": {"title": "Commutateurs Aruba", "event_source": ["aruba"], "streams": ["OMNI - Aruba"], "expected_minutes": 240},
+    "vsphere": {"title": "VMware vSphere", "event_source": ["vsphere"], "streams": ["OMNI - vSphere"], "expected_minutes": 1440},
+    "bunkerweb": {"title": "WAF BunkerWeb", "event_source": ["bunkerweb"], "streams": ["OMNI - BunkerWeb"], "expected_minutes": 1440},
+    "dns": {"title": "DNS des contrôleurs de domaine", "event_source": ["dns"], "streams": [], "expected_minutes": 1440}
+  },
+  "features": {
+    "detections": {"title": "Définitions d'alerte Graylog (événements)", "fields": ["event_definition_id", "priority", "key"]},
+    "xdr": {"title": "Corrélation d'incidents oms-xdr"},
+    "ueba": {"title": "Scores comportementaux UEBA / ML"},
+    "kev": {"title": "Vulnérabilités exposées (catalogue KEV)"},
+    "soar": {"title": "SOAR : liste de blocage lue par le pare-feu"},
+    "leaks": {"title": "Veille des fuites et du dark web"},
+    "attack_graph": {"title": "Graphe et jumeau d'attaque (oms-graph)"},
+    "deploy_kit": {"title": "Kit de déploiement des agents (/kit/)"}
+  },
+  "console_pages": {
+    "overview": {},
+    "incidents": {"notice_unless_any": ["xdr"], "notice": "Aucune corrélation d'incidents (oms-xdr) n'est configurée sur ce site : seuls les dossiers ouverts à la main apparaissent ici."},
+    "detections": {"notice_unless_any": ["detections"], "notice": "Aucune définition d'alerte Graylog n'est provisionnée sur ce site : seules les détections calculées par les pipelines (alert_tag) apparaissent. Ce n'est pas un zéro mesuré."},
+    "kpi": {"notice_unless_any": ["detections"], "notice": "Aucune définition d'alerte n'est configurée : les indicateurs de tri (volumes, délais) restent vides tant qu'aucune alerte n'est produite."},
+    "modules": {},
+    "entities": {"requires_any": ["windows_security", "sysmon", "m365", "linux", "fortigate", "watchguard"]},
+    "attack": {"notice_unless_any": ["detections"], "notice": "Couverture ATT&CK théorique : aucune définition d'alerte n'est provisionnée sur ce site."},
+    "graph": {"requires_any": ["attack_graph"]},
+    "twin": {"requires_any": ["attack_graph"]},
+    "ems": {"requires_any": ["fortiems"]},
+    "network": {"requires_any": ["aruba", "linux", "dns"]},
+    "deploy": {"requires_any": ["deploy_kit"]},
+    "globe": {"requires_any": ["fortigate", "watchguard", "m365", "bunkerweb", "windows_security"]},
+    "leaks": {"requires_any": ["leaks"]},
+    "health": {},
+    "soar": {"requires_any": ["soar"]},
+    "ops": {},
+    "admin": {},
+    "report": {},
+    "playbooks": {}
+  },
+  "kpis": {
+    "incidents_critiques_7j": ["xdr"],
+    "hotes_risque_ueba": ["ueba"],
+    "kev_exposees": ["kev"]
+  }
+}
