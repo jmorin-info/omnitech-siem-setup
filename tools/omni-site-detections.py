@@ -471,6 +471,80 @@ def assurer_lookup(cl, lk, etat, simuler):
     return f"{lk['nom']} créée"
 
 
+def corps_entree_gelf(ci):
+    e = ci["entree"]
+    return {"title": e["titre"], "type": "org.graylog2.inputs.gelf.http.GELFHttpInput", "global": True,
+            "configuration": {"bind_address": e["bind"], "port": e["port"], "recv_buffer_size": 1048576, "enable_bulk_receiving": True,
+                              "enable_cors": False, "max_chunk_size": 65536, "idle_writer_timeout": 60, "override_source": None,
+                              "decompress_size_limit": 8388608}}
+
+
+def corps_index_set(ci):
+    i = ci["index_set"]
+    return {"title": i["titre"], "description": "omni-site-detections (chaîne interne : tri, robots)", "index_prefix": i["prefixe"],
+            "shards": 1, "replicas": 0,
+            "rotation_strategy_class": "org.graylog2.indexer.rotation.strategies.TimeBasedRotationStrategy",
+            "rotation_strategy": {"type": "org.graylog2.indexer.rotation.strategies.TimeBasedRotationStrategyConfig", "rotation_period": "P1D",
+                                  "rotate_empty_index_set": False},
+            "retention_strategy_class": "org.graylog2.indexer.retention.strategies.DeletionRetentionStrategy",
+            "retention_strategy": {"type": "org.graylog2.indexer.retention.strategies.DeletionRetentionStrategyConfig",
+                                   "max_number_of_indices": i["retention_jours"]},
+            "index_analyzer": "standard", "index_optimization_max_num_segments": 1, "index_optimization_disabled": False,
+            "field_type_refresh_interval": 5000, "writable": True,
+            "creation_date": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")}
+
+
+def corps_stream(ci, index_set_id, entree_id):
+    return {"title": ci["stream"]["titre"], "description": "omni-site-detections : messages GELF internes (tri, robots), hors M365",
+            "index_set_id": index_set_id, "matching_type": "AND", "remove_matches_from_default_stream": True,
+            "rules": [{"field": "gl2_source_input", "type": 1, "value": entree_id, "inverted": False, "description": "entrée GELF interne"},
+                      {"field": "event_source", "type": 2, "value": ci["stream"]["exclure_event_source"], "inverted": True,
+                       "description": "M365 a son propre stream"}]}
+
+
+def assurer_chaine_interne(cl, ci, etat, simuler):
+    journal = []
+    entrees = cl.api("GET", "/system/inputs")["inputs"]
+    port = ci["entree"]["port"]
+    e = next((x for x in entrees if x["type"].endswith("GELFHttpInput") and int(x.get("attributes", {}).get("port", 0)) == port), None)
+    if e:
+        eid = e["id"]
+        journal.append(f"entrée GELF {port} existe ({e['title']})")
+    elif simuler:
+        eid = None
+        journal.append(f"entrée GELF {ci['entree']['bind']}:{port} serait créée")
+    else:
+        eid = cl.api("POST", "/system/inputs", corps_entree_gelf(ci))["id"]
+        etat.setdefault("chaine", {})["entree"] = eid
+        etat_ecrire(etat)
+        journal.append(f"entrée GELF {ci['entree']['bind']}:{port} créée")
+    sets = cl.api("GET", "/system/indices/index_sets?limit=500")["index_sets"]
+    iset = next((x for x in sets if x["index_prefix"] == ci["index_set"]["prefixe"]), None)
+    if iset:
+        isid = iset["id"]
+        journal.append(f"index set {ci['index_set']['prefixe']} existe")
+    elif simuler:
+        isid = None
+        journal.append(f"index set {ci['index_set']['prefixe']} serait créé")
+    else:
+        isid = cl.api("POST", "/system/indices/index_sets", corps_index_set(ci))["id"]
+        etat.setdefault("chaine", {})["index_set"] = isid
+        etat_ecrire(etat)
+        journal.append(f"index set {ci['index_set']['prefixe']} créé")
+    st = next((x for x in cl.api("GET", "/streams")["streams"] if x["title"] == ci["stream"]["titre"]), None)
+    if st:
+        journal.append(f"stream « {st['title']} » existe")
+    elif simuler:
+        journal.append(f"stream « {ci['stream']['titre']} » serait créé")
+    else:
+        sid = cl.api("POST", "/streams", corps_stream(ci, isid, eid))["stream_id"]
+        etat.setdefault("chaine", {})["stream"] = sid
+        etat_ecrire(etat)
+        cl.api("POST", f"/streams/{sid}/resume")
+        journal.append(f"stream « {ci['stream']['titre']} » créé et démarré")
+    return journal
+
+
 def regles_voulues(cat, site, pl):
     """(titre, source, pipeline, streams) des règles à poser selon le plan."""
     p = parametres(site)
@@ -491,7 +565,7 @@ def regles_voulues(cat, site, pl):
 def appliquer_regles(cat, site, cl, simuler):
     pl = plan(cat, site, cl)
     etat = etat_lire()
-    journal = []
+    journal = assurer_chaine_interne(cl, cat["chaine_interne"], etat, simuler)
     for lk in cat["lookups"]:
         if lk.get("toujours") or (lk.get("ti") and pl["ti"]):
             journal.append(assurer_lookup(cl, lk, etat, simuler))
@@ -824,6 +898,16 @@ def verifier(cat, site, cl, jours=7):
                         ligne["defauts"].append(f"table {d['ti']} absente ou vide")
         defauts += [f"{d['id']}: {m}" for m in ligne["defauts"]]
         rapport.append(ligne)
+    # Chaîne interne : sans elle, les décisions du tri (dont le rodage) n'atteignent pas le récapitulatif
+    ci = cat["chaine_interne"]
+    etats_entrees = {s["id"]: s["state"] for s in cl.api("GET", "/system/inputstates")["states"]}
+    gelf = [x for x in cl.api("GET", "/system/inputs")["inputs"]
+            if x["type"].endswith("GELFHttpInput") and int(x.get("attributes", {}).get("port", 0)) == ci["entree"]["port"]]
+    if not gelf or etats_entrees.get(gelf[0]["id"]) != "RUNNING":
+        defauts.append(f"chaîne interne : aucune entrée GELF en service sur le port {ci['entree']['port']}")
+    st = streams.get(ci["stream"]["titre"])
+    if not st or st.get("disabled"):
+        defauts.append(f"chaîne interne : stream « {ci['stream']['titre']} » absent ou arrêté")
     # Toute table lue par une règle connectée doit exister (sinon un avertissement par message dans server.log)
     connectees = {pid for c in connexions for pid in c.get("pipeline_ids", [])}
     actives = set()
@@ -886,6 +970,12 @@ def retour(cl, simuler):
             for cle, chemin in (("table", "tables"), ("cache", "caches"), ("adaptateur", "adapters")):
                 if lk.get(cle):
                     cl.api("DELETE", f"/system/lookup/{chemin}/{lk[cle]}")
+    ch = etat.get("chaine", {})
+    for cle, chemin in (("stream", "/streams/{}"), ("index_set", "/system/indices/index_sets/{}?delete_indices=true"), ("entree", "/system/inputs/{}")):
+        if ch.get(cle):
+            journal.append(f"chaîne interne : {cle} {ch[cle]}")
+            if not simuler:
+                cl.api("DELETE", chemin.format(ch[cle]))
     if not simuler:
         etat_ecrire({"lookups": [], "regles": {}, "pipelines": {}, "connexions": {}, "definitions": {}})
     return journal

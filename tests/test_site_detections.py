@@ -119,6 +119,19 @@ def test_definition_desactivee_porte_sa_raison(outil, cat):
     assert corps["config"]["group_by"] == ["v5_entite"] and corps["priority"] == 2
 
 
+def test_chaine_interne_independante_de_m365(outil, cat):
+    ci = cat["chaine_interne"]
+    e = outil.corps_entree_gelf(ci)
+    assert e["configuration"]["bind_address"] == "127.0.0.1" and e["configuration"]["port"] == 12201
+    s = outil.corps_stream(ci, "is1", "in1")
+    assert s["index_set_id"] == "is1" and s["remove_matches_from_default_stream"]
+    assert {"field": "gl2_source_input", "type": 1, "value": "in1", "inverted": False, "description": "entrée GELF interne"} in s["rules"]
+    assert any(r["field"] == "event_source" and r["inverted"] for r in s["rules"])
+    assert outil.corps_index_set(ci)["index_prefix"] == "omni-interne"
+    m365 = (ROOT / "16-m365-input.sh").read_text(encoding="utf-8")
+    assert ".attributes.port==12201" in m365  # réutilise l'entrée GELF déjà présente, quel que soit son titre
+
+
 def test_champs_ti_declares_dans_le_module_watchguard(cat):
     m = json.loads((ROOT / "integrations" / "watchguard" / "manifest.json").read_text(encoding="utf-8"))
     assert set(cat["champs_produits"]) <= set(m.get("derived_fields", {}))

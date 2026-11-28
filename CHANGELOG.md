@@ -22,6 +22,10 @@ tenu dans le dossier `docs` sans réécriture ; elles sont rédigées en liste l
   avec les tables `omni-v5-ti-*`. Anti-récidive : `valider` (hors ligne) et `verifier` (après
   déploiement : chaque définition planifiée a une source qui produit ses champs, chaque table
   lue par une règle connectée existe). Champs `ti_*` et `v5_*` déclarés dans le module WatchGuard.
+  Chaîne interne indépendante de M365 (entrée GELF HTTP 127.0.0.1:12201, index set
+  `omni-interne`, stream « OMNI - Interne SIEM », réutilisés s'ils existent) : sans elle, les
+  décisions du tri, dont le rodage, n'atteignent pas le récapitulatif. `16-m365-input.sh`
+  réutilise une entrée GELF déjà en écoute sur 12201.
 - `omni-v5-ti-fetch` : sans clé abuse.ch, ThreatFox, URLhaus et MalwareBazaar sont signalés
   « désactivés » (et non en erreur) et la liste Tranco n'est plus téléchargée ; Feodo et Tor
   restent alimentés.

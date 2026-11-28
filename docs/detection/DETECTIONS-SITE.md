@@ -27,6 +27,13 @@ du site `/etc/omni-siem/detections.json` (hors Git, mode 600, modèle
 - Les détections fondées sur une étiquette du socle (`alert_tag`) ne sont créées que si une
   règle de l'instance pose cette étiquette et qu'elle est connectée aux streams du site.
 
+## Chaîne interne
+Le tri trace ses décisions (dont le rodage), et les robots écrivent leur état, en GELF sur
+127.0.0.1:12201 ; le récapitulatif relit ces décisions dans `omni-interne*`. `appliquer-regles`
+pose donc, s'ils manquent, une entrée GELF HTTP sur la boucle locale, l'index set `omni-interne`
+(90 jours) et le stream « OMNI - Interne SIEM » (entrée GELF interne, hors `event_source` M365).
+Un objet déjà présent (même port, même préfixe, même titre) est réutilisé tel quel.
+
 ## Commandes
 ```
 python3 tools/omni-site-detections.py valider                     # hors ligne (CI)

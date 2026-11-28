@@ -34,6 +34,12 @@
     "ti_ioc_date": "date de première publication de l'indicateur",
     "ti_ref": "référence dans le flux (identifiant, statut)"
   },
+  "chaine_interne": {
+    "_pourquoi": "Le tri trace chaque décision (dont le rodage) et les robots (ti_fetch…) écrivent en GELF sur 127.0.0.1:12201 ; le récapitulatif relit les décisions dans omni-interne*. Sans cette chaîne, une alerte en rodage serait invisible. Objets réutilisés s'ils existent (même port, même préfixe, même titre).",
+    "entree": {"titre": "OMNI - GELF interne (127.0.0.1:12201)", "bind": "127.0.0.1", "port": 12201},
+    "index_set": {"titre": "OMNI - Interne SIEM", "prefixe": "omni-interne", "retention_jours": 90},
+    "stream": {"titre": "OMNI - Interne SIEM", "exclure_event_source": "^m365"}
+  },
   "lookups": [
     {"nom": "omni-canary", "adaptateur": "omni-canary-adapter", "cache": "omni-canary-cache", "csv": "/etc/graylog/lookup/canary-accounts.csv",
      "cle": "account", "valeur": "note", "entete": "account,note", "toujours": true,
